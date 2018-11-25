@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="at.favre.lib:hkdf:1.0.0" type="repository">
+    <properties maven-id="at.favre.lib:hkdf:1.0.0" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/at/favre/lib/hkdf/1.0.0/hkdf-1.0.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
