@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 public class QuicConnection {
 
     private Logger log;
-    private final Version quicVersion = Version.IETF_draft_14;
+    private final Version quicVersion;
     private final Random random = new Random();
     private final String host;
     private final int port;
@@ -23,11 +23,12 @@ public class QuicConnection {
     private ConnectionSecrets connectionSecrets;
     private TlsSession tlsSession;
 
-    public QuicConnection(String host, int port) {
+    public QuicConnection(String host, int port, Version quicVersion) {
         log = new Logger();
         log.debug("Creating connection with " + host + ":" + port);
         this.host = host;
         this.port = port;
+        this.quicVersion = quicVersion;
     }
 
     /**
