@@ -89,12 +89,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         byte[] paddedPayload = new byte[payload.length + paddingLength];
         System.arraycopy(payload, 0, paddedPayload, 0, payload.length);
-        encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, connectionSecrets);
+        encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, connectionSecrets.clientSecrets);
         packetBuffer.put(encryptedPayload);
     }
 
     private void protectPacketNumber() {
-        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, 0, connectionSecrets);
+        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, 0, connectionSecrets.clientSecrets);
         int currentPosition = packetBuffer.position();
         packetBuffer.position(packetNumberPosition);
         packetBuffer.put(protectedPacketNumber);
