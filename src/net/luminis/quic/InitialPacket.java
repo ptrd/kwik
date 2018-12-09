@@ -1,5 +1,7 @@
 package net.luminis.quic;
 
+import jdk.jshell.spi.ExecutionControl;
+
 import java.nio.ByteBuffer;
 
 public class InitialPacket extends LongHeaderPacket {
@@ -8,8 +10,8 @@ public class InitialPacket extends LongHeaderPacket {
         super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
     }
 
-    public InitialPacket(ConnectionSecrets connectionSecrets) {
-        super(connectionSecrets);
+    public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets) {
+        super(quicVersion, connectionSecrets);
     }
 
     protected void generateAdditionalFields() {
@@ -71,6 +73,42 @@ public class InitialPacket extends LongHeaderPacket {
 
         byte[] frames = decryptPayload(payload, frameHeader, 0, connectionSecrets.serverSecrets);
         log.debug("Decrypted payload", frames);
+        parseFrames(frames, log);
+    }
+
+    private void parseFrames(byte[] frames, Logger log) {
+        ByteBuffer buffer = ByteBuffer.wrap(frames);
+
+        while (buffer.remaining() > 0) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
+            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+            int frameType = buffer.get();
+            switch (frameType) {
+                case 0x00:
+                    // Padding
+                    break;
+                case 0x0d:
+                    if (quicVersion == Version.IETF_draft_14)
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x1a:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x1b:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                default:
+                    throw new NotYetImplementedException();
+            }
+        }
     }
 
 }

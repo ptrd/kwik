@@ -31,4 +31,18 @@ public enum Version {
         Optional<Version> version = Stream.of(Version.values()).filter(candidate -> candidate.versionId == input).findFirst();
         return version.orElseThrow(() -> new UnknownVersionException());
     }
+
+    public boolean atLeast(Version other) {
+        // Only for IETF drafts
+        if (isIetfDraft(this) && isIetfDraft(other)) {
+            return this.versionId >= other.versionId;
+        }
+        else {
+            throw new RuntimeException();
+        }
+    }
+
+    private boolean isIetfDraft(Version version) {
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_16.versionId;
+    }
 }

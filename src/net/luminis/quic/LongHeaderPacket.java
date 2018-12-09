@@ -20,7 +20,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private int paddingLength;
     private byte[] encryptedPayload;
 
-    public LongHeaderPacket(ConnectionSecrets connectionSecrets) {
+    public LongHeaderPacket(Version quicVersion, ConnectionSecrets connectionSecrets) {
+        this.quicVersion = quicVersion;
         this.connectionSecrets = connectionSecrets;
     }
 

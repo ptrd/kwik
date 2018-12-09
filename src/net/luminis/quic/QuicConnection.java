@@ -103,7 +103,7 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
-            new InitialPacket(connectionSecrets).parse(data, log);
+            new InitialPacket(quicVersion, connectionSecrets).parse(data, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
