@@ -8,17 +8,21 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     private static final int MAX_PACKET_SIZE = 1500;
     
-    protected final Version quicVersion;
-    protected final byte[] sourceConnectionId;
-    protected final byte[] destConnectionId;
-    private final int packetNumber;
-    protected final byte[] payload;
-    private final ConnectionSecrets connectionSecrets;
-    protected final ByteBuffer packetBuffer;
+    protected  Version quicVersion;
+    protected  byte[] sourceConnectionId;
+    protected  byte[] destConnectionId;
+    private  int packetNumber;
+    protected  byte[] payload;
+    protected  ConnectionSecrets connectionSecrets;
+    protected  ByteBuffer packetBuffer;
     private int packetNumberPosition;
     private int encodedPacketNumberSize;
     private int paddingLength;
     private byte[] encryptedPayload;
+
+    public LongHeaderPacket(ConnectionSecrets connectionSecrets) {
+        this.connectionSecrets = connectionSecrets;
+    }
 
     public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
         this.quicVersion = quicVersion;

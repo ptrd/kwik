@@ -100,8 +100,35 @@ public class QuicConnection {
             VersionNegotationPacket versionNegotationPacket = new VersionNegotationPacket().parse(data, log);
             log.info("Server doesn't support " + quicVersion + ", but only: " + versionNegotationPacket.getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
         }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
+        // "An Initial packet uses long headers with a type value of 0x7F."
+        else if ((flags & 0xff) == 0xff) {
+            new InitialPacket(connectionSecrets).parse(data, log);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
+        // "A Retry packet uses a long packet header with a type value of 0x7E."
+        else if ((flags & 0xff) == 0xfe) {
+            // Retry
+            System.out.println("Ignoring Retry packet");
+            return;
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
+        // "A Handshake packet uses long headers with a type value of 0x7D."
+        else if ((flags & 0xff) == 0xfd) {
+            System.out.println("Ignoring handshake packet");
+            return;
+        }
+        else if ((flags & 0xff) == 0xfc) {
+            // 0-RTT Protected
+            System.out.println("Ignoring 0-RTT Protected package");
+            return;
+        }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
+        }
+
+        if (data.position() < data.limit()) {
+            parse(data.slice());
         }
     }
 }

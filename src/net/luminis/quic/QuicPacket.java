@@ -74,6 +74,36 @@ abstract public class QuicPacket {
         }
     }
 
+    byte[] decryptPayload(byte[] message, byte[] associatedData, int packetNumber, NodeSecrets secrets) {
+        ByteBuffer nonceInput = ByteBuffer.allocate(12);
+        nonceInput.putInt(0);
+        nonceInput.putLong((long) packetNumber);
+
+        byte[] nonce = new byte[12];
+        int i = 0;
+        for (byte b : nonceInput.array())
+            nonce[i] = (byte) (b ^ secrets.writeIV[i++]);
+
+        try {
+            SecretKeySpec secretKey = new SecretKeySpec(secrets.writeKey, "AES");
+            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
+            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116  5.3
+            aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
+            aeadCipher.updateAAD(associatedData);
+            return aeadCipher.doFinal(message);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            // Inappropriate runtime environment
+            throw new QuicRuntimeException(e);
+        } catch (AEADBadTagException decryptError) {
+            throw new ProtocolError("Cannot decrypt payload");
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+
+    }
+
     byte[] createProtectedPacketNumber(byte[] ciphertext, int packetNumber, NodeSecrets secrets) {
 
         //int sampleOffset = 6 + initialConnectionId.length + sourceConnectionId.length + 2 /* length(payload_length) */ + 4;
@@ -83,6 +113,18 @@ abstract public class QuicPacket {
         byte[] encryptedPn = encryptAesCtr(secrets.pn, sample, new byte[] { (byte) packetNumber });   // TODO: if pn > 1 byte
         return encryptedPn;
     }
+
+    int unprotectPacketNumber(byte[] ciphertext, int protectedPacketNumber, NodeSecrets secrets) {
+
+        //int sampleOffset = 6 + initialConnectionId.length + sourceConnectionId.length + 2 /* length(payload_length) */ + 4;
+        int sampleOffset = 3;    // TODO
+        byte[] sample = new byte[16];
+        System.arraycopy(ciphertext, sampleOffset, sample,0,16);
+        // AES is symmetric, so decrypt is the same as encrypt
+        byte[] decryptedPn = encryptAesCtr(secrets.pn, sample, new byte[] { (byte) protectedPacketNumber });
+        return decryptedPn[0];   // TODO: assuming one byte
+    }
+
 
     byte[] encryptAesCtr(byte[] key, byte[] initVector, byte[] value) {
         try {
@@ -101,5 +143,22 @@ abstract public class QuicPacket {
             // Programming error
             throw new RuntimeException();
         }
+    }
+
+    static int parseVariableLengthInteger(ByteBuffer buffer) {
+        int length;
+        byte firstLengthByte = buffer.get();
+        switch ((firstLengthByte & 0xc0) >> 6) {
+            case 0:
+                length = firstLengthByte;
+                break;
+            case 1:
+                length = ((firstLengthByte & 0x3f) << 8) | (buffer.get() & 0xff);
+                break;
+            default:
+                // TODO
+                throw new RuntimeException("NYI");
+        }
+        return length;
     }
 }
