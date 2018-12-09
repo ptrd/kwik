@@ -41,4 +41,8 @@ public class Logger {
         }
         return result;
     }
+
+    public void info(String message) {
+        System.out.println(message);
+    }
 }

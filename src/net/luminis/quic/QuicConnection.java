@@ -6,6 +6,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
@@ -53,8 +54,9 @@ public class QuicConnection {
         socket.setSoTimeout(5000);
         socket.receive(receivedPacket);
 
-        log.debugWithHexBlock("Received packet", receivedPacket.getData(), receivedPacket.getLength());
+        log.debugWithHexBlock("Received packet (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
 
+        parse(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()));
     }
 
     /**
@@ -84,5 +86,21 @@ public class QuicConnection {
         connectionSecrets.generate(destConnectionId);
     }
 
+    void parse(ByteBuffer data) {
+        int flags = data.get();
+        int version = data.getInt();
+        data.rewind();
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
+        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
+        //  will be identified as a Version Negotiation packet based on the
+        //  Version field having a value of 0."
+        if (version == 0) {
+            VersionNegotationPacket versionNegotationPacket = new VersionNegotationPacket().parse(data, log);
+            log.info("Server doesn't support " + quicVersion + ", but only: " + versionNegotationPacket.getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
+        }
+        else {
+            throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
+        }
+    }
 }
