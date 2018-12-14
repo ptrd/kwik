@@ -1,17 +1,21 @@
 package net.luminis.quic;
 
 import jdk.jshell.spi.ExecutionControl;
+import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
 public class InitialPacket extends LongHeaderPacket {
 
+    private TlsState tlsState;
+
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
         super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
     }
 
-    public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets) {
+    public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
         super(quicVersion, connectionSecrets);
+        this.tlsState = tlsState;
     }
 
     protected void generateAdditionalFields() {
@@ -92,6 +96,9 @@ public class InitialPacket extends LongHeaderPacket {
                         new AckFrame().parse(buffer, log);
                     else
                         throw new NotYetImplementedException();
+                    break;
+                case 0x18:
+                    new CryptoFrame(tlsState).parse(buffer, log);
                     break;
                 case 0x1a:
                     if (quicVersion.atLeast(Version.IETF_draft_15))
