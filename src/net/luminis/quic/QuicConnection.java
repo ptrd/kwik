@@ -57,7 +57,7 @@ public class QuicConnection {
         ECPublicKey publicKey = (ECPublicKey) keys[1];
 
         byte[] clientHello = createClientHello(host, publicKey);
-        TlsState tlsState = new TlsState();
+        TlsState tlsState = new TlsState("quic ");
         tlsState.clientHelloSend(privateKey, clientHello);
 
         // Wrap it in a long header packet
@@ -134,7 +134,7 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
-            System.out.println("Ignoring handshake packet");
+            new HandshakePacket(quicVersion, connectionSecrets, tlsState).parse(data, log);
             return;
         }
         else if ((flags & 0xff) == 0xfc) {
@@ -163,7 +163,7 @@ public class QuicConnection {
                 (byte) 0xca, (byte) 0xe5, (byte) 0xd3, (byte) 0x76, (byte) 0x92, (byte) 0x02, (byte) 0xc1, (byte) 0x9f,   // Client random
                 (byte) 0x00,  // Session id
                 (byte) 0x00, (byte) 0x08,  // Cipher suites length
-                (byte) 0x13, (byte) 0x02, (byte) 0x13, (byte) 0x03, (byte) 0x13, (byte) 0x01, (byte) 0x00, (byte) 0xff,  // Cipher suites
+                (byte) 0x13, (byte) 0x01, (byte) 0x13, (byte) 0x01, (byte) 0x13, (byte) 0x01, (byte) 0x00, (byte) 0xff,  // Cipher suites
                 (byte) 0x01, (byte) 0x00,  // Compression methods
                 (byte) 0x00, (byte) 0xf6,  // Extension length
                 // Quic transport parameters           length 56

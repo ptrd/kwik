@@ -1,6 +1,8 @@
 package net.luminis.quic;
 
 
+import net.luminis.tls.TlsState;
+
 import java.nio.ByteBuffer;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.2
@@ -14,15 +16,17 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private  int packetNumber;
     protected  byte[] payload;
     protected  ConnectionSecrets connectionSecrets;
+    protected TlsState tlsState;
     protected  ByteBuffer packetBuffer;
     private int packetNumberPosition;
     private int encodedPacketNumberSize;
     private int paddingLength;
     private byte[] encryptedPayload;
 
-    public LongHeaderPacket(Version quicVersion, ConnectionSecrets connectionSecrets) {
+    public LongHeaderPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
         this.quicVersion = quicVersion;
         this.connectionSecrets = connectionSecrets;
+        this.tlsState = tlsState;
     }
 
     public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
@@ -111,5 +115,43 @@ public abstract class LongHeaderPacket extends QuicPacket {
         packetBuffer.rewind();
         packetBuffer.get(packetBytes);
         return packetBytes;
+    }
+
+    protected void parseFrames(byte[] frames, Logger log) {
+        ByteBuffer buffer = ByteBuffer.wrap(frames);
+
+        while (buffer.remaining() > 0) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
+            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+            int frameType = buffer.get();
+            switch (frameType) {
+                case 0x00:
+                    // Padding
+                    break;
+                case 0x0d:
+                    if (quicVersion == Version.IETF_draft_14)
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x18:
+                    new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
+                    break;
+                case 0x1a:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x1b:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        new AckFrame().parse(buffer, log);
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                default:
+                    throw new NotYetImplementedException();
+            }
+        }
     }
 }

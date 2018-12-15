@@ -4,24 +4,19 @@ import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
-public class InitialPacket extends LongHeaderPacket {
+public class HandshakePacket extends LongHeaderPacket {
 
-    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
-    }
-
-    public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
+    public HandshakePacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
         super(quicVersion, connectionSecrets, tlsState);
     }
 
+    @Override
     protected void generateAdditionalFields() {
-        // Token length (variable-length integer)
-        packetBuffer.put((byte) 0x00);
     }
 
     public void parse(ByteBuffer buffer, Logger log) {
-        log.debug("Parsing InitialPacket");
-        if (buffer.get() != (byte) 0xff) {
+        log.debug("Parsing HandshakePacket");
+        if (buffer.get() != (byte) 0xfd) {
             // Programming error: this method shouldn't have been called if packet is not Initial
             throw new RuntimeException();
         }
@@ -44,15 +39,10 @@ public class InitialPacket extends LongHeaderPacket {
         buffer.get(srcConnId);
         log.debug("Source connection id", srcConnId);
 
-        int tokenLength = buffer.get();
-        if (tokenLength > 0) {
-            buffer.position(buffer.position() + tokenLength);
-        }
-
         int length = parseVariableLengthInteger(buffer);
         log.debug("Length (PN + payload): " + length);
 
-        int protectedPackageNumberLength = 1;   // TODO: assuming pn is 1 byte
+        int protectedPackageNumberLength = 1;
         byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
         buffer.get(protectedPackageNumber);
 
@@ -62,8 +52,8 @@ public class InitialPacket extends LongHeaderPacket {
         buffer.get(frameHeader);
         buffer.position(currentPosition);
 
-        byte[] payload = new byte[length-1];  // 1 byte packet number
-        buffer.get(payload, 0, length-1);
+        byte[] payload = new byte[length-protectedPackageNumberLength];
+        buffer.get(payload, 0, length-protectedPackageNumberLength);
 
         int packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, connectionSecrets.serverSecrets);
         log.debug("Packet number: " + packetNumber);

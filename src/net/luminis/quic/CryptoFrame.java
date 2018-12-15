@@ -11,6 +11,7 @@ public class CryptoFrame extends QuicFrame {
 
     protected  ByteBuffer frameBuffer;
     private TlsState tlsState;
+    private ConnectionSecrets connectionSecrets;
 
     public CryptoFrame(byte[] cryptoData) {
         frameBuffer = ByteBuffer.allocate(3 * 4 + cryptoData.length);
@@ -20,7 +21,8 @@ public class CryptoFrame extends QuicFrame {
         frameBuffer.put(cryptoData);
     }
 
-    public CryptoFrame(TlsState tlsState) {
+    public CryptoFrame(ConnectionSecrets connectionSecrets, TlsState tlsState) {
+        this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
     }
 
@@ -39,9 +41,14 @@ public class CryptoFrame extends QuicFrame {
             log.debug("Crypto frame contains Server Hello");
             try {
                 new ServerHello().parse(ByteBuffer.wrap(cryptoData), length, tlsState);
+                // Server Hello provides a new secret, so
+                connectionSecrets.serverSecrets.recompute(tlsState);
             } catch (TlsProtocolException e) {
                 throw new ProtocolError("tls error", e);
             }
+        }
+        else if (handshakeType == TlsConstants.HandshakeType.encrypted_extensions.value) {
+            log.debug("Detected Encrypted Extensions");
         }
         else {
             throw new ProtocolError("Unknown handshake type in Crypto Frame");
