@@ -114,14 +114,12 @@ abstract public class QuicPacket {
         return encryptedPn;
     }
 
-    int unprotectPacketNumber(byte[] ciphertext, int protectedPacketNumber, NodeSecrets secrets) {
-
-        //int sampleOffset = 6 + initialConnectionId.length + sourceConnectionId.length + 2 /* length(payload_length) */ + 4;
-        int sampleOffset = 3;    // TODO
+    int unprotectPacketNumber(byte[] ciphertext, byte[] protectedPacketNumber, NodeSecrets secrets) {
+        int sampleOffset = 4 - protectedPacketNumber.length;
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample,0,16);
         // AES is symmetric, so decrypt is the same as encrypt
-        byte[] decryptedPn = encryptAesCtr(secrets.pn, sample, new byte[] { (byte) protectedPacketNumber });
+        byte[] decryptedPn = encryptAesCtr(secrets.pn, sample, protectedPacketNumber);
         return decryptedPn[0];   // TODO: assuming one byte
     }
 

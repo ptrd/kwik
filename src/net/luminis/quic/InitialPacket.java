@@ -1,6 +1,5 @@
 package net.luminis.quic;
 
-import jdk.jshell.spi.ExecutionControl;
 import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
@@ -56,7 +55,9 @@ public class InitialPacket extends LongHeaderPacket {
         int length = parseVariableLengthInteger(buffer);
         log.debug("Length (PN + payload): " + length);
 
-        int protectedPackageNumber = buffer.get() & 0xff;   // TODO: assuming pn is 1 byte
+        int protectedPackageNumberLength = 1;   // TODO: assuming pn is 1 byte
+        byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
+        buffer.get(protectedPackageNumber);
 
         int currentPosition = buffer.position();
         byte[] frameHeader = new byte[buffer.position()];
