@@ -61,7 +61,7 @@ public class QuicConnection {
         tlsState.clientHelloSend(privateKey, clientHello);
 
         // Wrap it in a long header packet
-        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, 0, clientHello, connectionSecrets);
+        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, 0, new CryptoFrame(clientHello), connectionSecrets);
         log.debugWithHexBlock("Sending packet", longHeaderPacket.getBytes());
 
         DatagramSocket socket = new DatagramSocket();
@@ -154,7 +154,6 @@ public class QuicConnection {
     // Stub
     private byte[] createClientHello(String host, ECPublicKey publicKey) {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
-                (byte) 0x18, (byte) 0x00, (byte) 0x41, (byte) 0x2b,  // Quic Frame Header: Crypto / 0 offset, 299 length
                 (byte) 0x01, // Client Hello
                 (byte) 0x00, (byte) 0x01, (byte) 0x27,  // Length 295
                 (byte) 0x03, (byte) 0x03,   // Version

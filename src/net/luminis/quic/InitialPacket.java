@@ -8,8 +8,8 @@ public class InitialPacket extends LongHeaderPacket {
 
     private TlsState tlsState;
 
-    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
+    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
     }
 
     public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {

@@ -7,12 +7,20 @@ import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
-public class CryptoFrame {
+public class CryptoFrame extends QuicFrame {
 
-    private final TlsState tlsState;
+    protected  ByteBuffer frameBuffer;
+    private TlsState tlsState;
+
+    public CryptoFrame(byte[] cryptoData) {
+        frameBuffer = ByteBuffer.allocate(3 * 4 + cryptoData.length);
+        frameBuffer.put(encodeVariableLengthInteger(0x18));
+        frameBuffer.put(encodeVariableLengthInteger(0));
+        frameBuffer.put(encodeVariableLengthInteger(cryptoData.length));
+        frameBuffer.put(cryptoData);
+    }
 
     public CryptoFrame(TlsState tlsState) {
-
         this.tlsState = tlsState;
     }
 
@@ -39,4 +47,12 @@ public class CryptoFrame {
             throw new ProtocolError("Unknown handshake type in Crypto Frame");
         }
     }
+
+    public byte[] getBytes() {
+        byte[] frameBytes = new byte[frameBuffer.position()];
+        frameBuffer.rewind();
+        frameBuffer.get(frameBytes);
+        return frameBytes;
+    }
+
 }
