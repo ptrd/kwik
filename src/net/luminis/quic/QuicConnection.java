@@ -33,7 +33,7 @@ public class QuicConnection {
 
     public QuicConnection(String host, int port, Version quicVersion) {
         log = new Logger();
-        log.debug("Creating connection with " + host + ":" + port);
+        log.debug("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
         this.quicVersion = quicVersion;
