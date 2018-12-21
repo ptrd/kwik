@@ -10,13 +10,18 @@ public class InitialPacket extends LongHeaderPacket {
         super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
     }
 
-    public InitialPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
-        super(quicVersion, connectionSecrets, tlsState);
+    public InitialPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {
+        super(quicVersion, connection, tlsState, connectionSecrets);
     }
 
     protected void generateAdditionalFields() {
         // Token length (variable-length integer)
         packetBuffer.put((byte) 0x00);
+    }
+
+    @Override
+    protected int getEncryptionLevel() {
+        return 0;
     }
 
     @Override

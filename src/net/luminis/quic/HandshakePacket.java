@@ -6,12 +6,17 @@ import java.nio.ByteBuffer;
 
 public class HandshakePacket extends LongHeaderPacket {
 
-    public HandshakePacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
-        super(quicVersion, connectionSecrets, tlsState);
+    public HandshakePacket(Version quicVersion, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState) {
+        super(quicVersion, connection, tlsState, connectionSecrets);
     }
 
     @Override
     protected void generateAdditionalFields() {
+    }
+
+    @Override
+    protected int getEncryptionLevel() {
+        return 1;
     }
 
     @Override

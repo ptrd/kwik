@@ -1,24 +1,28 @@
 package net.luminis.quic;
 
-import net.luminis.tls.ServerHello;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
 public class CryptoFrame extends QuicFrame {
 
-    protected  ByteBuffer frameBuffer;
     private TlsState tlsState;
     private ConnectionSecrets connectionSecrets;
 
-    public CryptoFrame(byte[] cryptoData) {
-        frameBuffer = ByteBuffer.allocate(3 * 4 + cryptoData.length);
+    private int offset;
+    private int length;
+    private byte[] cryptoData;
+
+    public CryptoFrame(byte[] payload) {
+        ByteBuffer frameBuffer = ByteBuffer.allocate(3 * 4 + payload.length);
         frameBuffer.put(encodeVariableLengthInteger(0x18));
-        frameBuffer.put(encodeVariableLengthInteger(0));
-        frameBuffer.put(encodeVariableLengthInteger(cryptoData.length));
-        frameBuffer.put(cryptoData);
+        frameBuffer.put(encodeVariableLengthInteger(offset));
+        frameBuffer.put(encodeVariableLengthInteger(payload.length));
+        frameBuffer.put(payload);
+
+        cryptoData = new byte[frameBuffer.position()];
+        frameBuffer.rewind();
+        frameBuffer.get(cryptoData);
     }
 
     public CryptoFrame(ConnectionSecrets connectionSecrets, TlsState tlsState) {
@@ -26,40 +30,32 @@ public class CryptoFrame extends QuicFrame {
         this.tlsState = tlsState;
     }
 
-    public void parse(ByteBuffer buffer, Logger log) {
+    public CryptoFrame parse(ByteBuffer buffer, Logger log) {
         log.debug("Parsing Crypto frame");
 
-        int offset = QuicPacket.parseVariableLengthInteger(buffer);
-        int length = QuicPacket.parseVariableLengthInteger(buffer);
+        offset = QuicPacket.parseVariableLengthInteger(buffer);
+        length = QuicPacket.parseVariableLengthInteger(buffer);
 
-        byte[] cryptoData = new byte[length];
+        cryptoData = new byte[length];
         buffer.get(cryptoData);
-        log.debug("Crypto data", cryptoData);
+        log.debug("Crypto data [" + offset + "," + length + "]", cryptoData);
 
-        int handshakeType = cryptoData[0];
-        if (handshakeType == TlsConstants.HandshakeType.server_hello.value) {
-            log.debug("Crypto frame contains Server Hello");
-            try {
-                new ServerHello().parse(ByteBuffer.wrap(cryptoData), length, tlsState);
-                // Server Hello provides a new secret, so
-                connectionSecrets.serverSecrets.recompute(tlsState);
-            } catch (TlsProtocolException e) {
-                throw new ProtocolError("tls error", e);
-            }
-        }
-        else if (handshakeType == TlsConstants.HandshakeType.encrypted_extensions.value) {
-            log.debug("Detected Encrypted Extensions");
-        }
-        else {
-            throw new ProtocolError("Unknown handshake type in Crypto Frame");
-        }
+        return this;
     }
 
     public byte[] getBytes() {
-        byte[] frameBytes = new byte[frameBuffer.position()];
-        frameBuffer.rewind();
-        frameBuffer.get(frameBytes);
-        return frameBytes;
+        return cryptoData;
     }
 
+    public byte[] getCryptoData() {
+        return cryptoData;
+    }
+
+    public int getOffset() {
+        return offset;
+    }
+
+    public int getLength() {
+        return length;
+    }
 }

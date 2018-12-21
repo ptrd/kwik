@@ -11,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.security.interfaces.ECKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -29,6 +31,8 @@ public class QuicConnection {
     private byte[] sourceConnectionId;
     private byte[] destConnectionId;
     private ConnectionSecrets connectionSecrets;
+    private List<CryptoStream> cryptoStreams = new ArrayList<>();
+    private TlsState tlsState;
 
 
     public QuicConnection(String host, int port, Version quicVersion) {
@@ -57,7 +61,7 @@ public class QuicConnection {
         ECPublicKey publicKey = (ECPublicKey) keys[1];
 
         byte[] clientHello = createClientHello(host, publicKey);
-        TlsState tlsState = new TlsState("quic ");
+        tlsState = new QuicTlsState();
         tlsState.clientHelloSend(privateKey, clientHello);
 
         // Wrap it in a long header packet
@@ -69,14 +73,15 @@ public class QuicConnection {
         socket.send(packet);
         log.debug("packet sent");
 
-        byte[] receiveBuffer = new byte[1500];
-        DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
         socket.setSoTimeout(5000);
-        socket.receive(receivedPacket);
-
-        log.debugWithHexBlock("Received packet (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
-
-        parse(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
+        byte[] receiveBuffer = new byte[1500];
+        DatagramPacket receivedPacket;
+        for (int i = 0; i < 3; i++) {
+            receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+            socket.receive(receivedPacket);
+            log.debugWithHexBlock("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
+            parse(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
+        }
     }
 
     /**
@@ -107,6 +112,8 @@ public class QuicConnection {
     }
 
     void parse(ByteBuffer data, TlsState tlsState) {
+        int packetStart = data.position();
+
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
@@ -122,7 +129,7 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
-            new InitialPacket(quicVersion, connectionSecrets, tlsState).parse(data, log);
+            new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
@@ -134,8 +141,7 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
-            new HandshakePacket(quicVersion, connectionSecrets, tlsState).parse(data, log);
-            return;
+            new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
         }
         else if ((flags & 0xff) == 0xfc) {
             // 0-RTT Protected
@@ -146,9 +152,20 @@ public class QuicConnection {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
 
+        log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
+
         if (data.position() < data.limit()) {
             parse(data.slice(), tlsState);
         }
+    }
+
+    public CryptoStream getCryptoStream(int encryptionLevel) {
+        if (cryptoStreams.size() <= encryptionLevel) {
+            for (int i = encryptionLevel - cryptoStreams.size(); i >= 0; i--) {
+                cryptoStreams.add(new CryptoStream(connectionSecrets, tlsState, log));
+            }
+        }
+        return cryptoStreams.get(encryptionLevel);
     }
 
     // Stub
@@ -231,6 +248,5 @@ public class QuicConnection {
 
         return buffer.array();
     }
-
 
 }

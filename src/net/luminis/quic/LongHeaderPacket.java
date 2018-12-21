@@ -14,17 +14,19 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected  byte[] sourceConnectionId;
     protected  byte[] destConnectionId;
     private  int packetNumber;
-    protected  byte[] payload;
-    protected  ConnectionSecrets connectionSecrets;
+    protected byte[] payload;
+    protected QuicConnection connection;
+    protected ConnectionSecrets connectionSecrets;
     protected TlsState tlsState;
-    protected  ByteBuffer packetBuffer;
+    protected ByteBuffer packetBuffer;
     private int packetNumberPosition;
     private int encodedPacketNumberSize;
     private int paddingLength;
     private byte[] encryptedPayload;
 
-    public LongHeaderPacket(Version quicVersion, ConnectionSecrets connectionSecrets, TlsState tlsState) {
+    public LongHeaderPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {
         this.quicVersion = quicVersion;
+        this.connection = connection;
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
     }
@@ -189,7 +191,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
                         throw new NotYetImplementedException();
                     break;
                 case 0x18:
-                    new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
+                    CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
+                    connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
                     break;
                 case 0x1a:
                     if (quicVersion.atLeast(Version.IETF_draft_15))
@@ -208,6 +211,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
             }
         }
     }
+
+    protected abstract int getEncryptionLevel();
 
     protected abstract void checkPacketType(byte b);
 
