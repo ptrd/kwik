@@ -24,6 +24,8 @@ public class ConnectionSecrets {
 
     NodeSecrets clientSecrets;
     NodeSecrets serverSecrets;
+    NodeSecrets initialServerSecrets;
+    NodeSecrets initialClientSecrets;
 
     public ConnectionSecrets(Version quicVersion, Logger log) {
         this.log = log;
@@ -45,6 +47,8 @@ public class ConnectionSecrets {
 
         clientSecrets = new NodeSecrets(initialSecret, NodeRole.Client, log);
         serverSecrets = new NodeSecrets(initialSecret, NodeRole.Server, log);
+        initialClientSecrets = new NodeSecrets(initialSecret, NodeRole.Client, log);
+        initialServerSecrets = new NodeSecrets(initialSecret, NodeRole.Server, log);
     }
 
 

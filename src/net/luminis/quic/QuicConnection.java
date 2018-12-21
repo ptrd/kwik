@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.interfaces.ECKey;
 import java.security.interfaces.ECPrivateKey;
@@ -33,13 +34,17 @@ public class QuicConnection {
     private ConnectionSecrets connectionSecrets;
     private List<CryptoStream> cryptoStreams = new ArrayList<>();
     private TlsState tlsState;
+    private DatagramSocket socket;
+    private final InetAddress serverAddress;
+    private int[] lastPacketNumber = new int[3];
 
 
-    public QuicConnection(String host, int port, Version quicVersion) {
+    public QuicConnection(String host, int port, Version quicVersion) throws UnknownHostException {
         log = new Logger();
         log.debug("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
+        serverAddress = InetAddress.getByName(host);
         this.quicVersion = quicVersion;
     }
 
@@ -65,13 +70,11 @@ public class QuicConnection {
         tlsState.clientHelloSend(privateKey, clientHello);
 
         // Wrap it in a long header packet
-        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, 0, new CryptoFrame(clientHello), connectionSecrets);
+        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[0]++, new CryptoFrame(clientHello), connectionSecrets);
         log.debugWithHexBlock("Sending packet", longHeaderPacket.getBytes());
 
-        DatagramSocket socket = new DatagramSocket();
-        DatagramPacket packet = new DatagramPacket(longHeaderPacket.getBytes(), longHeaderPacket.getBytes().length, InetAddress.getByName(host), port);
-        socket.send(packet);
-        log.debug("packet sent");
+        socket = new DatagramSocket();
+        send(longHeaderPacket);
 
         socket.setSoTimeout(5000);
         byte[] receiveBuffer = new byte[1500];
@@ -82,6 +85,12 @@ public class QuicConnection {
             log.debugWithHexBlock("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
             parse(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
         }
+    }
+
+    private void send(LongHeaderPacket longHeaderPacket) throws IOException {
+        DatagramPacket packet = new DatagramPacket(longHeaderPacket.getBytes(), longHeaderPacket.getBytes().length, serverAddress, port);
+        socket.send(packet);
+        log.debug("packet sent, pn: " + longHeaderPacket.getPacketNumber());
     }
 
     /**
@@ -111,7 +120,7 @@ public class QuicConnection {
         connectionSecrets.generate(destConnectionId);
     }
 
-    void parse(ByteBuffer data, TlsState tlsState) {
+    void parse(ByteBuffer data, TlsState tlsState) throws IOException {
         int packetStart = data.position();
 
         int flags = data.get();
@@ -129,7 +138,9 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
-            new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
+            LongHeaderPacket packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
+            destConnectionId = packet.getSourceConnectionId();
+            acknowledge(packet.getPacketNumber());
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
@@ -167,6 +178,12 @@ public class QuicConnection {
         }
         return cryptoStreams.get(encryptionLevel);
     }
+
+    private void acknowledge(int packetNumber) throws IOException {
+        LongHeaderPacket ack = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[0]++, new AckFrame(quicVersion, packetNumber), connectionSecrets);
+        send(ack);
+    }
+
 
     // Stub
     private byte[] createClientHello(String host, ECPublicKey publicKey) {

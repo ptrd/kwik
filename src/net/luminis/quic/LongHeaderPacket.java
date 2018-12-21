@@ -10,13 +10,13 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     private static final int MAX_PACKET_SIZE = 1500;
     
-    protected  Version quicVersion;
-    protected  byte[] sourceConnectionId;
-    protected  byte[] destConnectionId;
-    private  int packetNumber;
+    protected Version quicVersion;
+    protected byte[] sourceConnectionId;
+    protected byte[] destConnectionId;
+    protected int packetNumber;
     protected byte[] payload;
     protected QuicConnection connection;
-    protected ConnectionSecrets connectionSecrets;
+    protected ConnectionSecrets connectionSecrets;  // TODO? for parsing only...
     protected TlsState tlsState;
     protected ByteBuffer packetBuffer;
     private int packetNumberPosition;
@@ -24,20 +24,40 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private int paddingLength;
     private byte[] encryptedPayload;
 
-    public LongHeaderPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {
+    /**
+     * Constructs an empty packet for parsing a received one
+     * @param quicVersion
+     * @param connection
+     * @param tlsState
+     * @param connectionSecrets
+     */
+    public LongHeaderPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {  // TODO: move args to parse method?
         this.quicVersion = quicVersion;
         this.connection = connection;
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
     }
 
+    /**
+     * Constructs a long header packet for sending (client role).
+     * @param quicVersion
+     * @param sourceConnectionId
+     * @param destConnectionId
+     * @param packetNumber
+     * @param payload
+     * @param connectionSecrets
+     */
     public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destConnectionId = destConnectionId;
         this.packetNumber = packetNumber;
         this.payload = payload;
-        this.connectionSecrets = connectionSecrets;
+
+        NodeSecrets clientSecrets = connectionSecrets.clientSecrets;
+        if (getEncryptionLevel() == 0) {
+            clientSecrets = connectionSecrets.initialClientSecrets;
+        }
 
         packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         generateFrameHeaderInvariant();
@@ -46,8 +66,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
         addLength(encodedPacketNumber.length);
         addPacketNumber(encodedPacketNumber);
 
-        generateEncryptPayload(payload);
-        protectPacketNumber();
+        generateEncryptPayload(payload, clientSecrets);
+        protectPacketNumber(clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
     }
@@ -87,7 +107,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         packetBuffer.put(encodedPacketNumber);
     }
 
-    private void generateEncryptPayload(byte[] payload) {
+    private void generateEncryptPayload(byte[] payload, NodeSecrets clientSecrets) {
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
         // "The associated data, A, for the AEAD is the contents of the QUIC
         //   header, starting from the flags octet in either the short or long
@@ -100,12 +120,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         byte[] paddedPayload = new byte[payload.length + paddingLength];
         System.arraycopy(payload, 0, paddedPayload, 0, payload.length);
-        encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, connectionSecrets.clientSecrets);
+        encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
         packetBuffer.put(encryptedPayload);
     }
 
-    private void protectPacketNumber() {
-        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, 0, connectionSecrets.clientSecrets);
+    private void protectPacketNumber(NodeSecrets clientSecrets) {
+        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
         int currentPosition = packetBuffer.position();
         packetBuffer.position(packetNumberPosition);
         packetBuffer.put(protectedPacketNumber);
@@ -119,7 +139,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return packetBytes;
     }
 
-    public void parse(ByteBuffer buffer, Logger log) {
+    public LongHeaderPacket parse(ByteBuffer buffer, Logger log) {
         log.debug("Parsing " + this.getClass().getSimpleName());
         checkPacketType(buffer.get());
 
@@ -137,9 +157,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte[] destConnId = new byte[dstConnIdLength];
         buffer.get(destConnId);
         log.debug("Destination connection id", destConnId);
-        byte[] srcConnId = new byte[srcConnIdLength];
-        buffer.get(srcConnId);
-        log.debug("Source connection id", srcConnId);
+        sourceConnectionId = new byte[srcConnIdLength];
+        buffer.get(sourceConnectionId);
+        log.debug("Source connection id", sourceConnectionId);
 
         parseAdditionalFields(buffer);
 
@@ -170,8 +190,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte[] frames = decryptPayload(payload, frameHeader, packetNumber, connectionSecrets.serverSecrets);
         log.debug("Decrypted payload", frames);
         parseFrames(frames, log);
-    }
 
+        return this;
+    }
 
     protected void parseFrames(byte[] frames, Logger log) {
         ByteBuffer buffer = ByteBuffer.wrap(frames);
@@ -210,6 +231,14 @@ public abstract class LongHeaderPacket extends QuicPacket {
                     throw new NotYetImplementedException();
             }
         }
+    }
+
+    public byte[] getSourceConnectionId() {
+        return sourceConnectionId;
+    }
+
+    public int getPacketNumber() {
+        return packetNumber;
     }
 
     protected abstract int getEncryptionLevel();
