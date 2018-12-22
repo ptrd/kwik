@@ -30,11 +30,18 @@ public class CryptoStream {
         boolean inserted = false;
         for (int i = 0; !inserted && i < frames.size(); i++) {
             if (frames.get(i).getOffset() > frameOffset) {
+                // First check whether this frame is not added already
+                if (i > 0 && frames.get(i-1).getOffset() == frameOffset) {
+                    log.debug("Ignoring duplicate: " + cryptoFrame);
+                    return;
+                }
+                // Insert here.
                 frames.add(i, cryptoFrame);
                 inserted = true;
             }
         }
         if (! inserted) {
+            // So offset is larger than all existing frames.
             frames.add(cryptoFrame);
         }
 

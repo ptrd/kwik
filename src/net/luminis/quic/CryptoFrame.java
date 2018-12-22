@@ -43,6 +43,11 @@ public class CryptoFrame extends QuicFrame {
         return this;
     }
 
+    @Override
+    public String toString() {
+        return "CryptoFrame[" + offset + "," + length + "]";
+    }
+
     public byte[] getBytes() {
         return cryptoData;
     }
