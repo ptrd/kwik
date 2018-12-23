@@ -5,6 +5,8 @@ import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
+import static net.luminis.quic.EncryptionLevel.Initial;
+
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.2
 public abstract class LongHeaderPacket extends QuicPacket {
 
@@ -55,7 +57,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.payload = payload;
 
         NodeSecrets clientSecrets = connectionSecrets.clientSecrets;
-        if (getEncryptionLevel() == 0) {
+        if (getEncryptionLevel() == Initial) {
             clientSecrets = connectionSecrets.initialClientSecrets;
         }
 
@@ -73,8 +75,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     protected void generateFrameHeaderInvariant() {
-        // type (initial)
-        packetBuffer.put((byte) 0xff);
+        // Packet type
+        byte packetType = getPacketType();
+        packetBuffer.put(packetType);
         // Version
         packetBuffer.put(quicVersion.getBytes());
         // DCIL / SCIL
@@ -87,14 +90,18 @@ public abstract class LongHeaderPacket extends QuicPacket {
         packetBuffer.put(sourceConnectionId);
     }
 
+    protected abstract byte getPacketType();
+
     protected abstract void generateAdditionalFields();
 
     private void addLength(int packetNumberLength) {
         int estimatedPacketLength = packetBuffer.position() + packetNumberLength + payload.length + 16;   // 16 is what encryption adds, note that final length is larger due to adding packet length
         paddingLength = 0;
-        // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-14)
-        if (estimatedPacketLength < 1200)
-            paddingLength = 1200 - estimatedPacketLength;
+        if (getEncryptionLevel() == Initial && packetNumber == 0) {
+            // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-14)
+            if (estimatedPacketLength < 1200)
+                paddingLength = 1200 - estimatedPacketLength;
+        }
         int packetLength = payload.length + paddingLength + 16 + packetNumberLength;
         byte[] length = encodeVariableLengthInteger(packetLength);
         packetBuffer.put(length);
@@ -179,7 +186,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte[] payload = new byte[length - protectedPackageNumberLength];
         buffer.get(payload, 0, length - protectedPackageNumberLength);
 
-        int packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, connectionSecrets.serverSecrets);
+        packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, connectionSecrets.serverSecrets);
         log.debug("Packet number: " + packetNumber);
 
         log.debug("Encrypted payload", payload);
@@ -241,7 +248,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return packetNumber;
     }
 
-    protected abstract int getEncryptionLevel();
+    protected abstract EncryptionLevel getEncryptionLevel();
 
     protected abstract void checkPacketType(byte b);
 

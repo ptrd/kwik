@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import static net.luminis.quic.EncryptionLevel.Handshake;
+import static net.luminis.quic.EncryptionLevel.Initial;
 import static net.luminis.tls.Tls13.generateKeys;
 
 /**
@@ -36,7 +38,7 @@ public class QuicConnection {
     private TlsState tlsState;
     private DatagramSocket socket;
     private final InetAddress serverAddress;
-    private int[] lastPacketNumber = new int[3];
+    private int[] lastPacketNumber = new int[EncryptionLevel.values().length];
 
 
     public QuicConnection(String host, int port, Version quicVersion) throws UnknownHostException {
@@ -70,11 +72,11 @@ public class QuicConnection {
         tlsState.clientHelloSend(privateKey, clientHello);
 
         // Wrap it in a long header packet
-        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[0]++, new CryptoFrame(clientHello), connectionSecrets);
+        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Initial.ordinal()]++, new CryptoFrame(clientHello), connectionSecrets);
         log.debugWithHexBlock("Sending packet", longHeaderPacket.getBytes());
 
         socket = new DatagramSocket();
-        send(longHeaderPacket);
+        send(longHeaderPacket, "client hello");
 
         socket.setSoTimeout(5000);
         byte[] receiveBuffer = new byte[1500];
@@ -87,10 +89,11 @@ public class QuicConnection {
         }
     }
 
-    private void send(LongHeaderPacket longHeaderPacket) throws IOException {
-        DatagramPacket packet = new DatagramPacket(longHeaderPacket.getBytes(), longHeaderPacket.getBytes().length, serverAddress, port);
+    private void send(LongHeaderPacket longHeaderPacket, String logMessage) throws IOException {
+        byte[] packetData = longHeaderPacket.getBytes();
+        DatagramPacket packet = new DatagramPacket(packetData, packetData.length, serverAddress, port);
         socket.send(packet);
-        log.debug("packet sent, pn: " + longHeaderPacket.getPacketNumber());
+        log.debug("packet sent (" + logMessage + "), pn: " + longHeaderPacket.getPacketNumber(), packetData);
     }
 
     /**
@@ -140,7 +143,7 @@ public class QuicConnection {
         else if ((flags & 0xff) == 0xff) {
             LongHeaderPacket packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
             destConnectionId = packet.getSourceConnectionId();
-            acknowledge(packet.getPacketNumber());
+            acknowledge(Initial, packet.getPacketNumber());
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
@@ -152,7 +155,8 @@ public class QuicConnection {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
-            new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
+            LongHeaderPacket packet = new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
+            acknowledge(Handshake, packet.getPacketNumber());
         }
         else if ((flags & 0xff) == 0xfc) {
             // 0-RTT Protected
@@ -170,18 +174,28 @@ public class QuicConnection {
         }
     }
 
-    public CryptoStream getCryptoStream(int encryptionLevel) {
-        if (cryptoStreams.size() <= encryptionLevel) {
-            for (int i = encryptionLevel - cryptoStreams.size(); i >= 0; i--) {
+    public CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
+        if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
+            for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
                 cryptoStreams.add(new CryptoStream(connectionSecrets, tlsState, log));
             }
         }
-        return cryptoStreams.get(encryptionLevel);
+        return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private void acknowledge(int packetNumber) throws IOException {
-        LongHeaderPacket ack = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[0]++, new AckFrame(quicVersion, packetNumber), connectionSecrets);
-        send(ack);
+    private void acknowledge(EncryptionLevel encryptionLevel, int packetNumber) throws IOException {
+        AckFrame ack = new AckFrame(quicVersion, packetNumber);
+
+        LongHeaderPacket ackPacket = null;
+        switch (encryptionLevel) {
+            case Initial:
+                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                break;
+            case Handshake:
+                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                break;
+        }
+        send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
     }
 
 

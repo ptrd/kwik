@@ -10,13 +10,21 @@ public class HandshakePacket extends LongHeaderPacket {
         super(quicVersion, connection, tlsState, connectionSecrets);
     }
 
+    public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
+    }
+
+    protected byte getPacketType() {
+        return (byte) 0xfd;
+    }
+
     @Override
     protected void generateAdditionalFields() {
     }
 
     @Override
-    protected int getEncryptionLevel() {
-        return 1;
+    protected EncryptionLevel getEncryptionLevel() {
+        return EncryptionLevel.Handshake;
     }
 
     @Override

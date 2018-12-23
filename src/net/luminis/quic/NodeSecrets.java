@@ -27,6 +27,11 @@ public class NodeSecrets {
     }
 
     public void recompute(TlsState tlsState) {
+        if (nodeRole == Client) {
+            byte[] clientHandshakeTrafficSecret = tlsState.getClientHandshakeTrafficSecret();
+            log.debug("Got new clientHandshakeTrafficSecret from TLS (recomputing secrets): ", clientHandshakeTrafficSecret);
+            computeKeys(clientHandshakeTrafficSecret);
+        }
         if (nodeRole == Server) {
             byte[] serverHandshakeTrafficSecret = tlsState.getServerHandshakeTrafficSecret();
             log.debug("Got new serverHandshakeTrafficSecret from TLS (recomputing secrets): ", serverHandshakeTrafficSecret);

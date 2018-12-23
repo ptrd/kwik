@@ -14,14 +14,18 @@ public class InitialPacket extends LongHeaderPacket {
         super(quicVersion, connection, tlsState, connectionSecrets);
     }
 
+    protected byte getPacketType() {
+        return (byte) 0xff;
+    }
+
     protected void generateAdditionalFields() {
         // Token length (variable-length integer)
         packetBuffer.put((byte) 0x00);
     }
 
     @Override
-    protected int getEncryptionLevel() {
-        return 0;
+    protected EncryptionLevel getEncryptionLevel() {
+        return EncryptionLevel.Initial;
     }
 
     @Override

@@ -58,6 +58,7 @@ public class CryptoStream {
                     if (msg instanceof ServerHello) {
                         // Server Hello provides a new secret, so
                         connectionSecrets.serverSecrets.recompute(tlsState);
+                        connectionSecrets.clientSecrets.recompute(tlsState);
                     } else {
                         log.debug("Detected " + msg.getClass().getSimpleName());
                     }
