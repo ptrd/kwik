@@ -8,7 +8,7 @@ import java.util.List;
  * Represents a Version Negotiation Packet as specified by
  * https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4
  */
-public class VersionNegotationPacket {
+public class VersionNegotationPacket extends QuicPacket {
 
     public List<String> getServerSupportedVersions() {
         return serverSupportedVersions;

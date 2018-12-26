@@ -11,7 +11,7 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
     }
 
     protected byte getPacketType() {

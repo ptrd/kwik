@@ -14,6 +14,9 @@ public class CryptoFrame extends QuicFrame {
     private byte[] cryptoData;
 
     public CryptoFrame(byte[] payload) {
+        offset = 0;
+        cryptoData = payload;
+        length = payload.length;
         ByteBuffer frameBuffer = ByteBuffer.allocate(3 * 4 + payload.length);
         frameBuffer.put(encodeVariableLengthInteger(0x18));
         frameBuffer.put(encodeVariableLengthInteger(offset));

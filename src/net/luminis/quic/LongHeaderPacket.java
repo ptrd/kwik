@@ -4,6 +4,9 @@ package net.luminis.quic;
 import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.Initial;
 
@@ -15,7 +18,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected Version quicVersion;
     protected byte[] sourceConnectionId;
     protected byte[] destConnectionId;
-    protected int packetNumber;
     protected byte[] payload;
     protected QuicConnection connection;
     protected ConnectionSecrets connectionSecrets;  // TODO? for parsing only...
@@ -25,6 +27,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private int encodedPacketNumberSize;
     private int paddingLength;
     private byte[] encryptedPayload;
+    private int packetSize;
+    protected List<QuicFrame> frames;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -46,15 +50,16 @@ public abstract class LongHeaderPacket extends QuicPacket {
      * @param sourceConnectionId
      * @param destConnectionId
      * @param packetNumber
-     * @param payload
+     * @param frame
      * @param connectionSecrets
      */
-    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, byte[] payload, ConnectionSecrets connectionSecrets) {
+    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame frame, ConnectionSecrets connectionSecrets) {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destConnectionId = destConnectionId;
         this.packetNumber = packetNumber;
-        this.payload = payload;
+        this.frames = List.of(frame);
+        this.payload = frame.getBytes();
 
         NodeSecrets clientSecrets = connectionSecrets.clientSecrets;
         if (getEncryptionLevel() == Initial) {
@@ -72,6 +77,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         protectPacketNumber(clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
+        packetSize = packetBuffer.limit();
     }
 
     protected void generateFrameHeaderInvariant() {
@@ -147,6 +153,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     public LongHeaderPacket parse(ByteBuffer buffer, Logger log) {
+        int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         checkPacketType(buffer.get());
 
@@ -194,15 +201,18 @@ public abstract class LongHeaderPacket extends QuicPacket {
         frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // TODO: assuming packet number is 1 byte
         log.debug("Frame header", frameHeader);
 
-        byte[] frames = decryptPayload(payload, frameHeader, packetNumber, connectionSecrets.serverSecrets);
-        log.debug("Decrypted payload", frames);
-        parseFrames(frames, log);
+        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, connectionSecrets.serverSecrets);
+        log.debug("Decrypted payload", frameBytes);
 
+        frames = new ArrayList<>();
+        parseFrames(frameBytes, log);
+
+        packetSize = buffer.position() - startPosition;
         return this;
     }
 
-    protected void parseFrames(byte[] frames, Logger log) {
-        ByteBuffer buffer = ByteBuffer.wrap(frames);
+    protected void parseFrames(byte[] frameBytes, Logger log) {
+        ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         while (buffer.remaining() > 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
@@ -214,23 +224,24 @@ public abstract class LongHeaderPacket extends QuicPacket {
                     break;
                 case 0x0d:
                     if (quicVersion == Version.IETF_draft_14)
-                        new AckFrame().parse(buffer, log);
+                        frames.add(new AckFrame().parse(buffer, log));
                     else
                         throw new NotYetImplementedException();
                     break;
                 case 0x18:
                     CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
                     connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
+                    frames.add(cryptoFrame);
                     break;
                 case 0x1a:
                     if (quicVersion.atLeast(Version.IETF_draft_15))
-                        new AckFrame().parse(buffer, log);
+                        frames.add(new AckFrame().parse(buffer, log));
                     else
                         throw new NotYetImplementedException();
                     break;
                 case 0x1b:
                     if (quicVersion.atLeast(Version.IETF_draft_15))
-                        new AckFrame().parse(buffer, log);
+                        frames.add(new AckFrame().parse(buffer, log));
                     else
                         throw new NotYetImplementedException();
                     break;
@@ -238,6 +249,17 @@ public abstract class LongHeaderPacket extends QuicPacket {
                     throw new NotYetImplementedException();
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "Packet "
+                + getEncryptionLevel().name().charAt(0) + "|"
+                + packetNumber + "|"
+                + "L" + "|"
+                + packetSize + "|"
+                + frames.size() + "  "
+                + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
     }
 
     public byte[] getSourceConnectionId() {

@@ -85,15 +85,16 @@ public class QuicConnection {
             receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             socket.receive(receivedPacket);
             log.debugWithHexBlock("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
-            parse(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
+            parsePackets(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
         }
     }
 
     private void send(LongHeaderPacket longHeaderPacket, String logMessage) throws IOException {
         byte[] packetData = longHeaderPacket.getBytes();
-        DatagramPacket packet = new DatagramPacket(packetData, packetData.length, serverAddress, port);
-        socket.send(packet);
+        DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
+        socket.send(datagram);
         log.debug("packet sent (" + logMessage + "), pn: " + longHeaderPacket.getPacketNumber(), packetData);
+        log.sent(longHeaderPacket);
     }
 
     /**
@@ -123,54 +124,60 @@ public class QuicConnection {
         connectionSecrets.generate(destConnectionId);
     }
 
-    void parse(ByteBuffer data, TlsState tlsState) throws IOException {
+    void parsePackets(ByteBuffer data, TlsState tlsState) throws IOException {
         int packetStart = data.position();
 
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
 
+        QuicPacket packet;
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
         // "A Version Negotiation packet ... will appear to be a packet using the long header, but
         //  will be identified as a Version Negotiation packet based on the
         //  Version field having a value of 0."
         if (version == 0) {
-            VersionNegotationPacket versionNegotationPacket = new VersionNegotationPacket().parse(data, log);
-            log.info("Server doesn't support " + quicVersion + ", but only: " + versionNegotationPacket.getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
+            packet = new VersionNegotationPacket().parse(data, log);
+            log.received(packet);
+            log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
-            LongHeaderPacket packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
-            destConnectionId = packet.getSourceConnectionId();
+            packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
+            log.received(packet);
+            destConnectionId = ((LongHeaderPacket) packet).getSourceConnectionId();
             acknowledge(Initial, packet.getPacketNumber());
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
         else if ((flags & 0xff) == 0xfe) {
             // Retry
+            packet = null;
             System.out.println("Ignoring Retry packet");
             return;
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
-            LongHeaderPacket packet = new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
+            packet = new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
+            log.received(packet);
             acknowledge(Handshake, packet.getPacketNumber());
         }
         else if ((flags & 0xff) == 0xfc) {
             // 0-RTT Protected
+            packet = null;
             System.out.println("Ignoring 0-RTT Protected package");
             return;
         }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
-
         log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
         if (data.position() < data.limit()) {
-            parse(data.slice(), tlsState);
+            parsePackets(data.slice(), tlsState);
         }
     }
 

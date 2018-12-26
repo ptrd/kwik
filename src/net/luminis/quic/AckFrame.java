@@ -5,11 +5,13 @@ import java.nio.ByteBuffer;
 public class AckFrame extends QuicFrame {
 
     private byte[] frameBytes;
+    private int largestAcknowledged;
 
     public AckFrame() {
     }
 
     public AckFrame(Version quicVersion, int packetNumber) {
+        largestAcknowledged = packetNumber;
         ByteBuffer buffer = ByteBuffer.allocate(100);
 
         if (quicVersion.equals(Version.IETF_draft_14)) {
@@ -29,10 +31,10 @@ public class AckFrame extends QuicFrame {
         buffer.get(frameBytes);
     }
 
-    public void parse(ByteBuffer buffer, Logger log) {
+    public AckFrame parse(ByteBuffer buffer, Logger log) {
         log.debug("Parsing AckFrame");
 
-        int largestAcknowledged = QuicPacket.parseVariableLengthInteger(buffer);
+        largestAcknowledged = QuicPacket.parseVariableLengthInteger(buffer);
         int ackDelay = QuicPacket.parseVariableLengthInteger(buffer);
         int ackBlockCount = QuicPacket.parseVariableLengthInteger(buffer);
         int acknowledgedPacketsCount = QuicPacket.parseVariableLengthInteger(buffer);
@@ -40,6 +42,13 @@ public class AckFrame extends QuicFrame {
         // For the time being, we only parse simple Ack frames, without Additional Ack Block's
         if (ackBlockCount > 0)
             throw new NotYetImplementedException();
+
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "AckFrame[" + largestAcknowledged + "]";
     }
 
     @Override

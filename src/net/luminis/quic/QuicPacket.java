@@ -11,6 +11,8 @@ import java.security.NoSuchAlgorithmException;
 
 abstract public class QuicPacket {
 
+    protected int packetNumber;
+
     byte[] encodeVariableLengthInteger(int length) {
         if (length <= 63)
             return new byte[] { (byte) length };
@@ -158,5 +160,9 @@ abstract public class QuicPacket {
                 throw new RuntimeException("NYI");
         }
         return length;
+    }
+
+    public int getPacketNumber() {
+        return packetNumber;
     }
 }

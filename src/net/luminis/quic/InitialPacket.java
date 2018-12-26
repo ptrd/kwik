@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 public class InitialPacket extends LongHeaderPacket {
 
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload.getBytes(), connectionSecrets);
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
     }
 
     public InitialPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {

@@ -45,4 +45,12 @@ public class Logger {
     public void info(String message) {
         System.out.println(message);
     }
+
+    public void received(QuicPacket packet) {
+        System.out.println("<< " + packet);
+    }
+
+    public void sent(QuicPacket packet) {
+        System.out.println(">> " + packet);
+    }
 }
