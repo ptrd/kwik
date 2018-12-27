@@ -14,8 +14,7 @@ import static net.luminis.quic.EncryptionLevel.Initial;
 public abstract class LongHeaderPacket extends QuicPacket {
 
     private static final int MAX_PACKET_SIZE = 1500;
-    
-    protected Version quicVersion;
+
     protected byte[] sourceConnectionId;
     protected byte[] destConnectionId;
     protected byte[] payload;
@@ -28,7 +27,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private int paddingLength;
     private byte[] encryptedPayload;
     private int packetSize;
-    protected List<QuicFrame> frames;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -204,50 +202,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
         log.debug("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
-        parseFrames(frameBytes, log);
+        parseFrames(frameBytes, connection, connectionSecrets, tlsState, log);
 
         packetSize = buffer.position() - startPosition;
         return this;
-    }
-
-    protected void parseFrames(byte[] frameBytes, Logger log) {
-        ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
-
-        while (buffer.remaining() > 0) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
-            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
-            int frameType = buffer.get();
-            switch (frameType) {
-                case 0x00:
-                    // Padding
-                    break;
-                case 0x0d:
-                    if (quicVersion == Version.IETF_draft_14)
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                case 0x18:
-                    CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
-                    connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
-                    frames.add(cryptoFrame);
-                    break;
-                case 0x1a:
-                    if (quicVersion.atLeast(Version.IETF_draft_15))
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                case 0x1b:
-                    if (quicVersion.atLeast(Version.IETF_draft_15))
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                default:
-                    throw new NotYetImplementedException();
-            }
-        }
     }
 
     @Override
@@ -268,8 +226,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public int getPacketNumber() {
         return packetNumber;
     }
-
-    protected abstract EncryptionLevel getEncryptionLevel();
 
     protected abstract void checkPacketType(byte b);
 

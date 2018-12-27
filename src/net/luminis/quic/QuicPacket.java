@@ -1,5 +1,7 @@
 package net.luminis.quic;
 
+import net.luminis.tls.TlsState;
+
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
@@ -8,10 +10,13 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 abstract public class QuicPacket {
 
+    protected Version quicVersion;
     protected int packetNumber;
+    protected List<QuicFrame> frames;
 
     byte[] encodeVariableLengthInteger(int length) {
         if (length <= 63)
@@ -162,7 +167,52 @@ abstract public class QuicPacket {
         return length;
     }
 
+    protected void parseFrames(byte[] frameBytes, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+        ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
+
+        while (buffer.remaining() > 0) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
+            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+            int frameType = buffer.get();
+            switch (frameType) {
+                case 0x00:
+                    // Padding
+                    break;
+                case 0x02:
+                    log.debug("Receiving Connection Close frame, which is not yet implemented.");
+                    throw new NotYetImplementedException();
+                case 0x0d:
+                    if (quicVersion == Version.IETF_draft_14)
+                        frames.add(new AckFrame().parse(buffer, log));
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x18:
+                    CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
+                    connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
+                    frames.add(cryptoFrame);
+                    break;
+                case 0x1a:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        frames.add(new AckFrame().parse(buffer, log));
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                case 0x1b:
+                    if (quicVersion.atLeast(Version.IETF_draft_15))
+                        frames.add(new AckFrame().parse(buffer, log));
+                    else
+                        throw new NotYetImplementedException();
+                    break;
+                default:
+                    throw new NotYetImplementedException();
+            }
+        }
+    }
+
     public int getPacketNumber() {
         return packetNumber;
     }
+
+    protected abstract EncryptionLevel getEncryptionLevel();
 }

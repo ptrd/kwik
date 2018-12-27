@@ -63,4 +63,9 @@ public class VersionNegotationPacket extends QuicPacket {
             return null;
         }
     }
+
+    @Override
+    protected EncryptionLevel getEncryptionLevel() {
+        return null;
+    }
 }
