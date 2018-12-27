@@ -35,6 +35,9 @@ public class CryptoFrame extends QuicFrame {
 
     public CryptoFrame parse(ByteBuffer buffer, Logger log) {
         log.debug("Parsing Crypto frame");
+        if ((buffer.get() & 0xff) != 0x18) {
+            throw new RuntimeException();  // Programming error
+        }
 
         offset = QuicPacket.parseVariableLengthInteger(buffer);
         length = QuicPacket.parseVariableLengthInteger(buffer);

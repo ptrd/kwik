@@ -33,6 +33,7 @@ public class AckFrame extends QuicFrame {
 
     public AckFrame parse(ByteBuffer buffer, Logger log) {
         log.debug("Parsing AckFrame");
+        buffer.get();
 
         largestAcknowledged = QuicPacket.parseVariableLengthInteger(buffer);
         int ackDelay = QuicPacket.parseVariableLengthInteger(buffer);

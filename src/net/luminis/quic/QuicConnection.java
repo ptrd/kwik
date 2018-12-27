@@ -184,6 +184,13 @@ public class QuicConnection {
             System.out.println("Ignoring 0-RTT Protected package");
             return;
         }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.3
+        // "The most significant bit (0x80) of octet 0 is set to 0 for the short header."
+        else if ((flags & 0x80) == 0x00) {
+            // ShortHeader
+            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, tlsState, log);
+            log.received(packet);
+        }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
@@ -218,6 +225,9 @@ public class QuicConnection {
         send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
     }
 
+    public byte[] getSourceConnectionId() {
+        return sourceConnectionId;
+    }
 
     // Stub
     private byte[] createClientHello(String host, ECPublicKey publicKey) {

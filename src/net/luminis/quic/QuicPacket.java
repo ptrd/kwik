@@ -122,7 +122,14 @@ abstract public class QuicPacket {
     }
 
     int unprotectPacketNumber(byte[] ciphertext, byte[] protectedPacketNumber, NodeSecrets secrets) {
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.4:
+        // "The sampled ciphertext starts after allowing for a 4 octet packet number..."
         int sampleOffset = 4 - protectedPacketNumber.length;
+        // "...unless this would cause the sample to extend past the end of the packet. If the sample
+        // would extend past the end of the packet, the end of the packet is sampled."
+        if (sampleOffset + 16 > ciphertext.length) {
+            sampleOffset = ciphertext.length - 16;
+        }
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample,0,16);
         // AES is symmetric, so decrypt is the same as encrypt
@@ -173,14 +180,22 @@ abstract public class QuicPacket {
         while (buffer.remaining() > 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
             // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+            buffer.mark();
             int frameType = buffer.get();
+            buffer.reset();
             switch (frameType) {
                 case 0x00:
-                    // Padding
+                    frames.add(new Padding().parse(buffer, log));
                     break;
                 case 0x02:
-                    log.debug("Receiving Connection Close frame, which is not yet implemented.");
+                    log.debug("Received Connection Close frame (not yet implemented).");
                     throw new NotYetImplementedException();
+                case 0x07:
+                    frames.add(new PingFrame().parse(buffer, log));
+                    break;
+                case 0x0b:
+                    frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
+                    break;
                 case 0x0d:
                     if (quicVersion == Version.IETF_draft_14)
                         frames.add(new AckFrame().parse(buffer, log));
@@ -191,6 +206,9 @@ abstract public class QuicPacket {
                     CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
                     connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
                     frames.add(cryptoFrame);
+                    break;
+                case 0x19:
+                    frames.add(new NewTokenFrame().parse(buffer, log));
                     break;
                 case 0x1a:
                     if (quicVersion.atLeast(Version.IETF_draft_15))
@@ -205,7 +223,13 @@ abstract public class QuicPacket {
                         throw new NotYetImplementedException();
                     break;
                 default:
-                    throw new NotYetImplementedException();
+                    if ((frameType >= 0x10) && (frameType <= 0x17)) {
+                        frames.add(new StreamFrame().parse(buffer, log));
+                    }
+                    else {
+                        System.out.println("NYI frame type: " + frameType);
+                        throw new NotYetImplementedException();
+                    }
             }
         }
     }
