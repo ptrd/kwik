@@ -1,5 +1,6 @@
 package net.luminis.quic;
 
+import net.luminis.tls.FinishedMessage;
 import net.luminis.tls.KeyShareExtension;
 import net.luminis.tls.TlsState;
 
@@ -39,6 +40,7 @@ public class QuicConnection {
     private DatagramSocket socket;
     private final InetAddress serverAddress;
     private int[] lastPacketNumber = new int[EncryptionLevel.values().length];
+    private boolean clientFinishedSent;
 
 
     public QuicConnection(String host, int port, Version quicVersion) throws UnknownHostException {
@@ -81,11 +83,22 @@ public class QuicConnection {
         socket.setSoTimeout(5000);
         byte[] receiveBuffer = new byte[1500];
         DatagramPacket receivedPacket;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 9; i++) {
             receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             socket.receive(receivedPacket);
             log.debugWithHexBlock("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
             parsePackets(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
+
+            if (tlsState.isServerFinished() && ! clientFinishedSent) {
+                FinishedMessage finishedMessage = new FinishedMessage(tlsState);
+                CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
+                LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Handshake.ordinal()]++, cryptoFrame, connectionSecrets);
+                log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
+                send(finishedPacket, "client finished");
+                clientFinishedSent = true;
+                tlsState.computeApplicationSecrets();
+                connectionSecrets.computeApplicationSecrets(tlsState);
+            }
         }
     }
 
