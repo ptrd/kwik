@@ -121,7 +121,7 @@ public class QuicConnection {
 
     private void generateInitialKeys() {
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
-        connectionSecrets.generate(destConnectionId);
+        connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
     void parsePackets(ByteBuffer data, TlsState tlsState) throws IOException {

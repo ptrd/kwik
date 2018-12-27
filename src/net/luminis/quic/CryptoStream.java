@@ -65,8 +65,7 @@ public class CryptoStream {
                     Object msg = HandshakeRecord.parseHandshakeMessage(buffer, tlsState);
                     if (msg instanceof ServerHello) {
                         // Server Hello provides a new secret, so
-                        connectionSecrets.serverSecrets.recompute(tlsState);
-                        connectionSecrets.clientSecrets.recompute(tlsState);
+                        connectionSecrets.computeHandshakeSecrets(tlsState);
                     } else {
                         log.debug(this + " Detected " + msg.getClass().getSimpleName());
                     }

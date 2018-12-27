@@ -61,10 +61,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.frames = List.of(frame);
         this.payload = frame.getBytes();
 
-        NodeSecrets clientSecrets = connectionSecrets.clientSecrets;
-        if (getEncryptionLevel() == Initial) {
-            clientSecrets = connectionSecrets.initialClientSecrets;
-        }
+        NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         generateFrameHeaderInvariant();
@@ -193,7 +190,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte[] payload = new byte[length - protectedPackageNumberLength];
         buffer.get(payload, 0, length - protectedPackageNumberLength);
 
-        packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, connectionSecrets.serverSecrets);
+        NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
+
+        packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
         log.debug("Packet number: " + packetNumber);
 
         log.debug("Encrypted payload", payload);
@@ -201,7 +200,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // TODO: assuming packet number is 1 byte
         log.debug("Frame header", frameHeader);
 
-        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, connectionSecrets.serverSecrets);
+        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
         log.debug("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();

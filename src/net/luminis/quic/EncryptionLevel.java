@@ -4,4 +4,5 @@ public enum EncryptionLevel {
 
     Initial,
     Handshake,
+    App
 }

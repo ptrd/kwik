@@ -11,22 +11,26 @@ public class NodeSecrets {
     private final ConnectionSecrets.NodeRole nodeRole;
     private final Logger log;
 
-    byte[] initialNodeSecret;
     byte[] writeKey;
     byte[] writeIV;
     byte[] pn;
+
+    public NodeSecrets(ConnectionSecrets.NodeRole nodeRole, Logger log) {
+        this.nodeRole = nodeRole;
+        this.log = log;
+    }
 
     public NodeSecrets(byte[] initialSecret, ConnectionSecrets.NodeRole nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
 
-        initialNodeSecret = Crypto.hkdfExpandLabel(initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
+        byte[] initialNodeSecret = Crypto.hkdfExpandLabel(initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
         log.debug(nodeRole + " initial secret", initialNodeSecret);
 
         computeKeys(initialNodeSecret);
     }
 
-    public void recompute(TlsState tlsState) {
+    public void computeHandshakeKeys(TlsState tlsState) {
         if (nodeRole == Client) {
             byte[] clientHandshakeTrafficSecret = tlsState.getClientHandshakeTrafficSecret();
             log.debug("Got new clientHandshakeTrafficSecret from TLS (recomputing secrets): ", clientHandshakeTrafficSecret);
@@ -36,6 +40,19 @@ public class NodeSecrets {
             byte[] serverHandshakeTrafficSecret = tlsState.getServerHandshakeTrafficSecret();
             log.debug("Got new serverHandshakeTrafficSecret from TLS (recomputing secrets): ", serverHandshakeTrafficSecret);
             computeKeys(serverHandshakeTrafficSecret);
+        }
+    }
+
+    public void computeApplicationKeys(TlsState tlsState) {
+        if (nodeRole == Client) {
+            byte[] clientApplicationTrafficSecret = tlsState.getClientApplicationTrafficSecret();
+            log.debug("Got new clientApplicationTrafficSecret from TLS (recomputing secrets): ", clientApplicationTrafficSecret);
+            computeKeys(clientApplicationTrafficSecret);
+        }
+        if (nodeRole == Server) {
+            byte[] serverApplicationTrafficSecret = tlsState.getServerApplicationTrafficSecret();
+            log.debug("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", serverApplicationTrafficSecret);
+            computeKeys(serverApplicationTrafficSecret);
         }
     }
 

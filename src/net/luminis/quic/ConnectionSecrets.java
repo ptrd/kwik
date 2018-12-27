@@ -1,13 +1,9 @@
 package net.luminis.quic;
 
 import at.favre.lib.crypto.HKDF;
-
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import net.luminis.tls.TlsState;
 
 public class ConnectionSecrets {
-
-    private Logger log;
 
     enum NodeRole {
         Client,
@@ -22,10 +18,10 @@ public class ConnectionSecrets {
             (byte) 0x0e, (byte) 0x8a, (byte) 0x2c, (byte) 0x5f,
             (byte) 0xe0, (byte) 0x6d, (byte) 0x6c, (byte) 0x38};
 
-    NodeSecrets clientSecrets;
-    NodeSecrets serverSecrets;
-    NodeSecrets initialServerSecrets;
-    NodeSecrets initialClientSecrets;
+    private Logger log;
+
+    private NodeSecrets[] clientSecrets = new NodeSecrets[EncryptionLevel.values().length];
+    private NodeSecrets[] serverSecrets = new NodeSecrets[EncryptionLevel.values().length];
 
     public ConnectionSecrets(Version quicVersion, Logger log) {
         this.log = log;
@@ -36,7 +32,7 @@ public class ConnectionSecrets {
      *
      * @param destConnectionId
      */
-    public void generate(byte[] destConnectionId) {
+    public void computeInitialKeys(byte[] destConnectionId) {
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2:
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
@@ -45,12 +41,35 @@ public class ConnectionSecrets {
         byte[] initialSecret = hkdf.extract(STATIC_SALT, destConnectionId);
         log.debug("Initial secret", initialSecret);
 
-        clientSecrets = new NodeSecrets(initialSecret, NodeRole.Client, log);
-        serverSecrets = new NodeSecrets(initialSecret, NodeRole.Server, log);
-        initialClientSecrets = new NodeSecrets(initialSecret, NodeRole.Client, log);
-        initialServerSecrets = new NodeSecrets(initialSecret, NodeRole.Server, log);
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(initialSecret, NodeRole.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(initialSecret, NodeRole.Server, log);
     }
 
+    public void computeHandshakeSecrets(TlsState tlsState) {
+        NodeSecrets handshakeSecrets = new NodeSecrets(NodeRole.Client, log);
+        handshakeSecrets.computeHandshakeKeys(tlsState);
+        clientSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
 
+        handshakeSecrets = new NodeSecrets(NodeRole.Server, log);
+        handshakeSecrets.computeHandshakeKeys(tlsState);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
+    }
 
+    public void computeApplicationSecrets(TlsState tlsState) {
+        NodeSecrets applicationSecrets = new NodeSecrets(NodeRole.Client, log);
+        applicationSecrets.computeApplicationKeys(tlsState);
+        clientSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
+
+        applicationSecrets = new NodeSecrets(NodeRole.Server, log);
+        applicationSecrets.computeApplicationKeys(tlsState);
+        serverSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
+    }
+
+    public NodeSecrets getClientSecrets(EncryptionLevel encryptionLevel) {
+        return clientSecrets[encryptionLevel.ordinal()];
+    }
+
+    public NodeSecrets getServerSecrets(EncryptionLevel encryptionLevel) {
+        return serverSecrets[encryptionLevel.ordinal()];
+    }
 }
