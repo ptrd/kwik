@@ -184,7 +184,7 @@ public class QuicConnection {
     public CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(connectionSecrets, tlsState, log));
+                cryptoStreams.add(new CryptoStream(encryptionLevel, connectionSecrets, tlsState, log));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());

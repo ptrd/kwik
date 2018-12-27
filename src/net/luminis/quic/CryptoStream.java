@@ -14,11 +14,13 @@ import java.util.List;
 public class CryptoStream {
 
     private List<CryptoFrame> frames = new ArrayList<>();
+    private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
     private TlsState tlsState;
     private final Logger log;
 
-    public CryptoStream(ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    public CryptoStream(EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+        this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
         this.log = log;
@@ -32,7 +34,7 @@ public class CryptoStream {
             if (frames.get(i).getOffset() > frameOffset) {
                 // First check whether this frame is not added already
                 if (i > 0 && frames.get(i-1).getOffset() == frameOffset) {
-                    log.debug("Ignoring duplicate: " + cryptoFrame);
+                    log.debug(this + " Ignoring duplicate: " + cryptoFrame);
                     return;
                 }
                 // Insert here.
@@ -41,7 +43,13 @@ public class CryptoStream {
             }
         }
         if (! inserted) {
-            // So offset is larger than all existing frames.
+            // So offset is larger (or equal) than all existing frames.
+            // First check whether this frame is not added already
+            if (frames.size() > 0 && frames.get(frames.size() - 1).getOffset() == frameOffset) {
+                log.debug(this + " Ignoring duplicate: " + cryptoFrame);
+                return;
+            }
+
             frames.add(cryptoFrame);
         }
 
@@ -60,18 +68,18 @@ public class CryptoStream {
                         connectionSecrets.serverSecrets.recompute(tlsState);
                         connectionSecrets.clientSecrets.recompute(tlsState);
                     } else {
-                        log.debug("Detected " + msg.getClass().getSimpleName());
+                        log.debug(this + " Detected " + msg.getClass().getSimpleName());
                     }
                 }
             } catch (BufferUnderflowException notYetEnough) {
                 // Don't bother, try later
-                log.debug("(Received incomplete crypto message, wait for more)");
+                log.debug(this + " (Received incomplete crypto message, wait for more)");
             } catch (TlsProtocolException e) {
             }
         }
         else {
             // Wait for more frames
-            log.debug("Crypto stream contains non-contiguos frames, wait for more");
+            log.debug(this + " Crypto stream contains non-contiguous frames, wait for more");
         }
     }
 
@@ -84,5 +92,10 @@ public class CryptoStream {
             lastStart += frame.getLength();
         }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "CryptoStream["  + encryptionLevel.name().charAt(0) + "]";
     }
 }
