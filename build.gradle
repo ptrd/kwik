@@ -1,0 +1,36 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+
+repositories {
+    mavenCentral()
+
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
+    compile group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
+
+    compile name: 'tls13'
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['src']
+    }
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'net.luminis.quic.Quic'
+    }
+
+    doFirst {
+        from {
+           configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
+    }
+}

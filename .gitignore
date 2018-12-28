@@ -2,3 +2,5 @@ out
 workspace.xml
 checkstyle-idea.xml
 scala_settings.xml
+.gradle
+build
