@@ -102,12 +102,12 @@ public class QuicConnection {
         }
     }
 
-    private void send(LongHeaderPacket longHeaderPacket, String logMessage) throws IOException {
-        byte[] packetData = longHeaderPacket.getBytes();
+    private void send(QuicPacket packet, String logMessage) throws IOException {
+        byte[] packetData = packet.getBytes();
         DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
         socket.send(datagram);
-        log.debug("packet sent (" + logMessage + "), pn: " + longHeaderPacket.getPacketNumber(), packetData);
-        log.sent(longHeaderPacket);
+        log.debug("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
+        log.sent(packet);
     }
 
     /**

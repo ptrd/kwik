@@ -68,4 +68,9 @@ public class VersionNegotationPacket extends QuicPacket {
     protected EncryptionLevel getEncryptionLevel() {
         return null;
     }
+
+    @Override
+    public byte[] getBytes() {
+        return new byte[0];
+    }
 }

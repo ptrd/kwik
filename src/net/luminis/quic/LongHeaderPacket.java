@@ -22,10 +22,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected ConnectionSecrets connectionSecrets;  // TODO? for parsing only...
     protected TlsState tlsState;
     protected ByteBuffer packetBuffer;
-    private int packetNumberPosition;
-    private int encodedPacketNumberSize;
     private int paddingLength;
-    private byte[] encryptedPayload;
     private int packetSize;
 
     /**
@@ -66,10 +63,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         generateAdditionalFields();
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
         addLength(encodedPacketNumber.length);
-        addPacketNumber(encodedPacketNumber);
+        packetBuffer.put(encodedPacketNumber);
 
-        generateEncryptPayload(payload, clientSecrets);
-        protectPacketNumber(clientSecrets);
+        protectPayload(packetBuffer, encodedPacketNumber.length, payload, paddingLength, clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();
@@ -106,38 +102,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int packetLength = payload.length + paddingLength + 16 + packetNumberLength;
         byte[] length = encodeVariableLengthInteger(packetLength);
         packetBuffer.put(length);
-    }
-
-    private void addPacketNumber(byte[] encodedPacketNumber) {
-        // Remember packet number position in buffer, for protected in later.
-        packetNumberPosition = packetBuffer.position();
-        encodedPacketNumberSize = encodedPacketNumber.length;
-        packetBuffer.put(encodedPacketNumber);
-    }
-
-    private void generateEncryptPayload(byte[] payload, NodeSecrets clientSecrets) {
-        // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
-        // "The associated data, A, for the AEAD is the contents of the QUIC
-        //   header, starting from the flags octet in either the short or long
-        //   header, up to and including the unprotected packet number."
-        int additionalDataSize = packetBuffer.position();
-        byte[] additionalData = new byte[additionalDataSize];
-        packetBuffer.flip();  // Prepare for reading from start
-        packetBuffer.get(additionalData);  // Position is now where it was at start of this method.
-        packetBuffer.limit(packetBuffer.capacity());  // Ensure we can continue writing
-
-        byte[] paddedPayload = new byte[payload.length + paddingLength];
-        System.arraycopy(payload, 0, paddedPayload, 0, payload.length);
-        encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
-        packetBuffer.put(encryptedPayload);
-    }
-
-    private void protectPacketNumber(NodeSecrets clientSecrets) {
-        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
-        int currentPosition = packetBuffer.position();
-        packetBuffer.position(packetNumberPosition);
-        packetBuffer.put(protectedPacketNumber);
-        packetBuffer.position(currentPosition);
     }
 
     public byte[] getBytes() {

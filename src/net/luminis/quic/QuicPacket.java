@@ -238,5 +238,32 @@ abstract public class QuicPacket {
         return packetNumber;
     }
 
+    protected void protectPayload(ByteBuffer packetBuffer, int packetNumberSize, byte[] payload, int paddingSize, NodeSecrets clientSecrets) {
+        int packetNumberPosition = packetBuffer.position() - packetNumberSize;
+
+        // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
+        // "The associated data, A, for the AEAD is the contents of the QUIC
+        //   header, starting from the flags octet in either the short or long
+        //   header, up to and including the unprotected packet number."
+        int additionalDataSize = packetBuffer.position();
+        byte[] additionalData = new byte[additionalDataSize];
+        packetBuffer.flip();  // Prepare for reading from start
+        packetBuffer.get(additionalData);  // Position is now where it was at start of this method.
+        packetBuffer.limit(packetBuffer.capacity());  // Ensure we can continue writing
+
+        byte[] paddedPayload = new byte[payload.length + paddingSize];
+        System.arraycopy(payload, 0, paddedPayload, 0, payload.length);
+        byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
+        packetBuffer.put(encryptedPayload);
+
+        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
+        int currentPosition = packetBuffer.position();
+        packetBuffer.position(packetNumberPosition);
+        packetBuffer.put(protectedPacketNumber);
+        packetBuffer.position(currentPosition);
+    }
+
     protected abstract EncryptionLevel getEncryptionLevel();
+
+    public abstract byte[] getBytes();
 }

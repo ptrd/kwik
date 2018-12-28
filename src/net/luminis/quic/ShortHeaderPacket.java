@@ -65,6 +65,11 @@ public class ShortHeaderPacket extends QuicPacket {
         return EncryptionLevel.App;
     }
 
+    @Override
+    public byte[] getBytes() {
+        return new byte[0];
+    }
+
     protected void checkPacketType(byte flags) {
         if ((flags & 0x80) != 0x00) {
             // Programming error: this method shouldn't have been called if packet is not a Short Frame
