@@ -3,32 +3,33 @@ package net.luminis.quic;
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
+import static net.luminis.quic.StreamType.ClientInitiatedBidirectional;
+
 public class StreamFrame extends QuicFrame {
-
-    enum StreamType {
-        ClientInitiatedBidirectional(0, "CIB"),
-        ServerInitiatedBidirectional(1, "SIB"),
-        ClientInitiatedUnidirectional(2, "CIU"),
-        ServerInitiatedUnidirectional(3, "SIU"),
-        ;
-
-        public final int value;
-        public final String abbrev;
-
-        StreamType(int value, String abbrev) {
-            this.value = value;
-            this.abbrev = abbrev;
-        }
-    }
 
     private StreamType streamType;
     private int length;
     private int streamId;
     private int offset;
+    private byte[] frameData;
 
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
+    public StreamFrame() {
+    }
+
+    public StreamFrame(int streamId, String applicationData) {
+        streamType = ClientInitiatedBidirectional;
+
+        ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.getBytes().length);
+        byte frameType = 0x10 | 0x04 | 0x02 | 0x01;  // OFF-bit, LEN-bit, FIN-bit
+        buffer.put(frameType);
+        buffer.put(encodeVariableLengthInteger(streamId));
+        buffer.put(encodeVariableLengthInteger(0));  // offset
+        buffer.put(encodeVariableLengthInteger(applicationData.getBytes().length));  // length
+        buffer.put(applicationData.getBytes());
+
+        frameData = new byte[buffer.position()];
+        buffer.rewind();
+        buffer.get(frameData);
     }
 
     public StreamFrame parse(ByteBuffer buffer, Logger log) {
@@ -53,8 +54,14 @@ public class StreamFrame extends QuicFrame {
         }
         streamData = new byte[length];
         buffer.get(streamData);
+        log.debug("Stream data", streamData);
 
         return this;
+    }
+
+    @Override
+    byte[] getBytes() {
+        return frameData;
     }
 
     @Override

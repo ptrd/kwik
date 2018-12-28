@@ -4,17 +4,54 @@ import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class ShortHeaderPacket extends QuicPacket {
 
-    protected byte[] payload;
-    protected byte[] destConnectionId;
+    private byte[] destConnectionId;
+    private byte[] packetBytes;
     private int packetSize;
 
-
+    /**
+     * Constructs an empty short header packet for use with the parse() method.
+     * @param quicVersion
+     */
     public ShortHeaderPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
+    }
+
+    /**
+     * Constructs a short header packet for sending (client role).
+     * @param quicVersion
+     * @param destinationConnectionId
+     * @param packetNumber
+     * @param frame
+     * @param connectionSecrets
+     */
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, int packetNumber, QuicFrame frame, ConnectionSecrets connectionSecrets) {
+        this.quicVersion = quicVersion;
+        this.destConnectionId = destinationConnectionId;
+        this.packetNumber = packetNumber;
+        frames = List.of(frame);
+
+        NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
+
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        byte flags = 0x30;
+        buffer.put(flags);
+        buffer.put(destinationConnectionId);
+
+        byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
+        buffer.put(encodedPacketNumber);
+
+        protectPayload(buffer, encodedPacketNumber.length, frame.getBytes(), 0, clientSecrets);
+
+        buffer.limit(buffer.position());
+        packetSize = buffer.limit();
+        packetBytes = new byte[packetSize];
+        buffer.rewind();
+        buffer.get(packetBytes);
     }
 
     public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
@@ -67,7 +104,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        return packetBytes;
     }
 
     protected void checkPacketType(byte flags) {

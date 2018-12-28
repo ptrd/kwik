@@ -18,8 +18,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-import static net.luminis.quic.EncryptionLevel.Handshake;
-import static net.luminis.quic.EncryptionLevel.Initial;
+import static net.luminis.quic.EncryptionLevel.*;
 import static net.luminis.tls.Tls13.generateKeys;
 
 /**
@@ -98,6 +97,11 @@ public class QuicConnection {
                 clientFinishedSent = true;
                 tlsState.computeApplicationSecrets();
                 connectionSecrets.computeApplicationSecrets(tlsState);
+
+                // At this point, application data can be sent.
+                StreamFrame stream0 = new StreamFrame(0, "GET /index.html\r\n");
+                QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[App.ordinal()]++, stream0, connectionSecrets);
+                send(packet, "application data");
             }
         }
     }

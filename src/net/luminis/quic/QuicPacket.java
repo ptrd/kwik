@@ -14,6 +14,8 @@ import java.util.List;
 
 abstract public class QuicPacket {
 
+    protected static final int MAX_PACKET_SIZE = 1500;
+
     protected Version quicVersion;
     protected int packetNumber;
     protected List<QuicFrame> frames;
@@ -167,9 +169,14 @@ abstract public class QuicPacket {
             case 1:
                 length = ((firstLengthByte & 0x3f) << 8) | (buffer.get() & 0xff);
                 break;
+            case 2:
+                length = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                break;
+            case 3:
+                // TODO -> long
+                throw new NotYetImplementedException();
             default:
-                // TODO
-                throw new RuntimeException("NYI");
+                throw new ProtocolError("invalid variable length integer encoding");
         }
         return length;
     }
@@ -190,6 +197,9 @@ abstract public class QuicPacket {
                 case 0x02:
                     log.debug("Received Connection Close frame (not yet implemented).");
                     throw new NotYetImplementedException();
+                case 0x04:
+                    frames.add(new MaxDataFrame().parse(buffer, log));
+                    break;
                 case 0x07:
                     frames.add(new PingFrame().parse(buffer, log));
                     break;
