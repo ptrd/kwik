@@ -1,9 +1,6 @@
 package net.luminis.quic;
 
-import net.luminis.tls.HandshakeRecord;
-import net.luminis.tls.ServerHello;
-import net.luminis.tls.TlsProtocolException;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.*;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -66,7 +63,15 @@ public class CryptoStream {
                     if (msg instanceof ServerHello) {
                         // Server Hello provides a new secret, so
                         connectionSecrets.computeHandshakeSecrets(tlsState);
-                    } else {
+                    }
+                    else if (msg instanceof EncryptedExtensions) {
+                        for (Extension ex: ((EncryptedExtensions) msg).getExtensions()) {
+                            if (ex instanceof UnknownExtension) {
+                                parseExtension((UnknownExtension) ex);
+                            }
+                        }
+                    }
+                    else {
                         log.debug(this + " Detected " + msg.getClass().getSimpleName());
                     }
                 }
@@ -91,6 +96,18 @@ public class CryptoStream {
             lastStart += frame.getLength();
         }
         return true;
+    }
+
+    private void parseExtension(UnknownExtension extension) {
+        ByteBuffer buffer = ByteBuffer.wrap(extension.getData());
+        int extensionType = buffer.getShort();
+        buffer.rewind();
+        if ((extensionType & 0xffff) == 0xffa5) {
+            new QuicTransportParametersExtension().parse(buffer, log);
+        }
+        else {
+            log.debug("Unsupported extension!");
+        }
     }
 
     @Override
