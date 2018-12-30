@@ -1,8 +1,6 @@
 package net.luminis.quic;
 
-import net.luminis.tls.FinishedMessage;
-import net.luminis.tls.KeyShareExtension;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.*;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -20,6 +18,7 @@ import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.*;
 import static net.luminis.tls.Tls13.generateKeys;
+
 
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
@@ -233,85 +232,14 @@ public class QuicConnection {
         return sourceConnectionId;
     }
 
-    // Stub
     private byte[] createClientHello(String host, ECPublicKey publicKey) {
-        ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
-                (byte) 0x01, // Client Hello
-                (byte) 0x00, (byte) 0x01, (byte) 0x27,  // Length 295
-                (byte) 0x03, (byte) 0x03,   // Version
-                (byte) 0xa0, (byte) 0xad, (byte) 0xf9, (byte) 0x3a, (byte) 0x3c, (byte) 0x70, (byte) 0x19, (byte) 0x37,
-                (byte) 0x9b, (byte) 0xd5, (byte) 0x70, (byte) 0x59, (byte) 0x26, (byte) 0x21, (byte) 0x6a, (byte) 0x75,
-                (byte) 0xc2, (byte) 0x89, (byte) 0x3a, (byte) 0xed, (byte) 0x3e, (byte) 0x57, (byte) 0xf9, (byte) 0xdf,
-                (byte) 0xca, (byte) 0xe5, (byte) 0xd3, (byte) 0x76, (byte) 0x92, (byte) 0x02, (byte) 0xc1, (byte) 0x9f,   // Client random
-                (byte) 0x00,  // Session id
-                (byte) 0x00, (byte) 0x08,  // Cipher suites length
-                (byte) 0x13, (byte) 0x01, (byte) 0x13, (byte) 0x01, (byte) 0x13, (byte) 0x01, (byte) 0x00, (byte) 0xff,  // Cipher suites
-                (byte) 0x01, (byte) 0x00,  // Compression methods
-                (byte) 0x00, (byte) 0xf6,  // Extension length
-                // Quic transport parameters           length 56
-                (byte) 0xff, (byte) 0xa5, (byte) 0x00, (byte) 0x38,
-                (byte) 0xff, (byte) 0x00, (byte) 0x00, (byte) 0x0e, (byte) 0x00, (byte) 0x32, (byte) 0x00, (byte) 0x03,
-                (byte) 0x00, (byte) 0x02, (byte) 0x00, (byte) 0x1e, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x04,
-                (byte) 0x00, (byte) 0x04, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0a, (byte) 0x00, (byte) 0x04,
-                (byte) 0x00, (byte) 0x04, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0b, (byte) 0x00, (byte) 0x04,
-                (byte) 0x00, (byte) 0x04, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x04,
-                (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x02, (byte) 0x00, (byte) 0x02,
-                (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x08, (byte) 0x00, (byte) 0x02, (byte) 0x00, (byte) 0x01,
-                // Server name                                length 14
-                (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0e,
-                (byte) 0x00, (byte) 0x0c, (byte) 0x00, (byte) 0x00, (byte) 0x09, (byte) 0x6c, (byte) 0x6f, (byte) 0x63,
-                (byte) 0x61, (byte) 0x6c, (byte) 0x68, (byte) 0x6f, (byte) 0x73, (byte) 0x74,
-                // ec point formats
-                (byte) 0x00, (byte) 0x0b, (byte) 0x00, (byte) 0x04, (byte) 0x03, (byte) 0x00, (byte) 0x01, (byte) 0x02,
-                // support groups                        length 10
-                (byte) 0x00, (byte) 0x0a, (byte) 0x00, (byte) 0x0a,
-                (byte) 0x00, (byte) 0x08, (byte) 0x00, (byte) 0x17, (byte) 0x00, (byte) 0x1d, (byte) 0x00, (byte) 0x18,
-                (byte) 0x00, (byte) 0x19,
-                // session ticket                length 0
-                (byte) 0x00, (byte) 0x23, (byte) 0x00, (byte) 0x00,
-                // application layer protocol negotiation  length 8
-                (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x08,
-                (byte) 0x00, (byte) 0x06, (byte) 0x05, (byte) 0x68, (byte) 0x71, (byte) 0x2d, (byte) 0x31, (byte) 0x34,
-                // encrypt than mac
-                (byte) 0x00, (byte) 0x16, (byte) 0x00, (byte) 0x00,
-                // extended master secret
-                (byte) 0x00, (byte) 0x17, (byte) 0x00, (byte) 0x00,
-                // signature algorithms               length 30
-                (byte) 0x00, (byte) 0x0d, (byte) 0x00, (byte) 0x1e,
-                (byte) 0x00, (byte) 0x1c, (byte) 0x04, (byte) 0x03, (byte) 0x05, (byte) 0x03, (byte) 0x06, (byte) 0x03,
-                (byte) 0x08, (byte) 0x07, (byte) 0x08, (byte) 0x08, (byte) 0x08, (byte) 0x09, (byte) 0x08, (byte) 0x0a,
-                (byte) 0x08, (byte) 0x0b, (byte) 0x08, (byte) 0x04, (byte) 0x08, (byte) 0x05, (byte) 0x08, (byte) 0x06,
-                (byte) 0x04, (byte) 0x01, (byte) 0x05, (byte) 0x01, (byte) 0x06, (byte) 0x01,
-                // supported versions
-                (byte) 0x00, (byte) 0x2b, (byte) 0x00, (byte) 0x03, (byte) 0x02, (byte) 0x03, (byte) 0x04,
-                // psk key exchanges modes
-                (byte) 0x00, (byte) 0x2d, (byte) 0x00, (byte) 0x02, (byte) 0x01, (byte) 0x01,
-                // key share                                  71 bytes
-                (byte) 0x00, (byte) 0x33, (byte) 0x00, (byte) 0x47,
-                // key share length: 69
-                (byte) 0x00, (byte) 0x45,
-                // group
-                (byte) 0x00, (byte) 0x17,
-                // length: 65
-                (byte) 0x00, (byte) 0x41,
-                // key
-                (byte) 0x04, (byte) 0xf3, (byte) 0x65, (byte) 0xf2, (byte) 0x28, (byte) 0xf6, (byte) 0xac, (byte) 0x00,
-                (byte) 0x38, (byte) 0x9f, (byte) 0x99, (byte) 0xa0, (byte) 0x8c, (byte) 0x79, (byte) 0xd5, (byte) 0x35,
-                (byte) 0x6b, (byte) 0x61, (byte) 0xb9, (byte) 0x64, (byte) 0x41, (byte) 0xd0, (byte) 0x7d, (byte) 0xa2,
-                (byte) 0xa9, (byte) 0xf2, (byte) 0x21, (byte) 0xeb, (byte) 0x32, (byte) 0xa1, (byte) 0xfa, (byte) 0x93,
-                (byte) 0x64, (byte) 0xd0, (byte) 0xf6, (byte) 0xb1, (byte) 0x6b, (byte) 0x28, (byte) 0xb9, (byte) 0x04,
-                (byte) 0x44, (byte) 0xba, (byte) 0x93, (byte) 0x5d, (byte) 0x7a, (byte) 0x3e, (byte) 0xe6, (byte) 0xf0,
-                (byte) 0xfa, (byte) 0x54, (byte) 0x6b, (byte) 0xae, (byte) 0x4e, (byte) 0xe9, (byte) 0x2d, (byte) 0x03,
-                (byte) 0xee, (byte) 0xf3, (byte) 0x59, (byte) 0x11, (byte) 0x00, (byte) 0x13, (byte) 0xcd, (byte) 0x45,
-                (byte) 0x15
-        });
-        // Reset position to beginning of key share extension (71 + 4 bytes)
-        buffer.position(buffer.limit() - 75);
-        // And generate proper key share extension
-        KeyShareExtension keyShareExtension = new KeyShareExtension(publicKey, "secp256r1");
-        buffer.put(keyShareExtension.getBytes());
+        boolean compatibilityMode = false;
+        byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
-        return buffer.array();
+        Extension[] quicExtensions = new Extension[] {
+                new QuicTransportParametersExtension(quicVersion),
+                new ECPointFormatExtension(),
+        };
+        return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
-
 }
