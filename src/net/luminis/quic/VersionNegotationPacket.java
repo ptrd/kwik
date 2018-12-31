@@ -3,12 +3,15 @@ package net.luminis.quic;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Represents a Version Negotiation Packet as specified by
  * https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4
  */
 public class VersionNegotationPacket extends QuicPacket {
+
+    private int packetSize;
 
     public List<String> getServerSupportedVersions() {
         return serverSupportedVersions;
@@ -53,6 +56,7 @@ public class VersionNegotationPacket extends QuicPacket {
             }
         }
 
+        packetSize = buffer.limit();
         return this;
     }
 
@@ -73,4 +77,16 @@ public class VersionNegotationPacket extends QuicPacket {
     public byte[] getBytes() {
         return new byte[0];
     }
+
+    @Override
+    public String toString() {
+        return "Packet "
+                + "I" + "|"
+                + "-" + "|"
+                + "V" + "|"
+                + packetSize + "|"
+                + "0" + "  "
+                + serverSupportedVersions.stream().collect(Collectors.joining(", "));
+    }
+
 }
