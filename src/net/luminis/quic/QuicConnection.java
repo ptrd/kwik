@@ -239,6 +239,7 @@ public class QuicConnection {
         Extension[] quicExtensions = new Extension[] {
                 new QuicTransportParametersExtension(quicVersion),
                 new ECPointFormatExtension(),
+                new ApplicationLayerProtocolNegotiationExtension("hq-15"),
         };
         return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
