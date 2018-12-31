@@ -155,7 +155,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
 
         packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
-        log.debug("Packet number: " + packetNumber);
+        log.decrypted("Unprotected packet number: " + packetNumber);
 
         log.debug("Encrypted payload", payload);
 
@@ -163,7 +163,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         log.debug("Frame header", frameHeader);
 
         byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
-        log.debug("Decrypted payload", frameBytes);
+        log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
         parseFrames(frameBytes, connection, connectionSecrets, tlsState, log);

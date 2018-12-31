@@ -39,7 +39,7 @@ public class ConnectionSecrets {
         HKDF hkdf = HKDF.fromHmacSha256();
 
         byte[] initialSecret = hkdf.extract(STATIC_SALT, destConnectionId);
-        log.debug("Initial secret", initialSecret);
+        log.secret("Initial secret", initialSecret);
 
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(initialSecret, NodeRole.Client, log);
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(initialSecret, NodeRole.Server, log);

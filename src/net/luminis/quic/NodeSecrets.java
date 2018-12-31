@@ -25,7 +25,7 @@ public class NodeSecrets {
         this.log = log;
 
         byte[] initialNodeSecret = Crypto.hkdfExpandLabel(initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
-        log.debug(nodeRole + " initial secret", initialNodeSecret);
+        log.secret(nodeRole + " initial secret", initialNodeSecret);
 
         computeKeys(initialNodeSecret);
     }
@@ -33,12 +33,12 @@ public class NodeSecrets {
     public void computeHandshakeKeys(TlsState tlsState) {
         if (nodeRole == Client) {
             byte[] clientHandshakeTrafficSecret = tlsState.getClientHandshakeTrafficSecret();
-            log.debug("Got new clientHandshakeTrafficSecret from TLS (recomputing secrets): ", clientHandshakeTrafficSecret);
+            log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
             computeKeys(clientHandshakeTrafficSecret);
         }
         if (nodeRole == Server) {
             byte[] serverHandshakeTrafficSecret = tlsState.getServerHandshakeTrafficSecret();
-            log.debug("Got new serverHandshakeTrafficSecret from TLS (recomputing secrets): ", serverHandshakeTrafficSecret);
+            log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
             computeKeys(serverHandshakeTrafficSecret);
         }
     }
@@ -46,12 +46,12 @@ public class NodeSecrets {
     public void computeApplicationKeys(TlsState tlsState) {
         if (nodeRole == Client) {
             byte[] clientApplicationTrafficSecret = tlsState.getClientApplicationTrafficSecret();
-            log.debug("Got new clientApplicationTrafficSecret from TLS (recomputing secrets): ", clientApplicationTrafficSecret);
+            log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
             computeKeys(clientApplicationTrafficSecret);
         }
         if (nodeRole == Server) {
             byte[] serverApplicationTrafficSecret = tlsState.getServerApplicationTrafficSecret();
-            log.debug("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", serverApplicationTrafficSecret);
+            log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", serverApplicationTrafficSecret);
             computeKeys(serverApplicationTrafficSecret);
         }
     }
@@ -59,13 +59,13 @@ public class NodeSecrets {
     private void computeKeys(byte[] secret) {
         // https://tools.ietf.org/html/rfc8446#section-7.3
         writeKey = Crypto.hkdfExpandLabel(secret, "key", "", (short) 16);
-        log.debug(nodeRole + " key", writeKey);
+        log.secret(nodeRole + " key", writeKey);
 
         writeIV = Crypto.hkdfExpandLabel(secret, "iv", "", (short) 12);
-        log.debug(nodeRole + " iv", writeIV);
+        log.secret(nodeRole + " iv", writeIV);
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1: 'to derive a packet number protection key (the "pn" label")'
         pn = Crypto.hkdfExpandLabel(secret, "pn", "", (short) 16);
-        log.debug(nodeRole + " pn", pn);
+        log.secret(nodeRole + " pn", pn);
     }
 }

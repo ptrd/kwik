@@ -81,7 +81,7 @@ public class ShortHeaderPacket extends QuicPacket {
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(EncryptionLevel.App);
 
         packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
-        log.debug("Packet number: " + packetNumber);
+        log.decrypted("Unprotected packet number: " + packetNumber);
 
         log.debug("Encrypted payload", payload);
 
@@ -89,7 +89,7 @@ public class ShortHeaderPacket extends QuicPacket {
         log.debug("Frame header", frameHeader);
 
         byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
-        log.debug("Decrypted payload", frameBytes);
+        log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
         parseFrames(frameBytes, connection, connectionSecrets, tlsState, log);

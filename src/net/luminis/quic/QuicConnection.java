@@ -41,13 +41,13 @@ public class QuicConnection {
     private boolean clientFinishedSent;
 
 
-    public QuicConnection(String host, int port, Version quicVersion) throws UnknownHostException {
-        log = new Logger();
-        log.debug("Creating connection with " + host + ":" + port + " with " + quicVersion);
+    public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException {
+        log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
         serverAddress = InetAddress.getByName(host);
         this.quicVersion = quicVersion;
+        this.log = log;
     }
 
     /**
@@ -73,7 +73,6 @@ public class QuicConnection {
 
         // Wrap it in a long header packet
         LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Initial.ordinal()]++, new CryptoFrame(clientHello), connectionSecrets);
-        log.debugWithHexBlock("Sending packet", longHeaderPacket.getBytes());
 
         socket = new DatagramSocket();
         send(longHeaderPacket, "client hello");
@@ -84,7 +83,7 @@ public class QuicConnection {
         for (int i = 0; i < 9; i++) {
             receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             socket.receive(receivedPacket);
-            log.debugWithHexBlock("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
+            log.raw("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
             parsePackets(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
 
             if (tlsState.isServerFinished() && ! clientFinishedSent) {
@@ -109,7 +108,7 @@ public class QuicConnection {
         byte[] packetData = packet.getBytes();
         DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
         socket.send(datagram);
-        log.debug("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
+        log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
         log.sent(packet);
     }
 
