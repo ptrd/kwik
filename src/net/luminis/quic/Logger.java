@@ -1,5 +1,7 @@
 package net.luminis.quic;
 
+import java.nio.ByteBuffer;
+
 public class Logger {
 
     private boolean logDebug = false;
@@ -73,10 +75,25 @@ public class Logger {
             result += (String.format("%02x ", data[i]));
             i++;
             if (i < data.length)
-            if (i % 16 == 0)
-                result += "\n";
-            else if (i % 8 == 0)
-                result += " ";
+                if (i % 16 == 0)
+                    result += "\n";
+                else if (i % 8 == 0)
+                    result += " ";
+        }
+        return result;
+    }
+
+    private String byteToHexBlock(ByteBuffer data, int offset, int length) {
+        data.rewind();
+        String result = "";
+        for (int i = 0; i < length; ) {
+            result += String.format("%02x ", data.get(offset + i));
+            i++;
+            if (i < length)
+                if (i % 16 == 0)
+                    result += "\n";
+                else if (i % 8 == 0)
+                    result += " ";
         }
         return result;
     }
@@ -119,6 +136,13 @@ public class Logger {
         }
     }
 
+    public void raw(String message, ByteBuffer data, int offset, int length) {
+        if (logRawBytes) {
+            System.out.println(message + " (" + length + "): ");
+            System.out.println(byteToHexBlock(data, offset, length));
+        }
+    }
+
     public void raw(String message, byte[] data, int length) {
         if (logRawBytes) {
             System.out.println(message + " (" + data.length + "): ");
@@ -144,5 +168,9 @@ public class Logger {
         if (logDecrypted) {
             System.out.println(message);
         }
+    }
+
+    public void error(String message) {
+        System.out.println("Error: " + message);
     }
 }

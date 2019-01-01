@@ -3,14 +3,13 @@ package net.luminis.quic;
 import net.luminis.tls.*;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.security.interfaces.ECKey;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -77,31 +76,43 @@ public class QuicConnection {
         socket = new DatagramSocket();
         send(longHeaderPacket, "client hello");
 
-        socket.setSoTimeout(5000);
-        byte[] receiveBuffer = new byte[1500];
-        DatagramPacket receivedPacket;
+        Receiver receiver = new Receiver(socket, 1500, log);
+        receiver.start();
+
         for (int i = 0; i < 9; i++) {
-            receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-            socket.receive(receivedPacket);
-            log.raw("Received packet " + i + " (" + receivedPacket.getLength() + " bytes)", receivedPacket.getData(), receivedPacket.getLength());
-            parsePackets(ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength()), tlsState);
+            try {
+                RawPacket rawPacket = receiver.get(5);
+                if (rawPacket != null) {
+                    Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
+                    log.raw("Received packet " + i + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
+                    log.debug("Process delay: " + processDelay);
 
-            if (tlsState.isServerFinished() && ! clientFinishedSent) {
-                FinishedMessage finishedMessage = new FinishedMessage(tlsState);
-                CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
-                LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Handshake.ordinal()]++, cryptoFrame, connectionSecrets);
-                log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
-                send(finishedPacket, "client finished");
-                clientFinishedSent = true;
-                tlsState.computeApplicationSecrets();
-                connectionSecrets.computeApplicationSecrets(tlsState);
+                    parsePackets(rawPacket.getData(), tlsState);
 
-                // At this point, application data can be sent.
-                StreamFrame stream0 = new StreamFrame(0, "GET /index.html\r\n");
-                QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[App.ordinal()]++, stream0, connectionSecrets);
-                send(packet, "application data");
+                    if (tlsState.isServerFinished() && !clientFinishedSent) {
+                        FinishedMessage finishedMessage = new FinishedMessage(tlsState);
+                        CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
+                        LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Handshake.ordinal()]++, cryptoFrame, connectionSecrets);
+                        log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
+                        send(finishedPacket, "client finished");
+                        clientFinishedSent = true;
+                        tlsState.computeApplicationSecrets();
+                        connectionSecrets.computeApplicationSecrets(tlsState);
+
+                        // At this point, application data can be sent.
+                        StreamFrame stream0 = new StreamFrame(0, "GET /index.html\r\n");
+                        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[App.ordinal()]++, stream0, connectionSecrets);
+                        send(packet, "application data");
+                    }
+                }
+                else {
+                    throw new SocketTimeoutException();
+                }
+            } catch (InterruptedException e) {
+                throw new SocketTimeoutException();
             }
         }
+        receiver.shutdown();
     }
 
     private void send(QuicPacket packet, String logMessage) throws IOException {
