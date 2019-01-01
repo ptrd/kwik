@@ -276,4 +276,12 @@ abstract public class QuicPacket {
     protected abstract EncryptionLevel getEncryptionLevel();
 
     public abstract byte[] getBytes();
+
+    public List<QuicFrame> getFrames() {
+        return frames;
+    }
+
+    public PacketId getId() {
+        return new PacketId(getEncryptionLevel(), getPacketNumber());
+    }
 }

@@ -38,15 +38,21 @@ public class QuicConnection {
     private final InetAddress serverAddress;
     private int[] lastPacketNumber = new int[EncryptionLevel.values().length];
     private boolean clientFinishedSent;
+    private final Sender sender;
+    private Receiver receiver;
 
 
-    public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException {
+    public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
         serverAddress = InetAddress.getByName(host);
         this.quicVersion = quicVersion;
         this.log = log;
+
+        socket = new DatagramSocket();
+        sender = new Sender(socket, 1500, log, serverAddress, port);
+        receiver = new Receiver(socket, 1500, log);
     }
 
     /**
@@ -66,18 +72,14 @@ public class QuicConnection {
         ECPrivateKey privateKey = (ECPrivateKey) keys[0];
         ECPublicKey publicKey = (ECPublicKey) keys[1];
 
+        receiver.start();
+
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState = new QuicTlsState();
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        // Wrap it in a long header packet
         LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Initial.ordinal()]++, new CryptoFrame(clientHello), connectionSecrets);
-
-        socket = new DatagramSocket();
-        send(longHeaderPacket, "client hello");
-
-        Receiver receiver = new Receiver(socket, 1500, log);
-        receiver.start();
+        sender.send(longHeaderPacket, "client hello");
 
         for (int i = 0; i < 9; i++) {
             try {
@@ -94,7 +96,7 @@ public class QuicConnection {
                         CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
                         LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Handshake.ordinal()]++, cryptoFrame, connectionSecrets);
                         log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
-                        send(finishedPacket, "client finished");
+                        sender.send(finishedPacket, "client finished");
                         clientFinishedSent = true;
                         tlsState.computeApplicationSecrets();
                         connectionSecrets.computeApplicationSecrets(tlsState);
@@ -102,7 +104,7 @@ public class QuicConnection {
                         // At this point, application data can be sent.
                         StreamFrame stream0 = new StreamFrame(0, "GET /index.html\r\n");
                         QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[App.ordinal()]++, stream0, connectionSecrets);
-                        send(packet, "application data");
+                        sender.send(packet, "application data");
                     }
                 }
                 else {
@@ -113,14 +115,6 @@ public class QuicConnection {
             }
         }
         receiver.shutdown();
-    }
-
-    private void send(QuicPacket packet, String logMessage) throws IOException {
-        byte[] packetData = packet.getBytes();
-        DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
-        socket.send(datagram);
-        log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
-        log.sent(packet);
     }
 
     /**
@@ -209,6 +203,9 @@ public class QuicConnection {
         }
         log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
+        // Process ack frames.
+        packet.getFrames().stream().filter(f -> f instanceof AckFrame).forEach(ack -> sender.process(ack, packet.getEncryptionLevel()));
+
         if (data.position() < data.limit()) {
             parsePackets(data.slice(), tlsState);
         }
@@ -235,7 +232,7 @@ public class QuicConnection {
                 ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
                 break;
         }
-        send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
+        sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
     }
 
     public byte[] getSourceConnectionId() {
