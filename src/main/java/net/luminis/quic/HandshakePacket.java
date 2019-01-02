@@ -6,8 +6,8 @@ import java.nio.ByteBuffer;
 
 public class HandshakePacket extends LongHeaderPacket {
 
-    public HandshakePacket(Version quicVersion, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState) {
-        super(quicVersion, connection, tlsState, connectionSecrets);
+    public HandshakePacket(Version quicVersion) {
+        super(quicVersion);
     }
 
     public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {

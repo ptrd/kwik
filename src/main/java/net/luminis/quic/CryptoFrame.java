@@ -1,13 +1,9 @@
 package net.luminis.quic;
 
-import net.luminis.tls.TlsState;
 
 import java.nio.ByteBuffer;
 
 public class CryptoFrame extends QuicFrame {
-
-    private TlsState tlsState;
-    private ConnectionSecrets connectionSecrets;
 
     private int offset;
     private int length;
@@ -28,9 +24,7 @@ public class CryptoFrame extends QuicFrame {
         frameBuffer.get(cryptoData);
     }
 
-    public CryptoFrame(ConnectionSecrets connectionSecrets, TlsState tlsState) {
-        this.connectionSecrets = connectionSecrets;
-        this.tlsState = tlsState;
+    public CryptoFrame() {
     }
 
     public CryptoFrame parse(ByteBuffer buffer, Logger log) {

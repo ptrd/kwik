@@ -10,8 +10,8 @@ public class InitialPacket extends LongHeaderPacket {
         super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
     }
 
-    public InitialPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, connection, tlsState, connectionSecrets);
+    public InitialPacket(Version quicVersion) {
+        super(quicVersion);
     }
 
     protected byte getPacketType() {

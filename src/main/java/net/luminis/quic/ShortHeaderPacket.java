@@ -54,7 +54,7 @@ public class ShortHeaderPacket extends QuicPacket {
         buffer.get(packetBytes);
     }
 
-    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, Logger log) {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         checkPacketType(buffer.get());
@@ -92,7 +92,7 @@ public class ShortHeaderPacket extends QuicPacket {
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
-        parseFrames(frameBytes, connection, connectionSecrets, tlsState, log);
+        parseFrames(frameBytes, log);
 
         packetSize = buffer.position() - startPosition;
         return this;

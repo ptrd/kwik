@@ -181,7 +181,7 @@ abstract public class QuicPacket {
         return length;
     }
 
-    protected void parseFrames(byte[] frameBytes, QuicConnection connection, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    protected void parseFrames(byte[] frameBytes, Logger log) {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         while (buffer.remaining() > 0) {
@@ -213,7 +213,7 @@ abstract public class QuicPacket {
                         throw new NotYetImplementedException();
                     break;
                 case 0x18:
-                    frames.add(new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log));
+                    frames.add(new CryptoFrame().parse(buffer, log));
                     break;
                 case 0x19:
                     frames.add(new NewTokenFrame().parse(buffer, log));

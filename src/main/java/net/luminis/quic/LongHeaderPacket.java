@@ -18,9 +18,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected byte[] sourceConnectionId;
     protected byte[] destConnectionId;
     protected byte[] payload;
-    protected QuicConnection connection;
-    protected ConnectionSecrets connectionSecrets;  // TODO? for parsing only...
-    protected TlsState tlsState;
     protected ByteBuffer packetBuffer;
     private int paddingLength;
     private int packetSize;
@@ -28,15 +25,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
     /**
      * Constructs an empty packet for parsing a received one
      * @param quicVersion
-     * @param connection
-     * @param tlsState
-     * @param connectionSecrets
      */
-    public LongHeaderPacket(Version quicVersion, QuicConnection connection, TlsState tlsState, ConnectionSecrets connectionSecrets) {  // TODO: move args to parse method?
+    public LongHeaderPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
-        this.connection = connection;
-        this.connectionSecrets = connectionSecrets;
-        this.tlsState = tlsState;
     }
 
     /**
@@ -111,7 +102,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return packetBytes;
     }
 
-    public LongHeaderPacket parse(ByteBuffer buffer, Logger log) {
+    public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         checkPacketType(buffer.get());
@@ -166,7 +157,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
-        parseFrames(frameBytes, connection, connectionSecrets, tlsState, log);
+        parseFrames(frameBytes, log);
 
         packetSize = buffer.position() - startPosition;
         return this;

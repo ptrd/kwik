@@ -89,7 +89,7 @@ public class QuicConnection implements PacketProcessor {
                     log.raw("Received packet " + i + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Process delay: " + processDelay);
 
-                    parsePackets(rawPacket.getData(), tlsState);
+                    parsePackets(rawPacket.getData());
 
                     if (tlsState.isServerFinished() && !clientFinishedSent) {
                         FinishedMessage finishedMessage = new FinishedMessage(tlsState);
@@ -144,7 +144,7 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    void parsePackets(ByteBuffer data, TlsState tlsState) throws IOException {
+    void parsePackets(ByteBuffer data) {
         int packetStart = data.position();
 
         int flags = data.get();
@@ -163,7 +163,7 @@ public class QuicConnection implements PacketProcessor {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
-            packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
+            packet = new InitialPacket(quicVersion).parse(data, connectionSecrets, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
@@ -174,7 +174,7 @@ public class QuicConnection implements PacketProcessor {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
-            packet = new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
+            packet = new HandshakePacket(quicVersion).parse(data, connectionSecrets, log);
         }
         else if ((flags & 0xff) == 0xfc) {
             // 0-RTT Protected
@@ -184,7 +184,7 @@ public class QuicConnection implements PacketProcessor {
         // "The most significant bit (0x80) of octet 0 is set to 0 for the short header."
         else if ((flags & 0x80) == 0x00) {
             // ShortHeader
-            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, tlsState, log);
+            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, log);
         }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
@@ -200,11 +200,11 @@ public class QuicConnection implements PacketProcessor {
         }
 
         if (data.position() < data.limit()) {
-            parsePackets(data.slice(), tlsState);
+            parsePackets(data.slice());
         }
     }
 
-    public CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
+    private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
                 cryptoStreams.add(new CryptoStream(encryptionLevel, connectionSecrets, tlsState, log));
@@ -282,10 +282,9 @@ public class QuicConnection implements PacketProcessor {
                 sender.process(frame, packet.getEncryptionLevel());
             }
             else if (frame instanceof StreamFrame) {
-                System.out.println("HIERO: stream processing");
             }
             else {
-                log.debug("HIERO Ignoring " + frame);
+                log.debug("Ignoring " + frame);
             }
         }
     }
