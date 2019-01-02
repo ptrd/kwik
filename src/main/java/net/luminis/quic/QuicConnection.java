@@ -216,7 +216,7 @@ public class QuicConnection implements PacketProcessor {
     private void acknowledge(EncryptionLevel encryptionLevel, int packetNumber) throws IOException {
         AckFrame ack = new AckFrame(quicVersion, packetNumber);
 
-        LongHeaderPacket ackPacket = null;
+        QuicPacket ackPacket = null;
         switch (encryptionLevel) {
             case Initial:
                 ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
@@ -225,8 +225,8 @@ public class QuicConnection implements PacketProcessor {
                 ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
                 break;
             case App:
-                // TODO !!!
-                return;
+                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                break;
         }
         sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
     }
