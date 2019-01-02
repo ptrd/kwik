@@ -200,6 +200,9 @@ abstract public class QuicPacket {
                 case 0x04:
                     frames.add(new MaxDataFrame().parse(buffer, log));
                     break;
+                case 0x06:
+                    frames.add(new MaxStreamIdFrame().parse(buffer, log));
+                    break;
                 case 0x07:
                     frames.add(new PingFrame().parse(buffer, log));
                     break;
