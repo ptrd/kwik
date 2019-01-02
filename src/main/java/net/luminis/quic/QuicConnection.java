@@ -22,7 +22,7 @@ import static net.luminis.tls.Tls13.generateKeys;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicConnection {
+public class QuicConnection implements PacketProcessor {
 
     private Logger log;
     private final Version quicVersion;
@@ -159,52 +159,45 @@ public class QuicConnection {
         //  Version field having a value of 0."
         if (version == 0) {
             packet = new VersionNegotationPacket().parse(data, log);
-            log.received(packet);
-            log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
         // "An Initial packet uses long headers with a type value of 0x7F."
         else if ((flags & 0xff) == 0xff) {
             packet = new InitialPacket(quicVersion, this, tlsState, connectionSecrets).parse(data, log);
-            log.received(packet);
-            destConnectionId = ((LongHeaderPacket) packet).getSourceConnectionId();
-            acknowledge(Initial, packet.getPacketNumber());
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x7E."
         else if ((flags & 0xff) == 0xfe) {
-            // Retry
-            packet = null;
-            System.out.println("Ignoring Retry packet");
-            return;
+            // Retry packet....
+            throw new NotYetImplementedException();
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x7D."
         else if ((flags & 0xff) == 0xfd) {
             packet = new HandshakePacket(quicVersion, this, connectionSecrets, tlsState).parse(data, log);
-            log.received(packet);
-            acknowledge(Handshake, packet.getPacketNumber());
         }
         else if ((flags & 0xff) == 0xfc) {
             // 0-RTT Protected
-            packet = null;
-            System.out.println("Ignoring 0-RTT Protected package");
-            return;
+            throw new NotYetImplementedException();
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.3
         // "The most significant bit (0x80) of octet 0 is set to 0 for the short header."
         else if ((flags & 0x80) == 0x00) {
             // ShortHeader
             packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, tlsState, log);
-            log.received(packet);
         }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
+        log.received(packet);
         log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
-        // Process ack frames.
-        packet.getFrames().stream().filter(f -> f instanceof AckFrame).forEach(ack -> sender.process(ack, packet.getEncryptionLevel()));
+        packet.accept(this);
+        try {
+            acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+        } catch (IOException e) {
+            handleIOError(e);
+        }
 
         if (data.position() < data.limit()) {
             parsePackets(data.slice(), tlsState);
@@ -231,6 +224,9 @@ public class QuicConnection {
             case Handshake:
                 ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
                 break;
+            case App:
+                // TODO !!!
+                return;
         }
         sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
     }
@@ -250,4 +246,53 @@ public class QuicConnection {
         };
         return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
+
+    @Override
+    public void process(InitialPacket packet) {
+        destConnectionId = packet.getSourceConnectionId();
+        processFrames(packet);
+    }
+
+    @Override
+    public void process(HandshakePacket packet) {
+        processFrames(packet);
+    }
+
+    @Override
+    public void process(LongHeaderPacket packet) {
+        processFrames(packet);
+    }
+
+    @Override
+    public void process(ShortHeaderPacket packet) {
+        processFrames(packet);
+    }
+
+    @Override
+    public void process(VersionNegotationPacket packet) {
+        log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
+    }
+
+    void processFrames(QuicPacket packet) {
+        for (QuicFrame frame: packet.getFrames()) {
+            if (frame instanceof CryptoFrame) {
+                getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
+            }
+            else if (frame instanceof AckFrame) {
+                sender.process(frame, packet.getEncryptionLevel());
+            }
+            else if (frame instanceof StreamFrame) {
+                System.out.println("HIERO: stream processing");
+            }
+            else {
+                log.debug("HIERO Ignoring " + frame);
+            }
+        }
+    }
+
+    private void handleIOError(IOException e) {
+        System.out.println("Fatal: IO error " + e);
+        System.exit(1);
+    }
+
 }

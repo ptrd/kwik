@@ -213,9 +213,7 @@ abstract public class QuicPacket {
                         throw new NotYetImplementedException();
                     break;
                 case 0x18:
-                    CryptoFrame cryptoFrame = new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log);
-                    connection.getCryptoStream(getEncryptionLevel()).add(cryptoFrame);
-                    frames.add(cryptoFrame);
+                    frames.add(new CryptoFrame(connectionSecrets, tlsState).parse(buffer, log));
                     break;
                 case 0x19:
                     frames.add(new NewTokenFrame().parse(buffer, log));
@@ -284,4 +282,6 @@ abstract public class QuicPacket {
     public PacketId getId() {
         return new PacketId(getEncryptionLevel(), getPacketNumber());
     }
+
+    public abstract void accept(PacketProcessor processor);
 }

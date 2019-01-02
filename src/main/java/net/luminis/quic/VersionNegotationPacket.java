@@ -79,6 +79,11 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
+    public void accept(PacketProcessor processor) {
+        processor.process(this);
+    }
+
+    @Override
     public String toString() {
         return "Packet "
                 + "I" + "|"

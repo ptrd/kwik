@@ -107,6 +107,11 @@ public class ShortHeaderPacket extends QuicPacket {
         return packetBytes;
     }
 
+    @Override
+    public void accept(PacketProcessor processor) {
+        processor.process(this);
+    }
+
     protected void checkPacketType(byte flags) {
         if ((flags & 0x80) != 0x00) {
             // Programming error: this method shouldn't have been called if packet is not a Short Frame

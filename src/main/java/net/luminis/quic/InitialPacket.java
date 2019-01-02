@@ -29,6 +29,11 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
+    public void accept(PacketProcessor processor) {
+        processor.process(this);
+    }
+
+    @Override
     protected void checkPacketType(byte type) {
         if (type != (byte) 0xff) {
             // Programming error: this method shouldn't have been called if packet is not Initial
