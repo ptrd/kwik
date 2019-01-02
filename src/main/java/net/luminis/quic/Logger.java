@@ -4,12 +4,12 @@ import java.nio.ByteBuffer;
 
 public class Logger {
 
-    private boolean logDebug = false;
-    private boolean logRawBytes = false;
-    private boolean logDecrypted = false;
-    private boolean logSecrets = false;
-    private boolean logPackets = false;
-    private boolean logInfo = false;
+    private volatile boolean logDebug = false;
+    private volatile boolean logRawBytes = false;
+    private volatile boolean logDecrypted = false;
+    private volatile boolean logSecrets = false;
+    private volatile boolean logPackets = false;
+    private volatile boolean logInfo = false;
 
     public void logDebug(boolean enabled) {
         logDebug = enabled;
@@ -37,27 +37,35 @@ public class Logger {
 
     public void debug(String message) {
         if (logDebug) {
-            System.out.println(message);
+            synchronized (this) {
+                System.out.println(message);
+            }
         }
     }
 
     public void debugWithHexBlock(String message, byte[] data) {
         if (logDebug) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, data.length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, data.length));
+            }
         }
     }
 
     public void debugWithHexBlock(String message, byte[] data, int length) {
         if (logDebug) {
-            System.out.println(message + " (" + length + "): ");
-            System.out.println(byteToHexBlock(data, length));
+            synchronized (this) {
+                System.out.println(message + " (" + length + "): ");
+                System.out.println(byteToHexBlock(data, length));
+            }
         }
     }
 
     public void debug(String message, byte[] data) {
         if (logDebug) {
-            System.out.println(message + " (" + data.length + "): " + byteToHex(data));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): " + byteToHex(data));
+            }
         }
     }
 
@@ -100,77 +108,101 @@ public class Logger {
 
     public void info(String message) {
         if (logInfo) {
-            System.out.println(message);
+            synchronized (this) {
+                System.out.println(message);
+            }
         }
     }
 
     public void info(String message, byte[] data) {
         if (logInfo) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, data.length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, data.length));
+            }
         }
     }
 
     public void received(QuicPacket packet) {
         if (logPackets) {
-            System.out.println("<< " + packet);
+            synchronized (this) {
+                System.out.println("<< " + packet);
+            }
         }
     }
 
     public void sent(QuicPacket packet) {
         if (logPackets) {
-            System.out.println(">> " + packet);
+            synchronized (this) {
+                System.out.println(">> " + packet);
+            }
         }
     }
 
     public void secret(String message, byte[] secret) {
         if (logSecrets) {
-            System.out.println(message + ": " + byteToHex(secret));
+            synchronized (this) {
+                System.out.println(message + ": " + byteToHex(secret));
+            }
         }
     }
 
     public void raw(String message, byte[] data) {
         if (logRawBytes) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, data.length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, data.length));
+            }
         }
     }
 
     public void raw(String message, ByteBuffer data, int offset, int length) {
         if (logRawBytes) {
-            System.out.println(message + " (" + length + "): ");
-            System.out.println(byteToHexBlock(data, offset, length));
+            synchronized (this) {
+                System.out.println(message + " (" + length + "): ");
+                System.out.println(byteToHexBlock(data, offset, length));
+            }
         }
     }
 
     public void raw(String message, byte[] data, int length) {
         if (logRawBytes) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, length));
+            }
         }
     }
 
     public void decrypted(String message, byte[] data) {
         if (logDecrypted) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, data.length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, data.length));
+            }
         }
     }
 
     public void decrypted(String message, byte[] data, int length) {
         if (logDecrypted) {
-            System.out.println(message + " (" + data.length + "): ");
-            System.out.println(byteToHexBlock(data, length));
+            synchronized (this) {
+                System.out.println(message + " (" + data.length + "): ");
+                System.out.println(byteToHexBlock(data, length));
+            }
         }
     }
 
     public void decrypted(String message) {
         if (logDecrypted) {
-            System.out.println(message);
+            synchronized (this) {
+                System.out.println(message);
+            }
         }
     }
 
     public void error(String message) {
-        System.out.println("Error: " + message);
+        synchronized (this) {
+            System.out.println("Error: " + message);
+        }
     }
 }

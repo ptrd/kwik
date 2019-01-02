@@ -27,6 +27,7 @@ public class Receiver {
         this.log = log;
 
         receiverThread = new Thread(() -> run(), "receiver");
+        receiverThread.setDaemon(true);
         receivedPacketsQueue = new LinkedBlockingQueue<>();
 
         try {

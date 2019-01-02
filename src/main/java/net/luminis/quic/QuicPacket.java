@@ -1,7 +1,5 @@
 package net.luminis.quic;
 
-import net.luminis.tls.TlsState;
-
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
@@ -53,7 +51,8 @@ abstract public class QuicPacket {
         //   reconstructed QUIC packet number in network byte order are left-
         //   padded with zeros to the size of the IV.  The exclusive OR of the
         //   padded packet number and the IV forms the AEAD nonce"
-        ByteBuffer nonceInput = ByteBuffer.allocate(secrets.writeIV.length);
+        byte[] writeIV = secrets.getWriteIV();
+        ByteBuffer nonceInput = ByteBuffer.allocate(writeIV.length);
         for (int i = 0; i < nonceInput.capacity() - 8; i++)
             nonceInput.put((byte) 0x00);
         nonceInput.putLong((long) packetNumber);
@@ -61,10 +60,10 @@ abstract public class QuicPacket {
         byte[] nonce = new byte[12];
         int i = 0;
         for (byte b : nonceInput.array())
-            nonce[i] = (byte) (b ^ secrets.writeIV[i++]);
+            nonce[i] = (byte) (b ^ writeIV[i++]);
 
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(secrets.writeKey, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(secrets.getWriteKey(), "AES");
             // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
             // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
             String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
@@ -88,13 +87,14 @@ abstract public class QuicPacket {
         nonceInput.putInt(0);
         nonceInput.putLong((long) packetNumber);
 
+        byte[] writeIV = secrets.getWriteIV();
         byte[] nonce = new byte[12];
         int i = 0;
         for (byte b : nonceInput.array())
-            nonce[i] = (byte) (b ^ secrets.writeIV[i++]);
+            nonce[i] = (byte) (b ^ writeIV[i++]);
 
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(secrets.writeKey, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(secrets.getWriteKey(), "AES");
             String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
             Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
             GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116  5.3
@@ -119,7 +119,7 @@ abstract public class QuicPacket {
         int sampleOffset = 3;    // TODO
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample,0,16);
-        byte[] encryptedPn = encryptAesCtr(secrets.pn, sample, new byte[] { (byte) packetNumber });   // TODO: if pn > 1 byte
+        byte[] encryptedPn = encryptAesCtr(secrets.getPn(), sample, new byte[] { (byte) packetNumber });   // TODO: if pn > 1 byte
         return encryptedPn;
     }
 
@@ -135,7 +135,7 @@ abstract public class QuicPacket {
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample,0,16);
         // AES is symmetric, so decrypt is the same as encrypt
-        byte[] decryptedPn = encryptAesCtr(secrets.pn, sample, protectedPacketNumber);
+        byte[] decryptedPn = encryptAesCtr(secrets.getPn(), sample, protectedPacketNumber);
         return decryptedPn[0];   // TODO: assuming one byte
     }
 

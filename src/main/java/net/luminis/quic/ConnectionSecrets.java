@@ -32,7 +32,7 @@ public class ConnectionSecrets {
      *
      * @param destConnectionId
      */
-    public void computeInitialKeys(byte[] destConnectionId) {
+    public synchronized void computeInitialKeys(byte[] destConnectionId) {
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2:
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
@@ -45,7 +45,7 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(initialSecret, NodeRole.Server, log);
     }
 
-    public void computeHandshakeSecrets(TlsState tlsState) {
+    public synchronized void computeHandshakeSecrets(TlsState tlsState) {
         NodeSecrets handshakeSecrets = new NodeSecrets(NodeRole.Client, log);
         handshakeSecrets.computeHandshakeKeys(tlsState);
         clientSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
@@ -55,7 +55,7 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
     }
 
-    public void computeApplicationSecrets(TlsState tlsState) {
+    public synchronized void computeApplicationSecrets(TlsState tlsState) {
         NodeSecrets applicationSecrets = new NodeSecrets(NodeRole.Client, log);
         applicationSecrets.computeApplicationKeys(tlsState);
         clientSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
@@ -65,11 +65,11 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
     }
 
-    public NodeSecrets getClientSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized NodeSecrets getClientSecrets(EncryptionLevel encryptionLevel) {
         return clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public NodeSecrets getServerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized NodeSecrets getServerSecrets(EncryptionLevel encryptionLevel) {
         return serverSecrets[encryptionLevel.ordinal()];
     }
 }

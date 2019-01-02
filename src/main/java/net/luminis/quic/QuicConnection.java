@@ -24,22 +24,22 @@ import static net.luminis.tls.Tls13.generateKeys;
  */
 public class QuicConnection implements PacketProcessor {
 
-    private Logger log;
+    private final Logger log;
     private final Version quicVersion;
     private final Random random = new Random();
     private final String host;
     private final int port;
-    private byte[] sourceConnectionId;
-    private byte[] destConnectionId;
-    private ConnectionSecrets connectionSecrets;
-    private List<CryptoStream> cryptoStreams = new ArrayList<>();
-    private TlsState tlsState;
-    private DatagramSocket socket;
+    private final TlsState tlsState;
+    private final DatagramSocket socket;
     private final InetAddress serverAddress;
-    private int[] lastPacketNumber = new int[EncryptionLevel.values().length];
-    private boolean clientFinishedSent;
+    private final int[] lastPacketNumber = new int[EncryptionLevel.values().length];
     private final Sender sender;
-    private Receiver receiver;
+    private final Receiver receiver;
+    private volatile int receivedPacketCounter;
+    private volatile byte[] sourceConnectionId;
+    private volatile byte[] destConnectionId;
+    private final ConnectionSecrets connectionSecrets;
+    private final List<CryptoStream> cryptoStreams = new ArrayList<>();
 
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
@@ -53,12 +53,14 @@ public class QuicConnection implements PacketProcessor {
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port);
         receiver = new Receiver(socket, 1500, log);
+        tlsState = new QuicTlsState();
+        connectionSecrets = new ConnectionSecrets(quicVersion, log);
     }
 
     /**
      * Set up the connection with the server.
      */
-    public void connect() throws IOException {
+    public synchronized void connect() throws IOException {
         generateConnectionIds(8, 8);
         generateInitialKeys();
 
@@ -75,36 +77,32 @@ public class QuicConnection implements PacketProcessor {
         receiver.start();
 
         byte[] clientHello = createClientHello(host, publicKey);
-        tlsState = new QuicTlsState();
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        LongHeaderPacket longHeaderPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Initial.ordinal()]++, new CryptoFrame(clientHello), connectionSecrets);
-        sender.send(longHeaderPacket, "client hello");
+        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(clientHello), connectionSecrets);
+        sender.send(clientHelloPacket, "client hello");
 
-        for (int i = 0; i < 9; i++) {
+        boolean handshaking = true;
+        while (handshaking) {     // TODO: and not timed out
             try {
                 RawPacket rawPacket = receiver.get(5);
                 if (rawPacket != null) {
                     Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
-                    log.raw("Received packet " + i + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
+                    log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Process delay: " + processDelay);
 
                     parsePackets(rawPacket.getData());
 
-                    if (tlsState.isServerFinished() && !clientFinishedSent) {
+                    if (tlsState.isServerFinished()) {
                         FinishedMessage finishedMessage = new FinishedMessage(tlsState);
                         CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
-                        LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[Handshake.ordinal()]++, cryptoFrame, connectionSecrets);
+                        LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Handshake), cryptoFrame, connectionSecrets);
                         log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
                         sender.send(finishedPacket, "client finished");
-                        clientFinishedSent = true;
                         tlsState.computeApplicationSecrets();
                         connectionSecrets.computeApplicationSecrets(tlsState);
 
-                        // At this point, application data can be sent.
-                        StreamFrame stream0 = new StreamFrame(0, "GET /index.html\r\n");
-                        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[App.ordinal()]++, stream0, connectionSecrets);
-                        sender.send(packet, "application data");
+                        handshaking = false;
                     }
                 }
                 else {
@@ -114,7 +112,33 @@ public class QuicConnection implements PacketProcessor {
                 throw new SocketTimeoutException();
             }
         }
-        receiver.shutdown();
+        log.debug("Handshake finished");
+
+        startReceiverLoop();
+    }
+
+    private void startReceiverLoop() {
+        Thread receiverThread = new Thread(this::receiveAndProcessPackets, "receiver-loop");
+        receiverThread.setDaemon(true);
+        receiverThread.start();
+    }
+
+    private void receiveAndProcessPackets() {
+        Thread currentThread = Thread.currentThread();
+        try {
+            while (! currentThread.isInterrupted()) {
+                RawPacket rawPacket = receiver.get(15);
+                if (rawPacket != null) {
+                    Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
+                    log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
+                    log.debug("Process delay: " + processDelay);
+
+                    parsePackets(rawPacket.getData());
+                }
+            }
+        } catch (InterruptedException e) {
+            log.debug("Terminating receiver loop");
+        }
     }
 
     /**
@@ -140,7 +164,6 @@ public class QuicConnection implements PacketProcessor {
     }
 
     private void generateInitialKeys() {
-        connectionSecrets = new ConnectionSecrets(quicVersion, log);
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
@@ -219,16 +242,22 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket ackPacket = null;
         switch (encryptionLevel) {
             case Initial:
-                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
                 break;
             case Handshake:
-                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
                 break;
             case App:
-                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, lastPacketNumber[encryptionLevel.ordinal()]++, ack, connectionSecrets);
+                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
                 break;
         }
         sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
+    }
+
+    private int getNextPacketNumber(EncryptionLevel initial) {
+        synchronized (lastPacketNumber) {
+            return lastPacketNumber[initial.ordinal()]++;
+        }
     }
 
     public byte[] getSourceConnectionId() {

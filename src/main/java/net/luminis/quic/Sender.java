@@ -29,7 +29,7 @@ public class Sender implements FrameProcessor {
         packetSentLog = new HashMap<>();
     }
 
-    public void send(QuicPacket packet, String logMessage) throws IOException {
+    public synchronized void send(QuicPacket packet, String logMessage) throws IOException {
         byte[] packetData = packet.getBytes();
         DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
         socket.send(datagram);
@@ -40,7 +40,7 @@ public class Sender implements FrameProcessor {
         logSent(packet, sent);
     }
 
-    public void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel) {
+    public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel) {
         if (ackFrame instanceof AckFrame) {
             ((AckFrame) ackFrame).getAckedPacketNumbers().stream().forEach(pn -> {
                 PacketId id = new PacketId(encryptionLevel, pn);

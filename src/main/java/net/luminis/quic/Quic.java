@@ -115,7 +115,20 @@ public class Quic {
         }
 
         try {
-            new QuicConnection(host, port, quicVersion, logger).connect();
+            QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
+
+            quicConnection.connect();
+
+            // TODO:
+            // - send / receive stream data
+            // - properly close the connection
+
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {}
+
+            System.out.println("Terminating Quic");
+
         } catch (IOException e) {
             System.out.println("Got IO error: " + e);
         }
