@@ -10,9 +10,8 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.*;
@@ -40,6 +39,8 @@ public class QuicConnection implements PacketProcessor {
     private volatile byte[] destConnectionId;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
+    private final Map<Integer, QuicStream> streams;
+    private int nextStreamId;
 
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
@@ -55,6 +56,7 @@ public class QuicConnection implements PacketProcessor {
         receiver = new Receiver(socket, 1500, log);
         tlsState = new QuicTlsState();
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
+        streams = new ConcurrentHashMap<>();
     }
 
     /**
@@ -311,6 +313,15 @@ public class QuicConnection implements PacketProcessor {
                 sender.process(frame, packet.getEncryptionLevel());
             }
             else if (frame instanceof StreamFrame) {
+                int streamId = ((StreamFrame) frame).getStreamId();
+                QuicStream stream = streams.get(streamId);
+                if (stream != null) {
+                    stream.add((StreamFrame) frame);
+                }
+                else {
+                    // TODO: could be a server initiated stream.
+                    log.error("Receiving frame for non-existant stream " + streamId);
+                }
             }
             else {
                 log.debug("Ignoring " + frame);
@@ -323,4 +334,27 @@ public class QuicConnection implements PacketProcessor {
         System.exit(1);
     }
 
+    public QuicStream createStream(boolean bidirectional) {
+        int streamId = generateClientStreamId(bidirectional);
+        QuicStream stream = new QuicStream(streamId, this, log);
+        streams.put(streamId, stream);
+        return stream;
+    }
+
+    public void close() {
+        // TODO
+    }
+
+    private synchronized int generateClientStreamId(boolean bidirectional) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
+        // "0x0  | Client-Initiated, Bidirectional"
+        int id = (nextStreamId << 2) + 0x00;
+        nextStreamId++;
+        return id;
+    }
+
+    void send(StreamFrame streamFrame) throws IOException {
+        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, getNextPacketNumber(App), streamFrame, connectionSecrets);
+        sender.send(packet, "application data");
+    }
 }

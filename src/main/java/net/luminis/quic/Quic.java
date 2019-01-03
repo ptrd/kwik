@@ -2,7 +2,9 @@ package net.luminis.quic;
 
 import org.apache.commons.cli.*;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.List;
 
 /**
@@ -119,12 +121,27 @@ public class Quic {
 
             quicConnection.connect();
 
-            // TODO:
-            // - send / receive stream data
-            // - properly close the connection
+            boolean bidirectional = true;
+            QuicStream quicStream = quicConnection.createStream(bidirectional);
+            quicStream.getOutputStream().write("GET /index.html\r\n".getBytes());
+            quicStream.getOutputStream().close();
+
+            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {}
+
+            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+            String line;
+            System.out.println("Server returns: ");
+            while ((line = input.readLine()) != null) {
+                System.out.println(line);
+            }
+
+            quicConnection.close();
 
             try {
-                Thread.sleep(10000);
+                Thread.sleep(3000);
             } catch (InterruptedException e) {}
 
             System.out.println("Terminating Quic");
