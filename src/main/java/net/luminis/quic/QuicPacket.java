@@ -194,11 +194,22 @@ abstract public class QuicPacket {
                 case 0x00:
                     frames.add(new Padding().parse(buffer, log));
                     break;
+                case 0x01:
+                    if (quicVersion == Version.IETF_draft_14) {
+                        log.debug("Received RST Stream frame (not yet implemented).");
+                    }
+                    throw new NotYetImplementedException();
                 case 0x02:
                     log.debug("Received Connection Close frame (not yet implemented).");
                     throw new NotYetImplementedException();
+                case 0x03:
+                    frames.add(new ApplicationCloseFrame().parse(buffer, log));
+                    break;
                 case 0x04:
                     frames.add(new MaxDataFrame().parse(buffer, log));
+                    break;
+                case 0x05:
+                    frames.add(new MaxStreamDataFrame().parse(buffer, log));
                     break;
                 case 0x06:
                     frames.add(new MaxStreamIdFrame().parse(buffer, log));
@@ -208,6 +219,9 @@ abstract public class QuicPacket {
                     break;
                 case 0x0b:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x0c:
+                    frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x0d:
                     if (quicVersion == Version.IETF_draft_14)

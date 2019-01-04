@@ -2,6 +2,7 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
+// https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.9
 public class MaxDataFrame extends QuicFrame {
 
     private int maxData;
