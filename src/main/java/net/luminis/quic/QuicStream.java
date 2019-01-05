@@ -119,13 +119,12 @@ public class QuicStream {
 
         @Override
         public void write(byte[] data) throws IOException {
-            connection.send(new StreamFrame(streamId, currentOffset, data, false));
-            currentOffset += data.length;
+            write(data, 0, data.length);
         }
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            connection.send(new StreamFrame(streamId, currentOffset, Arrays.copyOfRange(data, off, off + len), false));
+            connection.send(new StreamFrame(streamId, currentOffset, data, off, len, false));
             currentOffset += len;
         }
 

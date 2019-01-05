@@ -4,17 +4,17 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.mockito.AdditionalMatchers.or;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,7 +48,7 @@ class QuicStreamTest {
         connection = Mockito.mock(QuicConnection.class);
         QuicStream quicStream = new QuicStream(0, connection, logger);
 
-        quicStream.add(new StreamFrame(0, "data".getBytes(), true));
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("data".getBytes());
     }
@@ -57,8 +57,8 @@ class QuicStreamTest {
     public void testReadMultipleStreamFrames() throws IOException {
         QuicStream quicStream = new QuicStream(0, connection, logger);
 
-        quicStream.add(new StreamFrame(0, "first-".getBytes(), false));
-        quicStream.add(new StreamFrame(0, 6, "second-final".getBytes(), true));
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-final".getBytes());
     }
@@ -67,9 +67,9 @@ class QuicStreamTest {
     void testAddDuplicateStreamFrames() throws IOException {
         QuicStream quicStream = new QuicStream(0, connection, logger);
 
-        quicStream.add(new StreamFrame(0, "first-".getBytes(), false));
-        quicStream.add(new StreamFrame(0, "first-".getBytes(), false));
-        quicStream.add(new StreamFrame(0, 6, "second-final".getBytes(), true));
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-final".getBytes());
     }
@@ -78,9 +78,9 @@ class QuicStreamTest {
     void testAddNonContiguousStreamFrames() throws IOException {
         QuicStream quicStream = new QuicStream(0, connection, logger);
 
-        quicStream.add(new StreamFrame(0, "first-".getBytes(), false));
-        quicStream.add(new StreamFrame(0, 13, "third-final".getBytes(), true));
-        quicStream.add(new StreamFrame(0, 6, "second-".getBytes(), false));
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-third-final".getBytes());
     }
@@ -89,8 +89,8 @@ class QuicStreamTest {
     void testReadBlocksTillContiguousFrameIsAvailalble() throws IOException {
         QuicStream quicStream = new QuicStream(0, connection, logger);
 
-        quicStream.add(new StreamFrame(0, "first-".getBytes(), false));
-        quicStream.add(new StreamFrame(0, 13, "third-final".getBytes(), true));
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
 
         byte[] buffer = new byte[100];
         int initialReadCount = quicStream.getInputStream().read(buffer);
@@ -105,7 +105,7 @@ class QuicStreamTest {
             // This is expected, as the read method should have blocked for QuicStream.waitForNextFrameTimeout seconds.
 
             // Now continue the test by offering the next frame
-            quicStream.add(new StreamFrame(0, 6, "second-".getBytes(), false));
+            quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
 
             // Read more
             int lastRead = quicStream.getInputStream().read(buffer, initialReadCount, buffer.length - initialReadCount);
@@ -155,7 +155,18 @@ class QuicStreamTest {
         quicStream.getOutputStream().close();
 
         verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)));
+    }
 
+    // Generate frame bytes and parse to get access to copied data bytes.
+
+    /**
+     * Serializes the given frame and parses the result, to simulate receiving a frame.
+     * This is necessary because not all fields off a parsed frame are available in a constructed frame, e.g. StreamFrame.applicationData.
+     * @param streamFrame
+     * @return the resurrected frame
+     */
+    private StreamFrame resurrect(StreamFrame streamFrame) {
+        return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
     }
 
     /**
@@ -187,6 +198,7 @@ class QuicStreamTest {
 
         @Override
         public boolean matches(StreamFrame streamFrame) {
+            streamFrame = resurrect(streamFrame);
             return Arrays.equals(streamFrame.getStreamData(), expectedBytes)
                     && streamFrame.getOffset() == expectedOffset
                     && streamFrame.isFinal() == expectedFinalFlag;

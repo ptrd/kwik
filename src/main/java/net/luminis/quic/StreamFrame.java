@@ -1,6 +1,7 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.stream.Stream;
 
 import static net.luminis.quic.StreamType.ClientInitiatedBidirectional;
@@ -19,15 +20,18 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, byte[] applicationData, boolean fin) {
-        this(streamId, 0, applicationData, fin);
+        this(streamId, 0, applicationData, 0, applicationData.length, fin);
     }
 
-    public StreamFrame(int streamId, int streamOffset, byte[] applicationData, boolean fin) {
+    public StreamFrame(int streamId, int offset, byte[] applicationData, boolean fin) {
+        this(streamId, offset, applicationData, 0, applicationData.length, fin);
+    }
+
+    public StreamFrame(int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
         streamType = ClientInitiatedBidirectional;
         this.streamId = streamId;
         this.offset = streamOffset;
-        this.length = applicationData.length;
-        streamData = applicationData;
+        this.length = dataLength;
         isFinal = fin;
 
         ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.length);
@@ -39,7 +43,7 @@ public class StreamFrame extends QuicFrame {
         buffer.put(encodeVariableLengthInteger(streamId));
         buffer.put(encodeVariableLengthInteger(offset));  // offset
         buffer.put(encodeVariableLengthInteger(applicationData.length));  // length
-        buffer.put(applicationData);
+        buffer.put(applicationData, dataOffset, dataLength);
 
         frameData = new byte[buffer.position()];
         buffer.rewind();
