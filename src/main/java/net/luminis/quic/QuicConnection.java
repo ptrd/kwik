@@ -357,4 +357,25 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, getNextPacketNumber(App), streamFrame, connectionSecrets);
         sender.send(packet, "application data");
     }
+
+    int getMaxPacketSize() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:
+        // "An endpoint SHOULD use Datagram Packetization Layer PMTU Discovery
+        //   ([DPLPMTUD]) or implement Path MTU Discovery (PMTUD) [RFC1191]
+        //   [RFC8201] ..."
+        // "In the absence of these mechanisms, QUIC endpoints SHOULD NOT send IP
+        //   packets larger than 1280 bytes.  Assuming the minimum IP header size,
+        //   this results in a QUIC maximum packet size of 1232 bytes for IPv6 and
+        //   1252 bytes for IPv4."
+        // As it is not know (yet) whether running over IP4 or IP6, take the smallest of the two:
+        return 1232;
+    }
+
+    int getMaxShortHeaderPacketOverhead() {
+        return 1  // flag byte
+                + destConnectionId.length
+                + 4  // max packet number size, in practice this will be mostly 1
+                + 16 // encryption overhead
+        ;
+    }
 }

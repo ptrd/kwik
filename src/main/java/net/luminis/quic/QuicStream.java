@@ -124,8 +124,16 @@ public class QuicStream {
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            connection.send(new StreamFrame(streamId, currentOffset, data, off, len, false));
-            currentOffset += len;
+            int maxDataPerFrame = connection.getMaxPacketSize() - StreamFrame.maxOverhead() - connection.getMaxShortHeaderPacketOverhead();
+            int remaining = len;
+            int offsetInDataArray = off;
+            while (remaining > 0) {
+                int bytesInFrame = Math.min(maxDataPerFrame, remaining);
+                connection.send(new StreamFrame(streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false));
+                remaining -= bytesInFrame;
+                offsetInDataArray += bytesInFrame;
+                currentOffset += bytesInFrame;
+            }
         }
 
         @Override

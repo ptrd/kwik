@@ -16,8 +16,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 
 class QuicStreamTest {
@@ -40,6 +39,7 @@ class QuicStreamTest {
     @BeforeEach
     void createDefaultMocks() {
         connection = Mockito.mock(QuicConnection.class);
+        when(connection.getMaxPacketSize()).thenReturn(1232);
         logger = Mockito.mock(Logger.class);
     }
 
@@ -157,7 +157,39 @@ class QuicStreamTest {
         verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)));
     }
 
-    // Generate frame bytes and parse to get access to copied data bytes.
+    @Test
+    void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws IOException {
+        QuicStream quicStream = new QuicStream(0, connection, logger);
+        byte[] data = generateByteArray(1400);
+        quicStream.getOutputStream().write(data);
+
+        ArgumentCaptor<StreamFrame> captor = ArgumentCaptor.forClass(StreamFrame.class);
+        verify(connection, times(2)).send(captor.capture());
+        // This is what the test is about: the first frame should be less than max packet size.
+        int lengthFirstFrame = captor.getAllValues().get(0).getLength();
+        assertThat(lengthFirstFrame).isLessThan(1300);
+        // And of course, the remaining bytes should be in the second frame.
+        int totalFrameLength = captor.getAllValues().stream().mapToInt(f -> f.getLength()).sum();
+        assertThat(totalFrameLength).isEqualTo(1400);
+
+        // Also, the content should be copied correctly over the two frames:
+        StreamFrame firstFrame = resurrect(captor.getAllValues().get(0));
+        StreamFrame secondFrame = resurrect(captor.getAllValues().get(1));
+        byte[] reconstructedContent = new byte[firstFrame.getStreamData().length + secondFrame.getStreamData().length];
+        System.arraycopy(firstFrame.getStreamData(), 0, reconstructedContent, 0, firstFrame.getStreamData().length);
+        System.arraycopy(secondFrame.getStreamData(), 0, reconstructedContent, firstFrame.getStreamData().length, secondFrame.getStreamData().length);
+        assertThat(reconstructedContent).isEqualTo(data);
+    }
+
+    private byte[] generateByteArray(int size) {
+        byte[] data = new byte[size];
+        for (int i = 0; i < size; i++) {
+            // Generate abc...z sequence; ASCII A = 97
+            data[i] = (byte) (97 + (i % 26));
+        }
+        return data;
+    }
+
 
     /**
      * Serializes the given frame and parses the result, to simulate receiving a frame.

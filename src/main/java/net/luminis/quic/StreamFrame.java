@@ -106,5 +106,11 @@ public class StreamFrame extends QuicFrame {
         return isFinal;
     }
 
-
+    static int maxOverhead() {
+        return 1  // frame type
+        + 4 // stream id
+        + 4 // offset
+        + 4 // length
+        ;
+    }
 }
