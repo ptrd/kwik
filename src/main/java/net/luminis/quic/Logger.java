@@ -10,6 +10,7 @@ public class Logger {
     private volatile boolean logSecrets = false;
     private volatile boolean logPackets = false;
     private volatile boolean logInfo = false;
+    private volatile boolean logStats = false;
 
     public void logDebug(boolean enabled) {
         logDebug = enabled;
@@ -33,6 +34,10 @@ public class Logger {
 
     public void logInfo(boolean enabeled) {
         logInfo = enabeled;
+    }
+
+    public void logStats(boolean enabeled) {
+        logStats = enabeled;
     }
 
     public void debug(String message) {
@@ -203,6 +208,14 @@ public class Logger {
     public void error(String message) {
         synchronized (this) {
             System.out.println("Error: " + message);
+        }
+    }
+
+    public void stats(String message) {
+        if (logStats) {
+            synchronized (this) {
+                System.out.println(message);
+            }
         }
     }
 }

@@ -342,6 +342,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public void close() {
+        sender.shutdown();
         // TODO
     }
 

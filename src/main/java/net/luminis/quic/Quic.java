@@ -75,7 +75,7 @@ public class Quic {
         logger.logInfo(true);
 
         if (cmd.hasOption('l')) {
-            String logArg = cmd.getOptionValue('l', "i");
+            String logArg = cmd.getOptionValue('l', "is");
 
             if (logArg.contains("n")) {
                 logger.logRaw(false);
@@ -84,6 +84,7 @@ public class Quic {
                 logger.logPackets(false);
                 logger.logInfo(false);
                 logger.logDebug(false);
+                logger.logStats(false);
             }
             if (logArg.contains("r")) {
                 logger.logRaw(true);
@@ -91,7 +92,7 @@ public class Quic {
             if (logArg.contains("d")) {
                 logger.logDecrypted(true);
             }
-            if (logArg.contains("s")) {
+            if (logArg.contains("S")) {
                 logger.logSecrets(true);
             }
             if (logArg.contains("p")) {
@@ -99,6 +100,9 @@ public class Quic {
             }
             if (logArg.contains("i")) {
                 logger.logInfo(true);
+            }
+            if (logArg.contains("s")) {
+                logger.logStats(true);
             }
             if (logArg.contains("D")) {
                 logger.logDebug(true);

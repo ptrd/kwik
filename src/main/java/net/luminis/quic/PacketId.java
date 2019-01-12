@@ -2,7 +2,7 @@ package net.luminis.quic;
 
 import java.util.Objects;
 
-public class PacketId {
+public class PacketId implements Comparable<PacketId> {
 
     private final EncryptionLevel encryptionLevel;
     private final int packetNumber;
@@ -28,6 +28,19 @@ public class PacketId {
 
     @Override
     public String toString() {
-        return "Packet-id " + encryptionLevel.name().charAt(0) + "|" + packetNumber;
+        return encryptionLevel.name().charAt(0) + "|" + packetNumber;
+    }
+
+    @Override
+    public int compareTo(PacketId other) {
+        if (this.encryptionLevel.ordinal() < other.encryptionLevel.ordinal()) {
+            return -1;
+        }
+        else if (this.encryptionLevel.ordinal() > other.encryptionLevel.ordinal()) {
+            return 1;
+        }
+        else {
+            return Integer.compare(this.packetNumber, other.packetNumber);
+        }
     }
 }

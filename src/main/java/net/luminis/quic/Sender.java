@@ -40,6 +40,9 @@ public class Sender implements FrameProcessor {
         logSent(packet, sent);
     }
 
+    void shutdown() {
+        logStatistics();
+    }
     public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel) {
         if (ackFrame instanceof AckFrame) {
             ((AckFrame) ackFrame).getAckedPacketNumbers().stream().forEach(pn -> {
@@ -58,6 +61,13 @@ public class Sender implements FrameProcessor {
 
     private void logSent(QuicPacket packet, Instant sent) {
         packetSentLog.put(packet.getId(), new PacketAckStatus(sent, packet));
+    }
+
+    void logStatistics() {
+        log.stats("Acknowledgement statistics (sent packets):");
+        packetSentLog.entrySet().stream().sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(e -> e.getValue()).forEach(e -> {
+            log.stats(e.packet.getId() + "\t" + (e.acked? "Acked\t": "-    \t") + e.packet);
+        });
     }
 
     private static class PacketAckStatus {
