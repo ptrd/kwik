@@ -220,7 +220,13 @@ public class QuicConnection implements PacketProcessor {
 
         packet.accept(this);
         try {
-            acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
+            // "A Version Negotiation packet cannot be explicitly acknowledged in an
+            //   ACK frame by a client.  Receiving another Initial packet implicitly
+            //   acknowledges a Version Negotiation packet."
+            if (! (packet instanceof VersionNegotationPacket)) {
+                acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+            }
         } catch (IOException e) {
             handleIOError(e);
         }
@@ -303,6 +309,7 @@ public class QuicConnection implements PacketProcessor {
     @Override
     public void process(VersionNegotationPacket packet) {
         log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
+        throw new VersionNegationFailure();
     }
 
     void processFrames(QuicPacket packet) {

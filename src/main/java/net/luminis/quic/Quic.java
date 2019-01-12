@@ -150,8 +150,12 @@ public class Quic {
 
             System.out.println("Terminating Quic");
 
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             System.out.println("Got IO error: " + e);
+        }
+        catch (VersionNegationFailure e) {
+            System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
     }
 
