@@ -77,6 +77,7 @@ public class QuicConnection implements PacketProcessor {
         ECPublicKey publicKey = (ECPublicKey) keys[1];
 
         receiver.start();
+        sender.start();
 
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);

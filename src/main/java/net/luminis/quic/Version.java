@@ -32,6 +32,10 @@ public enum Version {
         return version.orElseThrow(() -> new UnknownVersionException());
     }
 
+    static Version getDefault() {
+        return IETF_draft_16;
+    }
+
     public boolean atLeast(Version other) {
         // Only for IETF drafts
         if (isIetfDraft(this) && isIetfDraft(other)) {
