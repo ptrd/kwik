@@ -71,7 +71,7 @@ public class StreamFrame extends QuicFrame {
         }
         streamData = new byte[length];
         buffer.get(streamData);
-        log.info("Stream data", streamData);
+        log.debug("Stream data", streamData);
 
         return this;
     }

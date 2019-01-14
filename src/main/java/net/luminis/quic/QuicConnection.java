@@ -327,8 +327,14 @@ public class QuicConnection implements PacketProcessor {
                     stream.add((StreamFrame) frame);
                 }
                 else {
-                    // TODO: could be a server initiated stream.
-                    log.error("Receiving frame for non-existant stream " + streamId);
+                    if (streamId % 2 == 1) {
+                        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-2.1
+                        // "servers initiate odd-numbered streams"
+                        log.info("Receiving data for server-initiated stream " + streamId + ": " + ByteUtils.bytesToHex(((StreamFrame) frame).getStreamData()));
+                    }
+                    else {
+                        log.error("Receiving frame for non-existant stream " + streamId);
+                    }
                 }
             }
             else {
