@@ -10,7 +10,6 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="at.favre.lib:hkdf:1.0.0" level="project" />
-    <orderEntry type="library" name="org.bouncycastle:bcpkix-jdk15on:1.60" level="project" />
     <orderEntry type="library" name="commons-cli:commons-cli:1.4" level="project" />
     <orderEntry type="module-library" scope="TEST">
       <library name="JUnit5.3">
@@ -26,5 +25,6 @@
     </orderEntry>
     <orderEntry type="library" name="org.mockito:mockito-core:2.23.4" level="project" />
     <orderEntry type="library" name="org.assertj:assertj-core:3.11.1" level="project" />
+    <orderEntry type="library" name="tls13" level="project" />
   </component>
 </module>

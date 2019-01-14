@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="tls13">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/libs/tls13.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
