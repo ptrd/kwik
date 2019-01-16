@@ -22,6 +22,10 @@ There is currently no retransmission at all, so a connection will fail if any ne
 Kwik supports IETF draft-14, draft-15 and draft-16. Support for draft-17 is coming soon.
 
 
+## Contact
+
+If you have questions about this project, please mail the author (peter dot doornbosch) at luminis dot eu.
+
 ## License
 
 This program is open source and licensed under LGPL (see the LICENSE.txt and LICENSE-LESSER.txt files in the distribution). 
