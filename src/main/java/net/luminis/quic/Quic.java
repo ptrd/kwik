@@ -34,10 +34,11 @@ public class Quic {
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
-        cmdLineOptions.addOption("l", "log", true, "logging options: [Drdspi]");
+        cmdLineOptions.addOption("l", "log", true, "logging options: [DrdspiS]");
         cmdLineOptions.addOption("14", "Use Quic version IETF_draft_14");
         cmdLineOptions.addOption("15", "Use Quic version IETF_draft_15");
         cmdLineOptions.addOption("16", "Use Quic version IETF_draft_16");
+        cmdLineOptions.addOption("17", "Use Quic version IETF_draft_17");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -128,7 +129,10 @@ public class Quic {
         }
 
         Version quicVersion = Version.IETF_draft_16;
-        if (cmd.hasOption("16")) {
+        if (cmd.hasOption("17")) {
+            quicVersion = Version.IETF_draft_17;
+        }
+        else if (cmd.hasOption("16")) {
             quicVersion = Version.IETF_draft_16;
         }
         else if (cmd.hasOption("15")) {
