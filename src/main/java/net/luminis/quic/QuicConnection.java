@@ -72,7 +72,7 @@ public class QuicConnection implements PacketProcessor {
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port);
         receiver = new Receiver(socket, 1500, log);
-        tlsState = new QuicTlsState();
+        tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
     }
