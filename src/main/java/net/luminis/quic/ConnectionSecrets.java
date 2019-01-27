@@ -30,13 +30,19 @@ public class ConnectionSecrets {
         Server
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2
-    public static final byte[] STATIC_SALT = new byte[]{
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-14#section-5.1.1
+    public static final byte[] STATIC_SALT_DRAFT_14 = new byte[] {
             (byte) 0x9c, (byte) 0x10, (byte) 0x8f, (byte) 0x98,
             (byte) 0x52, (byte) 0x0a, (byte) 0x5c, (byte) 0x5c,
             (byte) 0x32, (byte) 0x96, (byte) 0x8e, (byte) 0x95,
             (byte) 0x0e, (byte) 0x8a, (byte) 0x2c, (byte) 0x5f,
-            (byte) 0xe0, (byte) 0x6d, (byte) 0x6c, (byte) 0x38};
+            (byte) 0xe0, (byte) 0x6d, (byte) 0x6c, (byte) 0x38 };
+
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.2
+    public static final byte[] STATIC_SALT_DRAFT_17 = new byte[] {
+            (byte) 0xef, (byte) 0x4f, (byte) 0xb0, (byte) 0xab, (byte) 0xb4, (byte) 0x74, (byte) 0x70, (byte) 0xc4,
+            (byte) 0x1b, (byte) 0xef, (byte) 0xcf, (byte) 0x80, (byte) 0x31, (byte) 0x33, (byte) 0x4f, (byte) 0xae,
+            (byte) 0x48, (byte) 0x5e, (byte) 0x09, (byte) 0xa0 };
 
     private Logger log;
 
@@ -59,7 +65,9 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSecret = hkdf.extract(STATIC_SALT, destConnectionId);
+        byte[] initialSalt = quicVersion.equals(Version.IETF_draft_17) ? STATIC_SALT_DRAFT_17 : STATIC_SALT_DRAFT_14;
+        byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
+
         log.secret("Initial secret", initialSecret);
 
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(quicVersion, initialSecret, NodeRole.Client, log);
