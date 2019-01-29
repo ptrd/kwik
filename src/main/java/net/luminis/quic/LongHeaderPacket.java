@@ -19,8 +19,6 @@
 package net.luminis.quic;
 
 
-import net.luminis.tls.TlsState;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +72,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         addLength(encodedPacketNumber.length);
         packetBuffer.put(encodedPacketNumber);
 
-        protectPayload(packetBuffer, encodedPacketNumber.length, payload, paddingLength, clientSecrets);
+        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, payload, paddingLength, clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();
@@ -123,7 +121,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
-        checkPacketType(buffer.get());
+        byte flags = buffer.get();
+        checkPacketType(flags);
 
         try {
             Version quicVersion = Version.parse(buffer.getInt());
@@ -148,34 +147,38 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int length = parseVariableLengthInteger(buffer);
         log.debug("Length (PN + payload): " + length);
 
-        int protectedPackageNumberLength = 1;
-        byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
-        buffer.get(protectedPackageNumber);
-
-        int currentPosition = buffer.position();
-        byte[] frameHeader = new byte[buffer.position()];
-        buffer.position(0);
-        buffer.get(frameHeader);
-        buffer.position(currentPosition);
-
-        byte[] payload = new byte[length - protectedPackageNumberLength];
-        buffer.get(payload, 0, length - protectedPackageNumberLength);
-
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            parsePacketNumberAndPayload(buffer, flags, length, serverSecrets, log);
+        }
+        else {
+            int protectedPackageNumberLength = 1;   // Assuming packet number is 1 byte (which is of course not always the case...)
+            byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
+            buffer.get(protectedPackageNumber);
 
-        packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
-        log.decrypted("Unprotected packet number: " + packetNumber);
+            int currentPosition = buffer.position();
+            byte[] frameHeader = new byte[buffer.position()];
+            buffer.position(0);
+            buffer.get(frameHeader);
+            buffer.position(currentPosition);
 
-        log.debug("Encrypted payload", payload);
+            byte[] payload = new byte[length - protectedPackageNumberLength];
+            buffer.get(payload, 0, length - protectedPackageNumberLength);
 
-        frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // TODO: assuming packet number is 1 byte
-        log.debug("Frame header", frameHeader);
+            packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
+            log.decrypted("Unprotected packet number: " + packetNumber);
 
-        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
-        log.decrypted("Decrypted payload", frameBytes);
+            log.debug("Encrypted payload", payload);
 
-        frames = new ArrayList<>();
-        parseFrames(frameBytes, log);
+            frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // Assuming packet number is 1 byte
+            log.debug("Frame header", frameHeader);
+
+            byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
+            log.decrypted("Decrypted payload", frameBytes);
+
+            frames = new ArrayList<>();
+            parseFrames(frameBytes, log);
+        }
 
         packetSize = buffer.position() - startPosition;
         return this;

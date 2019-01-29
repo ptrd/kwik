@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 
 abstract public class QuicPacket {
@@ -60,6 +61,111 @@ abstract public class QuicPacket {
             throw new RuntimeException("NIY");
         }
     }
+
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, Logger log) {
+
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
+        // "When removing packet protection, an endpoint
+        //   first removes the header protection."
+
+        int currentPosition = buffer.position();
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
+        // "The same number of bytes are always sampled, but an allowance needs
+        //   to be made for the endpoint removing protection, which will not know
+        //   the length of the Packet Number field.  In sampling the packet
+        //   ciphertext, the Packet Number field is assumed to be 4 bytes long
+        //   (its maximum possible encoded length)."
+        buffer.position(currentPosition + 4);
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
+        // "This algorithm samples 16 bytes from the packet ciphertext."
+        byte[] sample = new byte[16];
+        buffer.get(sample);
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
+        // "Header protection is applied after packet protection is applied (see
+        //   Section 5.3).  The ciphertext of the packet is sampled and used as
+        //   input to an encryption algorithm."
+        byte[] mask = createHeaderProtectionMask(sample, serverSecrets);
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1
+        // "The output of this algorithm is a 5 byte mask which is applied to the
+        //   protected header fields using exclusive OR.  The least significant
+        //   bits of the first byte of the packet are masked by the least
+        //   significant bits of the first mask byte"
+        byte decryptedFlags;
+        if ((flags & 0x80) == 0x80) {
+            // Long header: 4 bits masked
+            decryptedFlags = (byte) (flags ^ mask[0] & 0x0f);
+        }
+        else {
+            // Short header: 5 bits masked
+            decryptedFlags = (byte) (flags ^ mask[0] & 0x1f);
+        }
+        buffer.position(currentPosition);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
+        // "pn_length = (packet[0] & 0x03) + 1"
+        int protectedPackageNumberLength = (decryptedFlags & 0x03) + 1;
+        byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
+        buffer.get(protectedPackageNumber);
+
+        byte[] unprotectedPacketNumber = new byte[protectedPackageNumberLength];
+        for (int i = 0; i < protectedPackageNumberLength; i++) {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
+            // " ...and the packet number is
+            //   masked with the remaining bytes.  Any unused bytes of mask that might
+            //   result from a shorter packet number encoding are unused."
+            unprotectedPacketNumber[i] = (byte) (protectedPackageNumber[i] ^ mask[1+i]);
+        }
+        packetNumber = bytesToInt(unprotectedPacketNumber);
+        log.decrypted("Unprotected packet number: " + packetNumber);
+
+        currentPosition = buffer.position();
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
+        // "The associated data, A, for the AEAD is the contents of the QUIC
+        //   header, starting from the flags byte in either the short or long
+        //   header, up to and including the unprotected packet number."
+        byte[] frameHeader = new byte[buffer.position()];
+        buffer.position(0);
+        buffer.get(frameHeader);
+        frameHeader[0] = decryptedFlags;
+        buffer.position(currentPosition);
+
+        // Copy unprotected (decrypted) packet number in frame header, before decrypting payload.
+        System.arraycopy(unprotectedPacketNumber, 0, frameHeader, frameHeader.length - (protectedPackageNumberLength), protectedPackageNumberLength);
+        log.debug("Frame header", frameHeader);
+
+        // "The input plaintext, P, for the AEAD is the payload of the QUIC
+        //   packet, as described in [QUIC-TRANSPORT]."
+        // "The output ciphertext, C, of the AEAD is transmitted in place of P."
+        int encryptedPayloadLength = remainingLength - protectedPackageNumberLength;
+        byte[] payload = new byte[encryptedPayloadLength];
+        buffer.get(payload, 0, encryptedPayloadLength);
+        log.debug("Encrypted payload", payload);
+
+        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
+        log.decrypted("Decrypted payload", frameBytes);
+
+        frames = new ArrayList<>();
+        parseFrames(frameBytes, log);
+    }
+
+    byte[] createHeaderProtectionMask(byte[] sample, NodeSecrets secrets) {
+        return createHeaderProtectionMask(sample, 4, secrets);
+    }
+
+    byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, NodeSecrets secrets) {
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4
+        // "The same number of bytes are always sampled, but an allowance needs
+        //   to be made for the endpoint removing protection, which will not know
+        //   the length of the Packet Number field.  In sampling the packet
+        //   ciphertext, the Packet Number field is assumed to be 4 bytes long
+        //   (its maximum possible encoded length)."
+        int sampleOffset = 4 - encodedPacketNumberLength;
+        byte[] sample = new byte[16];
+        System.arraycopy(ciphertext, sampleOffset, sample, 0, 16);
+        byte[] mask = encryptAesEcb(secrets.getHp(), sample);
+        return mask;
+    }
+
 
     byte[] encryptPayload(byte[] message, byte[] associatedData, int packetNumber, NodeSecrets secrets) {
 
@@ -177,6 +283,24 @@ abstract public class QuicPacket {
         }
     }
 
+    byte[] encryptAesEcb(byte[] key, byte[] value) {
+        try {
+            SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
+
+            Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+
+            byte[] encrypted = cipher.doFinal(value);
+            return encrypted;
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            // Inappropriate runtime environment
+            throw new QuicRuntimeException(e);
+        } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+    }
+
     static int parseVariableLengthInteger(ByteBuffer buffer) {
         int length;
         byte firstLengthByte = buffer.get();
@@ -281,7 +405,7 @@ abstract public class QuicPacket {
         return packetNumber;
     }
 
-    protected void protectPayload(ByteBuffer packetBuffer, int packetNumberSize, byte[] payload, int paddingSize, NodeSecrets clientSecrets) {
+    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, byte[] payload, int paddingSize, NodeSecrets clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
@@ -299,11 +423,44 @@ abstract public class QuicPacket {
         byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
         packetBuffer.put(encryptedPayload);
 
-        byte[] protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
+        byte[] protectedPacketNumber;
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
+            byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, clientSecrets);
+
+            protectedPacketNumber = new byte[encodedPacketNumber.length];
+            for (int i = 0; i < encodedPacketNumber.length; i++) {
+                protectedPacketNumber[i] = (byte) (encodedPacketNumber[i] ^ mask[1+i]);
+            }
+
+            byte flags = packetBuffer.get(0);
+            if ((flags & 0x80) == 0x80) {
+                // Long header: 4 bits masked
+                flags ^= mask[0] & 0x0f;
+            }
+            else {
+                // Short header: 5 bits masked
+                flags ^= mask[0] & 0x1f;
+            }
+            packetBuffer.put(0, flags);
+        }
+        else {
+            protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
+        }
+
         int currentPosition = packetBuffer.position();
         packetBuffer.position(packetNumberPosition);
         packetBuffer.put(protectedPacketNumber);
         packetBuffer.position(currentPosition);
+    }
+
+    static int bytesToInt(byte[] data) {
+        int value = 0;
+        for (int i = 0; i < data.length; i++) {
+            value = (value << 8) | (data[i] & 0xff);
+
+        }
+        return value;
     }
 
     protected abstract EncryptionLevel getEncryptionLevel();
