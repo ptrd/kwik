@@ -29,12 +29,15 @@ import java.util.List;
 public class CryptoStream {
 
     private List<CryptoFrame> frames = new ArrayList<>();
+    private final Version quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
     private TlsState tlsState;
     private final Logger log;
 
-    public CryptoStream(EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+
+    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+        this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
@@ -121,7 +124,12 @@ public class CryptoStream {
         int extensionType = buffer.getShort();
         buffer.rewind();
         if ((extensionType & 0xffff) == 0xffa5) {
-            new QuicTransportParametersExtension().parse(buffer, log);
+            if (quicVersion.atLeast(Version.IETF_draft_17)) {
+                new QuicTransportParametersExtension().parse(buffer, log);
+            }
+            else {
+                new QuicTransportParametersExtensionPreDraft17().parse(buffer, log);
+            }
         }
         else {
             log.debug("Unsupported extension!");

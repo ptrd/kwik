@@ -37,7 +37,7 @@ abstract public class QuicPacket {
     protected int packetNumber;
     protected List<QuicFrame> frames;
 
-    byte[] encodeVariableLengthInteger(int length) {
+    static byte[] encodeVariableLengthInteger(int length) {
         if (length <= 63)
             return new byte[] { (byte) length };
         else if (length <= 16383) {

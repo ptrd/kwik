@@ -257,7 +257,7 @@ public class QuicConnection implements PacketProcessor {
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(encryptionLevel, connectionSecrets, tlsState, log));
+                cryptoStreams.add(new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, tlsState, log));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
@@ -296,7 +296,9 @@ public class QuicConnection implements PacketProcessor {
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
         Extension[] quicExtensions = new Extension[] {
-                new QuicTransportParametersExtension(quicVersion),
+                quicVersion.atLeast(Version.IETF_draft_17)?
+                        new QuicTransportParametersExtension(quicVersion):
+                        new QuicTransportParametersExtensionPreDraft17(quicVersion),
                 new ECPointFormatExtension(),
                 new ApplicationLayerProtocolNegotiationExtension("hq-15"),
         };

@@ -40,7 +40,7 @@ public class QuicTransportParametersExtension extends Extension {
     public QuicTransportParametersExtension(Version quicVersion) {
         ByteBuffer buffer = ByteBuffer.allocate(1500);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-8.2:
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
         // "quic_transport_parameters(0xffa5)"
         buffer.putShort((short) 0xffa5);
 
@@ -54,53 +54,66 @@ public class QuicTransportParametersExtension extends Extension {
         int transportParametersLengthPosition = buffer.position();
         buffer.putShort((short) 0);
 
-        buffer.putShort(idle_timeout.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "The idle timeout is a value in seconds that is encoded as an unsigned 16-bit integer."
-        buffer.putShort((short) 2);
-        buffer.putShort((short) 30);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "Those
+        //   transport parameters that are identified as integers use a variable-
+        //   length integer encoding (see Section 16) and have a default value of
+        //   0 if the transport parameter is absent, unless otherwise stated."
 
-        buffer.putShort(QuicConstants.TransportParameterId.initial_max_stream_data_bidi_local.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "Either peer MAY advertise an initial value for flow control of each type of stream on which they might receive data.
-        // Each of the following transport parameters is encoded as an unsigned 32-bit integer in units of octets: ..."
-        buffer.putShort((short) 4);
-        buffer.putInt(262144);
 
-        buffer.putShort(QuicConstants.TransportParameterId.initial_max_stream_data_bidi_remote.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "Either peer MAY advertise an initial value for flow control of each type of stream on which they might receive data.
-        // Each of the following transport parameters is encoded as an unsigned 32-bit integer in units of octets: ..."
-        buffer.putShort((short) 4);
-        buffer.putInt(262144);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "The idle timeout is a value in seconds that
+        //      is encoded as an integer.  If this parameter is absent or zero
+        //      then the idle timeout is disabled."
+        addTransportParameter(buffer, idle_timeout, 30);
 
-        buffer.putShort(QuicConstants.TransportParameterId.initial_max_stream_data_uni.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "Either peer MAY advertise an initial value for flow control of each type of stream on which they might receive data.
-        // Each of the following transport parameters is encoded as an unsigned 32-bit integer in units of octets: ..."
-        buffer.putShort((short) 4);
-        buffer.putInt(262144);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "The initial maximum data parameter is an
+        //      integer value that contains the initial value for the maximum
+        //      amount of data that can be sent on the connection.  This is
+        //      equivalent to sending a MAX_DATA (Section 19.9) for the connection
+        //      immediately after completing the handshake."
+        addTransportParameter(buffer, initial_max_data, 1048576);
 
-        buffer.putShort(initial_max_data.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "The initial maximum data parameter contains the initial value for the maximum amount of data that can
-        //  be sent on the connection.  This parameter is encoded as an unsigned 32-bit integer in units of octets."
-        buffer.putShort((short) 4);
-        buffer.putInt(1048576);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "This parameter is an
+        //      integer value specifying the initial flow control limit for
+        //      locally-initiated bidirectional streams.  This limit applies to
+        //      newly created bidirectional streams opened by the endpoint that
+        //      sends the transport parameter."
+        addTransportParameter(buffer, initial_max_stream_data_bidi_local, 262144);
 
-        buffer.putShort(initial_max_bidi_streams.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "The initial maximum bidirectional streams parameter contains the initial maximum number of
-        //  bidirectional streams the peer may initiate, encoded as an unsigned 16-bit integer."
-        buffer.putShort((short) 2);
-        buffer.putShort((short) 1);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "This parameter is an
+        //      integer value specifying the initial flow control limit for peer-
+        //      initiated bidirectional streams.  This limit applies to newly
+        //      created bidirectional streams opened by the endpoint that receives
+        //      the transport parameter."
+        addTransportParameter(buffer, initial_max_stream_data_bidi_remote, 262144);
 
-        buffer.putShort(QuicConstants.TransportParameterId.initial_max_uni_streams.value);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18.1:
-        // "The initial maximum unidirectional streams parameter contains the initial maximum number of
-        //  unidirectional streams the peer may initiate, encoded as an unsigned 16-bit integer."
-        buffer.putShort((short) 2);
-        buffer.putShort((short) 1);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "This parameter is an integer
+        //      value specifying the initial flow control limit for unidirectional
+        //      streams.  This limit applies to newly created bidirectional
+        //      streams opened by the endpoint that receives the transport
+        //      parameter."
+        addTransportParameter(buffer, initial_max_stream_data_uni, 262144);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // " The initial maximum bidirectional
+        //      streams parameter is an integer value that contains the initial
+        //      maximum number of bidirectional streams the peer may initiate.  If
+        //      this parameter is absent or zero, the peer cannot open
+        //      bidirectional streams until a MAX_STREAMS frame is sent."
+        addTransportParameter(buffer, initial_max_streams_bidi, 1);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+        // "The initial maximum unidirectional
+        //      streams parameter is an integer value that contains the initial
+        //      maximum number of unidirectional streams the peer may initiate.
+        //      If this parameter is absent or zero, the peer cannot open
+        //      unidirectional streams until a MAX_STREAMS frame is sent."
+        addTransportParameter(buffer, initial_max_streams_uni, 1);
 
         int length = buffer.position();
         buffer.limit(length);
@@ -144,72 +157,69 @@ public class QuicTransportParametersExtension extends Extension {
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
         int parameterId = buffer.getShort();
+        int size = buffer.getShort();
+
         if (parameterId == initial_max_stream_data_bidi_local.value) {
-            int size = buffer.getShort();
-            int maxStreamDataBidiLocal = buffer.getInt();
+            int maxStreamDataBidiLocal = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
         }
         else if (parameterId == initial_max_data.value) {
-            int size = buffer.getShort();
-            int maxData = buffer.getInt();
+            int maxData = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- initial max data: " + maxData);
         }
-        else if (parameterId == initial_max_bidi_streams.value) {
-            int size = buffer.getShort();
-            int maxBidiStreams = buffer.getShort();
+        else if (parameterId == initial_max_streams_bidi.value) {
+            int maxBidiStreams = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- initial max bidi streams: " + maxBidiStreams);
         }
         else if (parameterId == idle_timeout.value) {
-            int size = buffer.getShort();
-            int idleTimeout = buffer.getShort();
+            int idleTimeout = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- idle timeout: " + idleTimeout);
         }
         else if (parameterId == preferred_address.value) {
             throw new NotYetImplementedException();
         }
         else if (parameterId == max_packet_size.value) {
-            int size = buffer.getShort();
-            int maxPacketSize = buffer.getShort();
+            int maxPacketSize = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- max packet size: " + maxPacketSize);
         }
         else if (parameterId == stateless_reset_token.value) {
-            int size = buffer.getShort();
             byte[] resetToken = new byte[16];
             buffer.get(resetToken);
             log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
         }
         else if (parameterId == ack_delay_exponent.value) {
-            int size = buffer.getShort();
-            int ackDelayExponent = buffer.get();
+            int ackDelayExponent = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- ack delay exponent: " + ackDelayExponent);
         }
-        else if (parameterId == initial_max_uni_streams.value) {
-            int size = buffer.getShort();
-            int maxUniStreams = buffer.getShort();
+        else if (parameterId == initial_max_streams_uni.value) {
+            int maxUniStreams = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
         }
         else if (parameterId == disable_migration.value) {
-            int size = buffer.getShort();
             log.debug("- disable migration");
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
-            int size = buffer.getShort();
-            int maxStreamDataBidiRemote = buffer.getInt();
+            int maxStreamDataBidiRemote = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- initial max stream data bidi remote: " + maxStreamDataBidiRemote);
         }
         else if (parameterId == initial_max_stream_data_uni.value) {
-            int size = buffer.getShort();
-            int maxStreamDataUni = buffer.getInt();
+            int maxStreamDataUni = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- initial max stream data uni: " + maxStreamDataUni);
         }
         else if (parameterId == max_ack_delay.value) {
-            int size = buffer.getShort();
-            int maxAckDelay = buffer.get();
+            int maxAckDelay = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- idle timeout: " + maxAckDelay);
         }
         else if (parameterId == original_connection_id.value) {
             throw new NotYetImplementedException();
         }
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, int value) {
+        buffer.putShort(id.value);
+        byte[] encodedValue = QuicPacket.encodeVariableLengthInteger(value);
+        buffer.putShort((short) encodedValue.length);
+        buffer.put(encodedValue);
     }
 
 }
