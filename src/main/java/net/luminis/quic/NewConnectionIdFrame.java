@@ -37,7 +37,7 @@ public class NewConnectionIdFrame extends QuicFrame {
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
-        if (quicVersion.equals(Version.IETF_draft_14)) {
+        if (quicVersion.equals(Version.IETF_draft_14) || quicVersion.atLeast(Version.IETF_draft_17)) {
             sequence = QuicPacket.parseVariableLengthInteger(buffer);
             int connectionIdLength = buffer.get();
             byte[] connectionId = new byte[connectionIdLength];
