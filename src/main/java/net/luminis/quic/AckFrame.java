@@ -46,6 +46,9 @@ public class AckFrame extends QuicFrame {
         if (quicVersion.equals(Version.IETF_draft_14)) {
             buffer.put((byte) 0x0d);
         }
+        else if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            buffer.put((byte) 0x02);
+        }
         else if (quicVersion.atLeast(Version.IETF_draft_15)) {
             buffer.put((byte) 0x1a);
         }

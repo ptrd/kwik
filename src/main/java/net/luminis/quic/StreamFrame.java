@@ -38,14 +38,22 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, byte[] applicationData, boolean fin) {
-        this(streamId, 0, applicationData, 0, applicationData.length, fin);
+        this(Version.IETF_draft_17, streamId, 0, applicationData, 0, applicationData.length, fin);
     }
 
     public StreamFrame(int streamId, int offset, byte[] applicationData, boolean fin) {
-        this(streamId, offset, applicationData, 0, applicationData.length, fin);
+        this(Version.IETF_draft_17, streamId, offset, applicationData, 0, applicationData.length, fin);
     }
 
-    public StreamFrame(int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
+    public StreamFrame(Version quicVersion, int streamId, int offset, byte[] applicationData, boolean fin) {
+        this(quicVersion, streamId, offset, applicationData, 0, applicationData.length, fin);
+    }
+
+    public StreamFrame(int streamId, int offset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
+        this(Version.IETF_draft_17, streamId, offset, applicationData, dataOffset, dataLength, fin);
+    }
+
+    public StreamFrame(Version quicVersion, int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
         streamType = ClientInitiatedBidirectional;
         this.streamId = streamId;
         this.offset = streamOffset;
@@ -53,7 +61,8 @@ public class StreamFrame extends QuicFrame {
         isFinal = fin;
 
         ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.length);
-        byte frameType = 0x10 | 0x04 | 0x02 | 0x00;  // OFF-bit, LEN-bit, (no) FIN-bit
+        byte baseType = (byte) (quicVersion.atLeast(Version.IETF_draft_17)? 0x08: 0x10);
+        byte frameType = (byte) (baseType | 0x04 | 0x02 | 0x00);  // OFF-bit, LEN-bit, (no) FIN-bit
         if (fin) {
             frameType |= 0x01;
         }

@@ -27,9 +27,7 @@ public class MaxStreamDataFrame extends QuicFrame {
     private int maxData;
 
     public MaxStreamDataFrame parse(ByteBuffer buffer, Logger log) {
-        if (buffer.get() != 0x05) {
-            throw new RuntimeException();  // Would be a programming error.
-        }
+        buffer.get();
 
         streamId = QuicPacket.parseVariableLengthInteger(buffer);
         maxData = QuicPacket.parseVariableLengthInteger(buffer);

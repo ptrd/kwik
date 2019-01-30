@@ -100,7 +100,7 @@ public class QuicConnection implements PacketProcessor {
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(clientHello), connectionSecrets);
+        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
         sender.send(clientHelloPacket, "client hello");
 
         boolean handshaking = true;
@@ -116,7 +116,7 @@ public class QuicConnection implements PacketProcessor {
 
                     if (tlsState.isServerFinished()) {
                         FinishedMessage finishedMessage = new FinishedMessage(tlsState);
-                        CryptoFrame cryptoFrame = new CryptoFrame(finishedMessage.getBytes());
+                        CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
                         LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Handshake), cryptoFrame, connectionSecrets);
                         log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
                         sender.send(finishedPacket, "client finished");
@@ -368,7 +368,7 @@ public class QuicConnection implements PacketProcessor {
 
     public QuicStream createStream(boolean bidirectional) {
         int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(streamId, this, log);
+        QuicStream stream = new QuicStream(quicVersion, streamId, this, log);
         streams.put(streamId, stream);
         return stream;
     }

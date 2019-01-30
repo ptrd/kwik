@@ -324,6 +324,82 @@ abstract public class QuicPacket {
     }
 
     protected void parseFrames(byte[] frameBytes, Logger log) {
+        if (quicVersion.equals(Version.IETF_draft_17)) {
+            parseFramesDraft17(frameBytes, log);
+        }
+        else {
+            parseFramesPreDraft17(frameBytes, log);
+        }
+    }
+
+    protected void parseFramesDraft17(byte[] frameBytes, Logger log) {
+        ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
+
+        while (buffer.remaining() > 0) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
+            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+            buffer.mark();
+            int frameType = buffer.get();
+            buffer.reset();
+            switch (frameType) {
+                case 0x00:
+                    frames.add(new Padding().parse(buffer, log));
+                    break;
+                case 0x01:
+                    frames.add(new PingFrame().parse(buffer, log));
+                    break;
+                case 0x02:
+                case 0x03:
+                    frames.add(new AckFrame().parse(buffer, log));
+                    break;
+                case 0x04:
+                    log.debug("Received RST Stream frame (not yet implemented).");
+                    throw new NotYetImplementedException();
+                case 0x05:
+                    frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x06:
+                    frames.add(new CryptoFrame().parse(buffer, log));
+                    break;
+                case 0x07:
+                    frames.add(new NewTokenFrame().parse(buffer, log));
+                    break;
+                case 0x10:
+                    frames.add(new MaxDataFrame().parse(buffer, log));
+                    break;
+                case 0x011:
+                    frames.add(new MaxStreamDataFrame().parse(buffer, log));
+                    break;
+                case 0x12:
+                case 0x13:
+                    frames.add(new MaxStreamsFrame().parse(buffer, log));
+                    break;
+                case 0x14:
+                case 0x15:
+                case 0x16:
+                case 0x17:
+                    System.out.println("NYI frame type (data/stream blocked): " + frameType);
+                    throw new NotYetImplementedException();
+                case 0x18:
+                    frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x1c:
+                case 0x1d:
+                    log.debug("Received Connection Close frame (not yet implemented).");
+                    throw new NotYetImplementedException();
+                default:
+                    if ((frameType >= 0x08) && (frameType <= 0x0f)) {
+                        frames.add(new StreamFrame().parse(buffer, log));
+                    }
+                    else {
+                        System.out.println("NYI frame type: " + frameType);
+                        throw new NotYetImplementedException();
+                    }
+            }
+        }
+    }
+
+    protected void parseFramesPreDraft17(byte[] frameBytes, Logger log) {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         while (buffer.remaining() > 0) {

@@ -18,33 +18,31 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.ByteUtils;
-
 import java.nio.ByteBuffer;
 
-public class NewTokenFrame extends QuicFrame {
+public class MaxStreamsFrame extends QuicFrame {
 
-    private byte[] newToken;
+    private int maxStreams;
 
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
-    }
+    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
+        byte frameType = buffer.get();
+        if (frameType != 0x12 && frameType != 0x13) {
+            throw new RuntimeException();  // Would be a programming error.
+        }
 
-    public NewTokenFrame parse(ByteBuffer buffer, Logger log) {
-        buffer.get();
-
-        int tokenLength = QuicPacket.parseVariableLengthInteger(buffer);
-        newToken = new byte[tokenLength];
-        buffer.get(newToken);
-
-        log.debug("Got New Token: ", newToken);
+        maxStreams = QuicPacket.parseVariableLengthInteger(buffer);
 
         return this;
     }
 
     @Override
     public String toString() {
-        return "NewTokenFrame[" + ByteUtils.bytesToHex(newToken) + "]";
+        return "MaxStreamsFrame[" + maxStreams + "]";
     }
+
+    @Override
+    byte[] getBytes() {
+        return new byte[0];
+    }
+
 }

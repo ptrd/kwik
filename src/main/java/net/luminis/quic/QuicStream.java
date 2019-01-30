@@ -35,6 +35,7 @@ public class QuicStream {
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
 
     private Object addMonitor = new Object();
+    private final Version quicVersion;
     private final int streamId;
     private final QuicConnection connection;
     private final Logger log;
@@ -48,6 +49,11 @@ public class QuicStream {
 
 
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
+        this(Version.IETF_draft_17, streamId, connection, log);
+    }
+
+    public QuicStream(Version quicVersion, int streamId, QuicConnection connection, Logger log) {
+        this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
         this.log = log;
@@ -147,7 +153,7 @@ public class QuicStream {
             int offsetInDataArray = off;
             while (remaining > 0) {
                 int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                connection.send(new StreamFrame(streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false));
+                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false));
                 remaining -= bytesInFrame;
                 offsetInDataArray += bytesInFrame;
                 currentOffset += bytesInFrame;
@@ -156,7 +162,7 @@ public class QuicStream {
 
         @Override
         public void write(int dataByte) throws IOException {
-            connection.send(new StreamFrame(streamId, currentOffset, new byte[] {(byte) dataByte}, false));
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false));
             currentOffset += 1;
         }
 
@@ -167,7 +173,7 @@ public class QuicStream {
 
         @Override
         public void close() throws IOException {
-            connection.send(new StreamFrame(streamId, currentOffset, new byte[0], true));
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true));
         }
     }
 }
