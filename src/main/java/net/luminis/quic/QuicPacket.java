@@ -47,6 +47,13 @@ abstract public class QuicPacket {
             bytes[0] = (byte) (bytes[0] | (byte) 0x40);
             return bytes;
         }
+        else if (length <= 1073741823) {
+            ByteBuffer buffer = ByteBuffer.allocate(4);
+            buffer.putInt(length);
+            byte[] bytes = buffer.array();
+            bytes[0] = (byte) (bytes[0] | (byte) 0x80);
+            return bytes;
+        }
         else {
             // TODO
             throw new RuntimeException("NIY");
