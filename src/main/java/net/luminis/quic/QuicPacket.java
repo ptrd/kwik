@@ -62,6 +62,11 @@ abstract public class QuicPacket {
         }
     }
 
+    byte encodePacketNumberLength(byte flags, int packetNumber) {
+        // For the time being, a packet number length of 1 is assumed
+        return flags;
+    }
+
     void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, Logger log) {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3

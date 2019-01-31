@@ -54,7 +54,20 @@ public class ShortHeaderPacket extends QuicPacket {
         NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        byte flags = 0x30;
+        byte flags;
+        if (quicVersion.equals(Version.IETF_draft_17)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
+            // "|0|1|S|R|R|K|P P|"
+            // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin
+            //      Bit, set as described in [SPIN]."
+            // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
+            //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
+            flags = 0x40;  // 0100 0000
+            flags = encodePacketNumberLength(flags, packetNumber);
+        }
+        else {
+            flags = 0x30;
+        }
         buffer.put(flags);
         buffer.put(destinationConnectionId);
 

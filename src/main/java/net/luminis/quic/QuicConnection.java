@@ -191,6 +191,84 @@ public class QuicConnection implements PacketProcessor {
     void parsePackets(ByteBuffer data) {
         int packetStart = data.position();
 
+        QuicPacket packet;
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            packet = parsePacket(data);
+        }
+        else {
+            packet = parsePacketPreDraft17(data);
+        }
+
+        log.received(packet);
+        log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
+
+        packet.accept(this);
+        try {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
+            // "A Version Negotiation packet cannot be explicitly acknowledged in an
+            //   ACK frame by a client.  Receiving another Initial packet implicitly
+            //   acknowledges a Version Negotiation packet."
+            if (! (packet instanceof VersionNegotationPacket)) {
+                acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+            }
+        } catch (IOException e) {
+            handleIOError(e);
+        }
+
+        if (data.position() < data.limit()) {
+            parsePackets(data.slice());
+        }
+    }
+
+    QuicPacket parsePacket(ByteBuffer data) {
+        int flags = data.get();
+        int version = data.getInt();
+        data.rewind();
+
+        QuicPacket packet;
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
+        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
+        //  will be identified as a Version Negotiation packet based on the
+        //  Version field having a value of 0."
+        if (version == 0) {
+            packet = new VersionNegotationPacket().parse(data, log);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
+        // "An Initial packet uses long headers with a type value of 0x0."
+        else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
+            packet = new InitialPacket(quicVersion).parse(data, connectionSecrets, log);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
+        // "A Retry packet uses a long packet header with a type value of 0x3"
+        else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
+            // Retry packet....
+            throw new NotYetImplementedException();
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
+        // "A Handshake packet uses long headers with a type value of 0x2."
+        else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
+            packet = new HandshakePacket(quicVersion).parse(data, connectionSecrets, log);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
+        // "|  0x1 | 0-RTT Protected | Section 12.1 |"
+        else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
+            // 0-RTT Protected
+            throw new NotYetImplementedException();
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
+        // "|0|1|S|R|R|K|P P|"
+        else if ((flags & 0xc0) == 0x40) {  // 0100 0000
+            // ShortHeader
+            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, log);
+        }
+        else {
+            throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
+        }
+        return packet;
+    }
+
+    QuicPacket parsePacketPreDraft17(ByteBuffer data) {
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
@@ -233,25 +311,7 @@ public class QuicConnection implements PacketProcessor {
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
-        log.received(packet);
-        log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
-
-        packet.accept(this);
-        try {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
-            // "A Version Negotiation packet cannot be explicitly acknowledged in an
-            //   ACK frame by a client.  Receiving another Initial packet implicitly
-            //   acknowledges a Version Negotiation packet."
-            if (! (packet instanceof VersionNegotationPacket)) {
-                acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
-            }
-        } catch (IOException e) {
-            handleIOError(e);
-        }
-
-        if (data.position() < data.limit()) {
-            parsePackets(data.slice());
-        }
+        return packet;
     }
 
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {

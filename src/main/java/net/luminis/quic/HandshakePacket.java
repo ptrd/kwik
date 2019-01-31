@@ -18,8 +18,6 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.TlsState;
-
 import java.nio.ByteBuffer;
 
 public class HandshakePacket extends LongHeaderPacket {
@@ -33,7 +31,21 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     protected byte getPacketType() {
-        return (byte) 0xfd;
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
+            // "|1|1|T T|R R|P P|"
+            // "|  0x2 | Handshake       | Section 17.6 |"
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
+            // "The next two bits (those with a mask of 0x0c) of
+            //      byte 0 are reserved.  These bits are protected using header
+            //      protection (see Section 5.4 of [QUIC-TLS]).  The value included
+            //      prior to protection MUST be set to 0."
+            byte flags = (byte) 0xe0;  // 1110 0000
+            return encodePacketNumberLength(flags, packetNumber);
+        }
+        else {
+            return (byte) 0xfd;
+        }
     }
 
     @Override
@@ -52,9 +64,18 @@ public class HandshakePacket extends LongHeaderPacket {
 
     @Override
     protected void checkPacketType(byte type) {
-        if (type != (byte) 0xfd) {
-            // Programming error: this method shouldn't have been called if packet is not Initial
-            throw new RuntimeException();
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            byte masked = (byte) (type & 0xf0);
+            if (masked != (byte) 0xe0) {
+                // Programming error: this method shouldn't have been called if packet is not Initial
+                throw new RuntimeException();
+            }
+        }
+        else {
+            if (type != (byte) 0xfd) {
+                // Programming error: this method shouldn't have been called if packet is not Initial
+                throw new RuntimeException();
+            }
         }
     }
 
