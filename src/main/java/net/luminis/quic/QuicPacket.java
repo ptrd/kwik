@@ -397,8 +397,8 @@ abstract public class QuicPacket {
                     break;
                 case 0x1c:
                 case 0x1d:
-                    log.debug("Received Connection Close frame (not yet implemented).");
-                    throw new NotYetImplementedException();
+                    frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
+                    break;
                 default:
                     if ((frameType >= 0x08) && (frameType <= 0x0f)) {
                         frames.add(new StreamFrame().parse(buffer, log));
