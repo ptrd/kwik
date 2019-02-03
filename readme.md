@@ -19,7 +19,7 @@ This project is for educational purposes only.
 The status of the project is proof of concept: it is possible to set up a connection with a QUIC server and exchange some data.
 There is currently no retransmission at all, so a connection will fail if any network packet is dropped.
 
-Kwik supports IETF draft-14, draft-15 and draft-16. Support for draft-17 is coming soon.
+Kwik supports IETF draft-14, draft-15, draft-16 and draft-17.
 
 
 ## Contact
