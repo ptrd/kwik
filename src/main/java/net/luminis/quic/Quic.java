@@ -39,6 +39,7 @@ public class Quic {
         cmdLineOptions.addOption("15", "Use Quic version IETF_draft_15");
         cmdLineOptions.addOption("16", "Use Quic version IETF_draft_16");
         cmdLineOptions.addOption("17", "Use Quic version IETF_draft_17");
+        cmdLineOptions.addOption("18", "Use Quic version IETF_draft_18");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -128,8 +129,11 @@ public class Quic {
             }
         }
 
-        Version quicVersion = Version.IETF_draft_16;
-        if (cmd.hasOption("17")) {
+        Version quicVersion = Version.IETF_draft_17;
+        if (cmd.hasOption("18")) {
+            quicVersion = Version.IETF_draft_18;
+        }
+        else if (cmd.hasOption("17")) {
             quicVersion = Version.IETF_draft_17;
         }
         else if (cmd.hasOption("16")) {

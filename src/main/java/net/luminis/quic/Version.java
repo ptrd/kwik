@@ -32,7 +32,8 @@ public enum Version {
     IETF_draft_14(0xff00000e),
     IETF_draft_15(0xff00000f),
     IETF_draft_16(0xff000010),
-    IETF_draft_17(0xff000011);
+    IETF_draft_17(0xff000011),
+    IETF_draft_18(0xff000012);
 
     private int versionId;
 
@@ -66,6 +67,6 @@ public enum Version {
     }
 
     private boolean isIetfDraft(Version version) {
-        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_17.versionId;
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_18.versionId;
     }
 }
