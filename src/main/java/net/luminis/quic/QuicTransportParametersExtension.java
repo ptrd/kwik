@@ -21,6 +21,8 @@ package net.luminis.quic;
 import net.luminis.tls.ByteUtils;
 import net.luminis.tls.Extension;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
@@ -176,7 +178,7 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- idle timeout: " + idleTimeout);
         }
         else if (parameterId == preferred_address.value) {
-            throw new NotYetImplementedException();
+            parsePreferredAddress(buffer, log);
         }
         else if (parameterId == max_packet_size.value) {
             int maxPacketSize = QuicPacket.parseVariableLengthInteger(buffer);
@@ -213,6 +215,21 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == original_connection_id.value) {
             throw new NotYetImplementedException();
         }
+    }
+
+    private void parsePreferredAddress(ByteBuffer buffer, Logger log) {
+        byte ipVersion = buffer.get();
+        int ipAddressSize = buffer.get();
+        byte[] ipAddressBytes = new byte[ipAddressSize];
+        buffer.get(ipAddressBytes);
+        try {
+            InetAddress preferredIpAddress = InetAddress.getByAddress(ipAddressBytes);
+            int port = buffer.getShort();
+            log.info("Preferred Server Address: " + preferredIpAddress + " " + port);
+        } catch (UnknownHostException e) {
+            throw new ProtocolError("Invalid IP adresss in preferred address");
+        }
+
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, int value) {

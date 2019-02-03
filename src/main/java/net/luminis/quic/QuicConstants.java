@@ -23,21 +23,21 @@ public class QuicConstants {
 
     // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18
     public enum TransportParameterId {
-         original_connection_id(0),
-         idle_timeout(1),
-         stateless_reset_token(2),
-         max_packet_size(3),
-         initial_max_data(4),
-         initial_max_stream_data_bidi_local(5),
-         initial_max_stream_data_bidi_remote(6),
-         initial_max_stream_data_uni(7),
-         initial_max_streams_bidi(8),
-         initial_max_streams_uni(9),
-         ack_delay_exponent(10),
-         max_ack_delay(11),
-         disable_migration(12),
-         preferred_address(13),
-         // (65535)
+        original_connection_id(0),
+        idle_timeout(1),
+        stateless_reset_token(2),
+        max_packet_size(3),
+        initial_max_data(4),
+        initial_max_stream_data_bidi_local(5),
+        initial_max_stream_data_bidi_remote(6),
+        initial_max_stream_data_uni(7),
+        initial_max_streams_bidi(8),
+        initial_max_streams_uni(9),
+        ack_delay_exponent(10),
+        max_ack_delay(11),
+        disable_migration(12),
+        preferred_address(13),
+        // (65535)
         ;
         public final short value;
 
@@ -72,4 +72,15 @@ public class QuicConstants {
         }
     }
 
+    public enum IpVersion {
+        IPv4(4),
+        IPv6(6),
+        // (15)
+        ;
+        public final byte value;
+
+        IpVersion(int value) {
+            this.value = (byte) value;
+        }
+    }
 }
