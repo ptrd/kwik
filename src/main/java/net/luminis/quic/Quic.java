@@ -34,12 +34,14 @@ public class Quic {
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
-        cmdLineOptions.addOption("l", "log", true, "logging options: [DrdspiS]");
-        cmdLineOptions.addOption("14", "Use Quic version IETF_draft_14");
-        cmdLineOptions.addOption("15", "Use Quic version IETF_draft_15");
-        cmdLineOptions.addOption("16", "Use Quic version IETF_draft_16");
-        cmdLineOptions.addOption("17", "Use Quic version IETF_draft_17");
-        cmdLineOptions.addOption("18", "Use Quic version IETF_draft_18");
+        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrsiSD]: " +
+                "(p)ackets received/sent, (d)ecrypted bytes, (r)aw bytes, (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is \"is\", use (n)one to disable");
+        cmdLineOptions.addOption("h", "help", false, "show help");
+        cmdLineOptions.addOption("14", "use Quic version IETF_draft_14");
+        cmdLineOptions.addOption("15", "use Quic version IETF_draft_15");
+        cmdLineOptions.addOption("16", "use Quic version IETF_draft_16");
+        cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
+        cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -187,6 +189,6 @@ public class Quic {
 
     public static void usage() {
         HelpFormatter helpFormatter = new HelpFormatter();
-        helpFormatter.printHelp("quic <host>:<port>", cmdLineOptions);
+        helpFormatter.printHelp("quic <host>:<port> OR quic <host> <port>", cmdLineOptions);
     }
 }
