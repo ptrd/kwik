@@ -146,10 +146,10 @@ public class Logger {
         }
     }
 
-    public void received(QuicPacket packet) {
+    public void received(int datagram, QuicPacket packet) {
         if (logPackets) {
             synchronized (this) {
-                System.out.println("<< " + packet);
+                System.out.println("<< (" + datagram + ") " + packet);
             }
         }
     }

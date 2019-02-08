@@ -112,7 +112,7 @@ public class QuicConnection implements PacketProcessor {
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Process delay: " + processDelay);
 
-                    parsePackets(rawPacket.getData());
+                    parsePackets(receivedPacketCounter, rawPacket.getData());
 
                     if (tlsState.isServerFinished()) {
                         FinishedMessage finishedMessage = new FinishedMessage(tlsState);
@@ -154,7 +154,7 @@ public class QuicConnection implements PacketProcessor {
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Process delay: " + processDelay);
 
-                    parsePackets(rawPacket.getData());
+                    parsePackets(receivedPacketCounter, rawPacket.getData());
                 }
             }
         } catch (InterruptedException e) {
@@ -188,39 +188,45 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    void parsePackets(ByteBuffer data) {
+    void parsePackets(int datagram, ByteBuffer data) {
         int packetStart = data.position();
 
-        QuicPacket packet;
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            packet = parsePacket(data);
-        }
-        else {
-            packet = parsePacketPreDraft17(data);
-        }
-
-        log.received(packet);
-        log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
-
-        packet.accept(this);
         try {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
-            // "A Version Negotiation packet cannot be explicitly acknowledged in an
-            //   ACK frame by a client.  Receiving another Initial packet implicitly
-            //   acknowledges a Version Negotiation packet."
-            if (! (packet instanceof VersionNegotationPacket)) {
-                acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+            QuicPacket packet;
+            if (quicVersion.atLeast(Version.IETF_draft_17)) {
+                packet = parsePacket(data);
+            } else {
+                packet = parsePacketPreDraft17(data);
             }
-        } catch (IOException e) {
-            handleIOError(e);
+
+            log.received(datagram, packet);
+            log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
+
+            packet.accept(this);
+            try {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
+                // "A Version Negotiation packet cannot be explicitly acknowledged in an
+                //   ACK frame by a client.  Receiving another Initial packet implicitly
+                //   acknowledges a Version Negotiation packet."
+                if (!(packet instanceof VersionNegotationPacket)) {
+                    acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
+                }
+            } catch (IOException e) {
+                handleIOError(e);
+            }
+
+            if (data.position() < data.limit()) {
+                parsePackets(datagram, data.slice());
+            }
+
+        }
+        catch (MissingKeysException noKeys) {
+            log.debug("Discarding packets because of missing keys.");
         }
 
-        if (data.position() < data.limit()) {
-            parsePackets(data.slice());
-        }
     }
 
-    QuicPacket parsePacket(ByteBuffer data) {
+    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException {
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
@@ -268,7 +274,7 @@ public class QuicConnection implements PacketProcessor {
         return packet;
     }
 
-    QuicPacket parsePacketPreDraft17(ByteBuffer data) {
+    QuicPacket parsePacketPreDraft17(ByteBuffer data) throws MissingKeysException {
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
