@@ -151,7 +151,7 @@ public class Quic {
         try {
             QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
 
-            quicConnection.connect();
+            quicConnection.connect(5000);
 
             boolean bidirectional = true;
             QuicStream quicStream = quicConnection.createStream(bidirectional);

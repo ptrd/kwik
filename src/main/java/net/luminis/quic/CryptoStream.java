@@ -30,14 +30,16 @@ public class CryptoStream {
 
     private List<CryptoFrame> frames = new ArrayList<>();
     private final Version quicVersion;
+    private final QuicConnection connection;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
     private TlsState tlsState;
     private final Logger log;
 
 
-    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    public CryptoStream(Version quicVersion, QuicConnection connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
         this.quicVersion = quicVersion;
+        this.connection = connection;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
@@ -81,6 +83,7 @@ public class CryptoStream {
             try {
                 while (buffer.remaining() > 0) {
                     Object msg = HandshakeRecord.parseHandshakeMessage(buffer, tlsState);
+                    log.debug(this + " Detected " + msg.getClass().getSimpleName());
                     if (msg instanceof ServerHello) {
                         // Server Hello provides a new secret, so
                         connectionSecrets.computeHandshakeSecrets(tlsState);
@@ -92,8 +95,13 @@ public class CryptoStream {
                             }
                         }
                     }
+                    else if (msg instanceof FinishedMessage) {
+                        if (tlsState.isServerFinished()) {
+                            connection.finishHandshake(tlsState);
+                        }
+                    }
                     else {
-                        log.debug(this + " Detected " + msg.getClass().getSimpleName());
+                        log.debug(this + " Ignoring " + msg.getClass().getSimpleName());
                     }
                 }
             } catch (BufferUnderflowException notYetEnough) {

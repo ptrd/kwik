@@ -59,7 +59,7 @@ public class Sender implements FrameProcessor {
         congestionController = new CongestionController(log);
     }
 
-    public void send(QuicPacket packet, String logMessage) throws IOException {
+    public void send(QuicPacket packet, String logMessage) {
         log.debug("queing " + packet);
         incomingPacketQueue.add(new WaitingPacket(packet, logMessage));
     }

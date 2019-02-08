@@ -30,6 +30,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.*;
@@ -40,6 +42,12 @@ import static net.luminis.tls.Tls13.generateKeys;
  * Creates and maintains a QUIC connection with a QUIC server.
  */
 public class QuicConnection implements PacketProcessor {
+
+    enum Status {
+        Idle,
+        Handshaking,
+        Connected
+    }
 
     private final Logger log;
     private final Version quicVersion;
@@ -52,13 +60,14 @@ public class QuicConnection implements PacketProcessor {
     private final int[] lastPacketNumber = new int[EncryptionLevel.values().length];
     private final Sender sender;
     private final Receiver receiver;
-    private volatile int receivedPacketCounter;
     private volatile byte[] sourceConnectionId;
     private volatile byte[] destConnectionId;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
     private final Map<Integer, QuicStream> streams;
     private int nextStreamId;
+    private volatile Status connectionState;
+    private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
 
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
@@ -75,12 +84,14 @@ public class QuicConnection implements PacketProcessor {
         tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
+
+        connectionState = Status.Idle;
     }
 
     /**
      * Set up the connection with the server.
      */
-    public synchronized void connect() throws IOException {
+    public synchronized void connect(int connectionTimeout) throws IOException {
         generateConnectionIds(8, 8);
         generateInitialKeys();
 
@@ -96,46 +107,19 @@ public class QuicConnection implements PacketProcessor {
 
         receiver.start();
         sender.start();
+        startReceiverLoop();
 
-        byte[] clientHello = createClientHello(host, publicKey);
-        tlsState.clientHelloSend(privateKey, clientHello);
+        startHandshake(privateKey, publicKey);
 
-        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
-        sender.send(clientHelloPacket, "client hello");
-
-        boolean handshaking = true;
-        while (handshaking) {     // TODO: and not timed out
-            try {
-                RawPacket rawPacket = receiver.get(5);
-                if (rawPacket != null) {
-                    Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
-                    log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
-                    log.debug("Process delay: " + processDelay);
-
-                    parsePackets(receivedPacketCounter, rawPacket.getData());
-
-                    if (tlsState.isServerFinished()) {
-                        FinishedMessage finishedMessage = new FinishedMessage(tlsState);
-                        CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
-                        LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Handshake), cryptoFrame, connectionSecrets);
-                        log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
-                        sender.send(finishedPacket, "client finished");
-                        tlsState.computeApplicationSecrets();
-                        connectionSecrets.computeApplicationSecrets(tlsState);
-
-                        handshaking = false;
-                    }
-                }
-                else {
-                    throw new SocketTimeoutException();
-                }
-            } catch (InterruptedException e) {
-                throw new SocketTimeoutException();
+        try {
+            boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
+            if (!handshakeFinished) {
+                throw new ConnectException("Connection timed out");
             }
         }
-        log.debug("Handshake finished");
-
-        startReceiverLoop();
+        catch (InterruptedException e) {
+            throw new RuntimeException();  // Should not happen.
+        }
     }
 
     private void startReceiverLoop() {
@@ -146,13 +130,15 @@ public class QuicConnection implements PacketProcessor {
 
     private void receiveAndProcessPackets() {
         Thread currentThread = Thread.currentThread();
+        int receivedPacketCounter = 0;
+
         try {
             while (! currentThread.isInterrupted()) {
                 RawPacket rawPacket = receiver.get(15);
                 if (rawPacket != null) {
                     Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
-                    log.debug("Process delay: " + processDelay);
+                    log.debug("Packet process delay for packet #" + receivedPacketCounter + ": " + processDelay);
 
                     parsePackets(receivedPacketCounter, rawPacket.getData());
                 }
@@ -186,6 +172,30 @@ public class QuicConnection implements PacketProcessor {
 
     private void generateInitialKeys() {
         connectionSecrets.computeInitialKeys(destConnectionId);
+    }
+
+    private void startHandshake(ECPrivateKey privateKey, ECPublicKey publicKey) {
+        byte[] clientHello = createClientHello(host, publicKey);
+        tlsState.clientHelloSend(privateKey, clientHello);
+
+        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
+        sender.send(clientHelloPacket, "client hello");
+        connectionState = Status.Handshaking;
+    }
+
+    void finishHandshake(TlsState tlsState) {
+        if (tlsState.isServerFinished()) {
+            FinishedMessage finishedMessage = new FinishedMessage(tlsState);
+            CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
+            LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Handshake), cryptoFrame, connectionSecrets);
+            log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
+            sender.send(finishedPacket, "client finished");
+            tlsState.computeApplicationSecrets();
+            connectionSecrets.computeApplicationSecrets(tlsState);
+
+            connectionState = Status.Connected;
+            handshakeFinishedCondition.countDown();
+        }
     }
 
     void parsePackets(int datagram, ByteBuffer data) {
@@ -323,7 +333,7 @@ public class QuicConnection implements PacketProcessor {
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, tlsState, log));
+                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsState, log));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
