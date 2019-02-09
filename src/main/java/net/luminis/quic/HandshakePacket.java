@@ -27,7 +27,8 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload);
+        generateBinaryPacket(connectionSecrets);
     }
 
     protected byte getPacketType() {

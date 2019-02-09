@@ -152,6 +152,10 @@ public class Sender implements FrameProcessor {
         });
     }
 
+    public CongestionController getCongestionController() {
+        return congestionController;
+    }
+
     private static class PacketAckStatus {
         final Instant timeSent;
         final QuicPacket packet;

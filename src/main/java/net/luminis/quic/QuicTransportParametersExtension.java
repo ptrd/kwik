@@ -213,7 +213,9 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- idle timeout: " + maxAckDelay);
         }
         else if (parameterId == original_connection_id.value) {
-            throw new NotYetImplementedException();
+            byte[] originalConnectionId = new byte[size];
+            buffer.get(originalConnectionId);
+            log.debug("- original connection id: ", originalConnectionId);
         }
     }
 

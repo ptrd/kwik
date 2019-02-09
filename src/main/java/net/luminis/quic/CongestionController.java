@@ -60,4 +60,9 @@ public class CongestionController {
             lock.wait();
         }
     }
+
+    public void reset() {
+        log.debug("Resetting congestion controller.");
+        bytesInFlight = 0;
+    }
 }

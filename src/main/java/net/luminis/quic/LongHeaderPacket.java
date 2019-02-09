@@ -35,8 +35,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected byte[] destConnectionId;
     protected byte[] payload;
     protected ByteBuffer packetBuffer;
-    private int paddingLength;
-    private int packetSize;
+    protected int paddingLength;
+    protected int packetSize;
+    private byte[] destinationConnectionId;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -53,16 +54,17 @@ public abstract class LongHeaderPacket extends QuicPacket {
      * @param destConnectionId
      * @param packetNumber
      * @param frame
-     * @param connectionSecrets
      */
-    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame frame, ConnectionSecrets connectionSecrets) {
+    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destConnectionId = destConnectionId;
         this.packetNumber = packetNumber;
         this.frames = List.of(frame);
         this.payload = frame.getBytes();
+    }
 
+    protected void generateBinaryPacket(ConnectionSecrets connectionSecrets) {
         NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -135,9 +137,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
         int srcConnIdLength = (dcilScil & 0x0f) + 3;
 
-        byte[] destConnId = new byte[dstConnIdLength];
-        buffer.get(destConnId);
-        log.debug("Destination connection id", destConnId);
+        destinationConnectionId = new byte[dstConnIdLength];
+        buffer.get(destinationConnectionId);
+        log.debug("Destination connection id", destinationConnectionId);
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
         log.debug("Source connection id", sourceConnectionId);
@@ -201,6 +203,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     public int getPacketNumber() {
         return packetNumber;
+    }
+
+    public byte[] getDestinationConnectionId() {
+        return destConnectionId;
     }
 
     protected abstract void checkPacketType(byte b);

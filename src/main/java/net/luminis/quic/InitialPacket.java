@@ -18,16 +18,24 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.nio.ByteBuffer;
+import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
 
-    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload, connectionSecrets);
+    private final byte[] token;
+
+    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
+        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload);
+        this.token = token;
+        generateBinaryPacket(connectionSecrets);
     }
 
     public InitialPacket(Version quicVersion) {
         super(quicVersion);
+        token = null;
     }
 
     protected byte getPacketType() {
@@ -49,7 +57,14 @@ public class InitialPacket extends LongHeaderPacket {
 
     protected void generateAdditionalFields() {
         // Token length (variable-length integer)
-        packetBuffer.put((byte) 0x00);
+        if (token != null) {
+            byte[] encodedTokenLength = QuicPacket.encodeVariableLengthInteger(token.length);
+            packetBuffer.put(encodedTokenLength);
+            packetBuffer.put(token);
+        }
+        else {
+            packetBuffer.put((byte) 0x00);
+        }
     }
 
     @Override
@@ -90,4 +105,19 @@ public class InitialPacket extends LongHeaderPacket {
         }
     }
 
+    public byte[] getToken() {
+        return token;
+    }
+
+    @Override
+    public String toString() {
+        return "Packet "
+                + getEncryptionLevel().name().charAt(0) + "|"
+                + packetNumber + "|"
+                + "L" + "|"
+                + packetSize + "|"
+                + frames.size() + "  "
+                + "Token=" + (token != null? ByteUtils.bytesToHex(token): "[]") + " "
+                + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
+    }
 }

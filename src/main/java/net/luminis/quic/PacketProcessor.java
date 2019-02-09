@@ -29,4 +29,6 @@ public interface PacketProcessor {
     void process(VersionNegotationPacket packet);
 
     void process(HandshakePacket packet);
+
+    void process(RetryPacket packet);
 }

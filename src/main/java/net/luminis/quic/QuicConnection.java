@@ -60,8 +60,11 @@ public class QuicConnection implements PacketProcessor {
     private final int[] lastPacketNumber = new int[EncryptionLevel.values().length];
     private final Sender sender;
     private final Receiver receiver;
+    private final ECPrivateKey privateKey;
+    private final ECPublicKey publicKey;
     private volatile byte[] sourceConnectionId;
     private volatile byte[] destConnectionId;
+    private volatile byte[] token;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
     private final Map<Integer, QuicStream> streams;
@@ -69,6 +72,10 @@ public class QuicConnection implements PacketProcessor {
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
 
+
+    public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
+        this(host, port, Version.IETF_draft_17, log);
+    }
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
@@ -85,6 +92,14 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
 
+        try {
+            ECKey[] keys = generateKeys("secp256r1");
+            privateKey = (ECPrivateKey) keys[0];
+            publicKey = (ECPublicKey) keys[1];
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate key pair.");
+        }
+
         connectionState = Status.Idle;
     }
 
@@ -95,21 +110,11 @@ public class QuicConnection implements PacketProcessor {
         generateConnectionIds(8, 8);
         generateInitialKeys();
 
-        // Create client hello
-        ECKey[] keys = new ECKey[0];
-        try {
-            keys = generateKeys("secp256r1");
-        } catch (Exception e) {
-            throw new RuntimeException();
-        }
-        ECPrivateKey privateKey = (ECPrivateKey) keys[0];
-        ECPublicKey publicKey = (ECPublicKey) keys[1];
-
         receiver.start();
         sender.start();
         startReceiverLoop();
 
-        startHandshake(privateKey, publicKey);
+        startHandshake();
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -174,11 +179,11 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    private void startHandshake(ECPrivateKey privateKey, ECPublicKey publicKey) {
+    private void startHandshake() {
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
+        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
         sender.send(clientHelloPacket, "client hello");
         connectionState = Status.Handshaking;
     }
@@ -214,11 +219,11 @@ public class QuicConnection implements PacketProcessor {
 
             packet.accept(this);
             try {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.4
-                // "A Version Negotiation packet cannot be explicitly acknowledged in an
-                //   ACK frame by a client.  Receiving another Initial packet implicitly
-                //   acknowledges a Version Negotiation packet."
-                if (!(packet instanceof VersionNegotationPacket)) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.1
+                // "A Version Negotiation packet cannot be explicitly acknowledged in an ACK frame by a client."
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
+                // "A Retry packet does not include a packet number and cannot be explicitly acknowledged by a client."
+                if (!(packet instanceof VersionNegotationPacket) && !(packet instanceof RetryPacket)) {
                     acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
                 }
             } catch (IOException e) {
@@ -228,12 +233,10 @@ public class QuicConnection implements PacketProcessor {
             if (data.position() < data.limit()) {
                 parsePackets(datagram, data.slice());
             }
-
         }
         catch (MissingKeysException noKeys) {
             log.debug("Discarding packets because of missing keys.");
         }
-
     }
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException {
@@ -259,7 +262,7 @@ public class QuicConnection implements PacketProcessor {
         // "A Retry packet uses a long packet header with a type value of 0x3"
         else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
             // Retry packet....
-            throw new NotYetImplementedException();
+            packet = new RetryPacket(quicVersion).parse(data, connectionSecrets, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x2."
@@ -345,7 +348,7 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket ackPacket = null;
         switch (encryptionLevel) {
             case Initial:
-                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
+                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
                 break;
             case Handshake:
                 ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
@@ -365,6 +368,10 @@ public class QuicConnection implements PacketProcessor {
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
+    }
+
+    public byte[] getDestinationConnectionId() {
+        return destConnectionId;
     }
 
     private byte[] createClientHello(String host, ECPublicKey publicKey) {
@@ -406,6 +413,45 @@ public class QuicConnection implements PacketProcessor {
     public void process(VersionNegotationPacket packet) {
         log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
         throw new VersionNegationFailure();
+    }
+
+    private volatile boolean processedRetryPacket = false;
+
+    @Override
+    public void process(RetryPacket packet) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
+        // "Clients MUST discard Retry packets that contain an Original
+        //   Destination Connection ID field that does not match the Destination
+        //   Connection ID from its Initial packet"
+        if (Arrays.equals(packet.getOriginalDestinationConnectionId(), destConnectionId)) {
+            if (!processedRetryPacket) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
+                // "A client MUST accept and process at most one Retry packet for each
+                //   connection attempt.  After the client has received and processed an
+                //   Initial or Retry packet from the server, it MUST discard any
+                //   subsequent Retry packets that it receives."
+                processedRetryPacket = true;
+
+                token = packet.getRetryToken();
+                destConnectionId = packet.getSourceConnectionId();
+                log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
+                generateInitialKeys();
+
+                synchronized (lastPacketNumber) {
+                    lastPacketNumber[Initial.ordinal()] = 0;
+                }
+
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
+                // "A Retry or Version Negotiation packet causes a client to send another
+                //   Initial packet, effectively restarting the connection process and
+                //   resetting congestion control..."
+                sender.getCongestionController().reset();
+
+                startHandshake();
+            } else {
+                log.debug("Ignoring RetryPacket, because already processed one.");
+            }
+        }
     }
 
     void processFrames(QuicPacket packet) {
