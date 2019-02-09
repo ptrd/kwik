@@ -42,6 +42,7 @@ public class Quic {
         cmdLineOptions.addOption("16", "use Quic version IETF_draft_16");
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
+        cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -148,10 +149,20 @@ public class Quic {
             quicVersion = Version.IETF_draft_14;
         }
 
+        int connectionTimeout = 5;
+        if (cmd.hasOption("c")) {
+            try {
+                connectionTimeout = Integer.parseInt(cmd.getOptionValue("c", "5"));
+            } catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         try {
             QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
 
-            quicConnection.connect(5000);
+            quicConnection.connect(connectionTimeout * 1000);
 
             boolean bidirectional = true;
             QuicStream quicStream = quicConnection.createStream(bidirectional);
@@ -189,6 +200,7 @@ public class Quic {
 
     public static void usage() {
         HelpFormatter helpFormatter = new HelpFormatter();
+        helpFormatter.setWidth(79);
         helpFormatter.printHelp("quic <host>:<port> OR quic <host> <port>", cmdLineOptions);
     }
 }

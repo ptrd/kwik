@@ -28,17 +28,18 @@ Build with gradle (`gradle build`)
 and run the `quic.sh` script or `java -jar build/libs/quic.jar`. 
 
     usage: quic <host>:<port> OR quic <host> <port>
-     -14              use Quic version IETF_draft_14
-     -15              use Quic version IETF_draft_15
-     -16              use Quic version IETF_draft_16
-     -17              use Quic version IETF_draft_17
-     -18              use Quic version IETF_draft_18
-     -h,--help        show help
-     -l,--log <arg>   logging options: [pdrsiSD]: (p)ackets received/sent,
-                      (d)ecrypted bytes, (r)aw bytes, (s)tats, (i)nfo,
-                      (S)ecrets, (D)ebug; default is "is", use (n)one to
-                      disable
-
+     -14                            use Quic version IETF_draft_14
+     -15                            use Quic version IETF_draft_15
+     -16                            use Quic version IETF_draft_16
+     -17                            use Quic version IETF_draft_17
+     -18                            use Quic version IETF_draft_18
+     -c,--connectionTimeout <arg>   connection timeout in seconds
+     -h,--help                      show help
+     -l,--log <arg>                 logging options: [pdrsiSD]: (p)ackets
+                                    received/sent, (d)ecrypted bytes, (r)aw bytes,
+                                    (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is
+                                    "is", use (n)one to disable
+                                
 ## Contact
 
 If you have questions about this project, please mail the author (peter dot doornbosch) at luminis dot eu.
