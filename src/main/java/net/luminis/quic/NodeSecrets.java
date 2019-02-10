@@ -18,13 +18,19 @@
  */
 package net.luminis.quic;
 
+import at.favre.lib.crypto.HKDF;
 import net.luminis.tls.TlsState;
 
+
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Client;
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Server;
 
 public class NodeSecrets {
+
+    public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
     private final ConnectionSecrets.NodeRole nodeRole;
     private final Logger log;
@@ -46,7 +52,7 @@ public class NodeSecrets {
         this.log = log;
         this.quicVersion = quicVersion;
 
-        byte[] initialNodeSecret = Crypto.hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
+        byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
         log.secret(nodeRole + " initial secret", initialNodeSecret);
 
         computeKeys(initialNodeSecret);
@@ -101,23 +107,48 @@ public class NodeSecrets {
 
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        writeKey = Crypto.hkdfExpandLabel(quicVersion, secret, prefix + "key", "", (short) 16);
+        writeKey = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", (short) 16);
         log.secret(nodeRole + " key", writeKey);
 
-        writeIV = Crypto.hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
+        writeIV = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
         log.secret(nodeRole + " iv", writeIV);
 
         if (quicVersion.atLeast(Version.IETF_draft_17)) {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
             // "The header protection key uses the "quic hp" label"
-            hp = Crypto.hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", (short) 16);
+            hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", (short) 16);
             log.secret(nodeRole + " hp", hp);
         }
         else {
             // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1: 'to derive a packet number protection key (the "pn" label")'
-            pn = Crypto.hkdfExpandLabel(quicVersion, secret, prefix + "pn", "", (short) 16);
+            pn = hkdfExpandLabel(quicVersion, secret, prefix + "pn", "", (short) 16);
             log.secret(nodeRole + " pn", pn);
         }
+    }
+
+    // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
+    static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
+
+        byte[] prefix;
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
+            // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
+            prefix = "tls13 ".getBytes(ISO_8859_1);
+        }
+        else {
+            // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1: 'the label for HKDF-Expand-Label uses the prefix "quic " rather than "tls13 "'
+            prefix = "quic ".getBytes(ISO_8859_1);
+        }
+
+        ByteBuffer hkdfLabel = ByteBuffer.allocate(2 + 1 + prefix.length + label.getBytes(ISO_8859_1).length + 1 + context.getBytes(ISO_8859_1).length);
+        hkdfLabel.putShort(length);
+        hkdfLabel.put((byte) (prefix.length + label.getBytes().length));
+        hkdfLabel.put(prefix);
+        hkdfLabel.put(label.getBytes(ISO_8859_1));
+        hkdfLabel.put((byte) (context.getBytes(ISO_8859_1).length));
+        hkdfLabel.put(context.getBytes(ISO_8859_1));
+        HKDF hkdf = HKDF.fromHmacSha256();
+        return hkdf.expand(secret, hkdfLabel.array(), length);
     }
 
     public byte[] getWriteKey() {
