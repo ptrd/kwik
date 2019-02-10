@@ -64,6 +64,7 @@ public class QuicConnection implements PacketProcessor {
     private final ECPublicKey publicKey;
     private volatile byte[] sourceConnectionId;
     private volatile byte[] destConnectionId;
+    private volatile byte[] originalDestinationConnectionId;
     private volatile byte[] token;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
@@ -173,6 +174,7 @@ public class QuicConnection implements PacketProcessor {
         buffer.rewind();
         buffer.get(destConnectionId);
         log.debug("Destination connection id", destConnectionId);
+        originalDestinationConnectionId = destConnectionId;
     }
 
     private void generateInitialKeys() {
@@ -534,5 +536,24 @@ public class QuicConnection implements PacketProcessor {
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16 // encryption overhead
         ;
+    }
+
+    void setTransportParameters(TransportParameters transportParameters) {
+        if (processedRetryPacket) {
+            if (transportParameters.getOriginalConnectionId() == null ||
+                    ! Arrays.equals(originalDestinationConnectionId, transportParameters.getOriginalConnectionId())) {
+                signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+            }
+        }
+        else {
+            if (transportParameters.getOriginalConnectionId() != null) {
+                signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+            }
+        }
+    }
+
+    void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
+        log.info("ConnectionError " + transportError);
+        // TODO: close connection with a frame type of 0x1c
     }
 }

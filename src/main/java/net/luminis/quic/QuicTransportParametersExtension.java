@@ -31,6 +31,7 @@ import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 public class QuicTransportParametersExtension extends Extension {
 
     private byte[] data;
+    private TransportParameters params;
 
     public QuicTransportParametersExtension() {
     }
@@ -158,6 +159,8 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
+        params = new TransportParameters();
+
         int parameterId = buffer.getShort();
         int size = buffer.getShort();
 
@@ -216,6 +219,7 @@ public class QuicTransportParametersExtension extends Extension {
             byte[] originalConnectionId = new byte[size];
             buffer.get(originalConnectionId);
             log.debug("- original connection id: ", originalConnectionId);
+            params.setOriginalConnectionId(originalConnectionId);
         }
     }
 
@@ -241,4 +245,7 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.put(encodedValue);
     }
 
+    public TransportParameters getTransportParameters() {
+        return params;
+    }
 }

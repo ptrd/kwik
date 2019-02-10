@@ -41,6 +41,7 @@ class QuicConnectionTest {
     private static Logger logger;
 
     private QuicConnection connection;
+    private byte[] originalDestinationId;
 
     @BeforeAll
     static void initLogger() {
@@ -141,10 +142,98 @@ class QuicConnectionTest {
         verify(sender, never()).send(any(QuicPacket.class), anyString());
     }
 
-//    @Test
-//    void testAfterRetryPacketTransportParametersShouldContainOriginalDestinationId() throws Exception {
-//        // TODO
-//    }
+    @Test
+    void testAfterRetryPacketTransportParametersWithoutOriginalDestinationIdLeadsToConnectionError() throws Exception {
+        simulateConnectionReceivingRetryPacket();
+
+        // Simulate a TransportParametersExtension is received that does not contain the right original destination id
+        connection.setTransportParameters(new TransportParameters());
+
+        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+    }
+
+    @Test
+    void testAfterRetryPacketTransportParametersWithIncorrectOriginalDestinationIdLeadsToConnectionError() throws Exception {
+        simulateConnectionReceivingRetryPacket();
+
+        // Simulate a TransportParametersExtension is received that does contain an original destination id
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
+        connection.setTransportParameters(transportParameters);
+
+        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+    }
+
+    @Test
+    void testAfterRetryPacketTransportParametersWithCorrectOriginalDestinationId() throws Exception {
+        simulateConnectionReceivingRetryPacket();
+
+        // Simulate a TransportParametersExtension is received that does contain the original destination id
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setOriginalConnectionId(originalDestinationId);
+        connection.setTransportParameters(transportParameters);
+
+        verify(connection, never()).signalConnectionError(any());
+    }
+
+    @Test
+    void testWithNormalConnectionTransportParametersShouldNotContainOriginalDestinationId() throws Exception {
+        simulateNormalConnection();
+
+        // Simulate a TransportParametersExtension is received that does not contain an original destination id
+        connection.setTransportParameters(new TransportParameters());
+
+        verify(connection, never()).signalConnectionError(any());
+    }
+
+    @Test
+    void testOnNormalConnectionTransportParametersWithOriginalDestinationIdLeadsToConnectionError() throws Exception {
+        simulateNormalConnection();
+
+        // Simulate a TransportParametersExtension is received that does contain an original destination id
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
+        connection.setTransportParameters(transportParameters);
+
+        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+    }
+
+    private void simulateConnectionReceivingRetryPacket() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        connection = Mockito.spy(connection);
+
+        new Thread(() -> {
+            try {
+                connection.connect(3);
+            } catch (IOException e) {
+            }
+        }).start();
+        Thread.sleep(100);  // Give connection a chance to send packet(s).
+
+        // Store original destination id
+        originalDestinationId = connection.getDestinationConnectionId();
+
+        // Simulate a RetryPacket is received
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
+        connection.process(retryPacket);
+    }
+
+    private void simulateNormalConnection() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        connection = Mockito.spy(connection);
+
+        new Thread(() -> {
+            try {
+                connection.connect(3);
+            } catch (IOException e) {
+            }
+        }).start();
+        Thread.sleep(100);  // Give connection a chance to send packet(s).
+    }
 
     @Test
     void testCreateStream() throws IOException {
