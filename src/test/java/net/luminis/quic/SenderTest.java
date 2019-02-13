@@ -43,7 +43,7 @@ class SenderTest {
         DatagramSocket socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
         Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start();
+        sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         waitForSender();
@@ -55,7 +55,7 @@ class SenderTest {
     void testSenderIsCongestionControlled() throws IOException {
         DatagramSocket socket = mock(DatagramSocket.class);
         Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start();
+        sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
@@ -76,7 +76,7 @@ class SenderTest {
     void testSenderCongestionControlWithUnrelatedAck() throws IOException {
         DatagramSocket socket = mock(DatagramSocket.class);
         Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start();
+        sender.start(null);
 
         sender.send(new MockPacket(0, 1, EncryptionLevel.Initial,"initial"), "packet 1");
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
@@ -97,7 +97,7 @@ class SenderTest {
     void testSenderCongestionControlWithIncorrectAck() throws IOException {
         DatagramSocket socket = mock(DatagramSocket.class);
         Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start();
+        sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");

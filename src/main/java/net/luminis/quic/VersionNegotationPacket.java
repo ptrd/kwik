@@ -92,7 +92,7 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] getBytes() {
+    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets) {
         return new byte[0];
     }
 

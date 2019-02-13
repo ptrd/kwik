@@ -24,7 +24,7 @@ public abstract class QuicFrame {
 
     abstract byte[] getBytes();
 
-    byte[] encodeVariableLengthInteger(int value) {
+    byte[] encodeVariableLengthInteger(long value) {
         if (value <= 63)
             return new byte[] { (byte) value };
         else if (value <= 16383) {

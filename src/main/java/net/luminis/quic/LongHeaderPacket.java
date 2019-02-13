@@ -36,7 +36,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     protected byte[] payload;
     protected ByteBuffer packetBuffer;
     protected int paddingLength;
-    protected int packetSize;
     private byte[] destinationConnectionId;
 
     /**
@@ -52,19 +51,18 @@ public abstract class LongHeaderPacket extends QuicPacket {
      * @param quicVersion
      * @param sourceConnectionId
      * @param destConnectionId
-     * @param packetNumber
      * @param frame
      */
-    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame frame) {
+    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destConnectionId = destConnectionId;
-        this.packetNumber = packetNumber;
         this.frames = List.of(frame);
         this.payload = frame.getBytes();
     }
 
-    protected void generateBinaryPacket(ConnectionSecrets connectionSecrets) {
+    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
+        this.packetNumber = packetNumber;
         NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -74,10 +72,17 @@ public abstract class LongHeaderPacket extends QuicPacket {
         addLength(encodedPacketNumber.length);
         packetBuffer.put(encodedPacketNumber);
 
-        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, payload, paddingLength, clientSecrets);
+        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, ByteBuffer.wrap(payload), paddingLength, clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();
+
+        byte[] packetBytes = new byte[packetBuffer.position()];
+        packetBuffer.rewind();
+        packetBuffer.get(packetBytes);
+
+        packetSize = packetBytes.length;
+        return packetBytes;
     }
 
     protected void generateFrameHeaderInvariant() {
@@ -111,13 +116,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int packetLength = payload.length + paddingLength + 16 + packetNumberLength;
         byte[] length = encodeVariableLengthInteger(packetLength);
         packetBuffer.put(length);
-    }
-
-    public byte[] getBytes() {
-        byte[] packetBytes = new byte[packetBuffer.position()];
-        packetBuffer.rewind();
-        packetBuffer.get(packetBytes);
-        return packetBytes;
     }
 
     public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
@@ -199,10 +197,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
-    }
-
-    public int getPacketNumber() {
-        return packetNumber;
     }
 
     public byte[] getDestinationConnectionId() {

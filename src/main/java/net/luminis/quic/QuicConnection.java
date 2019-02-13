@@ -114,7 +114,7 @@ public class QuicConnection implements PacketProcessor {
         generateInitialKeys();
 
         receiver.start();
-        sender.start();
+        sender.start(connectionSecrets);
         startReceiverLoop();
 
         startHandshake();
@@ -195,7 +195,7 @@ public class QuicConnection implements PacketProcessor {
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
+        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, new CryptoFrame(quicVersion, clientHello));
         connectionState = Status.Handshaking;
         sender.send(clientHelloPacket, "client hello");
     }
@@ -204,8 +204,7 @@ public class QuicConnection implements PacketProcessor {
         if (tlsState.isServerFinished()) {
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
-            LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(Handshake), cryptoFrame, connectionSecrets);
-            log.debugWithHexBlock("Sending packet", finishedPacket.getBytes());
+            LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, cryptoFrame);
             sender.send(finishedPacket, "client finished");
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
@@ -354,19 +353,19 @@ public class QuicConnection implements PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private void acknowledge(EncryptionLevel encryptionLevel, int packetNumber) throws IOException {
+    private void acknowledge(EncryptionLevel encryptionLevel, long packetNumber) throws IOException {
         AckFrame ack = new AckFrame(quicVersion, packetNumber);
 
         QuicPacket ackPacket = null;
         switch (encryptionLevel) {
             case Initial:
-                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
+                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, ack);
                 break;
             case Handshake:
-                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
+                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, ack);
                 break;
             case App:
-                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, getNextPacketNumber(encryptionLevel), ack, connectionSecrets);
+                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, ack);
                 break;
         }
         sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
@@ -523,7 +522,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     void send(StreamFrame streamFrame) throws IOException {
-        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, getNextPacketNumber(App), streamFrame, connectionSecrets);
+        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, streamFrame);
         sender.send(packet, "application data");
     }
 

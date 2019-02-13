@@ -23,9 +23,9 @@ import java.util.Objects;
 public class PacketId implements Comparable<PacketId> {
 
     private final EncryptionLevel encryptionLevel;
-    private final int packetNumber;
+    private final long packetNumber;
 
-    public PacketId(EncryptionLevel encryptionLevel, int packetNumber) {
+    public PacketId(EncryptionLevel encryptionLevel, long packetNumber) {
         this.encryptionLevel = encryptionLevel;
         this.packetNumber = packetNumber;
     }
@@ -58,7 +58,7 @@ public class PacketId implements Comparable<PacketId> {
             return 1;
         }
         else {
-            return Integer.compare(this.packetNumber, other.packetNumber);
+            return Long.compare(this.packetNumber, other.packetNumber);
         }
     }
 }

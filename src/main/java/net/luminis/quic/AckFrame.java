@@ -37,8 +37,8 @@ public class AckFrame extends QuicFrame {
     public AckFrame() {
     }
 
-    public AckFrame(Version quicVersion, int packetNumber) {
-        largestAcknowledged = packetNumber;
+    public AckFrame(Version quicVersion, long packetNumber) {
+        largestAcknowledged = (int) packetNumber;
         acknowledgedPacketNumbers = List.of(largestAcknowledged);
         
         ByteBuffer buffer = ByteBuffer.allocate(100);

@@ -35,12 +35,12 @@ public class CongestionController {
         congestionWindow = 1250;  // i.e. approx 1 max packet size
     }
 
-    public synchronized boolean canSend(QuicPacket packet) {
-        return bytesInFlight + packet.getBytes().length < congestionWindow;
+    public synchronized boolean canSend(int bytes) {
+        return bytesInFlight + bytes < congestionWindow;
     }
 
     public synchronized void registerAcked(QuicPacket acknowlegdedPacket) {
-        bytesInFlight -= acknowlegdedPacket.getBytes().length;
+        bytesInFlight -= acknowlegdedPacket.getSize();
         log.debug("Bytes in flight decreased to " + bytesInFlight);
         synchronized (lock) {
             lock.notifyAll();
@@ -48,7 +48,7 @@ public class CongestionController {
     }
 
     public synchronized void registerInFlight(QuicPacket sentPacket) {
-        bytesInFlight += sentPacket.getBytes().length;
+        bytesInFlight += sentPacket.getSize();
         log.debug("Bytes in flight increased to " + bytesInFlight);
         synchronized (lock) {
             lock.notifyAll();

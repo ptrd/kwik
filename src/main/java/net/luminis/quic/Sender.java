@@ -42,6 +42,7 @@ public class Sender implements FrameProcessor {
     private BlockingQueue<WaitingPacket> incomingPacketQueue;
     private Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
+    private ConnectionSecrets connectionSecrets;
 
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port) {
@@ -64,7 +65,8 @@ public class Sender implements FrameProcessor {
         incomingPacketQueue.add(new WaitingPacket(packet, logMessage));
     }
 
-    public void start() {
+    public void start(ConnectionSecrets secrets) {
+        connectionSecrets = secrets;
         senderThread.start();
     }
 
@@ -77,8 +79,12 @@ public class Sender implements FrameProcessor {
                     QuicPacket packet = queued.packet;
                     String logMessage = queued.logMessage;
 
+                    EncryptionLevel level = packet.getEncryptionLevel();
+                    long packetNumber = generatePacketNumber(level);
+                    byte[] packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);
+
                     boolean hasBeenWaiting = false;
-                    while (! congestionController.canSend(packet)) {
+                    while (! congestionController.canSend(packetData.length)) {
                         log.debug("Congestion controller will not allow sending queued packet " + packet);
                         log.debug("Non-acked packets: " + getNonAcknowlegded());
                         hasBeenWaiting = true;
@@ -90,7 +96,6 @@ public class Sender implements FrameProcessor {
                         log.debug("But now it does.");
                     }
 
-                    byte[] packetData = packet.getBytes();
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();
                     socket.send(datagram);
@@ -107,6 +112,14 @@ public class Sender implements FrameProcessor {
         catch (IOException ioError) {
             // This is probably fatal.
             log.error("IOException while sending datagrams");
+        }
+    }
+
+    private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
+
+    private long generatePacketNumber(EncryptionLevel encryptionLevel) {
+        synchronized (lastPacketNumber) {
+            return lastPacketNumber[encryptionLevel.ordinal()]++;
         }
     }
 

@@ -21,7 +21,6 @@ package net.luminis.quic;
 public class MockPacket extends QuicPacket {
 
     private EncryptionLevel encryptionLevel;
-    private int packetSize;
     private String message;
 
     public MockPacket(int packetNumber, int packetSize, String message) {
@@ -44,7 +43,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] getBytes() {
+    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets) {
         return new byte[packetSize];
     }
 

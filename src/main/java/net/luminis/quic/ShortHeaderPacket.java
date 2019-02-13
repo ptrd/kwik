@@ -25,9 +25,8 @@ import java.util.stream.Collectors;
 
 public class ShortHeaderPacket extends QuicPacket {
 
-    private byte[] destConnectionId;
+    private byte[] destinationConnectionId;
     private byte[] packetBytes;
-    private int packetSize;
 
     /**
      * Constructs an empty short header packet for use with the parse() method.
@@ -41,46 +40,12 @@ public class ShortHeaderPacket extends QuicPacket {
      * Constructs a short header packet for sending (client role).
      * @param quicVersion
      * @param destinationConnectionId
-     * @param packetNumber
      * @param frame
-     * @param connectionSecrets
      */
-    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, int packetNumber, QuicFrame frame, ConnectionSecrets connectionSecrets) {
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
-        this.destConnectionId = destinationConnectionId;
-        this.packetNumber = packetNumber;
+        this.destinationConnectionId = destinationConnectionId;
         frames = List.of(frame);
-
-        NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
-
-        ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        byte flags;
-        if (quicVersion.equals(Version.IETF_draft_17)) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
-            // "|0|1|S|R|R|K|P P|"
-            // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin
-            //      Bit, set as described in [SPIN]."
-            // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
-            //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
-            flags = 0x40;  // 0100 0000
-            flags = encodePacketNumberLength(flags, packetNumber);
-        }
-        else {
-            flags = 0x30;
-        }
-        buffer.put(flags);
-        buffer.put(destinationConnectionId);
-
-        byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
-        buffer.put(encodedPacketNumber);
-
-        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frame.getBytes(), 0, clientSecrets);
-
-        buffer.limit(buffer.position());
-        packetSize = buffer.limit();
-        packetBytes = new byte[packetSize];
-        buffer.rewind();
-        buffer.get(packetBytes);
     }
 
     public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, Logger log) throws MissingKeysException {
@@ -144,7 +109,45 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] getBytes() {
+    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
+        this.packetNumber = packetNumber;
+        NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
+
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        byte flags;
+        if (quicVersion.equals(Version.IETF_draft_17)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
+            // "|0|1|S|R|R|K|P P|"
+            // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin
+            //      Bit, set as described in [SPIN]."
+            // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
+            //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
+            flags = 0x40;  // 0100 0000
+            flags = encodePacketNumberLength(flags, packetNumber);
+        }
+        else {
+            flags = 0x30;
+        }
+        buffer.put(flags);
+        buffer.put(destinationConnectionId);
+
+        byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
+        buffer.put(encodedPacketNumber);
+
+        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
+        frameBytes.flip();
+
+        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, clientSecrets);
+
+        buffer.limit(buffer.position());
+        packetSize = buffer.limit();
+        packetBytes = new byte[packetSize];
+        buffer.rewind();
+        buffer.get(packetBytes);
+
+        packetSize = packetBytes.length;
+
         return packetBytes;
     }
 

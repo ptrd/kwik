@@ -34,8 +34,9 @@ abstract public class QuicPacket {
     protected static final int MAX_PACKET_SIZE = 1500;
 
     protected Version quicVersion;
-    protected int packetNumber;
+    protected long packetNumber;
     protected List<QuicFrame> frames;
+    protected int packetSize = -1;
 
     static byte[] encodeVariableLengthInteger(int length) {
         if (length <= 63)
@@ -60,7 +61,7 @@ abstract public class QuicPacket {
         }
     }
 
-    byte[] encodePacketNumber(int number) {
+    byte[] encodePacketNumber(long number) {
         if (number <= 0x7f)
             return new byte[] { (byte) number };
         else {
@@ -69,7 +70,7 @@ abstract public class QuicPacket {
         }
     }
 
-    byte encodePacketNumberLength(byte flags, int packetNumber) {
+    byte encodePacketNumberLength(byte flags, long packetNumber) {
         // For the time being, a packet number length of 1 is assumed
         return flags;
     }
@@ -179,7 +180,7 @@ abstract public class QuicPacket {
     }
 
 
-    byte[] encryptPayload(byte[] message, byte[] associatedData, int packetNumber, NodeSecrets secrets) {
+    byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) {
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
         // "The nonce, N, is formed by combining the packet
@@ -191,7 +192,7 @@ abstract public class QuicPacket {
         ByteBuffer nonceInput = ByteBuffer.allocate(writeIV.length);
         for (int i = 0; i < nonceInput.capacity() - 8; i++)
             nonceInput.put((byte) 0x00);
-        nonceInput.putLong((long) packetNumber);
+        nonceInput.putLong(packetNumber);
 
         byte[] nonce = new byte[12];
         int i = 0;
@@ -218,10 +219,10 @@ abstract public class QuicPacket {
         }
     }
 
-    byte[] decryptPayload(byte[] message, byte[] associatedData, int packetNumber, NodeSecrets secrets) {
+    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) {
         ByteBuffer nonceInput = ByteBuffer.allocate(12);
         nonceInput.putInt(0);
-        nonceInput.putLong((long) packetNumber);
+        nonceInput.putLong(packetNumber);
 
         byte[] writeIV = secrets.getWriteIV();
         byte[] nonce = new byte[12];
@@ -249,7 +250,7 @@ abstract public class QuicPacket {
 
     }
 
-    byte[] createProtectedPacketNumber(byte[] ciphertext, int packetNumber, NodeSecrets secrets) {
+    byte[] createProtectedPacketNumber(byte[] ciphertext, long packetNumber, NodeSecrets secrets) {
 
         //int sampleOffset = 6 + initialConnectionId.length + sourceConnectionId.length + 2 /* length(payload_length) */ + 4;
         int sampleOffset = 3;    // TODO
@@ -489,11 +490,11 @@ abstract public class QuicPacket {
         }
     }
 
-    public int getPacketNumber() {
+    public long getPacketNumber() {
         return packetNumber;
     }
 
-    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, byte[] payload, int paddingSize, NodeSecrets clientSecrets) {
+    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, NodeSecrets clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
@@ -506,8 +507,8 @@ abstract public class QuicPacket {
         packetBuffer.get(additionalData);  // Position is now where it was at start of this method.
         packetBuffer.limit(packetBuffer.capacity());  // Ensure we can continue writing
 
-        byte[] paddedPayload = new byte[payload.length + paddingSize];
-        System.arraycopy(payload, 0, paddedPayload, 0, payload.length);
+        byte[] paddedPayload = new byte[payload.limit() + paddingSize];
+        payload.get(paddedPayload, 0, payload.limit());
         byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
         packetBuffer.put(encryptedPayload);
 
@@ -551,9 +552,18 @@ abstract public class QuicPacket {
         return value;
     }
 
+    public int getSize() {
+        if (packetSize > 0) {
+            return packetSize;
+        }
+        else {
+            throw new IllegalStateException("no size");
+        }
+    }
+
     protected abstract EncryptionLevel getEncryptionLevel();
 
-    public abstract byte[] getBytes();
+    public abstract byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets);
 
     public List<QuicFrame> getFrames() {
         return frames;

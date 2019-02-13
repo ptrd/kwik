@@ -27,10 +27,9 @@ public class InitialPacket extends LongHeaderPacket {
 
     private final byte[] token;
 
-    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload);
+    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
+        super(quicVersion, sourceConnectionId, destConnectionId, payload);
         this.token = token;
-        generateBinaryPacket(connectionSecrets);
     }
 
     public InitialPacket(Version quicVersion) {

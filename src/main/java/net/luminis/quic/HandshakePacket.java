@@ -26,9 +26,8 @@ public class HandshakePacket extends LongHeaderPacket {
         super(quicVersion);
     }
 
-    public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, int packetNumber, QuicFrame payload, ConnectionSecrets connectionSecrets) {
-        super(quicVersion, sourceConnectionId, destConnectionId, packetNumber, payload);
-        generateBinaryPacket(connectionSecrets);
+    public HandshakePacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, QuicFrame payload) {
+        super(quicVersion, sourceConnectionId, destConnectionId, payload);
     }
 
     protected byte getPacketType() {
@@ -83,6 +82,5 @@ public class HandshakePacket extends LongHeaderPacket {
     @Override
     protected void parseAdditionalFields(ByteBuffer buffer) {
     }
-
 
 }
