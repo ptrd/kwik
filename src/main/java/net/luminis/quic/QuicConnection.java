@@ -146,7 +146,7 @@ public class QuicConnection implements PacketProcessor {
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Packet process delay for packet #" + receivedPacketCounter + ": " + processDelay);
 
-                    parsePackets(receivedPacketCounter, rawPacket.getData());
+                    parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
                 }
             }
         } catch (InterruptedException e) {
@@ -205,7 +205,7 @@ public class QuicConnection implements PacketProcessor {
         }
     }
 
-    void parsePackets(int datagram, ByteBuffer data) {
+    void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
         int packetStart = data.position();
 
         try {
@@ -216,7 +216,7 @@ public class QuicConnection implements PacketProcessor {
                 packet = parsePacketPreDraft17(data);
             }
 
-            log.received(datagram, packet);
+            log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
             packet.accept(this);
@@ -233,7 +233,7 @@ public class QuicConnection implements PacketProcessor {
             }
 
             if (data.position() < data.limit()) {
-                parsePackets(datagram, data.slice());
+                parsePackets(datagram, timeReceived, data.slice());
             }
         }
         catch (MissingKeysException noKeys) {

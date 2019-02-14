@@ -19,6 +19,12 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
 
 public class Logger {
 
@@ -29,6 +35,13 @@ public class Logger {
     private volatile boolean logPackets = false;
     private volatile boolean logInfo = false;
     private volatile boolean logStats = false;
+    private volatile boolean useRelativeTime = false;
+    private final DateTimeFormatter timeFormatter;
+    private Instant start;
+
+    public Logger() {
+        timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+    }
 
     public void logDebug(boolean enabled) {
         logDebug = enabled;
@@ -50,12 +63,16 @@ public class Logger {
         logPackets = enabled;
     }
 
-    public void logInfo(boolean enabeled) {
-        logInfo = enabeled;
+    public void logInfo(boolean enabled) {
+        logInfo = enabled;
     }
 
-    public void logStats(boolean enabeled) {
-        logStats = enabeled;
+    public void logStats(boolean enabled) {
+        logStats = enabled;
+    }
+
+    public void useRelativeTime(boolean enabled) {
+        useRelativeTime = enabled;
     }
 
     public void debug(String message) {
@@ -146,18 +163,25 @@ public class Logger {
         }
     }
 
-    public void received(int datagram, QuicPacket packet) {
+    public void received(Instant timeReceived, int datagram, QuicPacket packet) {
         if (logPackets) {
             synchronized (this) {
-                System.out.println("<< (" + datagram + ") " + packet);
+                System.out.println(formatTime(timeReceived) + " <- (" + datagram + ") " + packet);
             }
         }
     }
 
-    public void sent(QuicPacket packet) {
+    public void sent(Instant sent, QuicPacket packet) {
+        synchronized (this) {
+            if (useRelativeTime) {
+                if (start == null) {
+                    start = sent;
+                }
+            }
+        }
         if (logPackets) {
             synchronized (this) {
-                System.out.println(">> " + packet);
+                System.out.println(formatTime(sent) + " -> " + packet);
             }
         }
     }
@@ -234,6 +258,20 @@ public class Logger {
             synchronized (this) {
                 System.out.println(message);
             }
+        }
+    }
+
+    String formatTime(Instant time) {
+        if (useRelativeTime) {
+            if (start == null) {
+                start = time;
+            }
+            Duration relativeTime = Duration.between(start, time);
+            return String.format("%d.%03d", relativeTime.getSeconds(), relativeTime.getNano() / 1_000_000);
+        }
+        else {
+            LocalTime localTimeNow = LocalTime.from(time.atZone(ZoneId.systemDefault()));
+            return timeFormatter.format(localTimeNow);
         }
     }
 }

@@ -43,6 +43,7 @@ public class Quic {
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -157,6 +158,10 @@ public class Quic {
                 usage();
                 System.exit(1);
             }
+        }
+
+        if (cmd.hasOption("T")) {
+            logger.useRelativeTime(true);
         }
 
         try {

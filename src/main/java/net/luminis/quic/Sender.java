@@ -92,10 +92,10 @@ public class Sender implements FrameProcessor {
 
                     byte[] packetData = packet.getBytes();
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
-                    socket.send(datagram);
                     Instant sent = Instant.now();
+                    socket.send(datagram);
                     log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
-                    log.sent(packet);
+                    log.sent(sent, packet);
 
                     logSent(packet, sent);
                     congestionController.registerInFlight(packet);

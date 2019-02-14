@@ -39,6 +39,7 @@ and run the `quic.sh` script or `java -jar build/libs/quic.jar`.
                                     received/sent, (d)ecrypted bytes, (r)aw bytes,
                                     (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is
                                     "is", use (n)one to disable
+     -T,--relativeTime              log with time (in seconds) since first packet                                    
                                 
 ## Contact
 
