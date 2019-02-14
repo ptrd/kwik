@@ -46,7 +46,9 @@ public class QuicConnection implements PacketProcessor {
     enum Status {
         Idle,
         Handshaking,
-        Connected
+        HandshakeError,
+        Connected,
+        Error
     }
 
     private final Logger log;
@@ -122,6 +124,9 @@ public class QuicConnection implements PacketProcessor {
             if (!handshakeFinished) {
                 throw new ConnectException("Connection timed out");
             }
+            else if (connectionState == Status.HandshakeError) {
+                throw new ConnectException("Handshake error");
+            }
         }
         catch (InterruptedException e) {
             throw new RuntimeException();  // Should not happen.
@@ -149,8 +154,13 @@ public class QuicConnection implements PacketProcessor {
                     parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
                 }
             }
-        } catch (InterruptedException e) {
-            log.debug("Terminating receiver loop");
+        }
+        catch (InterruptedException e) {
+            log.debug("Terminating receiver loop because of interrupt");
+        }
+        catch (Exception error) {
+            log.debug("Terminating receiver loop because of error");
+            abortConnection(error);
         }
     }
 
@@ -186,8 +196,8 @@ public class QuicConnection implements PacketProcessor {
         tlsState.clientHelloSend(privateKey, clientHello);
 
         LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, getNextPacketNumber(Initial), new CryptoFrame(quicVersion, clientHello), connectionSecrets);
-        sender.send(clientHelloPacket, "client hello");
         connectionState = Status.Handshaking;
+        sender.send(clientHelloPacket, "client hello");
     }
 
     void finishHandshake(TlsState tlsState) {
@@ -555,5 +565,20 @@ public class QuicConnection implements PacketProcessor {
     void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
         log.info("ConnectionError " + transportError);
         // TODO: close connection with a frame type of 0x1c
+    }
+
+    private void abortConnection(Exception error) {
+        if (connectionState == Status.Handshaking) {
+            connectionState = Status.HandshakeError;
+        }
+        else {
+            connectionState = Status.Error;
+        }
+
+        log.error("Aborting connection because of error", error);
+        handshakeFinishedCondition.countDown();
+        sender.shutdown();
+        receiver.shutdown();
+        streams.values().stream().forEach(s -> s.abort());
     }
 }

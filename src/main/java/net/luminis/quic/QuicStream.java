@@ -21,6 +21,7 @@ package net.luminis.quic;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.Map;
@@ -46,6 +47,8 @@ public class QuicStream {
     private Map<Integer, StreamFrame> receivedFrames;
     private StreamInputStream inputStream;
     private StreamOutputStream outputStream;
+    private volatile boolean aborted;
+    private volatile Thread blocking;
 
 
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
@@ -109,18 +112,30 @@ public class QuicStream {
         return streamId;
     }
 
+
     private class StreamInputStream extends InputStream {
         @Override
         public int read() throws IOException {
+            if (aborted)
+                throw new ProtocolException("Connection aborted");
+
+            blocking = Thread.currentThread();  // TODO: this works for one blocking reader thread only
             if (currentFrame == null) {
                 try {
                     // Because the read method is supposed to block, the timeout should be (nearly) infinite.
                     currentFrame = queuedFrames.poll(waitForNextFrameTimeout, TimeUnit.SECONDS);
-                } catch (InterruptedException e) { /* Nothing to do, currentFrame will stay null. */ }
+                } catch (InterruptedException e) {
+                    if (aborted) {
+                        blocking = null;
+                        throw new ProtocolException("Connection aborted");
+                    }
+                    /* Nothing to do, currentFrame will stay null. */ }
                 if (currentFrame == null) {
+                    blocking = null;
                     throw new SocketTimeoutException();
                 }
             }
+            blocking = null;
             if (currentOffset < currentFrame.getOffset() + currentFrame.getLength()) {
                 byte data = currentFrame.getStreamData()[currentOffset - currentFrame.getOffset()];
                 currentOffset++;
@@ -176,4 +191,12 @@ public class QuicStream {
             connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true));
         }
     }
+
+    void abort() {
+        aborted = true;
+        if (blocking != null) {
+            blocking.interrupt();
+        }
+    }
+
 }

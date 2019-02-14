@@ -83,6 +83,15 @@ public class Logger {
         }
     }
 
+    public void debug(String message, Exception error) {
+        if (logDebug) {
+            synchronized (this) {
+                System.out.println(message);
+                error.printStackTrace();
+            }
+        }
+    }
+
     public void debugWithHexBlock(String message, byte[] data) {
         if (logDebug) {
             synchronized (this) {
@@ -250,6 +259,13 @@ public class Logger {
     public void error(String message) {
         synchronized (this) {
             System.out.println("Error: " + message);
+        }
+    }
+
+    public void error(String message, Exception error) {
+        synchronized (this) {
+            System.out.println("Error: " + message + ": " + error);
+            error.printStackTrace();
         }
     }
 
