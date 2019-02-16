@@ -389,10 +389,12 @@ abstract public class QuicPacket {
                     break;
                 case 0x14:
                 case 0x15:
-                case 0x16:
-                case 0x17:
                     System.out.println("NYI frame type (data/stream blocked): " + frameType);
                     throw new NotYetImplementedException();
+                case 0x16:
+                case 0x17:
+                    frames.add(new StreamsBlockedFrame().parse(buffer, log));
+                    break;
                 case 0x18:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
                     break;
