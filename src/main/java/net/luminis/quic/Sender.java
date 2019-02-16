@@ -105,7 +105,7 @@ public class Sender implements FrameProcessor {
                     logSent(packet, sent);
                     congestionController.registerInFlight(packet);
                 } catch (InterruptedException interrupted) {
-                    // Nothing to do, loop will end.
+                    break;
                 }
             }
         }
