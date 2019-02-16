@@ -115,7 +115,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         byte flags;
-        if (quicVersion.equals(Version.IETF_draft_17)) {
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
             // "|0|1|S|R|R|K|P P|"
             // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin

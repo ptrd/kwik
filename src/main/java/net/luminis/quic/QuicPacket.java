@@ -337,7 +337,7 @@ abstract public class QuicPacket {
     }
 
     protected void parseFrames(byte[] frameBytes, Logger log) {
-        if (quicVersion.equals(Version.IETF_draft_17)) {
+        if (quicVersion.atLeast(Version.IETF_draft_17)) {
             parseFramesDraft17(frameBytes, log);
         }
         else {

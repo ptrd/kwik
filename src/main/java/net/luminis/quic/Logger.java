@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -166,8 +168,7 @@ public class Logger {
     public void info(String message, byte[] data) {
         if (logInfo) {
             synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, data.length));
+                System.out.println(message + " (" + data.length + "): " + ByteUtils.bytesToHex(data));
             }
         }
     }

@@ -183,7 +183,7 @@ public class QuicConnection implements PacketProcessor {
         destConnectionId = new byte[dstConnIdLength];
         buffer.rewind();
         buffer.get(destConnectionId);
-        log.debug("Destination connection id", destConnectionId);
+        log.info("Original destination connection id", destConnectionId);
         originalDestinationConnectionId = destConnectionId;
     }
 
