@@ -49,7 +49,7 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     @Override
-    protected void generateAdditionalFields() {
+    protected void generateAdditionalFields(ByteBuffer packetBuffer) {
     }
 
     @Override

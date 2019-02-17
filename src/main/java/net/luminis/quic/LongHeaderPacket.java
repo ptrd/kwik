@@ -33,9 +33,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected byte[] sourceConnectionId;
     protected byte[] destinationConnectionId;
-    protected byte[] payload;
-    protected ByteBuffer packetBuffer;
-    protected int paddingLength;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -56,22 +53,40 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destConnectionId;
-        this.frames = List.of(frame);
-        this.payload = frame.getBytes();
+        this.frames = new ArrayList<>();
+        this.frames.add(frame);
+    }
+
+    /**
+     * Constructs a long header packet for sending (client role).
+     * @param quicVersion
+     * @param sourceConnectionId
+     * @param destConnectionId
+     * @param frames
+     */
+    public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, List<QuicFrame> frames) {
+        this.quicVersion = quicVersion;
+        this.sourceConnectionId = sourceConnectionId;
+        this.destinationConnectionId = destConnectionId;
+        this.frames = frames;
     }
 
     public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
         this.packetNumber = packetNumber;
         NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
-        packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        generateFrameHeaderInvariant();
-        generateAdditionalFields();
+        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
+        frameBytes.flip();
+
+        ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        generateFrameHeaderInvariant(packetBuffer);
+        generateAdditionalFields(packetBuffer);
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
-        addLength(encodedPacketNumber.length);
+        addLength(packetBuffer, encodedPacketNumber.length, frameBytes.limit());
         packetBuffer.put(encodedPacketNumber);
 
-        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, ByteBuffer.wrap(payload), paddingLength, clientSecrets);
+        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, frameBytes, 0, clientSecrets);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();
@@ -84,7 +99,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return packetBytes;
     }
 
-    protected void generateFrameHeaderInvariant() {
+    protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
         // Packet type
         byte packetType = getPacketType();
         packetBuffer.put(packetType);
@@ -102,17 +117,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected abstract byte getPacketType();
 
-    protected abstract void generateAdditionalFields();
+    protected abstract void generateAdditionalFields(ByteBuffer packetBuffer);
 
-    private void addLength(int packetNumberLength) {
-        int estimatedPacketLength = packetBuffer.position() + packetNumberLength + payload.length + 16;   // 16 is what encryption adds, note that final length is larger due to adding packet length
-        paddingLength = 0;
-        if (getEncryptionLevel() == Initial && packetNumber == 0) {
-            // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-14)
-            if (estimatedPacketLength < 1200)
-                paddingLength = 1200 - estimatedPacketLength;
-        }
-        int packetLength = payload.length + paddingLength + 16 + packetNumberLength;
+    private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int payloadSize) {
+        int packetLength = payloadSize + 16 + packetNumberLength;   // 16 is what encryption adds, note that final length is larger due to adding packet length
         byte[] length = encodeVariableLengthInteger(packetLength);
         packetBuffer.put(length);
     }

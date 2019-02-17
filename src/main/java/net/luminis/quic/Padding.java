@@ -26,7 +26,15 @@ import java.nio.ByteBuffer;
 //   the single octet that identifies the frame as a PADDING frame.
 public class Padding extends QuicFrame {
 
-    int length;
+    private int length;
+
+
+    public Padding() {
+    }
+
+    public Padding(int paddingSize) {
+        length = paddingSize;
+    }
 
     /**
      * Strictly speaking, a padding frame consists of one single byte. For convenience, here all subsequent padding
@@ -49,11 +57,15 @@ public class Padding extends QuicFrame {
 
     @Override
     byte[] getBytes() {
-        return new byte[0];
+        return new byte[length];
     }
 
     @Override
     public String toString() {
         return "Padding(" + length + ")";
+    }
+
+    public int getLength() {
+        return length;
     }
 }

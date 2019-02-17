@@ -196,7 +196,10 @@ public class QuicConnection implements PacketProcessor {
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        LongHeaderPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, new CryptoFrame(quicVersion, clientHello));
+        InitialPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, new CryptoFrame(quicVersion, clientHello));
+        // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-14)
+        clientHelloPacket.ensureSize(1200);
+
         connectionState = Status.Handshaking;
         sender.send(clientHelloPacket, "client hello");
     }

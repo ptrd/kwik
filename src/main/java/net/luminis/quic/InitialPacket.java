@@ -54,7 +54,7 @@ public class InitialPacket extends LongHeaderPacket {
         }
     }
 
-    protected void generateAdditionalFields() {
+    protected void generateAdditionalFields(ByteBuffer packetBuffer) {
         // Token length (variable-length integer)
         if (token != null) {
             byte[] encodedTokenLength = QuicPacket.encodeVariableLengthInteger(token.length);
@@ -118,5 +118,16 @@ public class InitialPacket extends LongHeaderPacket {
                 + frames.size() + "  "
                 + "Token=" + (token != null? ByteUtils.bytesToHex(token): "[]") + " "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
+    }
+
+    public void ensureSize(int minimumSize) {
+        int payloadSize = frames.stream().mapToInt(f -> f.getBytes().length).sum();
+        int estimatedPacketLength = 1 + 4 + 1
+                + destinationConnectionId.length + sourceConnectionId.length + (token != null? token.length: 1)
+                + 2 + 1 + payloadSize + 16;   // 16 is what encryption adds, note that final length might be larger due to multi-byte packet length
+        int paddingSize = minimumSize - estimatedPacketLength;
+        if (paddingSize > 0) {
+            frames.add(new Padding(paddingSize));
+        }
     }
 }

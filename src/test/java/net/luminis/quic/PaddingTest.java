@@ -16,7 +16,7 @@ class PaddingTest {
         data[17] = 0x01;
         Padding padding = new Padding().parse(ByteBuffer.wrap(data), Mockito.mock(Logger.class));
 
-        assertThat(padding.length).isEqualTo(17);
+        assertThat(padding.getLength()).isEqualTo(17);
     }
 
     @Test
@@ -24,6 +24,6 @@ class PaddingTest {
         ByteBuffer zeroes = ByteBuffer.wrap(new byte[56]);
         Padding padding = new Padding().parse(zeroes, Mockito.mock(Logger.class));
 
-        assertThat(padding.length).isEqualTo(56);
+        assertThat(padding.getLength()).isEqualTo(56);
     }
 }
