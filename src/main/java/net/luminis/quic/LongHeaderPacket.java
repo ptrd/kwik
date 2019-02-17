@@ -32,11 +32,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private static final int MAX_PACKET_SIZE = 1500;
 
     protected byte[] sourceConnectionId;
-    protected byte[] destConnectionId;
+    protected byte[] destinationConnectionId;
     protected byte[] payload;
     protected ByteBuffer packetBuffer;
     protected int paddingLength;
-    private byte[] destinationConnectionId;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -56,7 +55,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
-        this.destConnectionId = destConnectionId;
+        this.destinationConnectionId = destConnectionId;
         this.frames = List.of(frame);
         this.payload = frame.getBytes();
     }
@@ -92,11 +91,11 @@ public abstract class LongHeaderPacket extends QuicPacket {
         // Version
         packetBuffer.put(quicVersion.getBytes());
         // DCIL / SCIL
-        byte dcil = (byte) ((destConnectionId.length - 3) << 4);
+        byte dcil = (byte) ((destinationConnectionId.length - 3) << 4);
         byte scil = (byte) (sourceConnectionId.length - 3);
         packetBuffer.put((byte) (dcil | scil));
         // Destination connection id
-        packetBuffer.put(destConnectionId);
+        packetBuffer.put(destinationConnectionId);
         // Source connection id, 8 bytes
         packetBuffer.put(sourceConnectionId);
     }
@@ -200,7 +199,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     public byte[] getDestinationConnectionId() {
-        return destConnectionId;
+        return destinationConnectionId;
     }
 
     protected abstract void checkPacketType(byte b);
