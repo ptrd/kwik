@@ -60,7 +60,7 @@ class AckFrameTest {
         assertThat(ack.getAckDelay()).isEqualTo(0);
 
         assertThat(ack.getAckedPacketNumbers()).containsOnly(8, 7, 2, 1);
-        assertThat(ack.toString()).contains("[8,7,2,1]");
+        assertThat(ack.toString()).contains("8,7,2,1");
     }
 
     @Test

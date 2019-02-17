@@ -21,6 +21,7 @@ package net.luminis.quic;
 public class TransportParameters {
 
     private byte[] originalConnectionId;
+    private int ackDelayExponent;
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
@@ -28,5 +29,13 @@ public class TransportParameters {
 
     public void setOriginalConnectionId(byte[] originalConnectionId) {
         this.originalConnectionId = originalConnectionId;
+    }
+
+    public void setAckDelayExponent(int ackDelayExponent) {
+        this.ackDelayExponent = ackDelayExponent;
+    }
+
+    public int getAckDelayExponent() {
+        return ackDelayExponent;
     }
 }

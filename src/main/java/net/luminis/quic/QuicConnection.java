@@ -74,6 +74,7 @@ public class QuicConnection implements PacketProcessor {
     private int nextStreamId;
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
+    private volatile TransportParameters transportParams;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -471,6 +472,9 @@ public class QuicConnection implements PacketProcessor {
                 getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
             }
             else if (frame instanceof AckFrame) {
+                if (transportParams != null) {
+                    ((AckFrame) frame).setDelayExponent(transportParams.getAckDelayExponent());
+                }
                 sender.process(frame, packet.getEncryptionLevel());
             }
             else if (frame instanceof StreamFrame) {
@@ -548,6 +552,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     void setTransportParameters(TransportParameters transportParameters) {
+        transportParams = transportParameters;
         if (processedRetryPacket) {
             if (transportParameters.getOriginalConnectionId() == null ||
                     ! Arrays.equals(originalDestinationConnectionId, transportParameters.getOriginalConnectionId())) {

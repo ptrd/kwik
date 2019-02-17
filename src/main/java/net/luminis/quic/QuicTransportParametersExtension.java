@@ -195,6 +195,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == ack_delay_exponent.value) {
             int ackDelayExponent = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- ack delay exponent: " + ackDelayExponent);
+            params.setAckDelayExponent(ackDelayExponent);
         }
         else if (parameterId == initial_max_streams_uni.value) {
             int maxUniStreams = QuicPacket.parseVariableLengthInteger(buffer);

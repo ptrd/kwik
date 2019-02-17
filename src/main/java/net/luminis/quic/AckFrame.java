@@ -33,6 +33,9 @@ public class AckFrame extends QuicFrame {
     private int largestAcknowledged;
     private int ackDelay;
     private List<Integer> acknowledgedPacketNumbers;
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-19.3
+    // "The "ack_delay_exponent" defaults to 3, or a multiplier of 8"
+    private int delayScale = 8;
 
     public AckFrame() {
     }
@@ -111,7 +114,8 @@ public class AckFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "AckFrame[" + acknowledgedPacketNumbers.stream().map(i -> i.toString()).collect(Collectors.joining(",")) + "]";
+        return "AckFrame[" + acknowledgedPacketNumbers.stream().map(i -> i.toString()).collect(Collectors.joining(","))
+                + "|\u0394" + (ackDelay * delayScale) / 1000  + "]";
     }
 
     @Override
@@ -125,5 +129,9 @@ public class AckFrame extends QuicFrame {
 
     public int getAckDelay() {
         return ackDelay;
+    }
+
+    public void setDelayExponent(int exponent) {
+        delayScale = (int) Math.pow(2, exponent);
     }
 }
