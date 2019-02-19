@@ -107,7 +107,7 @@ public class VersionNegotationPacket extends QuicPacket {
                 + "I" + "|"
                 + "-" + "|"
                 + "V" + "|"
-                + packetSize + "|"
+                + (packetSize >= 0? packetSize: ".") + "|"
                 + "0" + "  "
                 + serverSupportedVersions.stream().collect(Collectors.joining(", "));
     }

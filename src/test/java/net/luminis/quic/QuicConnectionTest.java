@@ -70,15 +70,15 @@ class QuicConnectionTest {
         Thread.sleep(1000);  // Give connection a chance to send packet.
 
         // First InitialPacket should not contain a token.
-        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null && p.getPacketNumber() == 0), anyString());
+        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString());
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
         connection.process(retryPacket);
 
         // A second InitialPacket should be send, with token and source connection id from retry packet
-        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getPacketNumber() == 0
-                && p.getToken() != null
+        recorder.verify(sender).send(argThat((InitialPacket p) ->
+                p.getToken() != null
                 && Arrays.equals(p.getToken(), new byte[] { 0x01, 0x02, 0x03 })
                 && Arrays.equals(p.getDestinationConnectionId(), new byte[] { 0x0b, 0x0b, 0x0b, 0x0b })
         ), anyString());

@@ -167,7 +167,7 @@ public class ShortHeaderPacket extends QuicPacket {
     public String toString() {
         return "Packet "
                 + getEncryptionLevel().name().charAt(0) + "|"
-                + packetNumber + "|"
+                + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "S" + "|"
                 + packetSize + "|"
                 + frames.size() + "  "

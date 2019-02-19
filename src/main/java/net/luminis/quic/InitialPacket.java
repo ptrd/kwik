@@ -112,9 +112,9 @@ public class InitialPacket extends LongHeaderPacket {
     public String toString() {
         return "Packet "
                 + getEncryptionLevel().name().charAt(0) + "|"
-                + packetNumber + "|"
+                + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "L" + "|"
-                + packetSize + "|"
+                + (packetSize >= 0? packetSize: ".") + "|"
                 + frames.size() + "  "
                 + "Token=" + (token != null? ByteUtils.bytesToHex(token): "[]") + " "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));

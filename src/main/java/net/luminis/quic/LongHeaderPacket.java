@@ -195,9 +195,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public String toString() {
         return "Packet "
                 + getEncryptionLevel().name().charAt(0) + "|"
-                + packetNumber + "|"
+                + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "L" + "|"
-                + packetSize + "|"
+                + (packetSize >= 0? packetSize: ".") + "|"
                 + frames.size() + "  "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
     }

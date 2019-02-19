@@ -34,7 +34,7 @@ abstract public class QuicPacket {
     protected static final int MAX_PACKET_SIZE = 1500;
 
     protected Version quicVersion;
-    protected long packetNumber;
+    protected long packetNumber = -1;
     protected List<QuicFrame> frames;
     protected int packetSize = -1;
 
@@ -493,7 +493,12 @@ abstract public class QuicPacket {
     }
 
     public long getPacketNumber() {
-        return packetNumber;
+        if (packetNumber >= 0) {
+            return packetNumber;
+        }
+        else {
+            throw new IllegalStateException("PN is not yet known");
+        }
     }
 
     protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, NodeSecrets clientSecrets) {
