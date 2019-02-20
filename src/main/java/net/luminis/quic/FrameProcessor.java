@@ -18,8 +18,10 @@
  */
 package net.luminis.quic;
 
+import java.time.Instant;
+
 public interface FrameProcessor {
 
-    void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel);
+    void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant time);
 
 }

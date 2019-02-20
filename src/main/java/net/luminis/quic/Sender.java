@@ -136,8 +136,9 @@ public class Sender implements FrameProcessor {
      * Process incoming acknowledgement.
      * @param ackFrame
      * @param encryptionLevel
+     * @param timeReceived
      */
-    public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel) {
+    public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
         if (ackFrame instanceof AckFrame) {
             ((AckFrame) ackFrame).getAckedPacketNumbers().stream().forEach(pn -> {
                 PacketId id = new PacketId(encryptionLevel, pn);

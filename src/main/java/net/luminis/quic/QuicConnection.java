@@ -232,7 +232,7 @@ public class QuicConnection implements PacketProcessor {
             log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
-            packet.accept(this);
+            packet.accept(this, timeReceived);
             try {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.1
                 // "A Version Negotiation packet cannot be explicitly acknowledged in an ACK frame by a client."
@@ -404,28 +404,28 @@ public class QuicConnection implements PacketProcessor {
     }
 
     @Override
-    public void process(InitialPacket packet) {
+    public void process(InitialPacket packet, Instant time) {
         destConnectionId = packet.getSourceConnectionId();
-        processFrames(packet);
+        processFrames(packet, time);
     }
 
     @Override
-    public void process(HandshakePacket packet) {
-        processFrames(packet);
+    public void process(HandshakePacket packet, Instant time) {
+        processFrames(packet, time);
     }
 
     @Override
-    public void process(LongHeaderPacket packet) {
-        processFrames(packet);
+    public void process(LongHeaderPacket packet, Instant time) {
+        processFrames(packet, time);
     }
 
     @Override
-    public void process(ShortHeaderPacket packet) {
-        processFrames(packet);
+    public void process(ShortHeaderPacket packet, Instant time) {
+        processFrames(packet, time);
     }
 
     @Override
-    public void process(VersionNegotationPacket packet) {
+    public void process(VersionNegotationPacket packet, Instant time) {
         log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
         throw new VersionNegationFailure();
     }
@@ -433,7 +433,7 @@ public class QuicConnection implements PacketProcessor {
     private volatile boolean processedRetryPacket = false;
 
     @Override
-    public void process(RetryPacket packet) {
+    public void process(RetryPacket packet, Instant time) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
         // "Clients MUST discard Retry packets that contain an Original
         //   Destination Connection ID field that does not match the Destination
@@ -469,7 +469,7 @@ public class QuicConnection implements PacketProcessor {
         }
     }
 
-    void processFrames(QuicPacket packet) {
+    void processFrames(QuicPacket packet, Instant timeReceived) {
         for (QuicFrame frame: packet.getFrames()) {
             if (frame instanceof CryptoFrame) {
                 getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
@@ -478,7 +478,7 @@ public class QuicConnection implements PacketProcessor {
                 if (transportParams != null) {
                     ((AckFrame) frame).setDelayExponent(transportParams.getAckDelayExponent());
                 }
-                sender.process(frame, packet.getEncryptionLevel());
+                sender.process(frame, packet.getEncryptionLevel(), timeReceived);
             }
             else if (frame instanceof StreamFrame) {
                 int streamId = ((StreamFrame) frame).getStreamId();

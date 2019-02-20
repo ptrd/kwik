@@ -74,7 +74,7 @@ class QuicConnectionTest {
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
-        connection.process(retryPacket);
+        connection.process(retryPacket, null);
 
         // A second InitialPacket should be send, with token and source connection id from retry packet
         recorder.verify(sender).send(argThat((InitialPacket p) ->
@@ -99,14 +99,14 @@ class QuicConnectionTest {
 
         // Simulate a first RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
-        connection.process(retryPacket);
+        connection.process(retryPacket, null);
 
         Thread.sleep(1000);  // Give connection a chance to send packet(s).
 
         clearInvocations(sender);
 
         // Simulate a second RetryPacket is received
-        connection.process(retryPacket);
+        connection.process(retryPacket, null);
 
         verify(sender, never()).send(any(QuicPacket.class), anyString());
     }
@@ -137,7 +137,7 @@ class QuicConnectionTest {
 
         // Simulate a RetryPacket with arbitrary original destination id is received
         RetryPacket retryPacket = createRetryPacket(new byte[] { 0x03, 0x0a, 0x0d, 0x09 });
-        connection.process(retryPacket);
+        connection.process(retryPacket, null);
 
         verify(sender, never()).send(any(QuicPacket.class), anyString());
     }
@@ -217,7 +217,7 @@ class QuicConnectionTest {
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
-        connection.process(retryPacket);
+        connection.process(retryPacket, null);
     }
 
     private void simulateNormalConnection() throws Exception {

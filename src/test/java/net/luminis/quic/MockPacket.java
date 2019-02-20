@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import java.time.Instant;
+
 public class MockPacket extends QuicPacket {
 
     private EncryptionLevel encryptionLevel;
@@ -48,7 +50,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor) {
+    public void accept(PacketProcessor processor, Instant time) {
     }
 
     @Override

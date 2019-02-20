@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 public class RetryPacket extends QuicPacket {
 
@@ -82,8 +83,8 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor) {
-        processor.process(this);
+    public void accept(PacketProcessor processor, Instant time) {
+        processor.process(this, time);
     }
 
     @Override

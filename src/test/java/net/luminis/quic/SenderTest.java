@@ -65,7 +65,7 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
 
         // An ack on first packet
-        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.App);
+        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.App, null);
 
         waitForSender();
         // Because congestion window is decreased, second packet should now have been sent too.
@@ -87,7 +87,7 @@ class SenderTest {
         verify(socket, times(2)).send(any(DatagramPacket.class));
 
         // An ack on initial packet should not decrease the congestion window too much
-        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Initial);
+        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Initial, null);
 
         waitForSender();
         verify(socket, times(2)).send(any(DatagramPacket.class));
@@ -107,7 +107,7 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
 
         // An ack on a non-existant packet, shouldn't change anything.
-        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Handshake);
+        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Handshake, null);
 
         waitForSender();
         verify(socket, times(1)).send(any(DatagramPacket.class));

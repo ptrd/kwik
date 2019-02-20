@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -152,8 +153,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor) {
-        processor.process(this);
+    public void accept(PacketProcessor processor, Instant time) {
+        processor.process(this, time);
     }
 
     protected void checkPacketType(byte flags) {

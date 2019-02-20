@@ -18,17 +18,19 @@
  */
 package net.luminis.quic;
 
+import java.time.Instant;
+
 public interface PacketProcessor {
 
-    void process(InitialPacket packet);
+    void process(InitialPacket packet, Instant time);
 
-    void process(LongHeaderPacket packet);
+    void process(LongHeaderPacket packet, Instant time);
 
-    void process(ShortHeaderPacket packet);
+    void process(ShortHeaderPacket packet, Instant time);
 
-    void process(VersionNegotationPacket packet);
+    void process(VersionNegotationPacket packet, Instant time);
 
-    void process(HandshakePacket packet);
+    void process(HandshakePacket packet, Instant time);
 
-    void process(RetryPacket packet);
+    void process(RetryPacket packet, Instant time);
 }

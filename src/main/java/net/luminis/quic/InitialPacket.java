@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
@@ -72,8 +73,8 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor) {
-        processor.process(this);
+    public void accept(PacketProcessor processor, Instant time) {
+        processor.process(this, time);
     }
 
     @Override

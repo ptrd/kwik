@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -580,5 +581,5 @@ abstract public class QuicPacket {
         return new PacketId(getEncryptionLevel(), getPacketNumber());
     }
 
-    public abstract void accept(PacketProcessor processor);
+    public abstract void accept(PacketProcessor processor, Instant time);
 }

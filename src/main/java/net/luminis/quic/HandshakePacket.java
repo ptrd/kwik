@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 public class HandshakePacket extends LongHeaderPacket {
 
@@ -58,8 +59,8 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor) {
-        processor.process(this);
+    public void accept(PacketProcessor processor, Instant time) {
+        processor.process(this, time);
     }
 
     @Override
