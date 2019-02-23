@@ -22,6 +22,7 @@ import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
@@ -36,6 +37,15 @@ public class InitialPacket extends LongHeaderPacket {
     public InitialPacket(Version quicVersion) {
         super(quicVersion);
         token = null;
+    }
+
+    public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, List<QuicFrame> frames) {
+        super(quicVersion, sourceConnectionId, destConnectionId, frames);
+        this.token = token;
+    }
+
+    public InitialPacket copy() {
+        return new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, token, frames);
     }
 
     protected byte getPacketType() {

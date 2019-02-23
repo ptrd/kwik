@@ -19,12 +19,16 @@
 package net.luminis.quic;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatcher;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 
 import static org.mockito.Mockito.*;
@@ -32,6 +36,8 @@ import static org.mockito.Mockito.*;
 class SenderTest {
 
     private static Logger logger;
+    private Sender sender;
+    private DatagramSocket socket;
 
     @BeforeAll
     static void initLogger() {
@@ -39,11 +45,16 @@ class SenderTest {
         logger.logDebug(true);
     }
 
-    @Test
-    void testSingleSend() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
+    @BeforeEach
+    void initSenderUnderTest() {
+        socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+    }
+
+    @Test
+    void testSingleSend() throws Exception {
+        setCongestionWindowSize(1250);
         sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
@@ -53,9 +64,8 @@ class SenderTest {
     }
 
     @Test
-    void testSenderIsCongestionControlled() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+    void testSenderIsCongestionControlled() throws Exception {
+        setCongestionWindowSize(1250);
         sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
@@ -74,14 +84,13 @@ class SenderTest {
     }
 
     @Test
-    void testSenderCongestionControlWithUnrelatedAck() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+    void testSenderCongestionControlWithUnrelatedAck() throws Exception {
+        setCongestionWindowSize(1250);
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1, EncryptionLevel.Initial,"initial"), "packet 1");
-        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
-        sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
+        sender.send(new MockPacket(0, 12, EncryptionLevel.Initial,"initial"), "packet 1");
+        sender.send(new MockPacket(0, 1230, "packet 1"), "packet 1");
+        sender.send(new MockPacket(1, 1230, "packet 2"), "packet 2");
 
         waitForSender();
         // Because of congestion control, only first 2 packets should have been sent.
@@ -95,9 +104,8 @@ class SenderTest {
     }
 
     @Test
-    void testSenderCongestionControlWithIncorrectAck() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+    void testSenderCongestionControlWithIncorrectAck() throws Exception {
+        setCongestionWindowSize(1250);
         sender.start(null);
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
@@ -114,6 +122,63 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
     }
 
+    @Test
+    void testRetransmit() throws Exception {
+        sender.start(null);
+
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial,"packet 1"), "packet 1");
+
+        waitForSender();
+        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
+        clearInvocations(socket);
+
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.Initial)));
+    }
+
+    @Test
+    void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
+        sender.start(null);
+
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(),"packet 1"), "packet 1");
+        waitForSender();
+        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
+        clearInvocations(socket);
+
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    void handshakeCryptoShouldBeRetransmitWhenNotAcked() throws Exception {
+        sender.start(null);
+
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Handshake,"packet H2"), "packet H2");
+
+        waitForSender();
+        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Handshake)));
+        clearInvocations(socket);
+
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.Handshake)));
+    }
+
+
+    private PacketMatcher matchesPacket(int packetNumber, EncryptionLevel encryptionLevel ) {
+        return new PacketMatcher(packetNumber, encryptionLevel);
+    }
 
     private void waitForSender() {
         // Because sender is asynchronous, test must wait a little to give sender thread a change to execute.
@@ -121,6 +186,29 @@ class SenderTest {
             Thread.sleep(100);
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void setCongestionWindowSize(int cwnd) throws Exception {
+        CongestionController congestionController = sender.getCongestionController();
+        FieldSetter.setField(congestionController, congestionController.getClass().getDeclaredField("congestionWindow"), cwnd);
+    }
+
+    static class PacketMatcher implements ArgumentMatcher<DatagramPacket> {
+        private final long packetNumber;
+        private final EncryptionLevel encryptionLevel;
+
+        public PacketMatcher(int packetNumber, EncryptionLevel encryptionLevel) {
+            this.packetNumber = packetNumber;
+            this.encryptionLevel = encryptionLevel;
+        }
+
+        @Override
+        public boolean matches(DatagramPacket datagramPacket) {
+            ByteBuffer buffer = ByteBuffer.wrap(datagramPacket.getData());
+            long sentPn = buffer.getLong();
+            int sentLevel = buffer.getInt();
+            return sentPn == packetNumber && sentLevel == encryptionLevel.ordinal();
         }
     }
 }

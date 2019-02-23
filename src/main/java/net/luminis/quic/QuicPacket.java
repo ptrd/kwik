@@ -36,7 +36,7 @@ abstract public class QuicPacket {
 
     protected Version quicVersion;
     protected long packetNumber = -1;
-    protected List<QuicFrame> frames;
+    protected List<QuicFrame> frames = new ArrayList<>();
     protected int packetSize = -1;
 
     static byte[] encodeVariableLengthInteger(int length) {
@@ -582,4 +582,18 @@ abstract public class QuicPacket {
     }
 
     public abstract void accept(PacketProcessor processor, Instant time);
+
+    /**
+     * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2
+     * "Crypto Packets:  Packets containing CRYPTO data sent in Initial or Handshake packets."
+     * @return whether packet is a Crypto Packet
+     */
+    public boolean isCrypto() {
+        return !getEncryptionLevel().equals(EncryptionLevel.App)
+            && frames.stream().filter(f -> f instanceof CryptoFrame).findFirst().isPresent();
+    }
+
+    public QuicPacket copy() {
+        throw new IllegalStateException();
+    }
 }

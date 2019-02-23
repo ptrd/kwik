@@ -31,6 +31,10 @@ public class HandshakePacket extends LongHeaderPacket {
         super(quicVersion, sourceConnectionId, destConnectionId, payload);
     }
 
+    public HandshakePacket copy() {
+        return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frames.size() > 0? frames.get(0): null);
+    }
+
     protected byte getPacketType() {
         if (quicVersion.atLeast(Version.IETF_draft_17)) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2

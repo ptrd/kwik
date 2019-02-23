@@ -26,13 +26,18 @@ public class CongestionController {
     private final Logger log;
     private final Object lock = new Object();
 
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-7.9.1
+    // "The RECOMMENDED value is the minimum of 10 * kMaxDatagramSize and max(2* kMaxDatagramSize, 14600))."
+    // "kMaxDatagramSize: The RECOMMENDED value is 1200 bytes."
+    private static final int initialWindowSize = 10 * 1200;
+
     private int bytesInFlight;
     private int congestionWindow;
 
 
     public CongestionController(Logger logger) {
         this.log = logger;
-        congestionWindow = 1250;  // i.e. approx 1 max packet size
+        congestionWindow = initialWindowSize;
     }
 
     public synchronized boolean canSend(int bytes) {

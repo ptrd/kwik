@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import java.nio.ByteBuffer;
 import java.time.Instant;
 
 public class MockPacket extends QuicPacket {
@@ -39,6 +40,14 @@ public class MockPacket extends QuicPacket {
         this.message = message;
     }
 
+    public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel, QuicFrame frame, String message) {
+        this.packetNumber = packetNumber;
+        this.packetSize = packetSize;
+        this.encryptionLevel = encryptionLevel;
+        this.frames.add(frame);
+        this.message = message;
+    }
+
     @Override
     protected EncryptionLevel getEncryptionLevel() {
         return encryptionLevel;
@@ -46,7 +55,21 @@ public class MockPacket extends QuicPacket {
 
     @Override
     public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets) {
-        return new byte[packetSize];
+        ByteBuffer buffer = ByteBuffer.allocate(packetSize);
+        buffer.putLong(packetNumber);
+        buffer.putInt(encryptionLevel.ordinal());
+        return buffer.array();
+    }
+
+    @Override
+    public boolean isCrypto() {
+        return ( encryptionLevel.equals(EncryptionLevel.Initial) || encryptionLevel.equals(EncryptionLevel.Handshake))
+                && (frames.size() == 0) || frames.stream().filter(frame -> frame instanceof CryptoFrame).findAny().isPresent();
+    }
+
+    @Override
+    public QuicPacket copy() {
+        return new MockPacket((int) packetNumber, packetSize, encryptionLevel, message);
     }
 
     @Override

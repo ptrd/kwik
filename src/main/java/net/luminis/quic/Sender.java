@@ -27,9 +27,9 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
+
 
 public class Sender implements FrameProcessor {
 
@@ -43,8 +43,11 @@ public class Sender implements FrameProcessor {
     private Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
+    private volatile boolean cryptoInFlight;
+    private volatile int failedCryptoRetries;
+    private final RttEstimator rttEstimater;
 
-    private RttEstimator rttEstimater;
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port) {
         this.socket = socket;
@@ -115,6 +118,9 @@ public class Sender implements FrameProcessor {
             // This is probably fatal.
             log.error("IOException while sending datagrams");
         }
+        catch (Exception error) {
+            log.error("Exception while sending datagrams", error);
+        }
     }
 
     private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
@@ -128,6 +134,7 @@ public class Sender implements FrameProcessor {
     void shutdown() {
         senderThread.interrupt();
         logStatistics();
+        scheduler.shutdownNow();
     }
 
     private List<QuicPacket> getNonAcknowlegded() {
@@ -160,6 +167,19 @@ public class Sender implements FrameProcessor {
                 packetSentLog.get(id).acked = true;
             }
         });
+
+        if (cryptoInFlight) {
+            failedCryptoRetries = 0;  // When an ack is received, reset the timeout value for crypto timeouts.
+            cryptoInFlight = packetSentLog.values().stream()
+                    .filter(p -> !p.acked && !p.resent).filter(p -> p.packet.isCrypto()).findFirst().isPresent();
+            if (!cryptoInFlight) {
+                log.debug("No crypto in flight anymore.");
+            }
+            else {
+                log.debug("Still crypto in flight: " + packetSentLog.values().stream().filter(p -> p.packet.isCrypto())
+                        .map(p -> p.packet).collect(Collectors.toList()));
+            }
+        }
     }
 
     private void computeRttSample(AckFrame ack, EncryptionLevel encryptionLevel, Instant timeReceived) {
@@ -171,14 +191,59 @@ public class Sender implements FrameProcessor {
     }
 
     private void logSent(QuicPacket packet, Instant sent) {
+        if (packet.isCrypto()) {
+            if (!cryptoInFlight) {
+                log.debug("Start crypto in flight.");
+            }
+            cryptoInFlight = true;
+        }
         packetSentLog.put(packet.getId(), new PacketAckStatus(sent, packet));
+        int rtt = rttEstimater.getSmoothedRtt();
+        int timeout = (int) (2 * rtt * Math.pow(2, failedCryptoRetries));
+        schedule(() -> checkIsAcked(packet.getId()), timeout, TimeUnit.MILLISECONDS);
+    }
+
+    private void checkIsAcked(PacketId id) {
+        if (cryptoInFlight) {
+            // TODO: all unack'd crypto's should be resent, but for a client there can only be one (i think)
+            PacketAckStatus ackStatus = packetSentLog.get(id);
+            if (ackStatus.packet.isCrypto() && !ackStatus.acked) {
+                if (ackStatus.resent) {
+                    throw new IllegalStateException();
+                }
+                if (! ackStatus.packet.isCrypto()) {
+                    throw new IllegalStateException();
+                }
+                failedCryptoRetries++;
+                log.debug("Packet " + id + " not acked; retransmitting");
+                retransmit(ackStatus);
+            }
+        }
+    }
+
+    private void retransmit(PacketAckStatus ackStatus) {
+        QuicPacket packet = ackStatus.packet;
+        ackStatus.resent = true;
+        QuicPacket newPacket = packet.copy();
+        send(newPacket, "retransmit " + packet.getId());
     }
 
     void logStatistics() {
         log.stats("Acknowledgement statistics (sent packets):");
         packetSentLog.entrySet().stream().sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(e -> e.getValue()).forEach(e -> {
-            log.stats(e.packet.getId() + "\t" + (e.acked? "Acked\t": "-    \t") + e.packet);
+            log.stats(e.packet.getId() + "\t" + e.status() + "\t" + e.packet);
         });
+    }
+
+    void schedule(Runnable runnable, int timeout, TimeUnit timeUnit) {
+        scheduler.schedule(() -> {
+            try {
+                runnable.run();
+            }
+            catch (Exception error) {
+                log.error("Runtime exception occurred while processing scheduled task", error);
+            }
+        }, timeout, timeUnit);
     }
 
     public CongestionController getCongestionController() {
@@ -188,11 +253,24 @@ public class Sender implements FrameProcessor {
     private static class PacketAckStatus {
         final Instant timeSent;
         final QuicPacket packet;
+        public boolean resent;
         boolean acked;
 
         public PacketAckStatus(Instant sent, QuicPacket packet) {
             this.timeSent = sent;
             this.packet = packet;
+        }
+
+        public String status() {
+            if (acked) {
+                return "Acked";
+            }
+            else if (resent) {
+                return "Resent";
+            }
+            else {
+                return "-";
+            }
         }
     }
 
