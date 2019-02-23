@@ -44,6 +44,7 @@ public class Sender implements FrameProcessor {
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
 
+    private RttEstimator rttEstimater;
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port) {
         this.socket = socket;
@@ -58,6 +59,7 @@ public class Sender implements FrameProcessor {
         incomingPacketQueue = new LinkedBlockingQueue<>();
         packetSentLog = new HashMap<>();
         congestionController = new CongestionController(log);
+        rttEstimater = new RttEstimator(log);
     }
 
     public void send(QuicPacket packet, String logMessage) {
@@ -140,18 +142,31 @@ public class Sender implements FrameProcessor {
      */
     public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
         if (ackFrame instanceof AckFrame) {
-            ((AckFrame) ackFrame).getAckedPacketNumbers().stream().forEach(pn -> {
-                PacketId id = new PacketId(encryptionLevel, pn);
-                if (packetSentLog.containsKey(id)) {
-                    Duration ackDuration = Duration.between(Instant.now(), packetSentLog.get(id).timeSent);
-                    log.debug("Ack duration for " + id + ": " + ackDuration);
-                    congestionController.registerAcked(packetSentLog.get(id).packet);
-                    packetSentLog.get(id).acked = true;
-                }
-            });
+            processAck((AckFrame) ackFrame, encryptionLevel, timeReceived);
         }
         else {
             throw new RuntimeException();  // Would be programming error.
+        }
+    }
+
+    private void processAck(AckFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
+        computeRttSample(ackFrame, encryptionLevel, timeReceived);
+        ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
+            PacketId id = new PacketId(encryptionLevel, pn);
+            if (packetSentLog.containsKey(id)) {
+                Duration ackDuration = Duration.between(Instant.now(), packetSentLog.get(id).timeSent);
+                log.debug("Ack duration for " + id + ": " + ackDuration);
+                congestionController.registerAcked(packetSentLog.get(id).packet);
+                packetSentLog.get(id).acked = true;
+            }
+        });
+    }
+
+    private void computeRttSample(AckFrame ack, EncryptionLevel encryptionLevel, Instant timeReceived) {
+        PacketId largestPnPacket = new PacketId(encryptionLevel, ack.getLargestAcknowledged());
+        PacketAckStatus packetStatus = packetSentLog.get(largestPnPacket);
+        if (packetStatus != null) {
+            rttEstimater.addSample(timeReceived, packetStatus.timeSent, ack.getAckDelay());
         }
     }
 

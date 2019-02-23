@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.time.Instant;
 
 import static org.mockito.Mockito.*;
 
@@ -65,7 +66,7 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
 
         // An ack on first packet
-        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.App, null);
+        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.App, Instant.now());
 
         waitForSender();
         // Because congestion window is decreased, second packet should now have been sent too.
@@ -87,7 +88,7 @@ class SenderTest {
         verify(socket, times(2)).send(any(DatagramPacket.class));
 
         // An ack on initial packet should not decrease the congestion window too much
-        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Initial, null);
+        sender.process(new AckFrame(Version.getDefault(), 0), EncryptionLevel.Initial, Instant.now());
 
         waitForSender();
         verify(socket, times(2)).send(any(DatagramPacket.class));

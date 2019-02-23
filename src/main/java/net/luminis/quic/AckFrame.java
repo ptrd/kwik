@@ -127,8 +127,12 @@ public class AckFrame extends QuicFrame {
         return largestAcknowledged;
     }
 
+    /**
+     * Get ack delay in milliseconds.
+     * @return
+     */
     public int getAckDelay() {
-        return ackDelay;
+        return (ackDelay * delayScale) / 1000;
     }
 
     public void setDelayExponent(int exponent) {
