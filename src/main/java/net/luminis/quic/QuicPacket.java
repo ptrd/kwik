@@ -38,6 +38,10 @@ abstract public class QuicPacket {
     protected List<QuicFrame> frames;
     protected int packetSize = -1;
 
+    public QuicPacket() {
+        frames = new ArrayList<>();
+    }
+
     static byte[] encodeVariableLengthInteger(int length) {
         if (length <= 63)
             return new byte[] { (byte) length };
@@ -554,6 +558,10 @@ abstract public class QuicPacket {
         return value;
     }
 
+    public void addFrame(QuicFrame frame) {
+        frames.add(frame);
+    }
+
     public int getSize() {
         if (packetSize > 0) {
             return packetSize;
@@ -576,4 +584,12 @@ abstract public class QuicPacket {
     }
 
     public abstract void accept(PacketProcessor processor);
+
+    public boolean canBeAcked() {
+        return true;
+    }
+
+    public boolean isAckEliciting() {
+        return frames.stream().anyMatch(frame -> frame.isAckEliciting());
+    }
 }

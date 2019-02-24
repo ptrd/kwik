@@ -40,5 +40,7 @@ public abstract class QuicFrame {
         }
     }
 
-
+    public boolean isAckEliciting() {
+        return true;
+    }
 }

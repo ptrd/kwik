@@ -102,6 +102,13 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
+    public boolean canBeAcked() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.1
+        // "A Version Negotiation packet cannot be explicitly acknowledged in an ACK frame by a client."
+        return false;
+    }
+
+    @Override
     public String toString() {
         return "Packet "
                 + "I" + "|"

@@ -96,6 +96,10 @@ public class Sender implements FrameProcessor {
                         log.debug("But now it does.");
                     }
 
+                    // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
+                    // an ack frame that should be coalesced with it.
+                    // Like: if (ackGenerator.hasAckToSend
+
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();
                     socket.send(datagram);

@@ -30,6 +30,22 @@ public class MockPacket extends QuicPacket {
         this.message = message;
     }
 
+    public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel) {
+        this.packetNumber = packetNumber;
+        this.packetSize = packetSize;
+        this.encryptionLevel = encryptionLevel;
+        this.message = "";
+        this.frames.add(new MaxStreamsFrame());
+    }
+
+    public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel, QuicFrame frame) {
+        this.packetNumber = packetNumber;
+        this.packetSize = packetSize;
+        this.encryptionLevel = encryptionLevel;
+        this.message = "";
+        this.frames.add(frame);
+    }
+
     public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel, String message) {
         this.packetNumber = packetNumber;
         this.packetSize = packetSize;
