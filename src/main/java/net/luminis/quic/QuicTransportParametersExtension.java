@@ -34,6 +34,7 @@ public class QuicTransportParametersExtension extends Extension {
     private TransportParameters params;
 
     public QuicTransportParametersExtension() {
+        params = new TransportParameters();
     }
 
     /**
@@ -159,8 +160,6 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
-        params = new TransportParameters();
-
         int parameterId = buffer.getShort();
         int size = buffer.getShort();
 

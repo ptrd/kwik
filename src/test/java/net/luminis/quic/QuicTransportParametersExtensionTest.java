@@ -18,16 +18,16 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+
 
 class QuicTransportParametersExtensionTest {
 
@@ -106,7 +106,7 @@ class QuicTransportParametersExtensionTest {
 
     @Test
     void parsePreferredAddressTransportParameterChecksForIP4OrIP6() throws Exception {
-        ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[]{
                 //      id     size     ip4.......  port
                 0x00, 0x0d, 0x00, 0x00, 0, 0, 0, 0, 0, 0,
                 // ip6   0:0:0:0:0:0:0:0
@@ -124,6 +124,17 @@ class QuicTransportParametersExtensionTest {
         assertThatThrownBy(
                 () -> params.parseTransportParameter(buffer, mock(Logger.class)))
                 .isInstanceOf(ProtocolError.class);
+    }
+
+    @Test
+    void testAckDelayTransportParameter() throws Exception {
+        //                                                 version____    size_ id___ size_    id___ size_
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 00 ff 00 00 12 00 00 00 00 0a 00 01 07 00 0b 00 01 29".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension();
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+
+        assertThat(transportParametersExtension.getTransportParameters().getAckDelayExponent()).isEqualTo(7);
     }
 
 }
