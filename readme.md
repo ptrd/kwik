@@ -1,4 +1,4 @@
-# Kwik
+![Kwik](https://bitbucket.org/pjtr/kwik/raw/master/docs/Logo%20Kwik%20rectangle.png)
 
 ## A QUIC client Java library
 
@@ -44,6 +44,10 @@ and run the `quic.sh` script or `java -jar build/libs/quic.jar`.
 ## Contact
 
 If you have questions about this project, please mail the author (peter dot doornbosch) at luminis dot eu.
+
+## Acknowledgements
+
+Thanks to Piet van Dongen for creating the marvellous logo!
 
 ## License
 
