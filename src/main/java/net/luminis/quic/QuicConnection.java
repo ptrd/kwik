@@ -196,7 +196,7 @@ public class QuicConnection implements PacketProcessor {
         byte[] clientHello = createClientHello(host, publicKey);
         tlsState.clientHelloSend(privateKey, clientHello);
 
-        InitialPacket clientHelloPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, new CryptoFrame(quicVersion, clientHello));
+        InitialPacket clientHelloPacket = (InitialPacket) createPacket(EncryptionLevel.Initial, new CryptoFrame(quicVersion, clientHello));
         // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-14)
         clientHelloPacket.ensureSize(1200);
 
@@ -208,7 +208,7 @@ public class QuicConnection implements PacketProcessor {
         if (tlsState.isServerFinished()) {
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
-            LongHeaderPacket finishedPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, cryptoFrame);
+            QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
             sender.send(finishedPacket, "client finished");
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
@@ -216,6 +216,24 @@ public class QuicConnection implements PacketProcessor {
             connectionState = Status.Connected;
             handshakeFinishedCondition.countDown();
         }
+    }
+
+    QuicPacket createPacket(EncryptionLevel level, QuicFrame frame) {
+        QuicPacket packet;
+        switch (level) {
+            case Initial:
+                packet = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, frame);
+                break;
+            case Handshake:
+                packet = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, frame);
+                break;
+            case App:
+                packet = new ShortHeaderPacket(quicVersion, destConnectionId, frame);
+                break;
+            default:
+                throw new RuntimeException();  // Cannot happen
+        }
+        return packet;
     }
 
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
@@ -363,13 +381,13 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket ackPacket = null;
         switch (encryptionLevel) {
             case Initial:
-                ackPacket = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, ack);
+                ackPacket = createPacket(Initial, ack);
                 break;
             case Handshake:
-                ackPacket = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, ack);
+                ackPacket = createPacket(Handshake, ack);
                 break;
             case App:
-                ackPacket = new ShortHeaderPacket(quicVersion, destConnectionId, ack);
+                ackPacket = createPacket(App, ack);
                 break;
         }
         sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
@@ -529,7 +547,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     void send(StreamFrame streamFrame) throws IOException {
-        QuicPacket packet = new ShortHeaderPacket(quicVersion, destConnectionId, streamFrame);
+        QuicPacket packet = createPacket(App, streamFrame);
         sender.send(packet, "application data");
     }
 
