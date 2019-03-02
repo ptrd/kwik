@@ -35,6 +35,8 @@ and run the `quic.sh` script or `java -jar build/libs/quic.jar`.
      -18                            use Quic version IETF_draft_18
      -c,--connectionTimeout <arg>   connection timeout in seconds
      -h,--help                      show help
+     -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
+                                    '/index.html'
      -l,--log <arg>                 logging options: [pdrsiSD]: (p)ackets
                                     received/sent, (d)ecrypted bytes, (r)aw bytes,
                                     (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is

@@ -43,6 +43,7 @@ public class Quic {
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
         CommandLineParser parser = new DefaultParser();
@@ -160,6 +161,15 @@ public class Quic {
             }
         }
 
+        String http09Request = null;
+        if (cmd.hasOption("H")) {
+            http09Request = cmd.getOptionValue("H");
+            if (http09Request == null) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
         }
@@ -169,21 +179,8 @@ public class Quic {
 
             quicConnection.connect(connectionTimeout * 1000);
 
-            boolean bidirectional = true;
-            QuicStream quicStream = quicConnection.createStream(bidirectional);
-            quicStream.getOutputStream().write("GET /index.html\r\n".getBytes());
-            quicStream.getOutputStream().close();
-
-            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {}
-
-            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
-            String line;
-            System.out.println("Server returns: ");
-            while ((line = input.readLine()) != null) {
-                System.out.println(line);
+            if (http09Request != null) {
+                doHttp09Request(quicConnection, http09Request);
             }
 
             quicConnection.close();
@@ -200,6 +197,28 @@ public class Quic {
         }
         catch (VersionNegationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
+        }
+    }
+
+    private static void doHttp09Request(QuicConnection quicConnection, String http09Request) throws IOException {
+        if (! http09Request.startsWith("/")) {
+            http09Request = "/" + http09Request;
+        }
+        boolean bidirectional = true;
+        QuicStream quicStream = quicConnection.createStream(bidirectional);
+        quicStream.getOutputStream().write(("GET " + http09Request + "\r\n").getBytes());
+        quicStream.getOutputStream().close();
+
+        // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {}
+
+        BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+        String line;
+        System.out.println("Server returns: ");
+        while ((line = input.readLine()) != null) {
+            System.out.println(line);
         }
     }
 
