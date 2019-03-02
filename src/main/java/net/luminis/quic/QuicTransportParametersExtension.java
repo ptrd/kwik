@@ -178,6 +178,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == idle_timeout.value) {
             int idleTimeout = QuicPacket.parseVariableLengthInteger(buffer);
             log.debug("- idle timeout: " + idleTimeout);
+            params.setIdleTimeout(idleTimeout);
         }
         else if (parameterId == preferred_address.value) {
             parsePreferredAddress(buffer, log);

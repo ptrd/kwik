@@ -23,6 +23,9 @@ import java.nio.ByteBuffer;
 
 public class PingFrame extends QuicFrame {
 
+    public PingFrame(Version quicVersion) {
+    }
+
     public PingFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
         return this;
@@ -30,7 +33,7 @@ public class PingFrame extends QuicFrame {
 
     @Override
     byte[] getBytes() {
-        return new byte[0];
+        return new byte[] { 0x01 };
     }
 
     @Override

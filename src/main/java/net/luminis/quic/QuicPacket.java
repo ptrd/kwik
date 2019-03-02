@@ -363,7 +363,7 @@ abstract public class QuicPacket {
                     frames.add(new Padding().parse(buffer, log));
                     break;
                 case 0x01:
-                    frames.add(new PingFrame().parse(buffer, log));
+                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x02:
                 case 0x03:
@@ -452,7 +452,7 @@ abstract public class QuicPacket {
                     frames.add(new MaxStreamIdFrame().parse(buffer, log));
                     break;
                 case 0x07:
-                    frames.add(new PingFrame().parse(buffer, log));
+                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x0b:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));

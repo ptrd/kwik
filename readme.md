@@ -24,7 +24,7 @@ Kwik supports IETF draft-14, draft-15, draft-16, draft-17 and draft-18.
 
 ## Usage
 
-Build with gradle (`gradle build`)
+Build the client with gradle (`gradle build`)
 and run the `quic.sh` script or `java -jar build/libs/quic.jar`. 
 
     usage: quic <host>:<port> OR quic <host> <port>
@@ -37,11 +37,15 @@ and run the `quic.sh` script or `java -jar build/libs/quic.jar`.
      -h,--help                      show help
      -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
                                     '/index.html'
+     -k,--keepAlive <arg>           connection keep alive time in seconds
      -l,--log <arg>                 logging options: [pdrsiSD]: (p)ackets
                                     received/sent, (d)ecrypted bytes, (r)aw bytes,
                                     (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is
                                     "is", use (n)one to disable
      -T,--relativeTime              log with time (in seconds) since first packet                                    
+       
+If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
+
                                 
 ## Contact
 

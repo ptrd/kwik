@@ -152,6 +152,9 @@ public class Sender implements FrameProcessor {
             // This is probably fatal.
             log.error("IOException while sending datagrams");
         }
+        catch (Throwable fatal) {
+            log.error("Sender thread aborted with exception"+ fatal);
+        }
     }
 
     public void packetProcessed(EncryptionLevel encryptionLevel) {

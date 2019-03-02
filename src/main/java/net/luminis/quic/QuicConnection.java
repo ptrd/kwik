@@ -43,6 +43,8 @@ import static net.luminis.tls.Tls13.generateKeys;
  */
 public class QuicConnection implements PacketProcessor {
 
+    private KeepAliveActor keepAliveActor;
+
     enum Status {
         Idle,
         Handshaking,
@@ -132,6 +134,14 @@ public class QuicConnection implements PacketProcessor {
         catch (InterruptedException e) {
             throw new RuntimeException();  // Should not happen.
         }
+    }
+
+    public void keepAlive(int seconds) {
+        if (connectionState != Status.Connected) {
+            throw new IllegalStateException("keep alive can only be set when connected");
+        }
+
+        keepAliveActor = new KeepAliveActor(quicVersion, seconds, transportParams.getIdleTimeout(), this);
     }
 
     private void startReceiverLoop() {
@@ -374,30 +384,6 @@ public class QuicConnection implements PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private void acknowledge(EncryptionLevel encryptionLevel, long packetNumber) throws IOException {
-        AckFrame ack = new AckFrame(quicVersion, packetNumber);
-
-        QuicPacket ackPacket = null;
-        switch (encryptionLevel) {
-            case Initial:
-                ackPacket = createPacket(Initial, ack);
-                break;
-            case Handshake:
-                ackPacket = createPacket(Handshake, ack);
-                break;
-            case App:
-                ackPacket = createPacket(App, ack);
-                break;
-        }
-        sender.send(ackPacket, "ack " + packetNumber + " on level " + encryptionLevel);
-    }
-
-    private int getNextPacketNumber(EncryptionLevel initial) {
-        synchronized (lastPacketNumber) {
-            return lastPacketNumber[initial.ordinal()]++;
-        }
-    }
-
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
     }
@@ -534,6 +520,9 @@ public class QuicConnection implements PacketProcessor {
 
     public void close() {
         sender.shutdown();
+        if (keepAliveActor != null) {
+            keepAliveActor.shutdown();
+        }
         // TODO
     }
 
@@ -545,9 +534,16 @@ public class QuicConnection implements PacketProcessor {
         return id;
     }
 
-    void send(StreamFrame streamFrame) throws IOException {
-        QuicPacket packet = createPacket(App, streamFrame);
+    void send(QuicFrame frame) {
+        QuicPacket packet = createPacket(App, frame);
         sender.send(packet, "application data");
+    }
+
+    void send(QuicPacket packet, String logMessage) {
+        if (logMessage == null) {
+            logMessage = "application data";
+        }
+        sender.send(packet, logMessage);
     }
 
     int getMaxPacketSize() {

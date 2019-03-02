@@ -43,6 +43,7 @@ public class Quic {
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
@@ -161,6 +162,17 @@ public class Quic {
             }
         }
 
+        int keepAliveTime = 0;
+        if (cmd.hasOption("k")) {
+            try {
+                keepAliveTime = Integer.parseInt(cmd.getOptionValue("k"));
+            }
+            catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         String http09Request = null;
         if (cmd.hasOption("H")) {
             http09Request = cmd.getOptionValue("H");
@@ -179,24 +191,36 @@ public class Quic {
 
             quicConnection.connect(connectionTimeout * 1000);
 
+            if (keepAliveTime > 0) {
+                quicConnection.keepAlive(keepAliveTime);
+            }
             if (http09Request != null) {
                 doHttp09Request(quicConnection, http09Request);
+            }
+
+            if (keepAliveTime > 0) {
+                try {
+                    Thread.sleep((keepAliveTime + 30) * 1000);
+                } catch (InterruptedException e) {}
             }
 
             quicConnection.close();
 
             try {
-                Thread.sleep(3000);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {}
 
             System.out.println("Terminating Quic");
-
         }
         catch (IOException e) {
             System.out.println("Got IO error: " + e);
         }
         catch (VersionNegationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
+        }
+
+        if (http09Request == null && keepAliveTime == 0) {
+            System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
     }
 
