@@ -90,7 +90,7 @@ public class QuicConnection implements PacketProcessor {
         this.log = log;
 
         socket = new DatagramSocket();
-        sender = new Sender(socket, 1500, log, serverAddress, port);
+        sender = new Sender(socket, 1500, log, serverAddress, port, this);
         receiver = new Receiver(socket, 1500, log);
         tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
@@ -231,7 +231,7 @@ public class QuicConnection implements PacketProcessor {
                 packet = new ShortHeaderPacket(quicVersion, destConnectionId, frame);
                 break;
             default:
-                throw new RuntimeException();  // Cannot happen
+                throw new RuntimeException();  // Cannot happen, just here to satisfy the compiler.
         }
         return packet;
     }
@@ -250,21 +250,20 @@ public class QuicConnection implements PacketProcessor {
             log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
 
+            // TODO: strictly speaking, processing packet received event, which includes generating acks, should be done after processing the packet itself, see
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-13.1
+            // "A packet MUST NOT be acknowledged until packet protection has been
+            //   successfully removed and all frames contained in the packet have been
+            //   processed."
+            sender.processPacketReceived(packet);
             packet.accept(this);
-            try {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.1
-                // "A Version Negotiation packet cannot be explicitly acknowledged in an ACK frame by a client."
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
-                // "A Retry packet does not include a packet number and cannot be explicitly acknowledged by a client."
-                if (!(packet instanceof VersionNegotationPacket) && !(packet instanceof RetryPacket)) {
-                    acknowledge(packet.getEncryptionLevel(), packet.getPacketNumber());
-                }
-            } catch (IOException e) {
-                handleIOError(e);
-            }
 
             if (data.position() < data.limit()) {
                 parsePackets(datagram, timeReceived, data.slice());
+            }
+            else {
+                // Processed all packets in the datagram. Select the "highest" level for ack (obviously a TODO)
+                sender.packetProcessed(packet.getEncryptionLevel());
             }
         }
         catch (MissingKeysException noKeys) {

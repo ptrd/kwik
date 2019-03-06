@@ -19,18 +19,24 @@
 package net.luminis.quic;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class SenderTest {
 
     private static Logger logger;
+    private Sender sender;
+    private DatagramSocket socket;
+    private QuicConnection connection;
 
     @BeforeAll
     static void initLogger() {
@@ -38,13 +44,17 @@ class SenderTest {
         logger.logDebug(true);
     }
 
+    @BeforeEach
+    void initSender() throws Exception {
+        socket = mock(DatagramSocket.class);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
+        connection = mock(QuicConnection.class);
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
+        sender.start(null);
+    }
+
     @Test
     void testSingleSend() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Logger logger = mock(Logger.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start(null);
-
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         waitForSender();
 
@@ -53,10 +63,6 @@ class SenderTest {
 
     @Test
     void testSenderIsCongestionControlled() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start(null);
-
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
 
@@ -74,10 +80,6 @@ class SenderTest {
 
     @Test
     void testSenderCongestionControlWithUnrelatedAck() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start(null);
-
         sender.send(new MockPacket(0, 1, EncryptionLevel.Initial,"initial"), "packet 1");
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
@@ -95,10 +97,6 @@ class SenderTest {
 
     @Test
     void testSenderCongestionControlWithIncorrectAck() throws IOException {
-        DatagramSocket socket = mock(DatagramSocket.class);
-        Sender sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
-        sender.start(null);
-
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
 
@@ -113,6 +111,36 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
     }
 
+    @Test
+    void receivingPacketLeadsToSendAckPacket() throws IOException  {
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
+                .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
+
+        sender.processPacketReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new CryptoFrame()));
+        sender.packetProcessed(EncryptionLevel.Initial);
+
+        waitForSender();
+
+        verify(socket, times(1)).send(any(DatagramPacket.class));  // TODO: would be nice to check send packet actually contains an ack frame...
+    }
+
+    @Test
+    void receivingVersionNegotationPacke() throws IOException {
+        sender.processPacketReceived(new VersionNegotationPacket());
+
+        waitForSender();
+
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    void receivingRetryPacket() throws IOException {
+        sender.processPacketReceived(new RetryPacket(Version.getDefault()));
+
+        waitForSender();
+
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
 
     private void waitForSender() {
         // Because sender is asynchronous, test must wait a little to give sender thread a change to execute.

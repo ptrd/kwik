@@ -45,7 +45,7 @@ public class ShortHeaderPacket extends QuicPacket {
     public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.destinationConnectionId = destinationConnectionId;
-        frames = List.of(frame);
+        frames = new ArrayList<>(List.of(frame));
     }
 
     public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, Logger log) throws MissingKeysException {

@@ -34,16 +34,15 @@ public class AckGenerator {
     private boolean newPacketsToAcknowledge;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
 
-
-    public boolean hasAckToSend() {
+    public synchronized boolean hasAckToSend() {
         return !packetsToAcknowledge.isEmpty();
     }
 
-    public boolean hasNewAckToSend() {
+    public synchronized boolean hasNewAckToSend() {
         return newPacketsToAcknowledge;
     }
 
-    public void packetReceived(QuicPacket packet) {
+    public synchronized void packetReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
             packetsToAcknowledge.add(packet.getPacketNumber());
             if (packet.isAckEliciting()) {
@@ -57,13 +56,16 @@ public class AckGenerator {
      * @param receivedAck
      * @param encryptionLevel
      */
-    public void process(QuicFrame receivedAck, EncryptionLevel encryptionLevel) {
-        ((AckFrame) receivedAck).getAckedPacketNumbers().forEach(pn -> {
-            if (ackSentWithPacket.containsKey(pn)) {
-                AckFrame ackSent = ackSentWithPacket.get(pn);
-                ackSent.getAckedPacketNumbers().forEach((Long ackedPacket) -> packetsToAcknowledge.remove(ackedPacket));
-            }
-        });
+    public synchronized void process(QuicFrame receivedAck, EncryptionLevel encryptionLevel) {
+        // Find max packet number that had an ack sent with it...
+        ((AckFrame) receivedAck).getAckedPacketNumbers().stream()
+                .filter(pn -> ackSentWithPacket.containsKey(pn))
+                .limit(1)
+                .forEach(pn -> {
+                    // ... and for that max pn, all packets that where acked by it don't need to be acked again.
+                    AckFrame ackSent = ackSentWithPacket.get(pn);
+                    ackSent.getAckedPacketNumbers().forEach((Long ackedPacket) -> packetsToAcknowledge.remove(ackedPacket));
+                });
     }
 
     /**
@@ -71,7 +73,7 @@ public class AckGenerator {
      * @param packetNumber
      * @return
      */
-    public AckFrame generateAckForPacket(long packetNumber) {
+    public synchronized AckFrame generateAckForPacket(long packetNumber) {
         AckFrame ackFrame = new AckFrame(quicVersion, packetsToAcknowledge);
         ackSentWithPacket.put(packetNumber, ackFrame);
         newPacketsToAcknowledge = false;
