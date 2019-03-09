@@ -133,7 +133,7 @@ public class Quic {
             }
         }
 
-        Version quicVersion = Version.IETF_draft_17;
+        Version quicVersion = Version.getDefault();
         if (cmd.hasOption("18")) {
             quicVersion = Version.IETF_draft_18;
         }
