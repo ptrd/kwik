@@ -225,18 +225,38 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void parsePreferredAddress(ByteBuffer buffer, Logger log) {
-        byte ipVersion = buffer.get();
-        int ipAddressSize = buffer.get();
-        byte[] ipAddressBytes = new byte[ipAddressSize];
-        buffer.get(ipAddressBytes);
         try {
-            InetAddress preferredIpAddress = InetAddress.getByAddress(ipAddressBytes);
-            int port = buffer.getShort();
-            log.info("Preferred Server Address: " + preferredIpAddress + " " + port);
-        } catch (UnknownHostException e) {
-            throw new ProtocolError("Invalid IP adresss in preferred address");
-        }
+            TransportParameters.PreferredAddress preferredAddress = new TransportParameters.PreferredAddress();
 
+            byte[] ip4 = new byte[4];
+            buffer.get(ip4);
+            if (!Bytes.allZero(ip4)) {
+                preferredAddress.ip4 = InetAddress.getByAddress(ip4);
+            }
+            preferredAddress.ip4Port = (buffer.get() << 8) | buffer.get();
+            byte[] ip6 = new byte[16];
+            buffer.get(ip6);
+            if (!Bytes.allZero(ip6)) {
+                preferredAddress.ip6 = InetAddress.getByAddress(ip6);
+            }
+            preferredAddress.ip6Port = (buffer.get() << 8) | buffer.get();
+
+            if (preferredAddress.ip4 == null && preferredAddress.ip6 == null) {
+                throw new ProtocolError("Preferred address: no valid IP address");
+            }
+
+            int connectionIdSize = buffer.get();
+            preferredAddress.connectionId = new byte[connectionIdSize];
+            buffer.get(preferredAddress.connectionId);
+            preferredAddress.statelessResetToken = new byte[16];
+            buffer.get(preferredAddress.statelessResetToken);
+
+            params.setPreferredAddress(preferredAddress);
+        }
+        catch (UnknownHostException invalidIpAddressLength) {
+            // Impossible
+            throw new RuntimeException();
+        }
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, int value) {

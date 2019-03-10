@@ -18,10 +18,14 @@
  */
 package net.luminis.quic;
 
+import java.net.InetAddress;
+
 public class TransportParameters {
 
     private byte[] originalConnectionId;
     private int ackDelayExponent;
+    private PreferredAddress preferredAddress;
+
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
@@ -37,5 +41,22 @@ public class TransportParameters {
 
     public int getAckDelayExponent() {
         return ackDelayExponent;
+    }
+
+    public PreferredAddress getPreferredAddress() {
+        return preferredAddress;
+    }
+
+    public void setPreferredAddress(PreferredAddress preferredAddress) {
+        this.preferredAddress = preferredAddress;
+    }
+
+    public static class PreferredAddress {
+        InetAddress ip4;
+        int ip4Port;
+        InetAddress ip6;
+        int ip6Port;
+        byte[] connectionId;
+        byte[] statelessResetToken;
     }
 }
