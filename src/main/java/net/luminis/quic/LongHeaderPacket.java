@@ -175,10 +175,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
             packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
             log.decrypted("Unprotected packet number: " + packetNumber);
 
-            log.debug("Encrypted payload", payload);
+            log.encrypted("Encrypted payload", payload);
 
             frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // Assuming packet number is 1 byte
-            log.debug("Frame header", frameHeader);
+            log.encrypted("Frame header", frameHeader);
 
             byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
             log.decrypted("Decrypted payload", frameBytes);

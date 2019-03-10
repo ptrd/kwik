@@ -148,7 +148,7 @@ abstract public class QuicPacket {
 
         // Copy unprotected (decrypted) packet number in frame header, before decrypting payload.
         System.arraycopy(unprotectedPacketNumber, 0, frameHeader, frameHeader.length - (protectedPackageNumberLength), protectedPackageNumberLength);
-        log.debug("Frame header", frameHeader);
+        log.encrypted("Frame header", frameHeader);
 
         // "The input plaintext, P, for the AEAD is the payload of the QUIC
         //   packet, as described in [QUIC-TRANSPORT]."
@@ -156,7 +156,7 @@ abstract public class QuicPacket {
         int encryptedPayloadLength = remainingLength - protectedPackageNumberLength;
         byte[] payload = new byte[encryptedPayloadLength];
         buffer.get(payload, 0, encryptedPayloadLength);
-        log.debug("Encrypted payload", payload);
+        log.encrypted("Encrypted payload", payload);
 
         byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
         log.decrypted("Decrypted payload", frameBytes);

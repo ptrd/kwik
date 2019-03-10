@@ -257,6 +257,10 @@ public class Logger {
         }
     }
 
+    public void encrypted(String message, byte[] data) {
+        // For debugging encryption/decryption code only.
+    }
+
     public void error(String message) {
         synchronized (this) {
             System.out.println("Error: " + message);
@@ -291,4 +295,5 @@ public class Logger {
             return timeFormatter.format(localTimeNow);
         }
     }
+
 }
