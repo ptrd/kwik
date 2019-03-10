@@ -68,8 +68,8 @@ public class StreamFrame extends QuicFrame {
         }
         buffer.put(frameType);
         buffer.put(encodeVariableLengthInteger(streamId));
-        buffer.put(encodeVariableLengthInteger(offset));  // offset
-        buffer.put(encodeVariableLengthInteger(applicationData.length));  // length
+        buffer.put(encodeVariableLengthInteger(offset));
+        buffer.put(encodeVariableLengthInteger(length));
         buffer.put(applicationData, dataOffset, dataLength);
 
         frameData = new byte[buffer.position()];
@@ -92,10 +92,10 @@ public class StreamFrame extends QuicFrame {
         if (withLength) {
             length = QuicPacket.parseVariableLengthInteger(buffer);
         }
-
-        if (length > 0) {
+        else {
             length = buffer.limit() - buffer.position();
         }
+
         streamData = new byte[length];
         buffer.get(streamData);
         log.debug("Stream data", streamData);
