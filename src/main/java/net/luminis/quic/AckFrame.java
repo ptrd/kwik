@@ -36,6 +36,7 @@ public class AckFrame extends QuicFrame {
     // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-19.3
     // "The "ack_delay_exponent" defaults to 3, or a multiplier of 8"
     private int delayScale = 8;
+    private String stringRepresentation = "";
 
     public AckFrame() {
     }
@@ -47,7 +48,8 @@ public class AckFrame extends QuicFrame {
     public AckFrame(Version quicVersion, long packetNumber) {
         largestAcknowledged = (int) packetNumber;
         acknowledgedPacketNumbers = List.of(largestAcknowledged);
-        
+        stringRepresentation = String.valueOf(largestAcknowledged);
+
         ByteBuffer buffer = ByteBuffer.allocate(100);
 
         if (quicVersion.equals(Version.IETF_draft_14)) {
@@ -108,6 +110,17 @@ public class AckFrame extends QuicFrame {
             buffer.put(encodeVariableLengthInteger(block));
         }
 
+        if (!ranges.isEmpty()) {
+            stringRepresentation = ranges.stream().map(range ->
+                    range.size() == 1 ?
+                            range.get(0).toString() :
+                            range.get(0).toString() + "-" + range.get(range.size() - 1).toString())
+                    .collect(Collectors.joining(","));
+        }
+        else {
+            stringRepresentation = String.valueOf(largestAcknowledged);
+        }
+
         frameBytes = new byte[buffer.position()];
         buffer.flip();
         buffer.get(frameBytes);
@@ -141,17 +154,17 @@ public class AckFrame extends QuicFrame {
         log.debug("Parsing AckFrame");
         acknowledgedPacketNumbers = new ArrayList<>();
 
-        buffer.get();
+        buffer.get();  // Eat type.
 
         largestAcknowledged = QuicPacket.parseVariableLengthInteger(buffer);
-        acknowledgedPacketNumbers.add(largestAcknowledged);
 
         ackDelay = QuicPacket.parseVariableLengthInteger(buffer);
 
         int ackBlockCount = QuicPacket.parseVariableLengthInteger(buffer);
 
         long currentSmallest = largestAcknowledged;
-        currentSmallest -= addAcknowledgeRange(largestAcknowledged, QuicPacket.parseVariableLengthInteger(buffer));
+        // The smallest of the first block is the largest - (rangeSize - 1).
+        currentSmallest -= addAcknowledgeRange(largestAcknowledged, 1 + QuicPacket.parseVariableLengthInteger(buffer)) - 1;
 
         for (int i = 0; i < ackBlockCount; i++) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1:
@@ -165,17 +178,30 @@ public class AckFrame extends QuicFrame {
             //   largest packet number in that block.  A value of zero indicates that
             //   only the largest packet number is acknowledged."
             int contiguousPacketsPreceding = QuicPacket.parseVariableLengthInteger(buffer) + 1;
-            currentSmallest -= (gapSize + addAcknowledgeRange(currentSmallest - gapSize, contiguousPacketsPreceding));
+            // The largest of the next range is the current smallest - (gap size + 1), because the gap size counts the
+            // ones not being present, and we need the first (below) being present.
+            // The new current smallest is largest of the next range - (range size - 1)
+            //                             == current smallest - (gap size + 1) - (range size - 1)
+            //                             == current smallest - gap size - range size
+            currentSmallest -= (gapSize + addAcknowledgeRange(currentSmallest - gapSize - 1, contiguousPacketsPreceding));
         }
 
         return this;
     }
 
-    private int addAcknowledgeRange(long smallestAcknowledged, int contiguousPacketsPreceding) {
-        for (int i = contiguousPacketsPreceding; i > 0 ; i--) {
-            acknowledgedPacketNumbers.add(--smallestAcknowledged);
+    private int addAcknowledgeRange(long largestOfRange, int rangeSize) {
+        for (int i = 0; i < rangeSize; i++) {
+            acknowledgedPacketNumbers.add(largestOfRange - i);
         }
-        return contiguousPacketsPreceding;
+
+        if (! stringRepresentation.isEmpty()) {
+            stringRepresentation += ",";
+        }
+        stringRepresentation += rangeSize > 1?
+                largestOfRange + "-" + (largestOfRange - rangeSize + 1):
+                largestOfRange;
+
+        return rangeSize;
     }
 
     public List<Long> getAckedPacketNumbers() {
@@ -184,8 +210,7 @@ public class AckFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "AckFrame[" + acknowledgedPacketNumbers.stream().map(i -> i.toString()).collect(Collectors.joining(","))
-                + "|\u0394" + (ackDelay * delayScale) / 1000  + "]";
+        return "AckFrame[" + stringRepresentation + "|\u0394" + (ackDelay * delayScale) / 1000  + "]";
     }
 
     @Override

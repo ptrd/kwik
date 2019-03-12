@@ -38,6 +38,7 @@ class AckFrameTest {
         assertThat(ack.getLargestAcknowledged()).isEqualTo(0);
         assertThat(ack.getAckDelay()).isEqualTo(0);
         assertThat(ack.getAckedPacketNumbers()).containsOnly(0L);
+        assertThat(ack.toString()).contains("[0|");
     }
 
     @Test
@@ -50,6 +51,7 @@ class AckFrameTest {
         assertThat(ack.getAckDelay()).isEqualTo(0);
 
         assertThat(ack.getAckedPacketNumbers()).containsOnly(2L, 0L);
+        assertThat(ack.toString()).contains("[2,0|");
     }
 
     @Test
@@ -62,7 +64,7 @@ class AckFrameTest {
         assertThat(ack.getAckDelay()).isEqualTo(0);
 
         assertThat(ack.getAckedPacketNumbers()).containsOnly(8L, 7L, 2L, 1L);
-        assertThat(ack.toString()).contains("8,7,2,1");
+        assertThat(ack.toString()).contains("[8-7,2-1|");
     }
 
     @Test
@@ -75,10 +77,11 @@ class AckFrameTest {
         assertThat(ack.getAckDelay()).isEqualTo(0);
 
         assertThat(ack.getAckedPacketNumbers()).containsOnly(10L, 9L, 8L, /* gap: 7, 6 */ 5L, 4L, /* gap: 3 */ 2L, 1L, 0L);
+        assertThat(ack.toString()).contains("[10-8,5-4,2-0|");
     }
 
     @Test
-    void testGenerateAckWithSinglePacketNumbers() {
+    void testGenerateAckWithSinglePacketNumber() {
         AckFrame ackFrame = new AckFrame(3);
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(3L);
 
@@ -86,6 +89,19 @@ class AckFrameTest {
         byte[] binaryFrame = new byte[] { 0x02,    0x03,   0x00, 0x00,   0x00 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(3L);
         assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(ackFrame.toString()).contains("[3|");
+    }
+
+    @Test
+    void testGenerateAckWithSinglePacketNumberAsList() {
+        AckFrame ackFrame = new AckFrame(List.of(3L));
+        assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(3L);
+
+        //                                ackframe largest delay #blocks #acked-below
+        byte[] binaryFrame = new byte[] { 0x02,    0x03,   0x00, 0x00,   0x00 };
+        assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(3L);
+        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(ackFrame.toString()).contains("[3|");
     }
 
     @Test
@@ -97,6 +113,7 @@ class AckFrameTest {
         byte[] binaryFrame = new byte[] { 0x02,    0x04,   0x00, 0x00,   0x04 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(4L, 3L, 2L, 1L, 0L);
         assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(ackFrame.toString()).contains("[4-0|");
     }
 
     @Test
@@ -108,6 +125,7 @@ class AckFrameTest {
         byte[] binaryFrame = new byte[] { 0x02,    0x05,   0x00, 0x01,   0x01,        0x01, 0x01 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(5L, 4L, 1L, 0L);
         assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(ackFrame.toString()).contains("[5-4,1-0|");
     }
 
     @Test
@@ -119,5 +137,6 @@ class AckFrameTest {
         byte[] binaryFrame = new byte[] { 0x02,    0x05,   0x00, 0x01,   0x01,        0x00, 0x02 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(5L, 4L, 2L, 1L, 0L);
         assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(ackFrame.toString()).contains("[5-4,2-0|");
     }
 }

@@ -97,16 +97,12 @@ public class Sender implements FrameProcessor {
                         level = lastReceivedMessageLevel;
                         AckGenerator ackGenerator = ackGenerators[level.ordinal()];
                         ackWaiting = ackGenerator.hasNewAckToSend();
-                        // System.out.println("ACKS no packets in queue, check for acks on level " + level + ": " + ackWaiting);
                     }
                     if (packetWaiting || !ackWaiting) {
                         WaitingPacket queued = incomingPacketQueue.take();
                         packet = queued.packet;
                         level = packet.getEncryptionLevel();
                         logMessage = queued.logMessage;
-                    }
-                    if (level == null) {
-                        System.out.println("FOUT");
                     }
 
                     packetNumber = generatePacketNumber(level);
@@ -134,7 +130,6 @@ public class Sender implements FrameProcessor {
                     AckGenerator ackGenerator = ackGenerators[level.ordinal()];
                     if (ackGenerator.hasAckToSend()) {
                         AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
-                        //System.out.println("ACKS  there is (also?) ack to send for " + level + ", namely: " + ackToSend);
                         packet.addFrame(ackToSend);
                         packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);
                     }
@@ -149,7 +144,7 @@ public class Sender implements FrameProcessor {
                     congestionController.registerInFlight(packet);
                 }
                 catch (InterruptedException interrupted) {
-                    // System.out.println("ACK:  wait for packet is interrupted, enabling checking for acks to send");
+                    // Someone interrupted, maybe because an Ack has to be sent.
                 }
             }
         }
