@@ -144,6 +144,17 @@ public class QuicConnection implements PacketProcessor {
         keepAliveActor = new KeepAliveActor(quicVersion, seconds, transportParams.getIdleTimeout(), this);
     }
 
+    public void ping() {
+        if (connectionState == Status.Connected) {
+            QuicPacket packet = createPacket(App, new PingFrame(quicVersion));
+            packet.frames.add(new Padding(20));  // TODO: find out minimum packet size, and let packet take care of it.
+            send(packet, "ping");
+        }
+        else {
+            throw new IllegalStateException("not connected");
+        }
+    }
+
     private void startReceiverLoop() {
         Thread receiverThread = new Thread(this::receiveAndProcessPackets, "receiver-loop");
         receiverThread.setDaemon(true);

@@ -44,6 +44,7 @@ public class Quic {
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
         cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
@@ -199,6 +200,9 @@ public class Quic {
             logger.useRelativeTime(true);
         }
 
+        boolean interactiveMode = cmd.hasOption("i");
+
+
         try {
             QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
 
@@ -210,20 +214,26 @@ public class Quic {
             if (http09Request != null) {
                 doHttp09Request(quicConnection, http09Request);
             }
-
-            if (keepAliveTime > 0) {
-                try {
-                    Thread.sleep((keepAliveTime + 30) * 1000);
-                } catch (InterruptedException e) {}
+            if (interactiveMode) {
+                new InteractiveShell(quicConnection).start();
+            }
+            else {
+                if (keepAliveTime > 0) {
+                    try {
+                        Thread.sleep((keepAliveTime + 30) * 1000);
+                    } catch (InterruptedException e) {
+                    }
+                }
             }
 
             quicConnection.close();
 
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {}
+            } catch (InterruptedException e) {
+            }
 
-            System.out.println("Terminating Quic");
+            System.out.println("Terminating Kwik");
         }
         catch (IOException e) {
             System.out.println("Got IO error: " + e);
@@ -232,7 +242,7 @@ public class Quic {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
 
-        if (http09Request == null && keepAliveTime == 0) {
+        if (!interactiveMode && http09Request == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
     }
