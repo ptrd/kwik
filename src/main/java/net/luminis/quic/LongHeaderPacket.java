@@ -54,7 +54,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destConnectionId;
         this.frames = new ArrayList<>();
-        this.frames.add(frame);
+        if (frame != null) {
+            this.frames.add(frame);
+        }
     }
 
     /**

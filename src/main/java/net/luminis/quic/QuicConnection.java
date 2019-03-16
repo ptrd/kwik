@@ -78,6 +78,7 @@ public class QuicConnection implements PacketProcessor {
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters transportParams;
     private Map<Integer, byte[]> destConnectionIds;
+    private Map<Integer, byte[]> sourceConnectionIds;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -98,6 +99,7 @@ public class QuicConnection implements PacketProcessor {
         tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
+        sourceConnectionIds = new ConcurrentHashMap<>();
         destConnectionIds = new ConcurrentHashMap<>();
 
         try {
@@ -195,20 +197,16 @@ public class QuicConnection implements PacketProcessor {
      * @param dstConnIdLength
      */
     private void generateConnectionIds(int srcConnIdLength, int dstConnIdLength) {
-        ByteBuffer buffer = ByteBuffer.allocate(srcConnIdLength);
-        buffer.putLong(random.nextLong());
         sourceConnectionId = new byte[srcConnIdLength];
-        buffer.rewind();
-        buffer.get(sourceConnectionId);
+        random.nextBytes(sourceConnectionId);
         log.debug("Source connection id", sourceConnectionId);
+        sourceConnectionIds.put(0, sourceConnectionId);
 
-        buffer = ByteBuffer.allocate(dstConnIdLength);
-        buffer.putLong(random.nextLong());
         destConnectionId = new byte[dstConnIdLength];
-        buffer.rewind();
-        buffer.get(destConnectionId);
+        random.nextBytes(destConnectionId);
         log.info("Original destination connection id", destConnectionId);
         originalDestinationConnectionId = destConnectionId;
+        destConnectionIds.put(0, destConnectionId);
     }
 
     private void generateInitialKeys() {
@@ -414,6 +412,7 @@ public class QuicConnection implements PacketProcessor {
     @Override
     public void process(InitialPacket packet) {
         destConnectionId = packet.getSourceConnectionId();
+        destConnectionIds.put(0, destConnectionId);
         processFrames(packet);
     }
 
@@ -457,6 +456,7 @@ public class QuicConnection implements PacketProcessor {
 
                 token = packet.getRetryToken();
                 destConnectionId = packet.getSourceConnectionId();
+                destConnectionIds.put(0, destConnectionId);
                 log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
                 generateInitialKeys();
 
@@ -507,6 +507,9 @@ public class QuicConnection implements PacketProcessor {
             }
             else if (frame instanceof NewConnectionIdFrame) {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
+            }
+            else if (frame instanceof RetireConnectionIdFrame) {
+                retireConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
             }
             else {
                 log.debug("Ignoring " + frame);
@@ -622,6 +625,31 @@ public class QuicConnection implements PacketProcessor {
         log.info("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
         destConnectionId = newConnectionId;
     }
+
+    public byte[][] newConnectionIds(int count) {
+        QuicPacket packet = createPacket(App, null);
+        byte[][] newConnectionIds = new byte[3][];
+
+        for (int i = 0; i < count; i++) {
+            byte[] newSourceConnectionId = new byte[sourceConnectionId.length];
+            random.nextBytes(newSourceConnectionId);
+            newConnectionIds[i] = newSourceConnectionId;
+            int sequenceNr = sourceConnectionIds.size();
+            sourceConnectionIds.put(sequenceNr, newSourceConnectionId);
+            log.debug("New generated source connection id", newSourceConnectionId);
+            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, newSourceConnectionId));
+        }
+
+        send(packet, "new connection id's");
+        return newConnectionIds;
+    }
+
+    private void retireConnectionId(int sequenceNr) {
+        if (sourceConnectionIds.containsKey(sequenceNr)) {
+            sourceConnectionIds.put(sequenceNr, null);
+        }
+    }
+
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;

@@ -32,9 +32,9 @@ public class NewConnectionIdFrame extends QuicFrame {
         this.quicVersion = quicVersion;
     }
 
-    public NewConnectionIdFrame(Version quicVersion, int secondNr, byte[] newSourceConnectionId) {
+    public NewConnectionIdFrame(Version quicVersion, int sequenceNr, byte[] newSourceConnectionId) {
         this.quicVersion = quicVersion;
-        this.sequenceNr = secondNr;
+        this.sequenceNr = sequenceNr;
         connectionId = newSourceConnectionId;
     }
 

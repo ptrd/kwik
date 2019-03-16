@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
     private byte[] destinationConnectionId;
     private byte[] packetBytes;
+    private byte[] connectionId;
 
     /**
      * Constructs an empty short header packet for use with the parse() method.
@@ -45,7 +48,11 @@ public class ShortHeaderPacket extends QuicPacket {
     public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.destinationConnectionId = destinationConnectionId;
-        frames = new ArrayList<>(List.of(frame));
+        connectionId = destinationConnectionId;
+        frames = new ArrayList<>();
+        if (frame != null) {
+            frames.add(frame);
+        }
     }
 
     public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, Logger log) throws MissingKeysException {
@@ -56,6 +63,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
         byte[] sourceConnectionId = connection.getSourceConnectionId();
         byte[] packetConnectionId = new byte[sourceConnectionId.length];
+        connectionId = packetConnectionId;
         buffer.get(packetConnectionId);
         log.debug("Destination connection id", packetConnectionId);
 
@@ -169,6 +177,7 @@ public class ShortHeaderPacket extends QuicPacket {
                 + getEncryptionLevel().name().charAt(0) + "|"
                 + packetNumber + "|"
                 + "S" + "|"
+                + ByteUtils.bytesToHex(connectionId) + "|"
                 + packetSize + "|"
                 + frames.size() + "  "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));

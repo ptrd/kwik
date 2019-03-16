@@ -21,7 +21,9 @@ package net.luminis.quic;
 import net.luminis.tls.ByteUtils;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class InteractiveShell {
 
@@ -51,6 +53,9 @@ public class InteractiveShell {
                             case "nextdestcid":
                                 nextDestinationConnectionId();
                                 break;
+                            case "newconnectionids":
+                                newConnectionIds();
+                                break;
                             case "ping":
                                 sendPing();
                                 break;
@@ -75,6 +80,14 @@ public class InteractiveShell {
         } catch (IOException e) {
             System.out.println("Error: " + e);
         }
+    }
+
+    private void newConnectionIds() {
+        byte[][] newConnectionIds = quicConnection.newConnectionIds(3);
+        System.out.println("Generated new (source) connection id's: " +
+                Arrays.stream(newConnectionIds)
+                        .map(cid -> ByteUtils.bytesToHex(cid))
+                        .collect(Collectors.joining(", ")));
     }
 
     private void printConnectionIds() {

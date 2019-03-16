@@ -402,6 +402,9 @@ abstract public class QuicPacket {
                 case 0x18:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
                     break;
+                case 0x19:
+                    frames.add(new RetireConnectionIdFrame(quicVersion).parse(buffer, log));
+                    break;
                 case 0x1c:
                 case 0x1d:
                     frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
