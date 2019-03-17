@@ -40,7 +40,7 @@ class SenderTest {
 
     @BeforeAll
     static void initLogger() {
-        logger = new Logger();
+        logger = new SysOutLogger();
         logger.logDebug(true);
     }
 

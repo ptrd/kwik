@@ -96,7 +96,7 @@ public class Quic {
             return;
         }
 
-        Logger logger = new Logger();
+        Logger logger = new SysOutLogger();
         logger.logPackets(true);
         logger.logInfo(true);
 
