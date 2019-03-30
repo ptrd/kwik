@@ -21,6 +21,7 @@ package net.luminis.quic;
 import org.apache.commons.cli.*;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
@@ -44,6 +45,7 @@ public class Quic {
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
+        cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
@@ -96,7 +98,18 @@ public class Quic {
             return;
         }
 
-        Logger logger = new SysOutLogger();
+        Logger logger = null;
+        if (cmd.hasOption("L")) {
+            String logFilename = cmd.getOptionValue("L");
+            try {
+                logger = new FileLogger(new File(logFilename));
+            } catch (IOException fileError) {
+                System.err.println("Error: cannot open log file '" + logFilename + "'");
+            }
+        }
+        if (logger == null) {
+            logger = new SysOutLogger();
+        }
         logger.logPackets(true);
         logger.logInfo(true);
 
