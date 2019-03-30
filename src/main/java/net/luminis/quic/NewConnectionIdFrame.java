@@ -23,7 +23,8 @@ import java.nio.ByteBuffer;
 public class NewConnectionIdFrame extends QuicFrame {
 
     private Version quicVersion;
-    private int sequence;
+    private int sequenceNr;
+    private byte[] connectionId;
 
     public NewConnectionIdFrame(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -38,15 +39,15 @@ public class NewConnectionIdFrame extends QuicFrame {
         buffer.get();
 
         if (quicVersion.equals(Version.IETF_draft_14) || quicVersion.atLeast(Version.IETF_draft_17)) {
-            sequence = QuicPacket.parseVariableLengthInteger(buffer);
+            sequenceNr = QuicPacket.parseVariableLengthInteger(buffer);
             int connectionIdLength = buffer.get();
-            byte[] connectionId = new byte[connectionIdLength];
+            connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }
         else if (quicVersion.atLeast(Version.IETF_draft_15)) {
             int connectionIdLength = buffer.get();
-            sequence = QuicPacket.parseVariableLengthInteger(buffer);
-            byte[] connectionId = new byte[connectionIdLength];
+            sequenceNr = QuicPacket.parseVariableLengthInteger(buffer);
+            connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }
 
@@ -58,6 +59,15 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewConnectionIdFrame[" + sequence + "]";
+        return "NewConnectionIdFrame[" + sequenceNr + "]";
     }
+
+    public int getSequenceNr() {
+        return sequenceNr;
+    }
+
+    public byte[] getConnectionId() {
+        return connectionId;
+    }
+
 }

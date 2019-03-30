@@ -18,7 +18,10 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.io.*;
+import java.util.Map;
 
 public class InteractiveShell {
 
@@ -41,7 +44,10 @@ public class InteractiveShell {
                 if (! cmdLine.isBlank()) {
                     String cmd = cmdLine.split(" ")[0];
                     try {
-                        switch (cmd) {
+                        switch (cmd.toLowerCase()) {
+                            case "connectionids":
+                                printConnectionIds();
+                                break;
                             case "ping":
                                 sendPing();
                                 break;
@@ -66,6 +72,15 @@ public class InteractiveShell {
         } catch (IOException e) {
             System.out.println("Error: " + e);
         }
+    }
+
+    private void printConnectionIds() {
+        System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
+        System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
+        System.out.println("Available destination connection id's:");
+        quicConnection.getDestinationConnectionIds().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
     }
 
     private void help() {

@@ -77,6 +77,7 @@ public class QuicConnection implements PacketProcessor {
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters transportParams;
+    private Map<Integer, byte[]> destConnectionIds;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -97,6 +98,7 @@ public class QuicConnection implements PacketProcessor {
         tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
+        destConnectionIds = new ConcurrentHashMap<>();
 
         try {
             ECKey[] keys = generateKeys("secp256r1");
@@ -395,14 +397,6 @@ public class QuicConnection implements PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    public byte[] getSourceConnectionId() {
-        return sourceConnectionId;
-    }
-
-    public byte[] getDestinationConnectionId() {
-        return destConnectionId;
-    }
-
     private byte[] createClientHello(String host, ECPublicKey publicKey) {
         boolean compatibilityMode = false;
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
@@ -511,6 +505,9 @@ public class QuicConnection implements PacketProcessor {
                     }
                 }
             }
+            else if (frame instanceof NewConnectionIdFrame) {
+                destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
+            }
             else {
                 log.debug("Ignoring " + frame);
             }
@@ -611,5 +608,17 @@ public class QuicConnection implements PacketProcessor {
         sender.shutdown();
         receiver.shutdown();
         streams.values().stream().forEach(s -> s.abort());
+    }
+
+    public byte[] getSourceConnectionId() {
+        return sourceConnectionId;
+    }
+
+    public byte[] getDestinationConnectionId() {
+        return destConnectionId;
+    }
+
+    public Map<Integer, byte[]> getDestinationConnectionIds() {
+        return destConnectionIds;
     }
 }
