@@ -19,20 +19,38 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
 
 public class NewConnectionIdFrame extends QuicFrame {
 
     private Version quicVersion;
     private int sequenceNr;
     private byte[] connectionId;
+    private static Random random = new Random();
 
     public NewConnectionIdFrame(Version quicVersion) {
         this.quicVersion = quicVersion;
     }
 
+    public NewConnectionIdFrame(Version quicVersion, int secondNr, byte[] newSourceConnectionId) {
+        this.quicVersion = quicVersion;
+        this.sequenceNr = secondNr;
+        connectionId = newSourceConnectionId;
+    }
+
     @Override
     byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(30);
+        buffer.put((byte) 0x18);
+        buffer.put(QuicPacket.encodeVariableLengthInteger(sequenceNr));
+        buffer.put((byte) connectionId.length);
+        buffer.put(connectionId);
+        random.ints(16).forEach(i -> buffer.put((byte) i));
+
+        byte[] bytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(bytes);
+        return bytes;
     }
 
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) {

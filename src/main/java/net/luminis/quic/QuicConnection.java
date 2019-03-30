@@ -610,6 +610,19 @@ public class QuicConnection implements PacketProcessor {
         streams.values().stream().forEach(s -> s.abort());
     }
 
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-5.1.2
+    // "An endpoint can change the connection ID it uses for a peer to
+    //   another available one at any time during the connection. "
+    public void nextDestinationConnectionId() {
+        int currentIndex = destConnectionIds.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(destConnectionId))
+                .mapToInt(entry -> entry.getKey())
+                .findFirst().orElse(0);
+        byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
+        log.info("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        destConnectionId = newConnectionId;
+    }
+
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
     }

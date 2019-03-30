@@ -48,6 +48,9 @@ public class InteractiveShell {
                             case "connectionids":
                                 printConnectionIds();
                                 break;
+                            case "nextdestcid":
+                                nextDestinationConnectionId();
+                                break;
                             case "ping":
                                 sendPing();
                                 break;
@@ -81,6 +84,10 @@ public class InteractiveShell {
         quicConnection.getDestinationConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
+    }
+
+    private void nextDestinationConnectionId() {
+        quicConnection.nextDestinationConnectionId();
     }
 
     private void help() {
