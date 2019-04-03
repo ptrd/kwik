@@ -23,10 +23,7 @@ import net.luminis.tls.ByteUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -35,11 +32,13 @@ public class InteractiveShell {
 
     private final QuicConnection quicConnection;
     private final Map<String, Consumer<String>> commands;
-    private volatile boolean running;
+    private boolean running;
+    private Map<String, String> history;
 
     public InteractiveShell(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
         commands = new HashMap<>();
+        history = new LinkedHashMap<>();
         setupCommands();
     }
 
@@ -50,9 +49,18 @@ public class InteractiveShell {
         commands.put("cids_new", this::newConnectionIds);
         commands.put("cids_next", this::nextDestinationConnectionId);
         commands.put("cids_show", this::printConnectionIds);
+        commands.put("!!", this::repeatLastCommand);
+    }
+
+    private void repeatLastCommand(String arg) {
+        if (history.size() > 0) {
+            Map.Entry<String, String> lastCommand = history.entrySet().stream().reduce((first, second) -> second).orElse(null);
+            commands.get(lastCommand.getKey()).accept(lastCommand.getValue());
+        }
     }
 
     public void start() {
+
         BufferedReader in = new BufferedReader(new InputStreamReader((System.in)));
         try {
             System.out.println("\nThis is the KWIK interactive shell. Type a command or 'help'.");
@@ -65,9 +73,14 @@ public class InteractiveShell {
                     String cmd = cmdLine.split(" ")[0];
                     List<String> matchingCommands = commands.keySet().stream().filter(command -> command.startsWith(cmd)).collect(Collectors.toList());
                     if (matchingCommands.size() == 1) {
-                        Consumer<String> commandFunction = commands.get(matchingCommands.get(0));
+                        String matchingCommand = matchingCommands.get(0);
+                        Consumer<String> commandFunction = commands.get(matchingCommand);
                         try {
-                            commandFunction.accept(cmdLine.substring(cmd.length()).trim());
+                            String commandArgs = cmdLine.substring(cmd.length()).trim();
+                            commandFunction.accept(commandArgs);
+                            if (!matchingCommand.startsWith("!")) {
+                                history.put(matchingCommand, commandArgs);
+                            }
                         } catch (Exception error) {
                             error(error);
                         }
@@ -127,7 +140,7 @@ public class InteractiveShell {
     }
 
     private void prompt() {
-        System.out.print("\n> ");
+        System.out.print("> ");
         System.out.flush();
     }
 }
