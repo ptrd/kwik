@@ -20,18 +20,36 @@ package net.luminis.quic;
 
 import net.luminis.tls.ByteUtils;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
 
 public class InteractiveShell {
 
     private final QuicConnection quicConnection;
-    private boolean running;
+    private final Map<String, Consumer<String>> commands;
+    private volatile boolean running;
 
     public InteractiveShell(QuicConnection quicConnection) {
         this.quicConnection = quicConnection;
+        commands = new HashMap<>();
+        setupCommands();
+    }
+
+    private void setupCommands() {
+        commands.put("help", this::help);
+        commands.put("quit", this::quit);
+        commands.put("ping", this::sendPing);
+        commands.put("cids_new", this::newConnectionIds);
+        commands.put("cids_next", this::nextDestinationConnectionId);
+        commands.put("cids_show", this::printConnectionIds);
     }
 
     public void start() {
@@ -45,32 +63,16 @@ public class InteractiveShell {
                 String cmdLine = in.readLine();
                 if (! cmdLine.isBlank()) {
                     String cmd = cmdLine.split(" ")[0];
-                    try {
-                        switch (cmd.toLowerCase()) {
-                            case "connectionids":
-                                printConnectionIds();
-                                break;
-                            case "nextdestcid":
-                                nextDestinationConnectionId();
-                                break;
-                            case "newconnectionids":
-                                newConnectionIds();
-                                break;
-                            case "ping":
-                                sendPing();
-                                break;
-                            case "help":
-                                help();
-                                break;
-                            case "quit":
-                                quit();
-                                break;
-                            default:
-                                unknown();
+                    List<String> matchingCommands = commands.keySet().stream().filter(command -> command.startsWith(cmd)).collect(Collectors.toList());
+                    if (matchingCommands.size() == 1) {
+                        Consumer<String> commandFunction = commands.get(matchingCommands.get(0));
+                        try {
+                            commandFunction.accept(cmdLine.substring(cmd.length()).trim());
+                        } catch (Exception error) {
+                            error(error);
                         }
-                    }
-                    catch (Exception error) {
-                        error(error);
+                    } else {
+                        unknown();
                     }
                 }
                 if (running) {
@@ -82,7 +84,8 @@ public class InteractiveShell {
         }
     }
 
-    private void newConnectionIds() {
+
+    private void newConnectionIds(String arg) {
         byte[][] newConnectionIds = quicConnection.newConnectionIds(3);
         System.out.println("Generated new (source) connection id's: " +
                 Arrays.stream(newConnectionIds)
@@ -90,7 +93,7 @@ public class InteractiveShell {
                         .collect(Collectors.joining(", ")));
     }
 
-    private void printConnectionIds() {
+    private void printConnectionIds(String arg) {
         System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
         System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
         System.out.println("Available destination connection id's:");
@@ -99,15 +102,15 @@ public class InteractiveShell {
                 .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
     }
 
-    private void nextDestinationConnectionId() {
+    private void nextDestinationConnectionId(String arg) {
         quicConnection.nextDestinationConnectionId();
     }
 
-    private void help() {
-        System.out.println("available commands: ping, quit");
+    private void help(String arg) {
+        System.out.println("available commands: " + commands.keySet().stream().sorted().collect(Collectors.joining(", ")));
     }
 
-    private void quit() {
+    private void quit(String arg) {
         running = false;
     }
 
@@ -115,7 +118,7 @@ public class InteractiveShell {
         System.out.println("unknown command");
     }
 
-    private void sendPing() {
+    private void sendPing(String arg) {
         quicConnection.ping();
     }
 
