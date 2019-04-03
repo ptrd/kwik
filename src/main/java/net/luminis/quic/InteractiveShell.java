@@ -116,7 +116,8 @@ public class InteractiveShell {
     }
 
     private void nextDestinationConnectionId(String arg) {
-        quicConnection.nextDestinationConnectionId();
+        byte[] newConnectionId = quicConnection.nextDestinationConnectionId();
+        System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
     }
 
     private void help(String arg) {
