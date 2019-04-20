@@ -80,6 +80,7 @@ public class QuicConnection implements PacketProcessor {
     private Map<Integer, byte[]> sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
     private Consumer<QuicStream> serverStreamCallback;
+    private String applicationProtocol;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -117,7 +118,12 @@ public class QuicConnection implements PacketProcessor {
     /**
      * Set up the connection with the server.
      */
-    public synchronized void connect(int connectionTimeout) throws IOException {
+    public void connect(int connectionTimeout) throws IOException {
+        connect(connectionTimeout, "hq-15");
+    }
+
+    public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
+        this.applicationProtocol = applicationProtocol;
         generateConnectionIds(8, 8);
         generateInitialKeys();
 
@@ -125,7 +131,7 @@ public class QuicConnection implements PacketProcessor {
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        startHandshake();
+        startHandshake(applicationProtocol);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -214,8 +220,8 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    private void startHandshake() {
-        byte[] clientHello = createClientHello(host, publicKey);
+    private void startHandshake(String applicationProtocol) {
+        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol);
         tlsState.clientHelloSend(privateKey, clientHello);
 
         InitialPacket clientHelloPacket = (InitialPacket) createPacket(EncryptionLevel.Initial, new CryptoFrame(quicVersion, clientHello));
@@ -396,7 +402,7 @@ public class QuicConnection implements PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private byte[] createClientHello(String host, ECPublicKey publicKey) {
+    private byte[] createClientHello(String host, ECPublicKey publicKey, String alpnProtocol) {
         boolean compatibilityMode = false;
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
@@ -405,7 +411,7 @@ public class QuicConnection implements PacketProcessor {
                         new QuicTransportParametersExtension(quicVersion):
                         new QuicTransportParametersExtensionPreDraft17(quicVersion),
                 new ECPointFormatExtension(),
-                new ApplicationLayerProtocolNegotiationExtension("hq-15"),
+                new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),
         };
         return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
@@ -471,7 +477,7 @@ public class QuicConnection implements PacketProcessor {
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                startHandshake();
+                startHandshake(applicationProtocol);
             } else {
                 log.debug("Ignoring RetryPacket, because already processed one.");
             }
