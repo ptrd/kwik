@@ -32,6 +32,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.*;
@@ -42,8 +43,6 @@ import static net.luminis.tls.Tls13.generateKeys;
  * Creates and maintains a QUIC connection with a QUIC server.
  */
 public class QuicConnection implements PacketProcessor {
-
-    private KeepAliveActor keepAliveActor;
 
     enum Status {
         Idle,
@@ -79,6 +78,8 @@ public class QuicConnection implements PacketProcessor {
     private volatile TransportParameters transportParams;
     private Map<Integer, byte[]> destConnectionIds;
     private Map<Integer, byte[]> sourceConnectionIds;
+    private KeepAliveActor keepAliveActor;
+    private Consumer<QuicStream> serverStreamCallback;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -498,7 +499,13 @@ public class QuicConnection implements PacketProcessor {
                     if (streamId % 2 == 1) {
                         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-2.1
                         // "servers initiate odd-numbered streams"
-                        log.info("Receiving data for server-initiated stream " + streamId + ": " + ByteUtils.bytesToHex(((StreamFrame) frame).getStreamData()));
+                        log.info("Receiving data for server-initiated stream " + streamId);
+                        stream = new QuicStream(quicVersion, streamId, this, log);
+                        streams.put(streamId, stream);
+                        stream.add((StreamFrame) frame);
+                        if (serverStreamCallback != null) {
+                            serverStreamCallback.accept(stream);
+                        }
                     }
                     else {
                         log.error("Receiving frame for non-existant stream " + streamId);
@@ -663,4 +670,9 @@ public class QuicConnection implements PacketProcessor {
     public Map<Integer, byte[]> getDestinationConnectionIds() {
         return destConnectionIds;
     }
+
+    public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
+        this.serverStreamCallback = streamProcessor;
+    }
+
 }
