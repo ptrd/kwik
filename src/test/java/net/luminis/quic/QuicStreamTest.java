@@ -72,6 +72,27 @@ class QuicStreamTest {
     }
 
     @Test
+    void testReadStreamWithNonAsciiBytes() throws IOException {
+        QuicStream quicStream = new QuicStream(0, connection, logger);
+
+        byte[] data = {
+                0x00, 0x01, 0x02, (byte) 0xff, (byte) 0xfe, (byte) 0xfd
+        };
+        quicStream.add(resurrect(new StreamFrame(0, data, true)));
+
+        assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo(data);
+    }
+
+    @Test
+    void testReadStreamWithFFByte() throws IOException {
+        QuicStream quicStream = new QuicStream(0, connection, logger);
+
+        quicStream.add(resurrect(new StreamFrame(0, new byte[] { (byte) 0xff }, true)));
+
+        assertThat(quicStream.getInputStream().read()).isEqualTo(0xff);
+    }
+
+    @Test
     public void testReadMultipleStreamFrames() throws IOException {
         QuicStream quicStream = new QuicStream(0, connection, logger);
 

@@ -139,7 +139,7 @@ public class QuicStream {
             if (currentOffset < currentFrame.getOffset() + currentFrame.getLength()) {
                 byte data = currentFrame.getStreamData()[currentOffset - currentFrame.getOffset()];
                 currentOffset++;
-                return data;
+                return data & 0xff;
             }
             else {
                 if (currentFrame.isFinal()) {
