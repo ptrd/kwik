@@ -42,7 +42,7 @@ public class NewConnectionIdFrame extends QuicFrame {
     byte[] getBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(30);
         buffer.put((byte) 0x18);
-        buffer.put(QuicPacket.encodeVariableLengthInteger(sequenceNr));
+        VariableLengthInteger.encode(sequenceNr, buffer);
         buffer.put((byte) connectionId.length);
         buffer.put(connectionId);
         random.ints(16).forEach(i -> buffer.put((byte) i));
@@ -57,14 +57,14 @@ public class NewConnectionIdFrame extends QuicFrame {
         buffer.get();
 
         if (quicVersion.equals(Version.IETF_draft_14) || quicVersion.atLeast(Version.IETF_draft_17)) {
-            sequenceNr = QuicPacket.parseVariableLengthInteger(buffer);
+            sequenceNr = VariableLengthInteger.parse(buffer);
             int connectionIdLength = buffer.get();
             connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }
         else if (quicVersion.atLeast(Version.IETF_draft_15)) {
             int connectionIdLength = buffer.get();
-            sequenceNr = QuicPacket.parseVariableLengthInteger(buffer);
+            sequenceNr = VariableLengthInteger.parse(buffer);
             connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }

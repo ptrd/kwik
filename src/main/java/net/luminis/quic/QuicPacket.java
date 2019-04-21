@@ -42,28 +42,6 @@ abstract public class QuicPacket {
         frames = new ArrayList<>();
     }
 
-    static byte[] encodeVariableLengthInteger(int length) {
-        if (length <= 63)
-            return new byte[] { (byte) length };
-        else if (length <= 16383) {
-            ByteBuffer buffer = ByteBuffer.allocate(2);
-            buffer.putShort((short) length);
-            byte[] bytes = buffer.array();
-            bytes[0] = (byte) (bytes[0] | (byte) 0x40);
-            return bytes;
-        }
-        else if (length <= 1073741823) {
-            ByteBuffer buffer = ByteBuffer.allocate(4);
-            buffer.putInt(length);
-            byte[] bytes = buffer.array();
-            bytes[0] = (byte) (bytes[0] | (byte) 0x80);
-            return bytes;
-        }
-        else {
-            // TODO
-            throw new RuntimeException("NIY");
-        }
-    }
 
     byte[] encodePacketNumber(long number) {
         if (number <= 0x7f)
@@ -316,28 +294,6 @@ abstract public class QuicPacket {
             // Programming error
             throw new RuntimeException();
         }
-    }
-
-    static int parseVariableLengthInteger(ByteBuffer buffer) {
-        int length;
-        byte firstLengthByte = buffer.get();
-        switch ((firstLengthByte & 0xc0) >> 6) {
-            case 0:
-                length = firstLengthByte;
-                break;
-            case 1:
-                length = ((firstLengthByte & 0x3f) << 8) | (buffer.get() & 0xff);
-                break;
-            case 2:
-                length = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
-                break;
-            case 3:
-                // TODO -> long
-                throw new NotYetImplementedException();
-            default:
-                throw new ProtocolError("invalid variable length integer encoding");
-        }
-        return length;
     }
 
     protected void parseFrames(byte[] frameBytes, Logger log) {

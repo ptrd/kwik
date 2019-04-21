@@ -29,7 +29,7 @@ public class MaxStreamIdFrame extends QuicFrame {
             throw new RuntimeException();  // Would be a programming error.
         }
 
-        maxStreamId = QuicPacket.parseVariableLengthInteger(buffer);
+        maxStreamId = VariableLengthInteger.parse(buffer);
 
         return this;
     }

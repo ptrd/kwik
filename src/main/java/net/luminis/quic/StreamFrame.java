@@ -83,14 +83,14 @@ public class StreamFrame extends QuicFrame {
         boolean withLength = ((frameType & 0x02) == 0x02);
         isFinal = ((frameType & 0x01) == 0x01);
 
-        streamId = QuicPacket.parseVariableLengthInteger(buffer);
+        streamId = VariableLengthInteger.parse(buffer);
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
 
         if (withOffset) {
-            offset = QuicPacket.parseVariableLengthInteger(buffer);
+            offset = VariableLengthInteger.parse(buffer);
         }
         if (withLength) {
-            length = QuicPacket.parseVariableLengthInteger(buffer);
+            length = VariableLengthInteger.parse(buffer);
         }
         else {
             length = buffer.limit() - buffer.position();

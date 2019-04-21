@@ -49,8 +49,8 @@ public class CryptoFrame extends QuicFrame {
         log.debug("Parsing Crypto frame");
         buffer.get();
 
-        offset = QuicPacket.parseVariableLengthInteger(buffer);
-        length = QuicPacket.parseVariableLengthInteger(buffer);
+        offset = VariableLengthInteger.parse(buffer);
+        length = VariableLengthInteger.parse(buffer);
 
         cryptoData = new byte[length];
         buffer.get(cryptoData);

@@ -156,28 +156,28 @@ public class AckFrame extends QuicFrame {
 
         buffer.get();  // Eat type.
 
-        largestAcknowledged = QuicPacket.parseVariableLengthInteger(buffer);
+        largestAcknowledged = VariableLengthInteger.parse(buffer);
 
-        ackDelay = QuicPacket.parseVariableLengthInteger(buffer);
+        ackDelay = VariableLengthInteger.parse(buffer);
 
-        int ackBlockCount = QuicPacket.parseVariableLengthInteger(buffer);
+        int ackBlockCount = VariableLengthInteger.parse(buffer);
 
         long currentSmallest = largestAcknowledged;
         // The smallest of the first block is the largest - (rangeSize - 1).
-        currentSmallest -= addAcknowledgeRange(largestAcknowledged, 1 + QuicPacket.parseVariableLengthInteger(buffer)) - 1;
+        currentSmallest -= addAcknowledgeRange(largestAcknowledged, 1 + VariableLengthInteger.parse(buffer)) - 1;
 
         for (int i = 0; i < ackBlockCount; i++) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1:
             // "Each Gap indicates a range of packets that are not being
             //   acknowledged.  The number of packets in the gap is one higher than
             //   the encoded value of the Gap Field."
-            int gapSize = QuicPacket.parseVariableLengthInteger(buffer) + 1;
+            int gapSize = VariableLengthInteger.parse(buffer) + 1;
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1:
             // "Each ACK Block acknowledges a contiguous range of packets by
             //   indicating the number of acknowledged packets that precede the
             //   largest packet number in that block.  A value of zero indicates that
             //   only the largest packet number is acknowledged."
-            int contiguousPacketsPreceding = QuicPacket.parseVariableLengthInteger(buffer) + 1;
+            int contiguousPacketsPreceding = VariableLengthInteger.parse(buffer) + 1;
             // The largest of the next range is the current smallest - (gap size + 1), because the gap size counts the
             // ones not being present, and we need the first (below) being present.
             // The new current smallest is largest of the next range - (range size - 1)

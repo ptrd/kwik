@@ -30,7 +30,7 @@ public class RetireConnectionIdFrame extends QuicFrame {
 
     public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
-        sequenceNr = QuicPacket.parseVariableLengthInteger(buffer);
+        sequenceNr = VariableLengthInteger.parse(buffer);
         return this;
     }
 

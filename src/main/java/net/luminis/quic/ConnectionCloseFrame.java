@@ -38,9 +38,9 @@ public class ConnectionCloseFrame extends QuicFrame {
 
         errorCode = buffer.getShort();
         if (frameType == 0x1c) {
-            triggeringFrameType = QuicPacket.parseVariableLengthInteger(buffer);
+            triggeringFrameType = VariableLengthInteger.parse(buffer);
         }
-        int reasonPhraseLength = QuicPacket.parseVariableLengthInteger(buffer);
+        int reasonPhraseLength = VariableLengthInteger.parse(buffer);
         if (reasonPhraseLength > 0) {
             reasonPhrase = new byte[reasonPhraseLength];
             buffer.get(reasonPhrase);

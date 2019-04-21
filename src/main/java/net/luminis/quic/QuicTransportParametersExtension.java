@@ -184,19 +184,19 @@ public class QuicTransportParametersExtension extends Extension {
         int size = buffer.getShort();
 
         if (parameterId == initial_max_stream_data_bidi_local.value) {
-            int maxStreamDataBidiLocal = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
         }
         else if (parameterId == initial_max_data.value) {
-            int maxData = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxData = VariableLengthInteger.parse(buffer);
             log.debug("- initial max data: " + maxData);
         }
         else if (parameterId == initial_max_streams_bidi.value) {
-            int maxBidiStreams = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxBidiStreams = VariableLengthInteger.parse(buffer);
             log.debug("- initial max bidi streams: " + maxBidiStreams);
         }
         else if (parameterId == idle_timeout.value) {
-            int idleTimeout = QuicPacket.parseVariableLengthInteger(buffer);
+            int idleTimeout = VariableLengthInteger.parse(buffer);
             log.debug("- idle timeout: " + idleTimeout);
             params.setIdleTimeout(idleTimeout);
         }
@@ -204,7 +204,7 @@ public class QuicTransportParametersExtension extends Extension {
             parsePreferredAddress(buffer, log);
         }
         else if (parameterId == max_packet_size.value) {
-            int maxPacketSize = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxPacketSize = VariableLengthInteger.parse(buffer);
             log.debug("- max packet size: " + maxPacketSize);
         }
         else if (parameterId == stateless_reset_token.value) {
@@ -213,27 +213,27 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
         }
         else if (parameterId == ack_delay_exponent.value) {
-            int ackDelayExponent = QuicPacket.parseVariableLengthInteger(buffer);
+            int ackDelayExponent = VariableLengthInteger.parse(buffer);
             log.debug("- ack delay exponent: " + ackDelayExponent);
             params.setAckDelayExponent(ackDelayExponent);
         }
         else if (parameterId == initial_max_streams_uni.value) {
-            int maxUniStreams = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxUniStreams = VariableLengthInteger.parse(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
         }
         else if (parameterId == disable_migration.value) {
             log.debug("- disable migration");
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
-            int maxStreamDataBidiRemote = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxStreamDataBidiRemote = VariableLengthInteger.parse(buffer);
             log.debug("- initial max stream data bidi remote: " + maxStreamDataBidiRemote);
         }
         else if (parameterId == initial_max_stream_data_uni.value) {
-            int maxStreamDataUni = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxStreamDataUni = VariableLengthInteger.parse(buffer);
             log.debug("- initial max stream data uni: " + maxStreamDataUni);
         }
         else if (parameterId == max_ack_delay.value) {
-            int maxAckDelay = QuicPacket.parseVariableLengthInteger(buffer);
+            int maxAckDelay = VariableLengthInteger.parse(buffer);
             log.debug("- idle timeout: " + maxAckDelay);
         }
         else if (parameterId == original_connection_id.value) {
@@ -281,9 +281,10 @@ public class QuicTransportParametersExtension extends Extension {
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, int value) {
         buffer.putShort(id.value);
-        byte[] encodedValue = QuicPacket.encodeVariableLengthInteger(value);
-        buffer.putShort((short) encodedValue.length);
-        buffer.put(encodedValue);
+        int position = buffer.position();
+        buffer.putShort((short) 0);  // placeholder
+        int encodedValueLength = VariableLengthInteger.encode(value, buffer);
+        buffer.putShort(position, (short) encodedValueLength);
     }
 
     public TransportParameters getTransportParameters() {

@@ -123,8 +123,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int payloadSize) {
         int packetLength = payloadSize + 16 + packetNumberLength;   // 16 is what encryption adds, note that final length is larger due to adding packet length
-        byte[] length = encodeVariableLengthInteger(packetLength);
-        packetBuffer.put(length);
+        VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
     public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
@@ -153,7 +152,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         parseAdditionalFields(buffer);
 
-        int length = parseVariableLengthInteger(buffer);
+        int length = VariableLengthInteger.parse(buffer);
         log.debug("Length (PN + payload): " + length);
 
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());

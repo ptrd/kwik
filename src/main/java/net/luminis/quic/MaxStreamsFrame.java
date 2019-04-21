@@ -30,7 +30,7 @@ public class MaxStreamsFrame extends QuicFrame {
             throw new RuntimeException();  // Would be a programming error.
         }
 
-        maxStreams = QuicPacket.parseVariableLengthInteger(buffer);
+        maxStreams = VariableLengthInteger.parse(buffer);
 
         return this;
     }

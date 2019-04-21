@@ -29,8 +29,8 @@ public class MaxStreamDataFrame extends QuicFrame {
     public MaxStreamDataFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
-        streamId = QuicPacket.parseVariableLengthInteger(buffer);
-        maxData = QuicPacket.parseVariableLengthInteger(buffer);
+        streamId = VariableLengthInteger.parse(buffer);
+        maxData = VariableLengthInteger.parse(buffer);
 
         return this;
     }

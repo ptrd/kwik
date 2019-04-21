@@ -34,7 +34,7 @@ public class NewTokenFrame extends QuicFrame {
     public NewTokenFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
-        int tokenLength = QuicPacket.parseVariableLengthInteger(buffer);
+        int tokenLength = VariableLengthInteger.parse(buffer);
         newToken = new byte[tokenLength];
         buffer.get(newToken);
 

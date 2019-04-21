@@ -37,7 +37,7 @@ public class StopSendingFrame extends QuicFrame {
     public StopSendingFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
-        streamId = QuicPacket.parseVariableLengthInteger(buffer);
+        streamId = VariableLengthInteger.parse(buffer);
         errorCode = buffer.getShort() & 0xffff;
 
         return this;
