@@ -41,6 +41,7 @@ class QuicStreamTest {
 
     private static long originalWaitForNextFrameTimeoutValue;
     private QuicConnection connection;
+    private QuicStream quicStream;
     private Logger logger;
 
     @BeforeAll
@@ -55,17 +56,16 @@ class QuicStreamTest {
     }
 
     @BeforeEach
-    void createDefaultMocks() {
+    void createDefaultMocksAndObjectUnderTest() {
         connection = Mockito.mock(QuicConnection.class);
         when(connection.getMaxPacketSize()).thenReturn(1232);
         logger = Mockito.mock(Logger.class);
+
+        quicStream = new QuicStream(0, connection, logger);
     }
 
     @Test
     void testReadSingleFinalStreamFrame() throws IOException {
-        connection = Mockito.mock(QuicConnection.class);
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("data".getBytes());
@@ -73,8 +73,6 @@ class QuicStreamTest {
 
     @Test
     void testReadStreamWithNonAsciiBytes() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         byte[] data = {
                 0x00, 0x01, 0x02, (byte) 0xff, (byte) 0xfe, (byte) 0xfd
         };
@@ -85,8 +83,6 @@ class QuicStreamTest {
 
     @Test
     void testReadStreamWithFFByte() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, new byte[] { (byte) 0xff }, true)));
 
         assertThat(quicStream.getInputStream().read()).isEqualTo(0xff);
@@ -94,8 +90,6 @@ class QuicStreamTest {
 
     @Test
     public void testReadMultipleStreamFrames() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
@@ -104,8 +98,6 @@ class QuicStreamTest {
 
     @Test
     void testAddDuplicateStreamFrames() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
@@ -115,8 +107,6 @@ class QuicStreamTest {
 
     @Test
     void testAddNonContiguousStreamFrames() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
@@ -126,8 +116,6 @@ class QuicStreamTest {
 
     @Test
     void testReadBlocksTillContiguousFrameIsAvailalble() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
-
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
 
@@ -155,7 +143,6 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputWithByteArray() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         quicStream.getOutputStream().write("hello world".getBytes());
 
         verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())));
@@ -163,7 +150,6 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputWithByteArrayFragment() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
         verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())));
@@ -171,7 +157,6 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputWithSingleByte() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
         verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())));
@@ -179,7 +164,6 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputMultipleFrames() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
 
@@ -189,7 +173,6 @@ class QuicStreamTest {
 
     @Test
     void testCloseSendsFinalFrame() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
 
@@ -198,7 +181,6 @@ class QuicStreamTest {
 
     @Test
     void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws IOException {
-        QuicStream quicStream = new QuicStream(0, connection, logger);
         byte[] data = generateByteArray(1400);
         quicStream.getOutputStream().write(data);
 
