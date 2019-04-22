@@ -27,6 +27,7 @@ import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -89,11 +90,56 @@ class QuicStreamTest {
     }
 
     @Test
+    void testAvailableBytesForSingleFrame() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
+
+        assertThat(quicStream.getInputStream().available()).isEqualTo(4);
+    }
+
+    @Test
+    void testAvailableBytesForSingleFrameAfterRead() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
+        InputStream inputStream = quicStream.getInputStream();
+        inputStream.read();
+
+        assertThat(inputStream.available()).isEqualTo(3);
+    }
+
+    @Test
+    void testAvailableAfterReadingAllAvailable() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));
+        InputStream inputStream = quicStream.getInputStream();
+        inputStream.read(new byte[4]);
+
+        assertThat(inputStream.available()).isEqualTo(0);
+    }
+
+    @Test
     public void testReadMultipleStreamFrames() throws IOException {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-final".getBytes());
+    }
+
+    @Test
+    public void testAvailableWithMultipleStreamFrames() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
+
+        assertThat(quicStream.getInputStream().available()).isGreaterThan("first-".getBytes().length - 1);
+    }
+
+    @Test
+    public void testAvailableAfterReadingFirstFrame() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
+
+        InputStream inputStream = quicStream.getInputStream();
+        assertThat(inputStream.available()).isGreaterThan("first-".getBytes().length - 1);
+
+        inputStream.read(new byte["first-".getBytes().length]);
+        assertThat(inputStream.available()).isEqualTo("second-final".getBytes().length);
     }
 
     @Test
