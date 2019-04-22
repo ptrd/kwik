@@ -74,12 +74,20 @@ public class QuicTransportParametersExtension extends Extension {
         //   length integer encoding (see Section 16) and have a default value of
         //   0 if the transport parameter is absent, unless otherwise stated."
 
-
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "The idle timeout is a value in seconds that
-        //      is encoded as an integer.  If this parameter is absent or zero
-        //      then the idle timeout is disabled."
-        addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds);
+        if (quicVersion.atLeast(Version.IETF_draft_19)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-18.1
+            // "The idle timeout is a value in milliseconds
+            //      that is encoded as an integer, see (Section 10.2).  If this
+            //      parameter is absent or zero then the idle timeout is disabled."
+            addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds * 1000);
+        }
+        else {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
+            // "The idle timeout is a value in seconds that
+            //      is encoded as an integer.  If this parameter is absent or zero
+            //      then the idle timeout is disabled."
+            addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds);
+        }
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an
