@@ -131,7 +131,7 @@ class QuicTransportParametersExtensionTest {
         //                                                 version____    size_ id___ size_    id___ size_
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 00 ff 00 00 12 00 00 00 00 0a 00 01 07 00 0b 00 01 29".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension();
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getAckDelayExponent()).isEqualTo(7);
