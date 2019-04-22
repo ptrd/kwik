@@ -38,11 +38,11 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, byte[] applicationData, boolean fin) {
-        this(Version.IETF_draft_17, streamId, 0, applicationData, 0, applicationData.length, fin);
+        this(Version.getDefault(), streamId, 0, applicationData, 0, applicationData.length, fin);
     }
 
     public StreamFrame(int streamId, int offset, byte[] applicationData, boolean fin) {
-        this(Version.IETF_draft_17, streamId, offset, applicationData, 0, applicationData.length, fin);
+        this(Version.getDefault(), streamId, offset, applicationData, 0, applicationData.length, fin);
     }
 
     public StreamFrame(Version quicVersion, int streamId, int offset, byte[] applicationData, boolean fin) {
@@ -50,7 +50,7 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, int offset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
-        this(Version.IETF_draft_17, streamId, offset, applicationData, dataOffset, dataLength, fin);
+        this(Version.getDefault(), streamId, offset, applicationData, dataOffset, dataLength, fin);
     }
 
     public StreamFrame(Version quicVersion, int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {

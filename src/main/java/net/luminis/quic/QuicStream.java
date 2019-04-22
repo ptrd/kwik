@@ -52,7 +52,7 @@ public class QuicStream {
 
 
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
-        this(Version.IETF_draft_17, streamId, connection, log);
+        this(Version.getDefault(), streamId, connection, log);
     }
 
     public QuicStream(Version quicVersion, int streamId, QuicConnection connection, Logger log) {

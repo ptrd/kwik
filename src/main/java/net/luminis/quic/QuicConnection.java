@@ -84,7 +84,7 @@ public class QuicConnection implements PacketProcessor {
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
-        this(host, port, Version.IETF_draft_17, log);
+        this(host, port, Version.getDefault(), log);
     }
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
