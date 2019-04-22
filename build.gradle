@@ -1,6 +1,9 @@
 apply plugin: 'java'
 apply plugin: 'idea'
 
+sourceCompatibility = 11
+targetCompatibility = 11
+
 repositories {
     mavenCentral()
 
