@@ -67,6 +67,16 @@ public enum Version {
         }
     }
 
+    public boolean before(Version other) {
+        // Only for IETF drafts
+        if (isIetfDraft(this) && isIetfDraft(other)) {
+            return this.versionId < other.versionId;
+        }
+        else {
+            throw new RuntimeException();
+        }
+    }
+
     private boolean isIetfDraft(Version version) {
         return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_19.versionId;
     }

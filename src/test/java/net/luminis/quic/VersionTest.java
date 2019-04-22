@@ -65,4 +65,9 @@ class VersionTest {
     void testDraft19IsAtLeastDraft17() {
         assertThat(Version.IETF_draft_19.atLeast(Version.IETF_draft_17)).isEqualTo(true);
     }
+
+    @Test
+    void testDraft18BeforeDraft19() {
+        assertThat(Version.IETF_draft_18.before(Version.IETF_draft_19)).isEqualTo(true);
+    }
 }

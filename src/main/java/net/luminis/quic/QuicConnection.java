@@ -408,7 +408,7 @@ public class QuicConnection implements PacketProcessor {
 
         Extension[] quicExtensions = new Extension[] {
                 quicVersion.atLeast(Version.IETF_draft_17)?
-                        new QuicTransportParametersExtension(quicVersion):
+                        new QuicTransportParametersExtension(quicVersion, 30):
                         new QuicTransportParametersExtensionPreDraft17(quicVersion),
                 new ECPointFormatExtension(),
                 new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),

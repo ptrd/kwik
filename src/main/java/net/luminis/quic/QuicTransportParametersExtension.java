@@ -30,10 +30,16 @@ import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18
 public class QuicTransportParametersExtension extends Extension {
 
+    private final Version quicVersion;
     private byte[] data;
     private TransportParameters params;
 
     public QuicTransportParametersExtension() {
+        this(Version.getDefault());
+    }
+
+    public QuicTransportParametersExtension(Version quicVersion) {
+        this.quicVersion = quicVersion;
         params = new TransportParameters();
     }
 
@@ -41,7 +47,9 @@ public class QuicTransportParametersExtension extends Extension {
      * Creates a Quic Transport Parameters Extension for use in a Client Hello.
      * @param quicVersion
      */
-    public QuicTransportParametersExtension(Version quicVersion) {
+    public QuicTransportParametersExtension(Version quicVersion, int idleTimeoutInSeconds) {
+        this.quicVersion = quicVersion;
+
         ByteBuffer buffer = ByteBuffer.allocate(1500);
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
@@ -51,8 +59,10 @@ public class QuicTransportParametersExtension extends Extension {
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
 
-        // For use in Client Hello: just the initial quic version
-        buffer.put(quicVersion.getBytes());
+        if (quicVersion.before(Version.IETF_draft_19)) {
+            // For use in Client Hello: just the initial quic version
+            buffer.put(quicVersion.getBytes());
+        }
 
         // Length of transport parameters vector: use placeholder.
         int transportParametersLengthPosition = buffer.position();
@@ -69,7 +79,7 @@ public class QuicTransportParametersExtension extends Extension {
         // "The idle timeout is a value in seconds that
         //      is encoded as an integer.  If this parameter is absent or zero
         //      then the idle timeout is disabled."
-        addTransportParameter(buffer, idle_timeout, 30);
+        addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds);
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an
@@ -144,12 +154,14 @@ public class QuicTransportParametersExtension extends Extension {
         if (extensionType != 0xffa5) {
             throw new RuntimeException();  // Must be programming error
         }
+        int extensionLength = buffer.getShort();
 
-        int length = buffer.getShort();
-        int negotiatedVersion = buffer.getInt();
-        int supportedVersionsSize = buffer.get();
-        for (int i = 0; i < supportedVersionsSize; i += 4) {
-            int supportedVersion = buffer.getInt();
+        if (quicVersion.before(Version.IETF_draft_19)) {
+            int negotiatedVersion = buffer.getInt();
+            int supportedVersionsSize = buffer.get();
+            for (int i = 0; i < supportedVersionsSize; i += 4) {
+                int supportedVersion = buffer.getInt();
+            }
         }
 
         int transportParametersSize = buffer.getShort();
