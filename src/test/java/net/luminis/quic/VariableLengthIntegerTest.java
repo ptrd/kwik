@@ -103,6 +103,24 @@ class VariableLengthIntegerTest {
     }
 
     @Test
+    void parseMaxInteger() {
+        int value = VariableLengthInteger.parse(wrap((byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+                (byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff));
+
+        assertThat(value).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void parseValueGreaterThanMaxInteger() {
+        byte[] rawBytes = { (byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
+
+        assertThatThrownBy(
+                () -> VariableLengthInteger.parse(wrap(rawBytes)))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void encodeSingleByteInteger() {
         ByteBuffer buffer = ByteBuffer.allocate(8);
         int encodedSize = VariableLengthInteger.encode(37, buffer);

@@ -41,8 +41,16 @@ public class VariableLengthInteger {
                 value = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
                 break;
             case 3:
-                // TODO -> long
-                throw new NotYetImplementedException();
+                // As long as value fits in a Java int, this can be done
+                boolean mostSignificantWordIsNull = (firstLengthByte & 0x3f) == 0 && buffer.get() == 0 && buffer.get() == 0 && buffer.get() == 0;
+                byte lswByte1 = buffer.get();
+                if (mostSignificantWordIsNull && (lswByte1 & 0xff) < 128) {
+                    value = ((lswByte1 & 0xff) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                    break;
+                }
+                else {
+                    throw new NotYetImplementedException("value does not fit in an int");
+                }
             default:
                 // Impossible, just to satisfy the compiler
                 throw new RuntimeException();
