@@ -18,8 +18,11 @@
  */
 package net.luminis.quic;
 
-
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
 public class VariableLengthInteger {
@@ -36,6 +39,42 @@ public class VariableLengthInteger {
                 break;
             case 2:
                 value = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                break;
+            case 3:
+                // TODO -> long
+                throw new NotYetImplementedException();
+            default:
+                // Impossible, just to satisfy the compiler
+                throw new RuntimeException();
+        }
+        return value;
+    }
+
+    public static int parse(InputStream inputStream) throws IOException {
+        int value;
+        int firstLengthByte = inputStream.read();
+        if (firstLengthByte == -1) {
+            throw new EOFException();
+        }
+        switch ((firstLengthByte & 0xc0) >> 6) {
+            case 0:
+                value = firstLengthByte;
+                break;
+            case 1:
+                int nextByte = inputStream.read();
+                if (nextByte == -1) {
+                    throw new EOFException();
+                }
+                value = ((firstLengthByte & 0x3f) << 8) | (nextByte & 0xff);
+                break;
+            case 2:
+                int byte2 = inputStream.read();
+                int byte3 = inputStream.read();
+                int byte4 = inputStream.read();
+                if (byte2 == -1 || byte3 == -1 || byte4 == -1) {
+                    throw new EOFException();
+                }
+                value = ((firstLengthByte & 0x3f) << 24) | ((byte2 & 0xff) << 16) | ((byte3 & 0xff) << 8) | (byte4 & 0xff);
                 break;
             case 3:
                 // TODO -> long

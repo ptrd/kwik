@@ -20,9 +20,14 @@ package net.luminis.quic;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 
 class VariableLengthIntegerTest {
@@ -37,10 +42,28 @@ class VariableLengthIntegerTest {
     }
 
     @Test
+    void parseSingleByteIntegerFromStream() throws IOException {
+        // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
+        // "and the single byte 25 decodes to 37"
+        int value = VariableLengthInteger.parse(wrapAsStream((byte) 0x25));
+
+        assertThat(value).isEqualTo(37);
+    }
+
+    @Test
     void parseTwoByteInteger() {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "the two byte sequence 7b bd decodes to 15293; "
         int value = VariableLengthInteger.parse(wrap((byte) 0x7b, (byte) 0xbd));
+
+        assertThat(value).isEqualTo(15293);
+    }
+
+    @Test
+    void parseTwoByteIntegerFromStream() throws IOException {
+        // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
+        // "the two byte sequence 7b bd decodes to 15293; "
+        int value = VariableLengthInteger.parse(wrapAsStream((byte) 0x7b, (byte) 0xbd));
 
         assertThat(value).isEqualTo(15293);
     }
@@ -61,6 +84,22 @@ class VariableLengthIntegerTest {
         int value = VariableLengthInteger.parse(wrap((byte) 0x9d, (byte) 0x7f, (byte) 0x3e, (byte) 0x7d));
 
         assertThat(value).isEqualTo(494878333);
+    }
+
+    @Test
+    void parseFourByteIntegerFromStream() throws IOException {
+        // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
+        // "the four byte sequence 9d 7f 3e 7d decodes to 494878333;"
+        int value = VariableLengthInteger.parse(wrapAsStream((byte) 0x9d, (byte) 0x7f, (byte) 0x3e, (byte) 0x7d));
+
+        assertThat(value).isEqualTo(494878333);
+    }
+
+    @Test
+    void parseIncompleteFourByteIntegerFromStream() throws IOException {
+        assertThatThrownBy(
+                () -> VariableLengthInteger.parse(wrapAsStream((byte) 0x9d, (byte) 0x7f, (byte) 0x3e)))
+                .isInstanceOf(EOFException.class);
     }
 
     @Test
@@ -120,6 +159,10 @@ class VariableLengthIntegerTest {
 
     private ByteBuffer wrap(byte... bytes) {
         return ByteBuffer.wrap(bytes);
+    }
+
+    private InputStream wrapAsStream(byte... bytes) {
+        return new ByteArrayInputStream(bytes);
     }
 
 }
