@@ -326,8 +326,8 @@ abstract public class QuicPacket {
                     frames.add(new AckFrame().parse(buffer, log));
                     break;
                 case 0x04:
-                    log.debug("Received RST Stream frame (not yet implemented).");
-                    throw new NotYetImplementedException();
+                    frames.add(new ResetStreamFrame().parse(buffer, log));
+                    break;
                 case 0x05:
                     frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
                     break;
@@ -348,9 +348,11 @@ abstract public class QuicPacket {
                     frames.add(new MaxStreamsFrame().parse(buffer, log));
                     break;
                 case 0x14:
+                    frames.add(new DataBlockedFrame().parse(buffer, log));
+                    break;
                 case 0x15:
-                    System.out.println("NYI frame type (data/stream blocked): " + frameType);
-                    throw new NotYetImplementedException();
+                    frames.add(new StreamDataBlockedFrame().parse(buffer, log));
+                    break;
                 case 0x16:
                 case 0x17:
                     frames.add(new StreamsBlockedFrame().parse(buffer, log));
