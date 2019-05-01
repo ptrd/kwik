@@ -44,6 +44,7 @@ public class Quic {
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
         cmdLineOptions.addOption("19", "use Quic version IETF_draft_19");
+        cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
@@ -151,7 +152,10 @@ public class Quic {
         }
 
         Version quicVersion = Version.getDefault();
-        if (cmd.hasOption("19")) {
+        if (cmd.hasOption("20")) {
+            quicVersion = Version.IETF_draft_20;
+        }
+        else if (cmd.hasOption("19")) {
             quicVersion = Version.IETF_draft_19;
         }
         else if (cmd.hasOption("18")) {
