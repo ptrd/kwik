@@ -42,7 +42,7 @@ public class Sender implements FrameProcessor {
     private int port;
     private volatile boolean running;
     private BlockingQueue<WaitingPacket> incomingPacketQueue;
-    private Map<PacketId, PacketAckStatus> packetSentLog;
+    private final Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
     private QuicConnection connection;
