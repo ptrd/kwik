@@ -42,19 +42,46 @@ abstract public class QuicPacket {
         frames = new ArrayList<>();
     }
 
-
-    byte[] encodePacketNumber(long number) {
-        if (number <= 0x7f)
-            return new byte[] { (byte) number };
+    static byte[] encodePacketNumber(long packetNumber) {
+        if (packetNumber <= 0xff) {
+            return new byte[] { (byte) packetNumber };
+        }
+        else if (packetNumber <= 0xffff) {
+            return new byte[] { (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
+        }
+        else if (packetNumber <= 0xffffff) {
+            return new byte[] { (byte) (packetNumber >> 16), (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
+        }
+        else if (packetNumber <= 0xffffffffL) {
+            return new byte[] { (byte) (packetNumber >> 24), (byte) (packetNumber >> 16), (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
+        }
         else {
-            // TODO
-            throw new RuntimeException("NIY");
+            throw new NotYetImplementedException("cannot encode pn > 4 bytes");
         }
     }
 
-    byte encodePacketNumberLength(byte flags, long packetNumber) {
-        // For the time being, a packet number length of 1 is assumed
-        return flags;
+    /**
+     * Updates the given flags byte to encode the packet number length that is used for encoding the given packet number.
+     * @param flags
+     * @param packetNumber
+     * @return
+     */
+    static byte encodePacketNumberLength(byte flags, long packetNumber) {
+        if (packetNumber <= 0xff) {
+            return flags;
+        }
+        else if (packetNumber <= 0xffff) {
+            return (byte) (flags | 0x01);
+        }
+        else if (packetNumber <= 0xffffff) {
+            return (byte) (flags | 0x02);
+        }
+        else if (packetNumber <= 0xffffffffL) {
+            return (byte) (flags | 0x03);
+        }
+        else {
+            throw new NotYetImplementedException("cannot encode pn > 4 bytes");
+        }
     }
 
     void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, Logger log) {
