@@ -161,6 +161,26 @@ class QuicStreamTest {
     }
 
     @Test
+    void testAddMultipleOutOfOrderFrames() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 13, "third-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 19, "forth-final".getBytes(), true)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
+
+        assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-third-forth-final".getBytes());
+    }
+
+    @Test
+    void testAddInterleavedOutOfOrderFrames() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 13, "third-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
+        quicStream.add(resurrect(new StreamFrame(0, 19, "forth-final".getBytes(), true)));
+
+        assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("first-second-third-forth-final".getBytes());
+    }
+
+    @Test
     void testReadBlocksTillContiguousFrameIsAvailalble() throws IOException {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));

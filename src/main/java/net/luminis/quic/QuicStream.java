@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +42,7 @@ public class QuicStream {
     private final BlockingQueue<StreamFrame> queuedFrames;
     private StreamFrame currentFrame;
     private int currentOffset;
-    private int lastContiguousOffsetReceived;
+    private int expectingOffset;
     private Map<Integer, StreamFrame> receivedFrames;
     private StreamInputStream inputStream;
     private StreamOutputStream outputStream;
@@ -61,7 +60,7 @@ public class QuicStream {
         this.connection = connection;
         this.log = log;
         queuedFrames = new LinkedBlockingQueue<>();  // Queued frames are the ones eligible for reading, because they are contiguous
-        receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-continguous
+        receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-contiguous
         inputStream = new StreamInputStream();
         outputStream = new StreamOutputStream();
     }
@@ -84,13 +83,14 @@ public class QuicStream {
         String logMessage = null;
 
         synchronized (addMonitor) {
-            if (frame.getOffset() == lastContiguousOffsetReceived) {
-                lastContiguousOffsetReceived += frame.getLength();
+            if (frame.getOffset() == expectingOffset) {
                 queuedFrames.add(frame);
-                if (receivedFrames.containsKey(lastContiguousOffsetReceived)) {
+                expectingOffset += frame.getLength();
+                while (receivedFrames.containsKey(expectingOffset)) {
                     // Next frame was already received; move it to the incoming queue
-                    StreamFrame nextFrame = receivedFrames.remove(lastContiguousOffsetReceived);
+                    StreamFrame nextFrame = receivedFrames.remove(expectingOffset);
                     queuedFrames.add(nextFrame);
+                    expectingOffset += nextFrame.getLength();
                 }
             }
             else {
