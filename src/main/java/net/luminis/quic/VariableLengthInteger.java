@@ -24,33 +24,38 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
 public class VariableLengthInteger {
 
     public static int parse(ByteBuffer buffer) {
-        int value;
+        long value = parseLong(buffer);
+        if (value <= Integer.MAX_VALUE) {
+            return (int) value;
+        }
+        else {
+            throw new RuntimeException("value to large for Java int");
+        }
+    }
+
+    public static long parseLong(ByteBuffer buffer) {
+        long value;
         byte firstLengthByte = buffer.get();
         switch ((firstLengthByte & 0xc0) >> 6) {
             case 0:
                 value = firstLengthByte;
                 break;
             case 1:
-                value = ((firstLengthByte & 0x3f) << 8) | (buffer.get() & 0xff);
+                buffer.position(buffer.position() - 1);
+                value = buffer.getShort() & 0x3fff;
                 break;
             case 2:
-                value = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                buffer.position(buffer.position() - 1);
+                value = buffer.getInt() & 0x3fffffff;
                 break;
             case 3:
-                // As long as value fits in a Java int, this can be done
-                boolean mostSignificantWordIsNull = (firstLengthByte & 0x3f) == 0 && buffer.get() == 0 && buffer.get() == 0 && buffer.get() == 0;
-                byte lswByte1 = buffer.get();
-                if (mostSignificantWordIsNull && (lswByte1 & 0xff) < 128) {
-                    value = ((lswByte1 & 0xff) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
-                    break;
-                }
-                else {
-                    throw new NotYetImplementedException("value does not fit in an int");
-                }
+                buffer.position(buffer.position() - 1);
+                value = buffer.getLong() & 0x3fffffffffffffffL;
+                break;
             default:
                 // Impossible, just to satisfy the compiler
                 throw new RuntimeException();
@@ -59,7 +64,17 @@ public class VariableLengthInteger {
     }
 
     public static int parse(InputStream inputStream) throws IOException {
-        int value;
+        long value = parseLong(inputStream);
+        if (value <= Integer.MAX_VALUE) {
+            return (int) value;
+        }
+        else {
+            throw new RuntimeException("value to large for Java int");
+        }
+    }
+
+    public static long parseLong(InputStream inputStream) throws IOException {
+        long value;
         int firstLengthByte = inputStream.read();
         if (firstLengthByte == -1) {
             throw new EOFException();
@@ -85,8 +100,20 @@ public class VariableLengthInteger {
                 value = ((firstLengthByte & 0x3f) << 24) | ((byte2 & 0xff) << 16) | ((byte3 & 0xff) << 8) | (byte4 & 0xff);
                 break;
             case 3:
-                // TODO -> long
-                throw new NotYetImplementedException();
+                byte[] rawBytes = new byte[8];
+                rawBytes[0] = (byte) (firstLengthByte & 0x3f);
+                int bytesRead = 0;
+                while (bytesRead != 7) {
+                    int read = inputStream.read(rawBytes, 1 + bytesRead, 7 - bytesRead);
+                    if (read > 0) {
+                        bytesRead += read;
+                    }
+                    else {
+                        throw new EOFException();
+                    }
+                }
+                value = ByteBuffer.wrap(rawBytes).getLong();
+                break;
             default:
                 // Impossible, just to satisfy the compiler
                 throw new RuntimeException();
@@ -95,6 +122,12 @@ public class VariableLengthInteger {
     }
 
     public static int encode(int value, ByteBuffer buffer) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+        // | 2Bit | Length | Usable Bits | Range                 |
+        // +------+--------+-------------+-----------------------+
+        // | 00   | 1      | 6           | 0-63                  |
+        // | 01   | 2      | 14          | 0-16383               |
+        // | 10   | 4      | 30          | 0-1073741823          |
         if (value <= 63) {
             buffer.put((byte) value);
             return 1;
@@ -118,5 +151,23 @@ public class VariableLengthInteger {
         }
     }
 
+    public static int encode(long value, ByteBuffer buffer) {
+        if (value <= Integer.MAX_VALUE) {
+            return encode((int) value, buffer);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+        // | 2Bit | Length | Usable Bits | Range                 |
+        // +------+--------+-------------+-----------------------+
+        // | 11   | 8      | 62          | 0-4611686018427387903 |
+        else if (value <= 4611686018427387903L) {
+            int initialPosition = buffer.position();
+            buffer.putLong(value);
+            buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0xc0));
+            return 8;
+        }
+        else {
+            throw new IllegalArgumentException("value cannot be encoded in variable-length integer");
+        }
+    }
 
 }

@@ -175,6 +175,45 @@ class VariableLengthIntegerTest {
         assertThat(buffer.get()).isEqualTo((byte) 0xff);
     }
 
+    @Test
+    void encodeLong() {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+        int encodedSize = VariableLengthInteger.encode(151288809941952652L, buffer);
+
+        assertThat(encodedSize).isEqualTo(8);
+        assertThat(buffer.position()).isEqualTo(8);
+        buffer.flip();
+        assertThat(buffer.get()).isEqualTo((byte) 0xc2);
+        assertThat(buffer.get()).isEqualTo((byte) 0x19);
+        assertThat(buffer.get()).isEqualTo((byte) 0x7c);
+        assertThat(buffer.get()).isEqualTo((byte) 0x5e);
+        assertThat(buffer.get()).isEqualTo((byte) 0xff);
+        assertThat(buffer.get()).isEqualTo((byte) 0x14);
+        assertThat(buffer.get()).isEqualTo((byte) 0xe8);
+        assertThat(buffer.get()).isEqualTo((byte) 0x8c);
+    }
+
+    @Test
+    void parseLong() {
+        long value = VariableLengthInteger.parseLong(
+                // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+                wrap(   (byte) 0xc2, (byte) 0x19, (byte) 0x7c, (byte) 0x5e,
+                        (byte) 0xff, (byte) 0x14, (byte) 0xe8, (byte) 0x8c)  );
+
+        assertThat(value).isEqualTo(151288809941952652L);
+    }
+
+    @Test
+    void parseLongFromStream() throws IOException {
+        long value = VariableLengthInteger.parseLong(
+                // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+                wrapAsStream(   (byte) 0xc2, (byte) 0x19, (byte) 0x7c, (byte) 0x5e,
+                        (byte) 0xff, (byte) 0x14, (byte) 0xe8, (byte) 0x8c)  );
+
+        assertThat(value).isEqualTo(151288809941952652L);
+    }
+
     private ByteBuffer wrap(byte... bytes) {
         return ByteBuffer.wrap(bytes);
     }
