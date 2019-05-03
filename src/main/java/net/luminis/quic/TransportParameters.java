@@ -25,7 +25,7 @@ public class TransportParameters {
     private byte[] originalConnectionId;
     private int ackDelayExponent;
     private PreferredAddress preferredAddress;
-    private int idleTimeout;
+    private long idleTimeout;
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
@@ -51,11 +51,11 @@ public class TransportParameters {
         this.preferredAddress = preferredAddress;
     }
 
-    public int getIdleTimeout() {
+    public long getIdleTimeout() {
         return idleTimeout;
     }
 
-    public void setIdleTimeout(int idleTimeout) {
+    public void setIdleTimeout(long idleTimeout) {
         this.idleTimeout = idleTimeout;
     }
 

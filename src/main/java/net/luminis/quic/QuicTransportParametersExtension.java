@@ -188,15 +188,15 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
         }
         else if (parameterId == initial_max_data.value) {
-            int maxData = VariableLengthInteger.parse(buffer);
+            long maxData = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max data: " + maxData);
         }
         else if (parameterId == initial_max_streams_bidi.value) {
-            int maxBidiStreams = VariableLengthInteger.parse(buffer);
+            long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max bidi streams: " + maxBidiStreams);
         }
         else if (parameterId == idle_timeout.value) {
-            int idleTimeout = VariableLengthInteger.parse(buffer);
+            long idleTimeout = VariableLengthInteger.parseLong(buffer);
             log.debug("- idle timeout: " + idleTimeout);
             params.setIdleTimeout(idleTimeout);
         }
@@ -218,18 +218,18 @@ public class QuicTransportParametersExtension extends Extension {
             params.setAckDelayExponent(ackDelayExponent);
         }
         else if (parameterId == initial_max_streams_uni.value) {
-            int maxUniStreams = VariableLengthInteger.parse(buffer);
+            long maxUniStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
         }
         else if (parameterId == disable_migration.value) {
             log.debug("- disable migration");
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
-            int maxStreamDataBidiRemote = VariableLengthInteger.parse(buffer);
+            long maxStreamDataBidiRemote = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max stream data bidi remote: " + maxStreamDataBidiRemote);
         }
         else if (parameterId == initial_max_stream_data_uni.value) {
-            int maxStreamDataUni = VariableLengthInteger.parse(buffer);
+            long maxStreamDataUni = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max stream data uni: " + maxStreamDataUni);
         }
         else if (parameterId == max_ack_delay.value) {

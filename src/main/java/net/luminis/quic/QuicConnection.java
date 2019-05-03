@@ -152,7 +152,7 @@ public class QuicConnection implements PacketProcessor {
             throw new IllegalStateException("keep alive can only be set when connected");
         }
 
-        keepAliveActor = new KeepAliveActor(quicVersion, seconds, transportParams.getIdleTimeout(), this);
+        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) transportParams.getIdleTimeout(), this);
     }
 
     public void ping() {
