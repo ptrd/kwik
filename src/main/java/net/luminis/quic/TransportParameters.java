@@ -40,13 +40,10 @@ public class TransportParameters {
 
     public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
         this.idleTimeoutInSeconds = idleTimeoutInSeconds;
+        setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
-        // All stream data values are equal. When changing this, also change the getter in QuicConnection, used by the streams.
-        initialMaxStreamDataBidiLocal = initialMaxStreamData;
-        initialMaxStreamDataBidiRemote = initialMaxStreamData;
-        initialMaxStreamDataUni = initialMaxStreamData;
-        this.initialMaxStreamsBidi = initialMaxStreamsBidirectional;
-        this.initialMaxStreamsUni = initialMaxStreamsUnidirectional;
+        initialMaxStreamsBidi = initialMaxStreamsBidirectional;
+        initialMaxStreamsUni = initialMaxStreamsUnidirectional;
         ackDelayExponent = 0;
     }
 
@@ -98,12 +95,27 @@ public class TransportParameters {
         return initialMaxStreamDataUni;
     }
 
+    public void setInitialMaxStreamData(long maxStreamData) {
+        // All stream data values are equal. When changing this, also change the getter in QuicConnection, used by the streams.
+        initialMaxStreamDataBidiLocal = maxStreamData;
+        initialMaxStreamDataBidiRemote = maxStreamData;
+        initialMaxStreamDataUni = maxStreamData;
+    }
+
     public long getInitialMaxStreamsBidi() {
         return initialMaxStreamsBidi;
     }
 
+    public void setInitialMaxStreamsBidi(int initialMaxStreamsBidi) {
+        this.initialMaxStreamsBidi = initialMaxStreamsBidi;
+    }
+
     public long getInitialMaxStreamsUni() {
         return initialMaxStreamsUni;
+    }
+
+    public void setInitialMaxStreamsUni(int initialMaxStreamsUni) {
+        this.initialMaxStreamsUni = initialMaxStreamsUni;
     }
 
     public static class PreferredAddress {

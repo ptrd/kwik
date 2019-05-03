@@ -76,7 +76,7 @@ public class QuicConnection implements PacketProcessor {
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
-    private TransportParameters transportParams;
+    private volatile TransportParameters transportParams;
     private Map<Integer, byte[]> destConnectionIds;
     private Map<Integer, byte[]> sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -702,9 +702,21 @@ public class QuicConnection implements PacketProcessor {
         this.serverStreamCallback = streamProcessor;
     }
 
-    public long getInitialMaxStreamData() {
+    // For internal use only.
+    long getInitialMaxStreamData() {
         return transportParams.getInitialMaxStreamDataBidiLocal();
     }
 
+    public void setMaxAllowedBidirectionalStreams(int max) {
+        transportParams.setInitialMaxStreamsBidi(max);
+    }
+
+    public void setMaxAllowedUnidirectionalStreams(int max) {
+        transportParams.setInitialMaxStreamsUni(max);
+    }
+
+    public void setDefaultStreamReceiveBufferSize(long size) {
+        transportParams.setInitialMaxStreamData(size);
+    }
 
 }
