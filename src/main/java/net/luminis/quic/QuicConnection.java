@@ -75,7 +75,8 @@ public class QuicConnection implements PacketProcessor {
     private int nextStreamId;
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
-    private volatile TransportParameters transportParams;
+    private volatile TransportParameters peerTransportParams;
+    private TransportParameters transportParams;
     private Map<Integer, byte[]> destConnectionIds;
     private Map<Integer, byte[]> sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -103,6 +104,7 @@ public class QuicConnection implements PacketProcessor {
         streams = new ConcurrentHashMap<>();
         sourceConnectionIds = new ConcurrentHashMap<>();
         destConnectionIds = new ConcurrentHashMap<>();
+        transportParams = new TransportParameters(60, 262144, 1 , 1);
 
         try {
             ECKey[] keys = generateKeys("secp256r1");
@@ -152,7 +154,7 @@ public class QuicConnection implements PacketProcessor {
             throw new IllegalStateException("keep alive can only be set when connected");
         }
 
-        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) transportParams.getIdleTimeout(), this);
+        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getIdleTimeout(), this);
     }
 
     public void ping() {
@@ -408,7 +410,7 @@ public class QuicConnection implements PacketProcessor {
 
         Extension[] quicExtensions = new Extension[] {
                 quicVersion.atLeast(Version.IETF_draft_17)?
-                        new QuicTransportParametersExtension(quicVersion, 30):
+                        new QuicTransportParametersExtension(quicVersion, transportParams):
                         new QuicTransportParametersExtensionPreDraft17(quicVersion),
                 new ECPointFormatExtension(),
                 new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),
@@ -490,8 +492,8 @@ public class QuicConnection implements PacketProcessor {
                 getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
             }
             else if (frame instanceof AckFrame) {
-                if (transportParams != null) {
-                    ((AckFrame) frame).setDelayExponent(transportParams.getAckDelayExponent());
+                if (peerTransportParams != null) {
+                    ((AckFrame) frame).setDelayExponent(peerTransportParams.getAckDelayExponent());
                 }
                 sender.process(frame, packet.getEncryptionLevel());
             }
@@ -595,8 +597,8 @@ public class QuicConnection implements PacketProcessor {
         ;
     }
 
-    void setTransportParameters(TransportParameters transportParameters) {
-        transportParams = transportParameters;
+    void setPeerTransportParameters(TransportParameters transportParameters) {
+        peerTransportParams = transportParameters;
         if (processedRetryPacket) {
             if (transportParameters.getOriginalConnectionId() == null ||
                     ! Arrays.equals(originalDestinationConnectionId, transportParameters.getOriginalConnectionId())) {
@@ -684,5 +686,10 @@ public class QuicConnection implements PacketProcessor {
     public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
         this.serverStreamCallback = streamProcessor;
     }
+
+    public long getInitialMaxStreamData() {
+        return transportParams.getInitialMaxStreamDataBidiLocal();
+    }
+
 
 }

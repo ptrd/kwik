@@ -23,9 +23,32 @@ import java.net.InetAddress;
 public class TransportParameters {
 
     private byte[] originalConnectionId;
+    private long idleTimeoutInSeconds;
+    private long initialMaxData;
+    private long initialMaxStreamDataBidiLocal;
+    private long initialMaxStreamDataBidiRemote;
+    private long initialMaxStreamDataUni;
+    private long initialMaxStreamsBidi;
+    private long initialMaxStreamsUni;
     private int ackDelayExponent;
+    private boolean disableMigration;
     private PreferredAddress preferredAddress;
-    private long idleTimeout;
+
+
+    public TransportParameters() {
+    }
+
+    public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+        this.idleTimeoutInSeconds = idleTimeoutInSeconds;
+        initialMaxData = 10 * initialMaxStreamData;
+        // All stream data values are equal. When changing this, also change the getter in QuicConnection, used by the streams.
+        initialMaxStreamDataBidiLocal = initialMaxStreamData;
+        initialMaxStreamDataBidiRemote = initialMaxStreamData;
+        initialMaxStreamDataUni = initialMaxStreamData;
+        this.initialMaxStreamsBidi = initialMaxStreamsBidirectional;
+        this.initialMaxStreamsUni = initialMaxStreamsUnidirectional;
+        ackDelayExponent = 0;
+    }
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
@@ -52,11 +75,35 @@ public class TransportParameters {
     }
 
     public long getIdleTimeout() {
-        return idleTimeout;
+        return idleTimeoutInSeconds;
     }
 
     public void setIdleTimeout(long idleTimeout) {
-        this.idleTimeout = idleTimeout;
+        this.idleTimeoutInSeconds = idleTimeout;
+    }
+
+    public long getInitialMaxData() {
+        return initialMaxData;
+    }
+
+    public long getInitialMaxStreamDataBidiLocal() {
+        return initialMaxStreamDataBidiLocal;
+    }
+
+    public long getInitialMaxStreamDataBidiRemote() {
+        return initialMaxStreamDataBidiRemote;
+    }
+
+    public long getInitialMaxStreamDataUni() {
+        return initialMaxStreamDataUni;
+    }
+
+    public long getInitialMaxStreamsBidi() {
+        return initialMaxStreamsBidi;
+    }
+
+    public long getInitialMaxStreamsUni() {
+        return initialMaxStreamsUni;
     }
 
     public static class PreferredAddress {

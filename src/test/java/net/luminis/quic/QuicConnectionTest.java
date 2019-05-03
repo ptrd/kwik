@@ -22,7 +22,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.FieldSetter;
 
@@ -32,7 +31,6 @@ import java.net.UnknownHostException;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -147,7 +145,7 @@ class QuicConnectionTest {
         simulateConnectionReceivingRetryPacket();
 
         // Simulate a TransportParametersExtension is received that does not contain the right original destination id
-        connection.setTransportParameters(new TransportParameters());
+        connection.setPeerTransportParameters(new TransportParameters());
 
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
     }
@@ -159,7 +157,7 @@ class QuicConnectionTest {
         // Simulate a TransportParametersExtension is received that does contain an original destination id
         TransportParameters transportParameters = new TransportParameters();
         transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
-        connection.setTransportParameters(transportParameters);
+        connection.setPeerTransportParameters(transportParameters);
 
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
     }
@@ -171,7 +169,7 @@ class QuicConnectionTest {
         // Simulate a TransportParametersExtension is received that does contain the original destination id
         TransportParameters transportParameters = new TransportParameters();
         transportParameters.setOriginalConnectionId(originalDestinationId);
-        connection.setTransportParameters(transportParameters);
+        connection.setPeerTransportParameters(transportParameters);
 
         verify(connection, never()).signalConnectionError(any());
     }
@@ -181,7 +179,7 @@ class QuicConnectionTest {
         simulateNormalConnection();
 
         // Simulate a TransportParametersExtension is received that does not contain an original destination id
-        connection.setTransportParameters(new TransportParameters());
+        connection.setPeerTransportParameters(new TransportParameters());
 
         verify(connection, never()).signalConnectionError(any());
     }
@@ -193,7 +191,7 @@ class QuicConnectionTest {
         // Simulate a TransportParametersExtension is received that does contain an original destination id
         TransportParameters transportParameters = new TransportParameters();
         transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
-        connection.setTransportParameters(transportParameters);
+        connection.setPeerTransportParameters(transportParameters);
 
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
     }

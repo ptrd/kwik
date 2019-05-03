@@ -47,7 +47,7 @@ public class QuicTransportParametersExtension extends Extension {
      * Creates a Quic Transport Parameters Extension for use in a Client Hello.
      * @param quicVersion
      */
-    public QuicTransportParametersExtension(Version quicVersion, int idleTimeoutInSeconds) {
+    public QuicTransportParametersExtension(Version quicVersion, TransportParameters params) {
         this.quicVersion = quicVersion;
 
         ByteBuffer buffer = ByteBuffer.allocate(1500);
@@ -79,14 +79,14 @@ public class QuicTransportParametersExtension extends Extension {
             // "The idle timeout is a value in milliseconds
             //      that is encoded as an integer, see (Section 10.2).  If this
             //      parameter is absent or zero then the idle timeout is disabled."
-            addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds * 1000);
+            addTransportParameter(buffer, idle_timeout, params.getIdleTimeout() * 1000);
         }
         else {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
             // "The idle timeout is a value in seconds that
             //      is encoded as an integer.  If this parameter is absent or zero
             //      then the idle timeout is disabled."
-            addTransportParameter(buffer, idle_timeout, idleTimeoutInSeconds);
+            addTransportParameter(buffer, idle_timeout, params.getIdleTimeout());
         }
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
@@ -95,7 +95,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      amount of data that can be sent on the connection.  This is
         //      equivalent to sending a MAX_DATA (Section 19.9) for the connection
         //      immediately after completing the handshake."
-        addTransportParameter(buffer, initial_max_data, 1048576);
+        addTransportParameter(buffer, initial_max_data, params.getInitialMaxData());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "This parameter is an
@@ -103,7 +103,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      locally-initiated bidirectional streams.  This limit applies to
         //      newly created bidirectional streams opened by the endpoint that
         //      sends the transport parameter."
-        addTransportParameter(buffer, initial_max_stream_data_bidi_local, 262144);
+        addTransportParameter(buffer, initial_max_stream_data_bidi_local, params.getInitialMaxStreamDataBidiLocal());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "This parameter is an
@@ -111,7 +111,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      initiated bidirectional streams.  This limit applies to newly
         //      created bidirectional streams opened by the endpoint that receives
         //      the transport parameter."
-        addTransportParameter(buffer, initial_max_stream_data_bidi_remote, 262144);
+        addTransportParameter(buffer, initial_max_stream_data_bidi_remote, params.getInitialMaxStreamDataBidiRemote());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "This parameter is an integer
@@ -119,7 +119,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      streams.  This limit applies to newly created bidirectional
         //      streams opened by the endpoint that receives the transport
         //      parameter."
-        addTransportParameter(buffer, initial_max_stream_data_uni, 262144);
+        addTransportParameter(buffer, initial_max_stream_data_uni, params.getInitialMaxStreamDataUni());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // " The initial maximum bidirectional
@@ -127,7 +127,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      maximum number of bidirectional streams the peer may initiate.  If
         //      this parameter is absent or zero, the peer cannot open
         //      bidirectional streams until a MAX_STREAMS frame is sent."
-        addTransportParameter(buffer, initial_max_streams_bidi, 1);
+        addTransportParameter(buffer, initial_max_streams_bidi, params.getInitialMaxStreamsBidi());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum unidirectional
@@ -135,7 +135,7 @@ public class QuicTransportParametersExtension extends Extension {
         //      maximum number of unidirectional streams the peer may initiate.
         //      If this parameter is absent or zero, the peer cannot open
         //      unidirectional streams until a MAX_STREAMS frame is sent."
-        addTransportParameter(buffer, initial_max_streams_uni, 1);
+        addTransportParameter(buffer, initial_max_streams_uni, params.getInitialMaxStreamsUni());
 
         int length = buffer.position();
         buffer.limit(length);
@@ -279,7 +279,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
     }
 
-    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, int value) {
+    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
         buffer.putShort(id.value);
         int position = buffer.position();
         buffer.putShort((short) 0);  // placeholder
