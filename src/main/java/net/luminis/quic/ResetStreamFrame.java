@@ -42,7 +42,7 @@ public class ResetStreamFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "StreamDataBlockedFrame[" + streamId + "|" + errorCode + "|" + finalSize + "]";
+        return "ResetStreamFrame[" + streamId + "|" + errorCode + "|" + finalSize + "]";
     }
 
 }
