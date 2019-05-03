@@ -19,10 +19,8 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.stream.Stream;
 
-import static net.luminis.quic.StreamType.ClientInitiatedBidirectional;
 
 public class StreamFrame extends QuicFrame {
 
@@ -54,7 +52,7 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(Version quicVersion, int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
-        streamType = ClientInitiatedBidirectional;
+        streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
         this.streamId = streamId;
         this.offset = streamOffset;
         this.length = dataLength;
