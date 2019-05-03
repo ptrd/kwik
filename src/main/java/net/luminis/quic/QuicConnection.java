@@ -554,6 +554,10 @@ public class QuicConnection implements PacketProcessor {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
         // "0x0  | Client-Initiated, Bidirectional"
         int id = (nextStreamId << 2) + 0x00;
+        if (! bidirectional) {
+            // "0x2  | Client-Initiated, Unidirectional |"
+            id += 0x02;
+        }
         nextStreamId++;
         return id;
     }
