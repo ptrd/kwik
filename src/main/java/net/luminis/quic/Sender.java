@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
@@ -63,7 +64,7 @@ public class Sender implements FrameProcessor {
         senderThread.setDaemon(true);
 
         incomingPacketQueue = new LinkedBlockingQueue<>();
-        packetSentLog = new HashMap<>();
+        packetSentLog = new ConcurrentHashMap<>();
         congestionController = new CongestionController(log);
 
         ackGenerators = new AckGenerator[3];
