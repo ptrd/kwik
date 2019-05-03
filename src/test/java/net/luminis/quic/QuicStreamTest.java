@@ -268,6 +268,38 @@ class QuicStreamTest {
         assertThat(reconstructedContent).isEqualTo(data);
     }
 
+    @Test
+    void testFlowControlUpdates() throws IOException {
+        float factor = QuicStream.receiverMaxDataIncrementFactor;
+        int initialWindow = 1000;
+        when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
+
+        quicStream = new QuicStream(0, connection, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+
+        quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
+        InputStream inputStream = quicStream.getInputStream();
+
+        inputStream.read(new byte[(int) (initialWindow * factor * 0.8)]);
+        verify(connection, never()).send(any(QuicFrame.class));
+
+        inputStream.read(new byte[(int) (initialWindow * factor * 0.2 - 1)]);
+        verify(connection, never()).send(any(QuicFrame.class));
+
+        inputStream.read(new byte[2]);
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class));
+
+        inputStream.read(new byte[(int) (initialWindow * factor)]);
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class));
+
+        inputStream.read(new byte[2]);
+        verify(connection, times(2)).send(any(MaxStreamDataFrame.class));
+
+        inputStream.read(new byte[(int) (initialWindow * factor * 3.1)]);
+        verify(connection, times(5)).send(any(MaxStreamDataFrame.class));
+    }
+
+
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {
@@ -276,7 +308,6 @@ class QuicStreamTest {
         }
         return data;
     }
-
 
     /**
      * Serializes the given frame and parses the result, to simulate receiving a frame.

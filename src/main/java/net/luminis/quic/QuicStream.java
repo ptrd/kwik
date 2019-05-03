@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 public class QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
+    protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
     private Object addMonitor = new Object();
     private final Version quicVersion;
@@ -48,6 +49,9 @@ public class QuicStream {
     private StreamOutputStream outputStream;
     private volatile boolean aborted;
     private volatile Thread blocking;
+    private long receiverMaxData;
+    private long lastCommunicatedMaxData;
+    private final long receiverMaxDataIncrement;
 
 
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
@@ -63,6 +67,10 @@ public class QuicStream {
         receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-contiguous
         inputStream = new StreamInputStream();
         outputStream = new StreamOutputStream();
+
+        receiverMaxData = connection.getInitialMaxStreamData();
+        lastCommunicatedMaxData = receiverMaxData;
+        receiverMaxDataIncrement = (long) (receiverMaxData * receiverMaxDataIncrementFactor);
     }
 
     public InputStream getInputStream() {
@@ -153,6 +161,14 @@ public class QuicStream {
             if (currentOffset < currentFrame.getOffset() + currentFrame.getLength()) {
                 byte data = currentFrame.getStreamData()[currentOffset - currentFrame.getOffset()];
                 currentOffset++;
+                // Flow control
+                receiverMaxData += 1;  // Slide flow control window forward (which as much bytes as are read)
+                if (receiverMaxData - lastCommunicatedMaxData > receiverMaxDataIncrement) {
+                    // Avoid sending updates which every single byte read...
+                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData));
+                    lastCommunicatedMaxData = receiverMaxData;
+                }
+
                 return data & 0xff;
             }
             else {

@@ -104,7 +104,7 @@ public class QuicConnection implements PacketProcessor {
         streams = new ConcurrentHashMap<>();
         sourceConnectionIds = new ConcurrentHashMap<>();
         destConnectionIds = new ConcurrentHashMap<>();
-        transportParams = new TransportParameters(60, 262144, 1 , 1);
+        transportParams = new TransportParameters(60, 250_000, 1 , 1);
 
         try {
             ECKey[] keys = generateKeys("secp256r1");
