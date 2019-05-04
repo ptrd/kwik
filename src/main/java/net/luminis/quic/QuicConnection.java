@@ -82,6 +82,9 @@ public class QuicConnection implements PacketProcessor {
     private KeepAliveActor keepAliveActor;
     private Consumer<QuicStream> serverStreamCallback;
     private String applicationProtocol;
+    private long flowControlMax;
+    private long flowControlLastAdvertised;
+    private long flowControlIncrement;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -105,6 +108,9 @@ public class QuicConnection implements PacketProcessor {
         sourceConnectionIds = new ConcurrentHashMap<>();
         destConnectionIds = new ConcurrentHashMap<>();
         transportParams = new TransportParameters(60, 250_000, 1 , 1);
+        flowControlMax = transportParams.getInitialMaxData();
+        flowControlLastAdvertised = flowControlMax;
+        flowControlIncrement = flowControlMax / 10;
 
         try {
             ECKey[] keys = generateKeys("secp256r1");
@@ -575,6 +581,15 @@ public class QuicConnection implements PacketProcessor {
         }
         sender.send(packet, logMessage);
     }
+
+    void slideFlowControlWindow(int size) {
+        flowControlMax += size;
+        if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
+            send(new MaxDataFrame(flowControlMax));
+            flowControlLastAdvertised = flowControlMax;
+        }
+    }
+
 
     int getMaxPacketSize() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:

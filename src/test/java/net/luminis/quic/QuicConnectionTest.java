@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
@@ -245,5 +246,25 @@ class QuicConnectionTest {
 
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
+    }
+
+    @Test
+    void testConnectionFlowControl() throws Exception {
+        QuicConnection connection = new QuicConnection("localhost", 443, Mockito.mock(Logger.class));
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
+
+        connection.slideFlowControlWindow(10);
+        verify(sender, never()).send(any(QuicPacket.class), anyString());  // No initial update, value is advertised in transport parameters.
+
+        connection.slideFlowControlWindow((int) flowControlIncrement);
+        verify(sender, times(1)).send(any(QuicPacket.class), anyString());
+
+        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.8));
+        verify(sender, times(1)).send(any(QuicPacket.class), anyString());
+
+        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.21));
+        verify(sender, times(2)).send(any(QuicPacket.class), anyString());
     }
 }

@@ -269,7 +269,7 @@ class QuicStreamTest {
     }
 
     @Test
-    void testFlowControlUpdates() throws IOException {
+    void testStreamFlowControlUpdates() throws IOException {
         float factor = QuicStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);

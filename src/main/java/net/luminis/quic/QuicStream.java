@@ -163,6 +163,7 @@ public class QuicStream {
                 currentOffset++;
                 // Flow control
                 receiverMaxData += 1;  // Slide flow control window forward (which as much bytes as are read)
+                connection.slideFlowControlWindow(1);
                 if (receiverMaxData - lastCommunicatedMaxData > receiverMaxDataIncrement) {
                     // Avoid sending updates which every single byte read...
                     connection.send(new MaxStreamDataFrame(streamId, receiverMaxData));
