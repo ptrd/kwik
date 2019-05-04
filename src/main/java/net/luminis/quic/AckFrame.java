@@ -62,10 +62,10 @@ public class AckFrame extends QuicFrame {
             buffer.put((byte) 0x1a);
         }
 
-        buffer.put(encodeVariableLengthInteger(packetNumber));
-        buffer.put(encodeVariableLengthInteger(0));
-        buffer.put(encodeVariableLengthInteger(0));
-        buffer.put(encodeVariableLengthInteger(0));
+        VariableLengthInteger.encode(packetNumber, buffer);
+        VariableLengthInteger.encode(0, buffer);
+        VariableLengthInteger.encode(0, buffer);
+        VariableLengthInteger.encode(0, buffer);
 
         frameBytes = new byte[buffer.position()];
         buffer.flip();
@@ -95,19 +95,19 @@ public class AckFrame extends QuicFrame {
             buffer.put((byte) 0x1a);
         }
 
-        buffer.put(encodeVariableLengthInteger(largestAcknowledged));
-        buffer.put(encodeVariableLengthInteger(ackDelay));
+        VariableLengthInteger.encode(largestAcknowledged, buffer);
+        VariableLengthInteger.encode(ackDelay, buffer);
         ArrayList<List<Long>> ranges = split(acknowledgedPacketNumbers);
-        buffer.put(encodeVariableLengthInteger(ranges.size() - 1));
-        buffer.put(encodeVariableLengthInteger(ranges.get(0).size() - 1));
+        VariableLengthInteger.encode(ranges.size() - 1, buffer);
+        VariableLengthInteger.encode(ranges.get(0).size() - 1, buffer);
 
         for (int i = 1; i < ranges.size(); i++) {
             long prev = getLastElement(ranges.get(i-1));
             long next = ranges.get(i).get(0);
             int gap = (int) (prev - next - 2);
             int block = ranges.get(i).size() - 1;
-            buffer.put(encodeVariableLengthInteger(gap));
-            buffer.put(encodeVariableLengthInteger(block));
+            VariableLengthInteger.encode(gap, buffer);
+            VariableLengthInteger.encode(block, buffer);
         }
 
         if (!ranges.isEmpty()) {

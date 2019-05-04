@@ -65,9 +65,9 @@ public class StreamFrame extends QuicFrame {
             frameType |= 0x01;
         }
         buffer.put(frameType);
-        buffer.put(encodeVariableLengthInteger(streamId));
-        buffer.put(encodeVariableLengthInteger(offset));
-        buffer.put(encodeVariableLengthInteger(length));
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(offset, buffer);
+        VariableLengthInteger.encode(length, buffer);
         buffer.put(applicationData, dataOffset, dataLength);
 
         frameData = new byte[buffer.position()];
