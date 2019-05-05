@@ -54,7 +54,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destConnectionId;
         this.frames = new ArrayList<>();
-        this.frames.add(frame);
+        if (frame != null) {
+            this.frames.add(frame);
+        }
     }
 
     /**
@@ -121,8 +123,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int payloadSize) {
         int packetLength = payloadSize + 16 + packetNumberLength;   // 16 is what encryption adds, note that final length is larger due to adding packet length
-        byte[] length = encodeVariableLengthInteger(packetLength);
-        packetBuffer.put(length);
+        VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
     public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
@@ -151,7 +152,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         parseAdditionalFields(buffer);
 
-        int length = parseVariableLengthInteger(buffer);
+        int length = VariableLengthInteger.parse(buffer);
         log.debug("Length (PN + payload): " + length);
 
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
@@ -175,10 +176,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
             packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
             log.decrypted("Unprotected packet number: " + packetNumber);
 
-            log.debug("Encrypted payload", payload);
+            log.encrypted("Encrypted payload", payload);
 
             frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // Assuming packet number is 1 byte
-            log.debug("Frame header", frameHeader);
+            log.encrypted("Frame header", frameHeader);
 
             byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
             log.decrypted("Decrypted payload", frameBytes);

@@ -18,31 +18,14 @@
  */
 package net.luminis.quic;
 
-import java.nio.ByteBuffer;
+public class Bytes {
 
-public class MaxStreamsFrame extends QuicFrame {
-
-    private int maxStreams;
-
-    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        if (frameType != 0x12 && frameType != 0x13) {
-            throw new RuntimeException();  // Would be a programming error.
+    static boolean allZero(byte[] data) {
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] != 0) {
+                return false;
+            }
         }
-
-        maxStreams = VariableLengthInteger.parse(buffer);
-
-        return this;
+        return true;
     }
-
-    @Override
-    public String toString() {
-        return "MaxStreamsFrame[" + maxStreams + "]";
-    }
-
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
-    }
-
 }

@@ -18,10 +18,34 @@
  */
 package net.luminis.quic;
 
+import java.net.InetAddress;
+
 public class TransportParameters {
 
     private byte[] originalConnectionId;
+    private long idleTimeoutInSeconds;
+    private long initialMaxData;
+    private long initialMaxStreamDataBidiLocal;
+    private long initialMaxStreamDataBidiRemote;
+    private long initialMaxStreamDataUni;
+    private long initialMaxStreamsBidi;
+    private long initialMaxStreamsUni;
     private int ackDelayExponent;
+    private boolean disableMigration;
+    private PreferredAddress preferredAddress;
+
+
+    public TransportParameters() {
+    }
+
+    public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+        this.idleTimeoutInSeconds = idleTimeoutInSeconds;
+        setInitialMaxStreamData(initialMaxStreamData);
+        initialMaxData = 10 * initialMaxStreamData;
+        initialMaxStreamsBidi = initialMaxStreamsBidirectional;
+        initialMaxStreamsUni = initialMaxStreamsUnidirectional;
+        ackDelayExponent = 0;
+    }
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
@@ -37,5 +61,69 @@ public class TransportParameters {
 
     public int getAckDelayExponent() {
         return ackDelayExponent;
+    }
+
+    public PreferredAddress getPreferredAddress() {
+        return preferredAddress;
+    }
+
+    public void setPreferredAddress(PreferredAddress preferredAddress) {
+        this.preferredAddress = preferredAddress;
+    }
+
+    public long getIdleTimeout() {
+        return idleTimeoutInSeconds;
+    }
+
+    public void setIdleTimeout(long idleTimeout) {
+        this.idleTimeoutInSeconds = idleTimeout;
+    }
+
+    public long getInitialMaxData() {
+        return initialMaxData;
+    }
+
+    public long getInitialMaxStreamDataBidiLocal() {
+        return initialMaxStreamDataBidiLocal;
+    }
+
+    public long getInitialMaxStreamDataBidiRemote() {
+        return initialMaxStreamDataBidiRemote;
+    }
+
+    public long getInitialMaxStreamDataUni() {
+        return initialMaxStreamDataUni;
+    }
+
+    public void setInitialMaxStreamData(long maxStreamData) {
+        // All stream data values are equal. When changing this, also change the getter in QuicConnection, used by the streams.
+        initialMaxStreamDataBidiLocal = maxStreamData;
+        initialMaxStreamDataBidiRemote = maxStreamData;
+        initialMaxStreamDataUni = maxStreamData;
+    }
+
+    public long getInitialMaxStreamsBidi() {
+        return initialMaxStreamsBidi;
+    }
+
+    public void setInitialMaxStreamsBidi(int initialMaxStreamsBidi) {
+        this.initialMaxStreamsBidi = initialMaxStreamsBidi;
+    }
+
+    public long getInitialMaxStreamsUni() {
+        return initialMaxStreamsUni;
+    }
+
+    public void setInitialMaxStreamsUni(int initialMaxStreamsUni) {
+        this.initialMaxStreamsUni = initialMaxStreamsUni;
+    }
+
+    public static class PreferredAddress {
+        InetAddress ip4;
+        int ip4Port;
+        InetAddress ip6;
+        int ip6Port;
+        byte[] connectionId;
+        byte[] statelessResetToken;
     }
 }

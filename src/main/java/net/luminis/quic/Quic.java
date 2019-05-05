@@ -21,6 +21,7 @@ package net.luminis.quic;
 import org.apache.commons.cli.*;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
@@ -42,7 +43,13 @@ public class Quic {
         cmdLineOptions.addOption("16", "use Quic version IETF_draft_16");
         cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
         cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
+        cmdLineOptions.addOption("19", "use Quic version IETF_draft_19");
+        cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
+        cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
+        cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
+        cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
         CommandLineParser parser = new DefaultParser();
@@ -94,7 +101,18 @@ public class Quic {
             return;
         }
 
-        Logger logger = new Logger();
+        Logger logger = null;
+        if (cmd.hasOption("L")) {
+            String logFilename = cmd.getOptionValue("L");
+            try {
+                logger = new FileLogger(new File(logFilename));
+            } catch (IOException fileError) {
+                System.err.println("Error: cannot open log file '" + logFilename + "'");
+            }
+        }
+        if (logger == null) {
+            logger = new SysOutLogger();
+        }
         logger.logPackets(true);
         logger.logInfo(true);
 
@@ -133,8 +151,14 @@ public class Quic {
             }
         }
 
-        Version quicVersion = Version.IETF_draft_17;
-        if (cmd.hasOption("18")) {
+        Version quicVersion = Version.getDefault();
+        if (cmd.hasOption("20")) {
+            quicVersion = Version.IETF_draft_20;
+        }
+        else if (cmd.hasOption("19")) {
+            quicVersion = Version.IETF_draft_19;
+        }
+        else if (cmd.hasOption("18")) {
             quicVersion = Version.IETF_draft_18;
         }
         else if (cmd.hasOption("17")) {
@@ -160,46 +184,96 @@ public class Quic {
             }
         }
 
+        int keepAliveTime = 0;
+        if (cmd.hasOption("k")) {
+            try {
+                keepAliveTime = Integer.parseInt(cmd.getOptionValue("k"));
+            }
+            catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
+        }
+
+        String http09Request = null;
+        if (cmd.hasOption("H")) {
+            http09Request = cmd.getOptionValue("H");
+            if (http09Request == null) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
         }
+
+        boolean interactiveMode = cmd.hasOption("i");
+
 
         try {
             QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
 
             quicConnection.connect(connectionTimeout * 1000);
 
-            boolean bidirectional = true;
-            QuicStream quicStream = quicConnection.createStream(bidirectional);
-            quicStream.getOutputStream().write("GET /index.html\r\n".getBytes());
-            quicStream.getOutputStream().close();
-
-            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {}
-
-            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
-            String line;
-            System.out.println("Server returns: ");
-            while ((line = input.readLine()) != null) {
-                System.out.println(line);
+            if (keepAliveTime > 0) {
+                quicConnection.keepAlive(keepAliveTime);
+            }
+            if (http09Request != null) {
+                doHttp09Request(quicConnection, http09Request);
+            }
+            if (interactiveMode) {
+                new InteractiveShell(quicConnection).start();
+            }
+            else {
+                if (keepAliveTime > 0) {
+                    try {
+                        Thread.sleep((keepAliveTime + 30) * 1000);
+                    } catch (InterruptedException e) {
+                    }
+                }
             }
 
             quicConnection.close();
 
             try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {}
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+            }
 
-            System.out.println("Terminating Quic");
-
+            System.out.println("Terminating Kwik");
         }
         catch (IOException e) {
             System.out.println("Got IO error: " + e);
         }
         catch (VersionNegationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
+        }
+
+        if (!interactiveMode && http09Request == null && keepAliveTime == 0) {
+            System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+        }
+    }
+
+    private static void doHttp09Request(QuicConnection quicConnection, String http09Request) throws IOException {
+        if (! http09Request.startsWith("/")) {
+            http09Request = "/" + http09Request;
+        }
+        boolean bidirectional = true;
+        QuicStream quicStream = quicConnection.createStream(bidirectional);
+        quicStream.getOutputStream().write(("GET " + http09Request + "\r\n").getBytes());
+        quicStream.getOutputStream().close();
+
+        // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {}
+
+        BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+        String line;
+        System.out.println("Server returns: ");
+        while ((line = input.readLine()) != null) {
+            System.out.println(line);
         }
     }
 

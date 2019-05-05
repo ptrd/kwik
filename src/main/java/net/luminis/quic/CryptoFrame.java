@@ -32,9 +32,9 @@ public class CryptoFrame extends QuicFrame {
         cryptoData = payload;
         length = payload.length;
         ByteBuffer frameBuffer = ByteBuffer.allocate(3 * 4 + payload.length);
-        frameBuffer.put(encodeVariableLengthInteger(quicVersion.atLeast(Version.IETF_draft_17)? 0x06: 0x18));
-        frameBuffer.put(encodeVariableLengthInteger(offset));
-        frameBuffer.put(encodeVariableLengthInteger(payload.length));
+        VariableLengthInteger.encode(quicVersion.atLeast(Version.IETF_draft_17)? 0x06: 0x18, frameBuffer);
+        VariableLengthInteger.encode(offset, frameBuffer);
+        VariableLengthInteger.encode(payload.length, frameBuffer);
         frameBuffer.put(payload);
 
         cryptoData = new byte[frameBuffer.position()];
@@ -49,8 +49,8 @@ public class CryptoFrame extends QuicFrame {
         log.debug("Parsing Crypto frame");
         buffer.get();
 
-        offset = QuicPacket.parseVariableLengthInteger(buffer);
-        length = QuicPacket.parseVariableLengthInteger(buffer);
+        offset = VariableLengthInteger.parse(buffer);
+        length = VariableLengthInteger.parse(buffer);
 
         cryptoData = new byte[length];
         buffer.get(cryptoData);

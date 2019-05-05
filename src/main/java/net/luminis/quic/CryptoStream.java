@@ -133,9 +133,9 @@ public class CryptoStream {
         buffer.rewind();
         if ((extensionType & 0xffff) == 0xffa5) {
             if (quicVersion.atLeast(Version.IETF_draft_17)) {
-                QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension();
+                QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(quicVersion);
                 transportParametersExtension.parse(buffer, log);
-                connection.setTransportParameters(transportParametersExtension.getTransportParameters());
+                connection.setPeerTransportParameters(transportParametersExtension.getTransportParameters());
             } else {
                 new QuicTransportParametersExtensionPreDraft17().parse(buffer, log);
             }

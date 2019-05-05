@@ -52,4 +52,35 @@ class VersionTest {
     void testDraft18IsAtLeastDraft17() {
         assertThat(Version.IETF_draft_18.atLeast(Version.IETF_draft_17)).isEqualTo(true);
     }
+
+    @Test
+    void testParseDraft19Version() throws UnknownVersionException {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] { (byte) 0xff, 0x00, 0x00, 0x13 });
+        int rawVersion = buffer.getInt();
+        Version version = Version.parse(rawVersion);
+        assertThat(version).isEqualTo(Version.IETF_draft_19);
+    }
+
+    @Test
+    void testParseDraft20Version() throws UnknownVersionException {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] { (byte) 0xff, 0x00, 0x00, 0x14 });
+        int rawVersion = buffer.getInt();
+        Version version = Version.parse(rawVersion);
+        assertThat(version).isEqualTo(Version.IETF_draft_20);
+    }
+
+    @Test
+    void testDraft19IsAtLeastDraft17() {
+        assertThat(Version.IETF_draft_19.atLeast(Version.IETF_draft_17)).isEqualTo(true);
+    }
+
+    @Test
+    void testDraft18BeforeDraft19() {
+        assertThat(Version.IETF_draft_18.before(Version.IETF_draft_19)).isEqualTo(true);
+    }
+
+    @Test
+    void testDraft19BeforeDraft20() {
+        assertThat(Version.IETF_draft_19.before(Version.IETF_draft_20)).isEqualTo(true);
+    }
 }

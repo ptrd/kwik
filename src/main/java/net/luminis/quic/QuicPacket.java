@@ -39,41 +39,50 @@ abstract public class QuicPacket {
     protected List<QuicFrame> frames = new ArrayList<>();
     protected int packetSize = -1;
 
-    static byte[] encodeVariableLengthInteger(int length) {
-        if (length <= 63)
-            return new byte[] { (byte) length };
-        else if (length <= 16383) {
-            ByteBuffer buffer = ByteBuffer.allocate(2);
-            buffer.putShort((short) length);
-            byte[] bytes = buffer.array();
-            bytes[0] = (byte) (bytes[0] | (byte) 0x40);
-            return bytes;
+    public QuicPacket() {
+        frames = new ArrayList<>();
+    }
+
+    static byte[] encodePacketNumber(long packetNumber) {
+        if (packetNumber <= 0xff) {
+            return new byte[] { (byte) packetNumber };
         }
-        else if (length <= 1073741823) {
-            ByteBuffer buffer = ByteBuffer.allocate(4);
-            buffer.putInt(length);
-            byte[] bytes = buffer.array();
-            bytes[0] = (byte) (bytes[0] | (byte) 0x80);
-            return bytes;
+        else if (packetNumber <= 0xffff) {
+            return new byte[] { (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
+        }
+        else if (packetNumber <= 0xffffff) {
+            return new byte[] { (byte) (packetNumber >> 16), (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
+        }
+        else if (packetNumber <= 0xffffffffL) {
+            return new byte[] { (byte) (packetNumber >> 24), (byte) (packetNumber >> 16), (byte) (packetNumber >> 8), (byte) (packetNumber & 0x00ff) };
         }
         else {
-            // TODO
-            throw new RuntimeException("NIY");
+            throw new NotYetImplementedException("cannot encode pn > 4 bytes");
         }
     }
 
-    byte[] encodePacketNumber(long number) {
-        if (number <= 0x7f)
-            return new byte[] { (byte) number };
-        else {
-            // TODO
-            throw new RuntimeException("NIY");
+    /**
+     * Updates the given flags byte to encode the packet number length that is used for encoding the given packet number.
+     * @param flags
+     * @param packetNumber
+     * @return
+     */
+    static byte encodePacketNumberLength(byte flags, long packetNumber) {
+        if (packetNumber <= 0xff) {
+            return flags;
         }
-    }
-
-    byte encodePacketNumberLength(byte flags, long packetNumber) {
-        // For the time being, a packet number length of 1 is assumed
-        return flags;
+        else if (packetNumber <= 0xffff) {
+            return (byte) (flags | 0x01);
+        }
+        else if (packetNumber <= 0xffffff) {
+            return (byte) (flags | 0x02);
+        }
+        else if (packetNumber <= 0xffffffffL) {
+            return (byte) (flags | 0x03);
+        }
+        else {
+            throw new NotYetImplementedException("cannot encode pn > 4 bytes");
+        }
     }
 
     void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, Logger log) {
@@ -145,7 +154,7 @@ abstract public class QuicPacket {
 
         // Copy unprotected (decrypted) packet number in frame header, before decrypting payload.
         System.arraycopy(unprotectedPacketNumber, 0, frameHeader, frameHeader.length - (protectedPackageNumberLength), protectedPackageNumberLength);
-        log.debug("Frame header", frameHeader);
+        log.encrypted("Frame header", frameHeader);
 
         // "The input plaintext, P, for the AEAD is the payload of the QUIC
         //   packet, as described in [QUIC-TRANSPORT]."
@@ -153,7 +162,7 @@ abstract public class QuicPacket {
         int encryptedPayloadLength = remainingLength - protectedPackageNumberLength;
         byte[] payload = new byte[encryptedPayloadLength];
         buffer.get(payload, 0, encryptedPayloadLength);
-        log.debug("Encrypted payload", payload);
+        log.encrypted("Encrypted payload", payload);
 
         byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
         log.decrypted("Decrypted payload", frameBytes);
@@ -315,28 +324,6 @@ abstract public class QuicPacket {
         }
     }
 
-    static int parseVariableLengthInteger(ByteBuffer buffer) {
-        int length;
-        byte firstLengthByte = buffer.get();
-        switch ((firstLengthByte & 0xc0) >> 6) {
-            case 0:
-                length = firstLengthByte;
-                break;
-            case 1:
-                length = ((firstLengthByte & 0x3f) << 8) | (buffer.get() & 0xff);
-                break;
-            case 2:
-                length = ((firstLengthByte & 0x3f) << 24) | ((buffer.get() & 0xff) << 16) | ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
-                break;
-            case 3:
-                // TODO -> long
-                throw new NotYetImplementedException();
-            default:
-                throw new ProtocolError("invalid variable length integer encoding");
-        }
-        return length;
-    }
-
     protected void parseFrames(byte[] frameBytes, Logger log) {
         if (quicVersion.atLeast(Version.IETF_draft_17)) {
             parseFramesDraft17(frameBytes, log);
@@ -360,15 +347,15 @@ abstract public class QuicPacket {
                     frames.add(new Padding().parse(buffer, log));
                     break;
                 case 0x01:
-                    frames.add(new PingFrame().parse(buffer, log));
+                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x02:
                 case 0x03:
                     frames.add(new AckFrame().parse(buffer, log));
                     break;
                 case 0x04:
-                    log.debug("Received RST Stream frame (not yet implemented).");
-                    throw new NotYetImplementedException();
+                    frames.add(new ResetStreamFrame().parse(buffer, log));
+                    break;
                 case 0x05:
                     frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
                     break;
@@ -389,15 +376,20 @@ abstract public class QuicPacket {
                     frames.add(new MaxStreamsFrame().parse(buffer, log));
                     break;
                 case 0x14:
+                    frames.add(new DataBlockedFrame().parse(buffer, log));
+                    break;
                 case 0x15:
-                    System.out.println("NYI frame type (data/stream blocked): " + frameType);
-                    throw new NotYetImplementedException();
+                    frames.add(new StreamDataBlockedFrame().parse(buffer, log));
+                    break;
                 case 0x16:
                 case 0x17:
                     frames.add(new StreamsBlockedFrame().parse(buffer, log));
                     break;
                 case 0x18:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x19:
+                    frames.add(new RetireConnectionIdFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x1c:
                 case 0x1d:
@@ -449,7 +441,7 @@ abstract public class QuicPacket {
                     frames.add(new MaxStreamIdFrame().parse(buffer, log));
                     break;
                 case 0x07:
-                    frames.add(new PingFrame().parse(buffer, log));
+                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
                     break;
                 case 0x0b:
                     frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
@@ -560,6 +552,10 @@ abstract public class QuicPacket {
         return value;
     }
 
+    public void addFrame(QuicFrame frame) {
+        frames.add(frame);
+    }
+
     public int getSize() {
         if (packetSize > 0) {
             return packetSize;
@@ -595,5 +591,13 @@ abstract public class QuicPacket {
 
     public QuicPacket copy() {
         throw new IllegalStateException();
+    }
+
+    public boolean canBeAcked() {
+        return true;
+    }
+
+    public boolean isAckEliciting() {
+        return frames.stream().anyMatch(frame -> frame.isAckEliciting());
     }
 }

@@ -33,7 +33,9 @@ public enum Version {
     IETF_draft_15(0xff00000f),
     IETF_draft_16(0xff000010),
     IETF_draft_17(0xff000011),
-    IETF_draft_18(0xff000012);
+    IETF_draft_18(0xff000012),
+    IETF_draft_19(0xff000013),
+    IETF_draft_20(0xff000014);
 
     private int versionId;
 
@@ -53,7 +55,7 @@ public enum Version {
     }
 
     static Version getDefault() {
-        return IETF_draft_17;
+        return IETF_draft_19;
     }
 
     public boolean atLeast(Version other) {
@@ -66,7 +68,17 @@ public enum Version {
         }
     }
 
+    public boolean before(Version other) {
+        // Only for IETF drafts
+        if (isIetfDraft(this) && isIetfDraft(other)) {
+            return this.versionId < other.versionId;
+        }
+        else {
+            throw new RuntimeException();
+        }
+    }
+
     private boolean isIetfDraft(Version version) {
-        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_18.versionId;
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_20.versionId;
     }
 }

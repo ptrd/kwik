@@ -19,34 +19,53 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
 
 public class NewConnectionIdFrame extends QuicFrame {
 
     private Version quicVersion;
-    private int sequence;
+    private int sequenceNr;
+    private byte[] connectionId;
+    private static Random random = new Random();
 
     public NewConnectionIdFrame(Version quicVersion) {
         this.quicVersion = quicVersion;
     }
 
+    public NewConnectionIdFrame(Version quicVersion, int sequenceNr, byte[] newSourceConnectionId) {
+        this.quicVersion = quicVersion;
+        this.sequenceNr = sequenceNr;
+        connectionId = newSourceConnectionId;
+    }
+
     @Override
     byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(30);
+        buffer.put((byte) 0x18);
+        VariableLengthInteger.encode(sequenceNr, buffer);
+        buffer.put((byte) connectionId.length);
+        buffer.put(connectionId);
+        random.ints(16).forEach(i -> buffer.put((byte) i));
+
+        byte[] bytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(bytes);
+        return bytes;
     }
 
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
         if (quicVersion.equals(Version.IETF_draft_14) || quicVersion.atLeast(Version.IETF_draft_17)) {
-            sequence = QuicPacket.parseVariableLengthInteger(buffer);
+            sequenceNr = VariableLengthInteger.parse(buffer);
             int connectionIdLength = buffer.get();
-            byte[] connectionId = new byte[connectionIdLength];
+            connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }
         else if (quicVersion.atLeast(Version.IETF_draft_15)) {
             int connectionIdLength = buffer.get();
-            sequence = QuicPacket.parseVariableLengthInteger(buffer);
-            byte[] connectionId = new byte[connectionIdLength];
+            sequenceNr = VariableLengthInteger.parse(buffer);
+            connectionId = new byte[connectionIdLength];
             buffer.get(connectionId);
         }
 
@@ -58,6 +77,15 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewConnectionIdFrame[" + sequence + "]";
+        return "NewConnectionIdFrame[" + sequenceNr + "]";
     }
+
+    public int getSequenceNr() {
+        return sequenceNr;
+    }
+
+    public byte[] getConnectionId() {
+        return connectionId;
+    }
+
 }

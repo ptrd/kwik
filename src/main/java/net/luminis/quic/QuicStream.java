@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 public class QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
+    protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
     private Object addMonitor = new Object();
     private final Version quicVersion;
@@ -43,16 +43,19 @@ public class QuicStream {
     private final BlockingQueue<StreamFrame> queuedFrames;
     private StreamFrame currentFrame;
     private int currentOffset;
-    private int lastContiguousOffsetReceived;
+    private int expectingOffset;
     private Map<Integer, StreamFrame> receivedFrames;
     private StreamInputStream inputStream;
     private StreamOutputStream outputStream;
     private volatile boolean aborted;
     private volatile Thread blocking;
+    private long receiverMaxData;
+    private long lastCommunicatedMaxData;
+    private final long receiverMaxDataIncrement;
 
 
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
-        this(Version.IETF_draft_17, streamId, connection, log);
+        this(Version.getDefault(), streamId, connection, log);
     }
 
     public QuicStream(Version quicVersion, int streamId, QuicConnection connection, Logger log) {
@@ -61,9 +64,13 @@ public class QuicStream {
         this.connection = connection;
         this.log = log;
         queuedFrames = new LinkedBlockingQueue<>();  // Queued frames are the ones eligible for reading, because they are contiguous
-        receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-continguous
+        receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-contiguous
         inputStream = new StreamInputStream();
         outputStream = new StreamOutputStream();
+
+        receiverMaxData = connection.getInitialMaxStreamData();
+        lastCommunicatedMaxData = receiverMaxData;
+        receiverMaxDataIncrement = (long) (receiverMaxData * receiverMaxDataIncrementFactor);
     }
 
     public InputStream getInputStream() {
@@ -84,13 +91,14 @@ public class QuicStream {
         String logMessage = null;
 
         synchronized (addMonitor) {
-            if (frame.getOffset() == lastContiguousOffsetReceived) {
-                lastContiguousOffsetReceived += frame.getLength();
+            if (frame.getOffset() == expectingOffset) {
                 queuedFrames.add(frame);
-                if (receivedFrames.containsKey(lastContiguousOffsetReceived)) {
+                expectingOffset += frame.getLength();
+                while (receivedFrames.containsKey(expectingOffset)) {
                     // Next frame was already received; move it to the incoming queue
-                    StreamFrame nextFrame = receivedFrames.remove(lastContiguousOffsetReceived);
+                    StreamFrame nextFrame = receivedFrames.remove(expectingOffset);
                     queuedFrames.add(nextFrame);
+                    expectingOffset += nextFrame.getLength();
                 }
             }
             else {
@@ -114,6 +122,20 @@ public class QuicStream {
 
 
     private class StreamInputStream extends InputStream {
+
+        @Override
+        public int available() throws IOException {
+            if (currentFrame == null || ! (currentOffset < currentFrame.getOffset() + currentFrame.getLength())) {
+                currentFrame = queuedFrames.poll();  // Does not block
+            }
+            if (currentFrame != null) {
+                return currentFrame.getOffset() + currentFrame.getLength() - currentOffset;
+            }
+            else {
+                return 0;
+            }
+        }
+
         @Override
         public int read() throws IOException {
             if (aborted)
@@ -139,7 +161,16 @@ public class QuicStream {
             if (currentOffset < currentFrame.getOffset() + currentFrame.getLength()) {
                 byte data = currentFrame.getStreamData()[currentOffset - currentFrame.getOffset()];
                 currentOffset++;
-                return data;
+                // Flow control
+                receiverMaxData += 1;  // Slide flow control window forward (which as much bytes as are read)
+                connection.slideFlowControlWindow(1);
+                if (receiverMaxData - lastCommunicatedMaxData > receiverMaxDataIncrement) {
+                    // Avoid sending updates which every single byte read...
+                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData));
+                    lastCommunicatedMaxData = receiverMaxData;
+                }
+
+                return data & 0xff;
             }
             else {
                 if (currentFrame.isFinal()) {

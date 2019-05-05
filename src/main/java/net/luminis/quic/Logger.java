@@ -18,277 +18,64 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.ByteUtils;
-
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
+public interface Logger {
 
-public class Logger {
+    void logDebug(boolean enabled);
 
-    private volatile boolean logDebug = false;
-    private volatile boolean logRawBytes = false;
-    private volatile boolean logDecrypted = false;
-    private volatile boolean logSecrets = false;
-    private volatile boolean logPackets = false;
-    private volatile boolean logInfo = false;
-    private volatile boolean logStats = false;
-    private volatile boolean useRelativeTime = false;
-    private final DateTimeFormatter timeFormatter;
-    private Instant start;
+    void logRaw(boolean enabled);
 
-    public Logger() {
-        timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
-    }
+    void logDecrypted(boolean enabled);
 
-    public void logDebug(boolean enabled) {
-        logDebug = enabled;
-    }
+    void logSecrets(boolean enabled);
 
-    public void logRaw(boolean enabled) {
-        logRawBytes = enabled;
-    }
+    void logPackets(boolean enabled);
 
-    public void logDecrypted(boolean enabled) {
-        logDecrypted = enabled;
-    }
+    void logInfo(boolean enabled);
 
-    public void logSecrets(boolean enabled) {
-        logSecrets = enabled;
-    }
+    void logStats(boolean enabled);
 
-    public void logPackets(boolean enabled) {
-        logPackets = enabled;
-    }
+    void useRelativeTime(boolean enabled);
 
-    public void logInfo(boolean enabled) {
-        logInfo = enabled;
-    }
+    void debug(String message);
 
-    public void logStats(boolean enabled) {
-        logStats = enabled;
-    }
+    void debug(String message, Exception error);
 
-    public void useRelativeTime(boolean enabled) {
-        useRelativeTime = enabled;
-    }
+    void debugWithHexBlock(String message, byte[] data);
 
-    public void debug(String message) {
-        if (logDebug) {
-            synchronized (this) {
-                System.out.println(message);
-            }
-        }
-    }
+    void debugWithHexBlock(String message, byte[] data, int length);
 
-    public void debug(String message, Exception error) {
-        if (logDebug) {
-            synchronized (this) {
-                System.out.println(message);
-                error.printStackTrace();
-            }
-        }
-    }
+    void debug(String message, byte[] data);
 
-    public void debugWithHexBlock(String message, byte[] data) {
-        if (logDebug) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, data.length));
-            }
-        }
-    }
+    void info(String message);
 
-    public void debugWithHexBlock(String message, byte[] data, int length) {
-        if (logDebug) {
-            synchronized (this) {
-                System.out.println(message + " (" + length + "): ");
-                System.out.println(byteToHexBlock(data, length));
-            }
-        }
-    }
+    void info(String message, byte[] data);
 
-    public void debug(String message, byte[] data) {
-        if (logDebug) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): " + byteToHex(data));
-            }
-        }
-    }
+    void received(Instant timeReceived, int datagram, QuicPacket packet);
 
-    private String byteToHex(byte[] data) {
-        String result = "";
-        for (int i = 0; i < data.length; i++) {
-            result += (String.format("%02x ", data[i]));
-        }
-        return result;
-    }
+    void sent(Instant sent, QuicPacket packet);
 
-    private String byteToHexBlock(byte[] data, int length) {
-        String result = "";
-        for (int i = 0; i < length; ) {
-            result += (String.format("%02x ", data[i]));
-            i++;
-            if (i < data.length)
-                if (i % 16 == 0)
-                    result += "\n";
-                else if (i % 8 == 0)
-                    result += " ";
-        }
-        return result;
-    }
+    void secret(String message, byte[] secret);
 
-    private String byteToHexBlock(ByteBuffer data, int offset, int length) {
-        data.rewind();
-        String result = "";
-        for (int i = 0; i < length; ) {
-            result += String.format("%02x ", data.get(offset + i));
-            i++;
-            if (i < length)
-                if (i % 16 == 0)
-                    result += "\n";
-                else if (i % 8 == 0)
-                    result += " ";
-        }
-        return result;
-    }
+    void raw(String message, byte[] data);
 
-    public void info(String message) {
-        if (logInfo) {
-            synchronized (this) {
-                System.out.println(message);
-            }
-        }
-    }
+    void raw(String message, ByteBuffer data, int offset, int length);
 
-    public void info(String message, byte[] data) {
-        if (logInfo) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): " + ByteUtils.bytesToHex(data));
-            }
-        }
-    }
+    void raw(String message, byte[] data, int length);
 
-    public void received(Instant timeReceived, int datagram, QuicPacket packet) {
-        if (logPackets) {
-            synchronized (this) {
-                System.out.println(formatTime(timeReceived) + " <- (" + datagram + ") " + packet);
-            }
-        }
-    }
+    void decrypted(String message, byte[] data);
 
-    public void sent(Instant sent, QuicPacket packet) {
-        synchronized (this) {
-            if (useRelativeTime) {
-                if (start == null) {
-                    start = sent;
-                }
-            }
-        }
-        if (logPackets) {
-            synchronized (this) {
-                System.out.println(formatTime(sent) + " -> " + packet);
-            }
-        }
-    }
+    void decrypted(String message, byte[] data, int length);
 
-    public void secret(String message, byte[] secret) {
-        if (logSecrets) {
-            synchronized (this) {
-                System.out.println(message + ": " + byteToHex(secret));
-            }
-        }
-    }
+    void decrypted(String message);
 
-    public void raw(String message, byte[] data) {
-        if (logRawBytes) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, data.length));
-            }
-        }
-    }
+    void encrypted(String message, byte[] data);
 
-    public void raw(String message, ByteBuffer data, int offset, int length) {
-        if (logRawBytes) {
-            synchronized (this) {
-                System.out.println(message + " (" + length + "): ");
-                System.out.println(byteToHexBlock(data, offset, length));
-            }
-        }
-    }
+    void error(String message);
 
-    public void raw(String message, byte[] data, int length) {
-        if (logRawBytes) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, length));
-            }
-        }
-    }
+    void error(String message, Throwable error);
 
-    public void decrypted(String message, byte[] data) {
-        if (logDecrypted) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, data.length));
-            }
-        }
-    }
-
-    public void decrypted(String message, byte[] data, int length) {
-        if (logDecrypted) {
-            synchronized (this) {
-                System.out.println(message + " (" + data.length + "): ");
-                System.out.println(byteToHexBlock(data, length));
-            }
-        }
-    }
-
-    public void decrypted(String message) {
-        if (logDecrypted) {
-            synchronized (this) {
-                System.out.println(message);
-            }
-        }
-    }
-
-    public void error(String message) {
-        synchronized (this) {
-            System.out.println("Error: " + message);
-        }
-    }
-
-    public void error(String message, Exception error) {
-        synchronized (this) {
-            System.out.println("Error: " + message + ": " + error);
-            error.printStackTrace();
-        }
-    }
-
-    public void stats(String message) {
-        if (logStats) {
-            synchronized (this) {
-                System.out.println(message);
-            }
-        }
-    }
-
-    String formatTime(Instant time) {
-        if (useRelativeTime) {
-            if (start == null) {
-                start = time;
-            }
-            Duration relativeTime = Duration.between(start, time);
-            return String.format("%d.%03d", relativeTime.getSeconds(), relativeTime.getNano() / 1_000_000);
-        }
-        else {
-            LocalTime localTimeNow = LocalTime.from(time.atZone(ZoneId.systemDefault()));
-            return timeFormatter.format(localTimeNow);
-        }
-    }
+    void stats(String message);
 }

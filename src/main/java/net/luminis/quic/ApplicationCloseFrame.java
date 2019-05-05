@@ -32,7 +32,7 @@ public class ApplicationCloseFrame extends QuicFrame {
         }
 
         errorCode = buffer.getShort() & 0xffff;
-        int reasonPhraseLength = QuicPacket.parseVariableLengthInteger(buffer);
+        int reasonPhraseLength = VariableLengthInteger.parse(buffer);
         if (reasonPhraseLength > 0) {
             byte[] data = new byte[reasonPhraseLength];
             buffer.get(data);

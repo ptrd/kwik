@@ -30,7 +30,7 @@ public class StreamsBlockedFrame extends QuicFrame {
     public StreamsBlockedFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
         bidirectional = frameType == 0x16;
-        streamLimit = QuicPacket.parseVariableLengthInteger(buffer);
+        streamLimit = VariableLengthInteger.parse(buffer);
 
         return this;
     }

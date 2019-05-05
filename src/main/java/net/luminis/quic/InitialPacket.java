@@ -68,8 +68,7 @@ public class InitialPacket extends LongHeaderPacket {
     protected void generateAdditionalFields(ByteBuffer packetBuffer) {
         // Token length (variable-length integer)
         if (token != null) {
-            byte[] encodedTokenLength = QuicPacket.encodeVariableLengthInteger(token.length);
-            packetBuffer.put(encodedTokenLength);
+            VariableLengthInteger.encode(token.length, packetBuffer);
             packetBuffer.put(token);
         }
         else {

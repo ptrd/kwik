@@ -92,6 +92,13 @@ public class RetryPacket extends QuicPacket {
         return new byte[0];
     }
 
+    @Override
+    public boolean canBeAcked() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
+        // "A Retry packet does not include a packet number and cannot be explicitly acknowledged by a client."
+        return false;
+    }
+
     public byte[] getRetryToken() {
         return retryToken;
     }

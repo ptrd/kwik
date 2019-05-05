@@ -33,13 +33,15 @@ import java.util.concurrent.TimeUnit;
  */
 public class Receiver {
 
+    private final QuicConnection connection;
     private final DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
 
-    public Receiver(DatagramSocket socket, int initialMaxPacketSize, Logger log) {
+    public Receiver(QuicConnection connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
+        this.connection = connection;
         this.socket = socket;
         this.maxPacketSize = initialMaxPacketSize;
         this.log = log;
@@ -101,8 +103,12 @@ public class Receiver {
         }
         catch (IOException e) {
             // This is probably fatal
-            log.error("IOException while receiving datagrams");
-            // TODO: abort the quic-connection (if any)
+            log.error("IOException while receiving datagrams", e);
+            connection.abortConnection(e);
+        }
+        catch (Throwable fatal) {
+            log.error("IOException while receiving datagrams", fatal);
+            connection.abortConnection(fatal);
         }
     }
 

@@ -20,29 +20,28 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
-public class MaxStreamsFrame extends QuicFrame {
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
+public class StreamDataBlockedFrame extends QuicFrame {
 
-    private int maxStreams;
+    private int streamId;
+    private int streamDataLimit;
 
-    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
+    public StreamDataBlockedFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
-        if (frameType != 0x12 && frameType != 0x13) {
-            throw new RuntimeException();  // Would be a programming error.
-        }
-
-        maxStreams = VariableLengthInteger.parse(buffer);
+        streamId = VariableLengthInteger.parse(buffer);
+        streamDataLimit = VariableLengthInteger.parse(buffer);
 
         return this;
     }
 
     @Override
-    public String toString() {
-        return "MaxStreamsFrame[" + maxStreams + "]";
+    byte[] getBytes() {
+        return new byte[0];
     }
 
     @Override
-    byte[] getBytes() {
-        return new byte[0];
+    public String toString() {
+        return "StreamDataBlockedFrame[" + streamId + "|" + streamDataLimit + "]";
     }
 
 }

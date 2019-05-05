@@ -19,10 +19,8 @@
 package net.luminis.quic;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.stream.Stream;
 
-import static net.luminis.quic.StreamType.ClientInitiatedBidirectional;
 
 public class StreamFrame extends QuicFrame {
 
@@ -38,11 +36,11 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, byte[] applicationData, boolean fin) {
-        this(Version.IETF_draft_17, streamId, 0, applicationData, 0, applicationData.length, fin);
+        this(Version.getDefault(), streamId, 0, applicationData, 0, applicationData.length, fin);
     }
 
     public StreamFrame(int streamId, int offset, byte[] applicationData, boolean fin) {
-        this(Version.IETF_draft_17, streamId, offset, applicationData, 0, applicationData.length, fin);
+        this(Version.getDefault(), streamId, offset, applicationData, 0, applicationData.length, fin);
     }
 
     public StreamFrame(Version quicVersion, int streamId, int offset, byte[] applicationData, boolean fin) {
@@ -50,11 +48,11 @@ public class StreamFrame extends QuicFrame {
     }
 
     public StreamFrame(int streamId, int offset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
-        this(Version.IETF_draft_17, streamId, offset, applicationData, dataOffset, dataLength, fin);
+        this(Version.getDefault(), streamId, offset, applicationData, dataOffset, dataLength, fin);
     }
 
     public StreamFrame(Version quicVersion, int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
-        streamType = ClientInitiatedBidirectional;
+        streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
         this.streamId = streamId;
         this.offset = streamOffset;
         this.length = dataLength;
@@ -67,9 +65,9 @@ public class StreamFrame extends QuicFrame {
             frameType |= 0x01;
         }
         buffer.put(frameType);
-        buffer.put(encodeVariableLengthInteger(streamId));
-        buffer.put(encodeVariableLengthInteger(offset));  // offset
-        buffer.put(encodeVariableLengthInteger(applicationData.length));  // length
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(offset, buffer);
+        VariableLengthInteger.encode(length, buffer);
         buffer.put(applicationData, dataOffset, dataLength);
 
         frameData = new byte[buffer.position()];
@@ -83,19 +81,19 @@ public class StreamFrame extends QuicFrame {
         boolean withLength = ((frameType & 0x02) == 0x02);
         isFinal = ((frameType & 0x01) == 0x01);
 
-        streamId = QuicPacket.parseVariableLengthInteger(buffer);
+        streamId = VariableLengthInteger.parse(buffer);
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
 
         if (withOffset) {
-            offset = QuicPacket.parseVariableLengthInteger(buffer);
+            offset = VariableLengthInteger.parse(buffer);
         }
         if (withLength) {
-            length = QuicPacket.parseVariableLengthInteger(buffer);
+            length = VariableLengthInteger.parse(buffer);
         }
-
-        if (length > 0) {
+        else {
             length = buffer.limit() - buffer.position();
         }
+
         streamData = new byte[length];
         buffer.get(streamData);
         log.debug("Stream data", streamData);

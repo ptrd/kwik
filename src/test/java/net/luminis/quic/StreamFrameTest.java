@@ -42,6 +42,18 @@ class StreamFrameTest {
     }
 
     @Test
+    void testParseStreamWithoutOffsetAndLengthByte() {
+        byte[] raw = new byte[] { 0x08, 0x02, 48, 49, 50, 51, 52 };
+        StreamFrame frame = new StreamFrame().parse(ByteBuffer.wrap(raw), Mockito.mock(Logger.class));
+
+        assertThat(frame.getStreamId()).isEqualTo(2);
+        assertThat(frame.getOffset()).isEqualTo(0);
+        assertThat(frame.getLength()).isEqualTo(5);
+        assertThat(frame.getStreamData()).isEqualTo("01234".getBytes());
+        assertThat(frame.isFinal()).isEqualTo(false);
+    }
+
+    @Test
     void testStreamFrameByteArraySlicing() {
         byte[] data = generateByteArray(26);
         StreamFrame frame = new StreamFrame(0, 0, data, 3, 5, true);

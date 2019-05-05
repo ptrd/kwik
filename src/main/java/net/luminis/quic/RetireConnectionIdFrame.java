@@ -20,24 +20,18 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
-public class MaxStreamsFrame extends QuicFrame {
 
-    private int maxStreams;
+public class RetireConnectionIdFrame extends QuicFrame {
 
-    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        if (frameType != 0x12 && frameType != 0x13) {
-            throw new RuntimeException();  // Would be a programming error.
-        }
+    private int sequenceNr;
 
-        maxStreams = VariableLengthInteger.parse(buffer);
-
-        return this;
+    public RetireConnectionIdFrame(Version quicVersion) {
     }
 
-    @Override
-    public String toString() {
-        return "MaxStreamsFrame[" + maxStreams + "]";
+    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
+        buffer.get();
+        sequenceNr = VariableLengthInteger.parse(buffer);
+        return this;
     }
 
     @Override
@@ -45,4 +39,12 @@ public class MaxStreamsFrame extends QuicFrame {
         return new byte[0];
     }
 
+    @Override
+    public String toString() {
+        return "RetireConnectionIdFrame[" + sequenceNr + "]";
+    }
+
+    public int getSequenceNr() {
+        return sequenceNr;
+    }
 }

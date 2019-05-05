@@ -60,6 +60,10 @@ public class Padding extends QuicFrame {
         return new byte[length];
     }
 
+    public boolean isAckEliciting() {
+        return false;
+    }
+
     @Override
     public String toString() {
         return "Padding(" + length + ")";

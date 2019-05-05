@@ -24,10 +24,14 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
 
@@ -39,30 +43,39 @@ public class Sender implements FrameProcessor {
     private final Thread senderThread;
     private InetAddress serverAddress;
     private int port;
+    private volatile boolean running;
     private BlockingQueue<WaitingPacket> incomingPacketQueue;
-    private Map<PacketId, PacketAckStatus> packetSentLog;
+    private final Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
     private volatile boolean cryptoInFlight;
     private volatile int failedCryptoRetries;
     private final RttEstimator rttEstimater;
-
+    private QuicConnection connection;
+    private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
+    private AckGenerator[] ackGenerators;
+    private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
-    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port) {
+
+    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
         this.socket = socket;
         this.maxPacketSize = maxPacketSize;
         this.log = log;
         this.serverAddress = serverAddress;
         this.port = port;
+        this.connection = connection;
 
-        senderThread = new Thread(() -> run(), "receiver");
+        senderThread = new Thread(() -> run(), "sender");
         senderThread.setDaemon(true);
 
         incomingPacketQueue = new LinkedBlockingQueue<>();
-        packetSentLog = new HashMap<>();
+        packetSentLog = new ConcurrentHashMap<>();
         congestionController = new CongestionController(log);
         rttEstimater = new RttEstimator(log);
+
+        ackGenerators = new AckGenerator[3];
+        Arrays.setAll(ackGenerators, i -> new AckGenerator());
     }
 
     public void send(QuicPacket packet, String logMessage) {
@@ -76,17 +89,35 @@ public class Sender implements FrameProcessor {
     }
 
     private void run() {
+        running = true;
         try {
-            while (!senderThread.isInterrupted()) {
+            while (running) {
 
                 try {
-                    WaitingPacket queued = incomingPacketQueue.take();
-                    QuicPacket packet = queued.packet;
-                    String logMessage = queued.logMessage;
+                    QuicPacket packet = null;
+                    String logMessage = null;
+                    EncryptionLevel level = null;
+                    long packetNumber = -1;
 
-                    EncryptionLevel level = packet.getEncryptionLevel();
-                    long packetNumber = generatePacketNumber(level);
-                    byte[] packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);
+                    boolean packetWaiting = incomingPacketQueue.peek() != null;
+                    boolean ackWaiting = false;
+                    if (!packetWaiting) {
+                        level = lastReceivedMessageLevel;
+                        AckGenerator ackGenerator = ackGenerators[level.ordinal()];
+                        ackWaiting = ackGenerator.hasNewAckToSend();
+                    }
+                    if (packetWaiting || !ackWaiting) {
+                        WaitingPacket queued = incomingPacketQueue.take();
+                        packet = queued.packet;
+                        level = packet.getEncryptionLevel();
+                        logMessage = queued.logMessage;
+                    }
+
+                    packetNumber = generatePacketNumber(level);
+                    if (packet == null) {
+                        packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
+                    }
+                    byte[] packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);  // TODO: more efficient would be to estimate packet size
 
                     boolean hasBeenWaiting = false;
                     while (! congestionController.canSend(packetData.length)) {
@@ -101,6 +132,16 @@ public class Sender implements FrameProcessor {
                         log.debug("But now it does.");
                     }
 
+                    // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
+                    // an ack frame that should be coalesced with it.
+
+                    AckGenerator ackGenerator = ackGenerators[level.ordinal()];
+                    if (ackGenerator.hasAckToSend()) {
+                        AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
+                        packet.addFrame(ackToSend);
+                        packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);
+                    }
+
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();
                     socket.send(datagram);
@@ -109,21 +150,28 @@ public class Sender implements FrameProcessor {
 
                     logSent(packet, sent);
                     congestionController.registerInFlight(packet);
-                } catch (InterruptedException interrupted) {
-                    break;
+                }
+                catch (InterruptedException interrupted) {
+                    // Someone interrupted, maybe because an Ack has to be sent.
                 }
             }
         }
         catch (IOException ioError) {
             // This is probably fatal.
-            log.error("IOException while sending datagrams");
+            log.error("IOException while sending datagrams", ioError);
+            connection.abortConnection(ioError);
         }
-        catch (Exception error) {
-            log.error("Exception while sending datagrams", error);
+        catch (Throwable fatal) {
+            log.error("Sender thread aborted with exception", fatal);
+            connection.abortConnection(fatal);
         }
     }
 
-    private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
+    public void packetProcessed(EncryptionLevel encryptionLevel) {
+        lastReceivedMessageLevel = encryptionLevel;
+        // Notify sender loop: might need to send an acknowledge packet.
+        senderThread.interrupt();
+    }
 
     private long generatePacketNumber(EncryptionLevel encryptionLevel) {
         synchronized (lastPacketNumber) {
@@ -132,6 +180,7 @@ public class Sender implements FrameProcessor {
     }
 
     void shutdown() {
+        running = false;
         senderThread.interrupt();
         logStatistics();
         scheduler.shutdownNow();
@@ -139,6 +188,12 @@ public class Sender implements FrameProcessor {
 
     private List<QuicPacket> getNonAcknowlegded() {
         return packetSentLog.values().stream().filter(p -> !p.acked).map(o -> o.packet).collect(Collectors.toList());
+    }
+
+    public void processPacketReceived(QuicPacket packet) {
+        if (packet.canBeAcked()) {
+            ackGenerators[packet.getEncryptionLevel().ordinal()].packetReceived(packet);
+        }
     }
 
     /**
@@ -157,7 +212,10 @@ public class Sender implements FrameProcessor {
     }
 
     private void processAck(AckFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
+        ackGenerators[encryptionLevel.ordinal()].process(ackFrame, encryptionLevel);
+
         computeRttSample(ackFrame, encryptionLevel, timeReceived);
+
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             PacketId id = new PacketId(encryptionLevel, pn);
             if (packetSentLog.containsKey(id)) {
@@ -171,7 +229,10 @@ public class Sender implements FrameProcessor {
         if (cryptoInFlight) {
             failedCryptoRetries = 0;  // When an ack is received, reset the timeout value for crypto timeouts.
             cryptoInFlight = packetSentLog.values().stream()
-                    .filter(p -> !p.acked && !p.resent).filter(p -> p.packet.isCrypto()).findFirst().isPresent();
+                    .filter(p -> !p.acked && !p.resent)
+                    .filter(p -> p.packet.isCrypto())
+                    .findFirst()
+                    .isPresent();
             if (!cryptoInFlight) {
                 log.debug("No crypto in flight anymore.");
             }
@@ -221,16 +282,16 @@ public class Sender implements FrameProcessor {
         }
     }
 
-    private void retransmit(PacketAckStatus ackStatus) {
-        QuicPacket packet = ackStatus.packet;
-        ackStatus.resent = true;
+    private void retransmit(PacketAckStatus packetStatus) {
+        QuicPacket packet = packetStatus.packet;
+        packetStatus.resent = true;
         QuicPacket newPacket = packet.copy();
         send(newPacket, "retransmit " + packet.getId());
     }
 
     void logStatistics() {
         log.stats("Acknowledgement statistics (sent packets):");
-        packetSentLog.entrySet().stream().sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(e -> e.getValue()).forEach(e -> {
+        packetSentLog.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e -> e.getValue()).forEach(e -> {
             log.stats(e.packet.getId() + "\t" + e.status() + "\t" + e.packet);
         });
     }

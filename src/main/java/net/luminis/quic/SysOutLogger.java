@@ -20,29 +20,38 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
-public class MaxStreamsFrame extends QuicFrame {
+public class SysOutLogger extends BaseLogger {
 
-    private int maxStreams;
+    @Override
+    protected void log(String message) {
+        synchronized (this) {
+            System.out.println(message);
+        }
+    }
 
-    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        if (frameType != 0x12 && frameType != 0x13) {
-            throw new RuntimeException();  // Would be a programming error.
+    @Override
+    protected void log(String message, Throwable error) {
+        synchronized (this) {
+            System.out.println(message);
+            error.printStackTrace();
         }
 
-        maxStreams = VariableLengthInteger.parse(buffer);
-
-        return this;
     }
 
     @Override
-    public String toString() {
-        return "MaxStreamsFrame[" + maxStreams + "]";
+    protected void logWithHexDump(String message, byte[] data, int length) {
+        synchronized (this) {
+            System.out.println(message);
+            System.out.println(byteToHexBlock(data, length));
+        }
     }
 
     @Override
-    byte[] getBytes() {
-        return new byte[0];
+    protected void logWithHexDump(String message, ByteBuffer data, int offset, int length) {
+        synchronized (this) {
+            System.out.println(message);
+            System.out.println(byteToHexBlock(data, offset, length));
+        }
     }
 
 }

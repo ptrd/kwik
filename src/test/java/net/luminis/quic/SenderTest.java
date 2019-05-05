@@ -31,6 +31,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class SenderTest {
@@ -38,25 +39,27 @@ class SenderTest {
     private static Logger logger;
     private Sender sender;
     private DatagramSocket socket;
+    private QuicConnection connection;
 
     @BeforeAll
     static void initLogger() {
-        logger = new Logger();
+        logger = new SysOutLogger();
         logger.logDebug(true);
     }
 
     @BeforeEach
-    void initSenderUnderTest() {
+    void initSenderUnderTest() throws Exception {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
-        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
+        connection = mock(QuicConnection.class);
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
     }
 
     @Test
     void testSingleSend() throws Exception {
         setCongestionWindowSize(1250);
         sender.start(null);
-
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         waitForSender();
 
@@ -67,7 +70,6 @@ class SenderTest {
     void testSenderIsCongestionControlled() throws Exception {
         setCongestionWindowSize(1250);
         sender.start(null);
-
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
 
@@ -144,7 +146,7 @@ class SenderTest {
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(),"packet 1"), "packet 1");
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(), "packet 1"), "packet 1");
         waitForSender();
         verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
         clearInvocations(socket);
@@ -154,6 +156,26 @@ class SenderTest {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    void receivingPacketLeadsToSendAckPacket() throws IOException  {
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
+                .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
+
+        sender.processPacketReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new CryptoFrame()));
+        sender.packetProcessed(EncryptionLevel.Initial);
+
+        waitForSender();
+
+        verify(socket, times(1)).send(any(DatagramPacket.class));  // TODO: would be nice to check send packet actually contains an ack frame...
+    }
+
+    @Test
+    void receivingVersionNegotationPacke() throws IOException {
+        sender.processPacketReceived(new VersionNegotationPacket());
+
+        waitForSender();
+
         verify(socket, never()).send(any(DatagramPacket.class));
     }
 
@@ -178,6 +200,14 @@ class SenderTest {
 
     private PacketMatcher matchesPacket(int packetNumber, EncryptionLevel encryptionLevel ) {
         return new PacketMatcher(packetNumber, encryptionLevel);
+    }
+
+    void receivingRetryPacket() throws IOException {
+        sender.processPacketReceived(new RetryPacket(Version.getDefault()));
+
+        waitForSender();
+
+        verify(socket, never()).send(any(DatagramPacket.class));
     }
 
     private void waitForSender() {

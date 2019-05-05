@@ -20,17 +20,36 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.9
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
 public class MaxDataFrame extends QuicFrame {
 
-    private int maxData;
+    private long maxData;
+
+    public MaxDataFrame() {
+    }
+
+    public MaxDataFrame(long flowControlMax) {
+        maxData = flowControlMax;
+    }
 
     public MaxDataFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
-
-        maxData = QuicPacket.parseVariableLengthInteger(buffer);
-
+        maxData = VariableLengthInteger.parse(buffer);
         return this;
+    }
+
+    @Override
+    byte[] getBytes() {
+        ByteBuffer buffer = ByteBuffer.allocate(5);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
+        // "The MAX_DATA frame (type=0x10)..."
+        buffer.put((byte) 0x10);
+        VariableLengthInteger.encode(maxData, buffer);
+
+        byte[] bytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(bytes);
+        return bytes;
     }
 
     @Override
@@ -38,8 +57,4 @@ public class MaxDataFrame extends QuicFrame {
         return "MaxDataFrame[" + maxData + "]";
     }
 
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
-    }
 }
