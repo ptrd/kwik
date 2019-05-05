@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
  */
 public class AckFrame extends QuicFrame {
 
+    public static final int MAX_FRAME_SIZE = 1000;  // Should be large enough; leave some space for packet overhead.
+
     private byte[] frameBytes;
     private long largestAcknowledged;
     private int ackDelay;
@@ -50,7 +52,7 @@ public class AckFrame extends QuicFrame {
         acknowledgedPacketNumbers = List.of(largestAcknowledged);
         stringRepresentation = String.valueOf(largestAcknowledged);
 
-        ByteBuffer buffer = ByteBuffer.allocate(100);
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
 
         if (quicVersion.equals(Version.IETF_draft_14)) {
             buffer.put((byte) 0x0d);
@@ -83,7 +85,7 @@ public class AckFrame extends QuicFrame {
         acknowledgedPacketNumbers = packetNumbers.stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
         largestAcknowledged = acknowledgedPacketNumbers.get(0);
 
-        ByteBuffer buffer = ByteBuffer.allocate(100);
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
 
         if (quicVersion.equals(Version.IETF_draft_14)) {
             buffer.put((byte) 0x0d);
