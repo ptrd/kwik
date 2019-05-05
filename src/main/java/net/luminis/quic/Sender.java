@@ -151,10 +151,12 @@ public class Sender implements FrameProcessor {
         }
         catch (IOException ioError) {
             // This is probably fatal.
-            log.error("IOException while sending datagrams");
+            log.error("IOException while sending datagrams", ioError);
+            connection.abortConnection(ioError);
         }
         catch (Throwable fatal) {
-            log.error("Sender thread aborted with exception"+ fatal);
+            log.error("Sender thread aborted with exception", fatal);
+            connection.abortConnection(fatal);
         }
     }
 

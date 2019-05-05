@@ -30,7 +30,7 @@ public class SysOutLogger extends BaseLogger {
     }
 
     @Override
-    protected void log(String message, Exception error) {
+    protected void log(String message, Throwable error) {
         synchronized (this) {
             System.out.println(message);
             error.printStackTrace();

@@ -41,7 +41,7 @@ public class FileLogger extends BaseLogger {
     }
 
     @Override
-    protected void log(String message, Exception ex) {
+    protected void log(String message, Throwable ex) {
         synchronized (this) {
             logStream.println(message);
             ex.printStackTrace(logStream);

@@ -101,7 +101,7 @@ public class QuicConnection implements PacketProcessor {
 
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port, this);
-        receiver = new Receiver(socket, 1500, log);
+        receiver = new Receiver(this, socket, 1500, log);
         tlsState = new QuicTlsState(quicVersion);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
@@ -632,7 +632,11 @@ public class QuicConnection implements PacketProcessor {
         // TODO: close connection with a frame type of 0x1c
     }
 
-    private void abortConnection(Exception error) {
+    /**
+     * Abort connection due to a fatal error in this client. No message is sent to peer; just inform client it's all over.
+     * @param error  the exception that caused the trouble
+     */
+    void abortConnection(Throwable error) {
         if (connectionState == Status.Handshaking) {
             connectionState = Status.HandshakeError;
         }

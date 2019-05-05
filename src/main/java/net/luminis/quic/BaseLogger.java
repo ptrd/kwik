@@ -215,7 +215,7 @@ public abstract class BaseLogger implements Logger {
     }
 
     @Override
-    public void error(String message, Exception error) {
+    public void error(String message, Throwable error) {
         log("Error: " + message + ": " + error, error);
     }
 
@@ -279,7 +279,7 @@ public abstract class BaseLogger implements Logger {
 
     abstract protected void log(String message);
 
-    abstract protected void log(String message, Exception ex);
+    abstract protected void log(String message, Throwable ex);
 
     abstract protected void logWithHexDump(String message, byte[] data, int length);
 

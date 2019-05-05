@@ -75,7 +75,7 @@ public interface Logger {
 
     void error(String message);
 
-    void error(String message, Exception error);
+    void error(String message, Throwable error);
 
     void stats(String message);
 }
