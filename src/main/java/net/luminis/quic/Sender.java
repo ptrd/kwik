@@ -25,7 +25,6 @@ import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -55,7 +54,7 @@ public class Sender implements FrameProcessor {
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
     private AckGenerator[] ackGenerators;
     private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
 
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
@@ -344,4 +343,5 @@ public class Sender implements FrameProcessor {
             this.logMessage = logMessage;
         }
     }
+
 }
