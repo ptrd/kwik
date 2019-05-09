@@ -208,6 +208,27 @@ class QuicStreamTest {
     }
 
     @Test
+    void testReadAtEndOfStreamReturns() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "1".getBytes(), true)));
+        InputStream inputStream = quicStream.getInputStream();
+
+        assertThat(inputStream.read()).isEqualTo(49);
+        assertThat(inputStream.read()).isEqualTo(-1);
+        assertThat(inputStream.read()).isEqualTo(-1);
+    }
+
+    @Test
+    void testAvailableAtEndOfStreamReturnsZero() throws IOException {
+        quicStream.add(resurrect(new StreamFrame(0, "1".getBytes(), true)));
+        InputStream inputStream = quicStream.getInputStream();
+
+        assertThat(inputStream.read()).isEqualTo(49);
+        assertThat(inputStream.read()).isEqualTo(-1);
+        assertThat(inputStream.available()).isEqualTo(0);
+        assertThat(inputStream.read()).isEqualTo(-1);  // Important: read() must keep on returning -1!
+    }
+
+    @Test
     void testStreamOutputWithByteArray() throws IOException {
         quicStream.getOutputStream().write("hello world".getBytes());
 

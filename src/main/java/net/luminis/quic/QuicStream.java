@@ -125,7 +125,7 @@ public class QuicStream {
 
         @Override
         public int available() throws IOException {
-            if (currentFrame == null || ! (currentOffset < currentFrame.getOffset() + currentFrame.getLength())) {
+            if (currentFrame == null || !(currentOffset < currentFrame.getOffset() + currentFrame.getLength()) && !currentFrame.isFinal()) {
                 currentFrame = queuedFrames.poll();  // Does not block
             }
             if (currentFrame != null) {
