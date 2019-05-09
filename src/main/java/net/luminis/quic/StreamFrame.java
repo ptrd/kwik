@@ -108,7 +108,7 @@ public class StreamFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + "]";
+        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",f": "") + "]";
     }
 
     public int getStreamId() {
