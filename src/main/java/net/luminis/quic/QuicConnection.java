@@ -92,10 +92,14 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
+        this(host, port, quicVersion, log, host);
+    }
+
+    public QuicConnection(String host, int port, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
-        serverAddress = InetAddress.getByName(host);
+        serverAddress = InetAddress.getByName(proxyHost);
         this.quicVersion = quicVersion;
         this.log = log;
 
