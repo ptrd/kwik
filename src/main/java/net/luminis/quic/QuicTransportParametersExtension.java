@@ -234,7 +234,8 @@ public class QuicTransportParametersExtension extends Extension {
         }
         else if (parameterId == max_ack_delay.value) {
             int maxAckDelay = VariableLengthInteger.parse(buffer);
-            log.debug("- idle timeout: " + maxAckDelay);
+            log.debug("- max ack delay: " + maxAckDelay);
+            params.setMaxAckDelay(maxAckDelay);
         }
         else if (parameterId == original_connection_id.value) {
             byte[] originalConnectionId = new byte[size];

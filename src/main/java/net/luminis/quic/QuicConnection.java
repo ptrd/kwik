@@ -618,6 +618,8 @@ public class QuicConnection implements PacketProcessor {
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
         peerTransportParams = transportParameters;
+        sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
+
         if (processedRetryPacket) {
             if (transportParameters.getOriginalConnectionId() == null ||
                     ! Arrays.equals(originalDestinationConnectionId, transportParameters.getOriginalConnectionId())) {

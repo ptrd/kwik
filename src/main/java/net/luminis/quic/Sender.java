@@ -56,6 +56,7 @@ public class Sender implements FrameProcessor {
     private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
 
+    private int receiverMaxAckDelay;
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
         this.socket = socket;
@@ -309,6 +310,11 @@ public class Sender implements FrameProcessor {
     public CongestionController getCongestionController() {
         return congestionController;
     }
+
+    public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
+        this.receiverMaxAckDelay = receiverMaxAckDelay;
+    }
+
 
     private static class PacketAckStatus {
         final Instant timeSent;

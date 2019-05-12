@@ -33,18 +33,27 @@ public class TransportParameters {
     private int ackDelayExponent;
     private boolean disableMigration;
     private PreferredAddress preferredAddress;
+    private int maxAckDelay;
 
 
     public TransportParameters() {
+        setDefaults();
     }
 
     public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+        setDefaults();
         this.idleTimeoutInSeconds = idleTimeoutInSeconds;
         setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
         ackDelayExponent = 0;
+    }
+
+    private void setDefaults() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
+        // "If this value is absent, a default of 25 milliseconds is assumed."
+        maxAckDelay = 25;
     }
 
     public byte[] getOriginalConnectionId() {
@@ -116,6 +125,14 @@ public class TransportParameters {
 
     public void setInitialMaxStreamsUni(int initialMaxStreamsUni) {
         this.initialMaxStreamsUni = initialMaxStreamsUni;
+    }
+
+    public void setMaxAckDelay(int maxAckDelay) {
+        this.maxAckDelay = maxAckDelay;
+    }
+
+    public int getMaxAckDelay() {
+        return maxAckDelay;
     }
 
     public static class PreferredAddress {
