@@ -96,7 +96,6 @@ public class Receiver {
                 Instant timeReceived = Instant.now();
                 RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
                 receivedPacketsQueue.add(rawPacket);
-                log.debug("Received packet " + counter + " at ");
             }
 
             log.debug("Terminating receive loop");

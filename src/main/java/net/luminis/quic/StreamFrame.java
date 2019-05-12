@@ -96,7 +96,7 @@ public class StreamFrame extends QuicFrame {
 
         streamData = new byte[length];
         buffer.get(streamData);
-        log.debug("Stream data", streamData);
+        log.decrypted("Stream data", streamData);
 
         return this;
     }

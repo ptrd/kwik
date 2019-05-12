@@ -190,7 +190,7 @@ public class QuicConnection implements PacketProcessor {
                 if (rawPacket != null) {
                     Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
-                    log.debug("Packet process delay for packet #" + receivedPacketCounter + ": " + processDelay);
+                    log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
                     parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
                 }

@@ -141,7 +141,7 @@ public class CryptoStream {
             }
         }
         else {
-            log.debug("Unsupported extension!");
+            log.debug("Crypto stream: unsupported extension " + extensionType);
         }
     }
 

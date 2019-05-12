@@ -54,7 +54,7 @@ public class CryptoFrame extends QuicFrame {
 
         cryptoData = new byte[length];
         buffer.get(cryptoData);
-        log.debug("Crypto data [" + offset + "," + length + "]", cryptoData);
+        log.decrypted("Crypto data [" + offset + "," + length + "]", cryptoData);
 
         return this;
     }
