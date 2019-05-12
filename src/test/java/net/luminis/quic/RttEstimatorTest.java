@@ -39,7 +39,7 @@ class RttEstimatorTest {
     @Test
     void checkInitialRtt() {
         rttEstimator = new RttEstimator(logger);
-        assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(100);
+        assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(500);
     }
 
     @Test
@@ -70,5 +70,18 @@ class RttEstimatorTest {
         Instant end = start.plusMillis(253);
         rttEstimator.addSample(end, start, 80);
         assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(173);
+    }
+
+    @Test
+    void rttVarShouldNeverBecomeZero() {
+        rttEstimator = new RttEstimator(logger);
+        Instant start = Instant.now();
+        Instant end = start.plusMillis(10);
+        // Simulate number of samples with the exact same rtt
+        for (int i = 0; i < 10; i++) {
+            rttEstimator.addSample(end, start, 0);
+        }
+
+        assertThat(rttEstimator.getRttVar()).isGreaterThan(0);
     }
 }

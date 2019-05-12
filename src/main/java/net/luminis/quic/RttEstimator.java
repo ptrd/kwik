@@ -26,7 +26,7 @@ public class RttEstimator {
 
     private Logger log;
     // All intervals are in milliseconds (1/1000 second)
-    private int initialRtt = 100;
+    private int initialRtt;
     private int minRtt = Integer.MAX_VALUE;
     private int smoothedRtt = 0;
     private int rttVar;
@@ -34,6 +34,16 @@ public class RttEstimator {
 
     public RttEstimator(Logger log) {
         this.log = log;
+
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.2
+        // "If no previous RTT is available, or if the network
+        //   changes, the initial RTT SHOULD be set to 500ms"
+        initialRtt = 500;
+    }
+
+    public RttEstimator(Logger log, int initialRtt) {
+        this.log = log;
+        this.initialRtt = initialRtt;
     }
 
     public void addSample(Instant timeReceived, Instant timeSent, int ackDelay) {
@@ -72,6 +82,17 @@ public class RttEstimator {
         }
         else {
             return smoothedRtt;
+        }
+    }
+
+    public int getRttVar() {
+        // Not exactly according to specification, but rtt-var is only used for computing PTO and in that computation,
+        // 4 * rtt-var should be at least 1; for this implementation, an rtt-var that is a few ms too large won't matter.
+        if (rttVar == 0) {
+            return 1;
+        }
+        else {
+            return rttVar;
         }
     }
 }

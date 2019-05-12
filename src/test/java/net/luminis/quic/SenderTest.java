@@ -52,6 +52,7 @@ class SenderTest {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
         sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("rttEstimater"), new RttEstimator(logger, 100));
         connection = mock(QuicConnection.class);
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
     }
