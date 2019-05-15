@@ -30,6 +30,7 @@ public class RttEstimator {
     private int minRtt = Integer.MAX_VALUE;
     private int smoothedRtt = 0;
     private int rttVar;
+    private int latestRtt;
 
 
     public RttEstimator(Logger log) {
@@ -55,6 +56,7 @@ public class RttEstimator {
         int previousSmoothed = smoothedRtt;
 
         int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000 - ackDelay;
+        latestRtt = rttSample;
         if (rttSample < minRtt)
             minRtt = rttSample;
         // Adjust for ack delay if it's plausible.
@@ -94,5 +96,9 @@ public class RttEstimator {
         else {
             return rttVar;
         }
+    }
+
+    public int getLatestRtt() {
+        return latestRtt;
     }
 }

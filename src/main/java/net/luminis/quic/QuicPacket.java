@@ -600,4 +600,10 @@ abstract public class QuicPacket {
     public boolean isAckEliciting() {
         return frames.stream().anyMatch(frame -> frame.isAckEliciting());
     }
+
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-2
+    // "ACK-only:  Any packet containing only one or more ACK frame(s)."
+    public boolean isAckOnly() {
+        return frames.stream().allMatch(frame -> frame instanceof AckFrame);
+    }
 }
