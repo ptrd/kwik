@@ -20,18 +20,16 @@ package net.luminis.quic;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatcher;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 
-class LossDetectorTest {
+class LossDetectorTest extends RecoveryTests {
 
     private LossDetector lossDetector;
     private LostPacketHandler lostPacketHandler;
@@ -42,7 +40,7 @@ class LossDetectorTest {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(rttEstimator);
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator);
     }
 
     @BeforeEach
@@ -196,41 +194,4 @@ class LossDetectorTest {
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
-    private QuicPacket createPacket(int packetNumber, QuicFrame frame) {
-        ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
-        packet.packetNumber = packetNumber;
-        return packet;
-    }
-
-    private QuicPacket createPacket(int packetNumber) {
-        return createPacket(packetNumber, new Padding(1));
-    }
-
-    private List<QuicPacket>  createPackets(int... packetNumbers) {
-        List<QuicPacket> packets = new ArrayList<>();
-        for (int packetNumber: packetNumbers) {
-            ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new Padding(1));
-            packet.packetNumber = packetNumber;
-            packets.add(packet);
-        }
-        return packets;
-    }
-
-    interface LostPacketHandler {
-        void process(QuicPacket lostPacket);
-    }
-
-
-    static class PacketMatcher implements ArgumentMatcher<QuicPacket> {
-        private int packetNumber;
-
-        PacketMatcher(int packetNumber) {
-            this.packetNumber = packetNumber;
-        }
-
-        @Override
-        public boolean matches(QuicPacket quicPacket) {
-            return quicPacket.getPacketNumber() == packetNumber;
-        }
-    }
 }

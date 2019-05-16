@@ -19,7 +19,6 @@
 package net.luminis.quic;
 
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,16 +27,18 @@ import java.util.function.Consumer;
 
 public class LossDetector {
 
+    private final RecoveryManager recoveryManager;
     private final RttEstimator rttEstimater;
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketAckStatus> packetSentLog;
     private volatile long largestAcked;
     private volatile long lost;
-    private Instant lossTime;
+    private volatile Instant lossTime;
 
 
-    public LossDetector(RttEstimator rttEstimator) {
+    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator) {
+        this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
         packetSentLog = new ConcurrentHashMap<>();
     }
@@ -59,6 +60,8 @@ public class LossDetector {
         });
 
         detectLostPackets();
+
+        recoveryManager.setLossDetectionTimer();
     }
 
     void detectLostPackets() {
@@ -91,7 +94,7 @@ public class LossDetector {
                 .min(Instant::compareTo);
 
         if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
-            lossTime = earliestSentTime.get().plusMillis(lossDelay);
+            lossTime = earliestSentTime.get().plusMillis(lossDelay);    // FOUT: alleen als eerder dan huidige lossTime!
         }
     }
 
