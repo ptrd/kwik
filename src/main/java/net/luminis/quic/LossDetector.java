@@ -62,6 +62,8 @@ public class LossDetector {
     }
 
     void detectLostPackets() {
+        lossTime = null;
+
         int lossDelay = (int) (kTimeThreshold * Integer.max(rttEstimater.getSmoothedRtt(), rttEstimater.getLatestRtt()));
         Instant lostSendTime = Instant.now().minusMillis(lossDelay);
 
@@ -91,7 +93,6 @@ public class LossDetector {
         if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
             lossTime = earliestSentTime.get().plusMillis(lossDelay);
         }
-
     }
 
     Instant getLossTime() {

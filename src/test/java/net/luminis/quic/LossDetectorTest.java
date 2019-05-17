@@ -138,7 +138,7 @@ class LossDetectorTest {
     }
 
     @Test
-    void packetNotYetLostIsLostAfterLostTime() throws InterruptedException {
+    void packetNotYetLostIsLostAfterLossTime() throws InterruptedException {
         Instant now = Instant.now();
         int timeDiff = defaultRtt - 1;  // Give some time for processing.
         lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
@@ -156,7 +156,7 @@ class LossDetectorTest {
     }
 
     @Test
-    void ifAllPacketsAreLostThenLostTimeIsNotSet() {
+    void ifAllPacketsAreLostThenLossTimeIsNotSet() {
         Instant now = Instant.now();
         int timeDiff = (defaultRtt * 9 / 8) + 1;
         lossDetector.packetSent(createPacket(1), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
@@ -168,6 +168,33 @@ class LossDetectorTest {
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
+    @Test
+    void ifAllPacketsAreAckedThenLossTimeIsNotSet() {
+        Instant now = Instant.now();
+        int timeDiff = defaultRtt / 2;
+        lossDetector.packetSent(createPacket(1), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(7), now, lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
+
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 7L, 8L)));
+        assertThat(lossDetector.getLossTime()).isNull();
+    }
+
+    @Test
+    void ifAllPacketsAreAckedBeforeLossTimeThenLossTimeIsNotSet() {
+        Instant now = Instant.now();
+        int timeDiff = defaultRtt / 2;
+        lossDetector.packetSent(createPacket(1), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(7), now, lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
+
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 8L)));
+        assertThat(lossDetector.getLossTime()).isNotNull();
+
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 7L, 8L)));
+
+        assertThat(lossDetector.getLossTime()).isNull();
+    }
 
     private QuicPacket createPacket(int packetNumber, QuicFrame frame) {
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
