@@ -117,5 +117,24 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(probeSender, never()).sendProbe();
     }
 
+    @Test
+    void whenAckElicitingPacketsAreNotAckedProbeIsSentForLastOnly()  throws InterruptedException {
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        int delta = 10;
+        recoveryManager.packetSent(createPacket(10), Instant.now(), p -> {});
+        Thread.sleep(probeTimeout - delta);
+        recoveryManager.packetSent(createPacket(11), Instant.now(), p -> {});
+        Thread.sleep(probeTimeout - delta);
+        recoveryManager.packetSent(createPacket(12), Instant.now(), p -> {});
+        Thread.sleep(probeTimeout - delta);
+        recoveryManager.packetSent(createPacket(13), Instant.now(), p -> {});
+        Thread.sleep(probeTimeout - delta);
+        recoveryManager.packetSent(createPacket(14), Instant.now(), p -> {});
+        Thread.sleep(probeTimeout - delta);
+        recoveryManager.packetSent(createPacket(15), Instant.now(), p -> {});
 
+        verify(probeSender, never()).sendProbe();
+        Thread.sleep(probeTimeout + delta);
+        verify(probeSender, times(1)).sendProbe();
+    }
 }
