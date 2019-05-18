@@ -59,6 +59,9 @@ public class RecoveryManager {
             lossDetectionTimer.cancel(false);
             lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
         }
+        else {
+            lossDetectionTimer.cancel(false);
+        }
     }
 
     private void lossDetectionTimeout() {
