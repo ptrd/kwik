@@ -102,6 +102,15 @@ public class LossDetector {
         return lossTime;
     }
 
+    boolean ackElicitingInFlight() {
+        boolean inflight = packetSentLog.values().stream()
+                    .filter(p -> p.packet.isAckEliciting())
+                    .filter(p -> !p.acked && !p.lost)
+                    .findFirst()
+                    .isPresent();
+        return inflight;
+    }
+
     private boolean pnTooOld(PacketAckStatus p) {
         return p.packet.getPacketNumber() <= largestAcked - kPacketThreshold;
     }

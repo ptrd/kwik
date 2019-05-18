@@ -30,13 +30,13 @@ public abstract class RecoveryTests {
     }
 
     QuicPacket createPacket(int packetNumber) {
-        return createPacket(packetNumber, new Padding(1));
+        return createPacket(packetNumber, new MaxDataFrame(1024));
     }
 
     List<QuicPacket> createPackets(int... packetNumbers) {
         List<QuicPacket> packets = new ArrayList<>();
         for (int packetNumber: packetNumbers) {
-            ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new Padding(1));
+            ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new MaxDataFrame(1024));
             packet.packetNumber = packetNumber;
             packets.add(packet);
         }

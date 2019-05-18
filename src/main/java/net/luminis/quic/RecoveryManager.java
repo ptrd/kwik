@@ -27,14 +27,18 @@ public class RecoveryManager {
 
     private final RttEstimator rttEstimater;
     private final LossDetector lossDetector;
+    private final ProbeSender sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
+    private int receiverMaxAckDelay;
     private volatile ScheduledFuture<?> lossDetectionTimer;
+    private volatile int ptoCount;
 
 
-    RecoveryManager(RttEstimator rttEstimater, Logger logger) {
+    RecoveryManager(RttEstimator rttEstimater, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         lossDetector = new LossDetector(this, rttEstimater);
+        this.sender = sender;
         log = logger;
 
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
@@ -48,6 +52,13 @@ public class RecoveryManager {
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
             lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
         }
+        else if (ackElicitingInFlight()) {
+            int timeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
+            timeout *= (int) (Math.pow(2, ptoCount));
+            int pto = timeout;
+            lossDetectionTimer.cancel(false);
+            lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
+        }
     }
 
     private void lossDetectionTimeout() {
@@ -56,8 +67,11 @@ public class RecoveryManager {
             lossDetector.detectLostPackets();
         }
         else {
-            log.error("This would be a PTO trigger, but that can't be: there is none yet!");
+            sender.sendProbe();
+            ptoCount++;
+            System.out.println("PROBE SENT");
         }
+        setLossDetectionTimer();
     }
 
     ScheduledFuture<?> schedule(Runnable runnable, int timeout, TimeUnit timeUnit) {
@@ -79,7 +93,20 @@ public class RecoveryManager {
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (packet.getEncryptionLevel() == EncryptionLevel.App) {
             lossDetector.packetSent(packet, sent, packetLostCallback);
+            setLossDetectionTimer();
         }
+    }
+
+    private boolean ackElicitingInFlight() {
+        return lossDetector.ackElicitingInFlight();
+    }
+
+    void shutdown() {
+        lossDetectionTimer.cancel(true);
+    }
+
+    public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
+        this.receiverMaxAckDelay = receiverMaxAckDelay;
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {
@@ -119,4 +146,7 @@ public class RecoveryManager {
         }
     }
 
+    interface ProbeSender {
+        void sendProbe();
+    }
 }

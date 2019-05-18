@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -25,18 +26,23 @@ import java.time.Instant;
 
 import static org.mockito.Mockito.*;
 
+
 class RecoveryManagerTest extends RecoveryTests {
 
     private RecoveryManager recoveryManager;
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 40;
+    private int defaultRttVar = 10;
+    private RecoveryManager.ProbeSender probeSender;
 
     @BeforeEach
     void initObjectUnderTest() {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        recoveryManager = new RecoveryManager(rttEstimator, mock(Logger.class));
+        when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
+        probeSender = mock(RecoveryManager.ProbeSender.class);
+        recoveryManager = new RecoveryManager(rttEstimator, probeSender, mock(Logger.class));
     }
 
     @BeforeEach
@@ -44,6 +50,10 @@ class RecoveryManagerTest extends RecoveryTests {
         lostPacketHandler = mock(LostPacketHandler.class);
     }
 
+    @AfterEach
+    void shutdownRecoveryManager() {
+        recoveryManager.shutdown();
+    }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1.2
     // "If packets sent prior to the largest
@@ -66,6 +76,45 @@ class RecoveryManagerTest extends RecoveryTests {
         Thread.sleep(defaultRtt);
 
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(1)));
+    }
+
+    @Test
+    void whenAckElicitingPacketIsNotAckedProbeIsSent() throws InterruptedException {
+        recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(probeTimeout + 10);
+
+        verify(probeSender, times(1)).sendProbe();
+    }
+
+    @Test
+    void whenProbeIsNotAckedAnotherOneIsSent() throws InterruptedException {
+        recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(probeTimeout + 10);
+
+        verify(probeSender, times(1)).sendProbe();
+
+        probeTimeout *= 2;
+        Thread.sleep(probeTimeout - 20);
+        verify(probeSender, times(1)).sendProbe();  // Not yet
+
+        Thread.sleep(20);
+        verify(probeSender, times(2)).sendProbe();  // Yet it should
+    }
+
+    @Test
+    void noProbeIsSentForAck() throws InterruptedException {
+        QuicPacket ackPacket = createPacket(8, new AckFrame(20));
+        recoveryManager.packetSent(ackPacket, Instant.now(), p -> {});
+
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+
+        Thread.sleep(probeTimeout + 10);
+
+        verify(probeSender, never()).sendProbe();
     }
 
 
