@@ -90,11 +90,12 @@ public class LossDetector {
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
                 .filter(p -> p.packet.getPacketNumber() <= largestAcked)
+                .filter(p -> !p.packet.isAckOnly())
                 .map(p -> p.timeSent)
                 .min(Instant::compareTo);
 
         if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
-            lossTime = earliestSentTime.get().plusMillis(lossDelay);    // FOUT: alleen als eerder dan huidige lossTime!
+            lossTime = earliestSentTime.get().plusMillis(lossDelay);
         }
     }
 

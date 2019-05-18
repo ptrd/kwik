@@ -194,4 +194,13 @@ class LossDetectorTest extends RecoveryTests {
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
+    @Test
+    void ackOnlyPacketShouldNotSetLossTime() {
+        lossDetector.packetSent(createPacket(1, new AckFrame(1)), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(List.of(2L)));
+
+        assertThat(lossDetector.getLossTime()).isNull();
+    }
 }
