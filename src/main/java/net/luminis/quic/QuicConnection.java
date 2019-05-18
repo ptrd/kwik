@@ -241,7 +241,7 @@ public class QuicConnection implements PacketProcessor {
         clientHelloPacket.ensureSize(1200);
 
         connectionState = Status.Handshaking;
-        sender.send(clientHelloPacket, "client hello");
+        sender.send(clientHelloPacket, "client hello", p -> {});
     }
 
     void finishHandshake(TlsState tlsState) {
@@ -249,7 +249,7 @@ public class QuicConnection implements PacketProcessor {
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
             QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
-            sender.send(finishedPacket, "client finished");
+            sender.send(finishedPacket, "client finished", p -> {});
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
 
@@ -574,22 +574,22 @@ public class QuicConnection implements PacketProcessor {
         return id;
     }
 
-    void send(QuicFrame frame) {
+    void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
         QuicPacket packet = createPacket(App, frame);
-        sender.send(packet, "application data");
+        sender.send(packet, "application data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
     }
 
     void send(QuicPacket packet, String logMessage) {
         if (logMessage == null) {
             logMessage = "application data";
         }
-        sender.send(packet, logMessage);
+        sender.send(packet, logMessage, p -> {});
     }
 
     void slideFlowControlWindow(int size) {
         flowControlMax += size;
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
-            send(new MaxDataFrame(flowControlMax));
+            send(new MaxDataFrame(flowControlMax), f -> {});
             flowControlLastAdvertised = flowControlMax;
         }
     }

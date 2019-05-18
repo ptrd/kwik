@@ -61,7 +61,7 @@ class SenderTest {
     void testSingleSend() throws Exception {
         setCongestionWindowSize(1250);
         sender.start(null);
-        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
+        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
         waitForSender();
 
         verify(socket, times(1)).send(any(DatagramPacket.class));
@@ -71,8 +71,8 @@ class SenderTest {
     void testSenderIsCongestionControlled() throws Exception {
         setCongestionWindowSize(1250);
         sender.start(null);
-        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
-        sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
+        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
+        sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2", p -> {});
 
         waitForSender();
         // Because of congestion control, only first packet should have been sent.
@@ -91,9 +91,9 @@ class SenderTest {
         setCongestionWindowSize(1250);
         sender.start(null);
 
-        sender.send(new MockPacket(0, 12, EncryptionLevel.Initial,"initial"), "packet 1");
-        sender.send(new MockPacket(0, 1230, "packet 1"), "packet 1");
-        sender.send(new MockPacket(1, 1230, "packet 2"), "packet 2");
+        sender.send(new MockPacket(0, 12, EncryptionLevel.Initial,"initial"), "packet 1", p -> {});
+        sender.send(new MockPacket(0, 1230, "packet 1"), "packet 1", p -> {});
+        sender.send(new MockPacket(1, 1230, "packet 2"), "packet 2", p -> {});
 
         waitForSender();
         // Because of congestion control, only first 2 packets should have been sent.
@@ -111,8 +111,8 @@ class SenderTest {
         setCongestionWindowSize(1250);
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1");
-        sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2");
+        sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
+        sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2", p -> {});
 
         waitForSender();
         // Because of congestion control, only first packet should have been sent.
@@ -129,7 +129,7 @@ class SenderTest {
     void testRetransmit() throws Exception {
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial,"packet 1"), "packet 1");
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial,"packet 1"), "packet 1", p -> {});
 
         waitForSender();
         verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
@@ -147,7 +147,7 @@ class SenderTest {
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(), "packet 1"), "packet 1");
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(), "packet 1"), "packet 1", p -> {});
         waitForSender();
         verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
         clearInvocations(socket);
@@ -184,7 +184,7 @@ class SenderTest {
     void handshakeCryptoShouldBeRetransmitWhenNotAcked() throws Exception {
         sender.start(null);
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Handshake,"packet H2"), "packet H2");
+        sender.send(new MockPacket(0, 1240, EncryptionLevel.Handshake,"packet H2"), "packet H2", p -> {});
 
         waitForSender();
         verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Handshake)));

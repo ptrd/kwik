@@ -31,6 +31,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -78,9 +79,9 @@ public class Sender implements FrameProcessor {
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
     }
 
-    public void send(QuicPacket packet, String logMessage) {
+    public void send(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
         log.debug("queing " + packet);
-        incomingPacketQueue.add(new WaitingPacket(packet, logMessage));
+        incomingPacketQueue.add(new WaitingPacket(packet, logMessage, packetLostCallback));
     }
 
     public void start(ConnectionSecrets secrets) {
@@ -286,7 +287,7 @@ public class Sender implements FrameProcessor {
         QuicPacket packet = packetStatus.packet;
         packetStatus.resent = true;
         QuicPacket newPacket = packet.copy();
-        send(newPacket, "retransmit " + packet.getId());
+        send(newPacket, "retransmit " + packet.getId(), p -> {});
     }
 
     void logStatistics() {
@@ -343,10 +344,12 @@ public class Sender implements FrameProcessor {
     private static class WaitingPacket {
         final QuicPacket packet;
         final String logMessage;
+        private final Consumer<QuicPacket> packetLostCallback;
 
-        public WaitingPacket(QuicPacket packet, String logMessage) {
+        public WaitingPacket(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
             this.packet = packet;
             this.logMessage = logMessage;
+            this.packetLostCallback = packetLostCallback;
         }
     }
 

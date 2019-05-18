@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -232,21 +233,21 @@ class QuicStreamTest {
     void testStreamOutputWithByteArray() throws IOException {
         quicStream.getOutputStream().write("hello world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class));
     }
 
     @Test
     void testStreamOutputWithByteArrayFragment() throws IOException {
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class));
     }
 
     @Test
     void testStreamOutputWithSingleByte() throws IOException {
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())), any(Consumer.class));
     }
 
     @Test
@@ -254,8 +255,8 @@ class QuicStreamTest {
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())));
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)), any(Consumer.class));
     }
 
     @Test
@@ -263,7 +264,7 @@ class QuicStreamTest {
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)), any(Consumer.class));
     }
 
     @Test
@@ -272,7 +273,7 @@ class QuicStreamTest {
         quicStream.getOutputStream().write(data);
 
         ArgumentCaptor<StreamFrame> captor = ArgumentCaptor.forClass(StreamFrame.class);
-        verify(connection, times(2)).send(captor.capture());
+        verify(connection, times(2)).send(captor.capture(), any(Consumer.class));
         // This is what the test is about: the first frame should be less than max packet size.
         int lengthFirstFrame = captor.getAllValues().get(0).getLength();
         assertThat(lengthFirstFrame).isLessThan(1300);
@@ -301,22 +302,22 @@ class QuicStreamTest {
         InputStream inputStream = quicStream.getInputStream();
 
         inputStream.read(new byte[(int) (initialWindow * factor * 0.8)]);
-        verify(connection, never()).send(any(QuicFrame.class));
+        verify(connection, never()).send(any(QuicFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[(int) (initialWindow * factor * 0.2 - 1)]);
-        verify(connection, never()).send(any(QuicFrame.class));
+        verify(connection, never()).send(any(QuicFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[2]);
-        verify(connection, times(1)).send(any(MaxStreamDataFrame.class));
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[(int) (initialWindow * factor)]);
-        verify(connection, times(1)).send(any(MaxStreamDataFrame.class));
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[2]);
-        verify(connection, times(2)).send(any(MaxStreamDataFrame.class));
+        verify(connection, times(2)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[(int) (initialWindow * factor * 3.1)]);
-        verify(connection, times(5)).send(any(MaxStreamDataFrame.class));
+        verify(connection, times(5)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
     }
 
 

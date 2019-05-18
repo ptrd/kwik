@@ -166,7 +166,7 @@ public class QuicStream {
                 connection.slideFlowControlWindow(1);
                 if (receiverMaxData - lastCommunicatedMaxData > receiverMaxDataIncrement) {
                     // Avoid sending updates which every single byte read...
-                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData));
+                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData), f -> {});
                     lastCommunicatedMaxData = receiverMaxData;
                 }
 
@@ -199,7 +199,7 @@ public class QuicStream {
             int offsetInDataArray = off;
             while (remaining > 0) {
                 int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false));
+                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), f -> {});
                 remaining -= bytesInFrame;
                 offsetInDataArray += bytesInFrame;
                 currentOffset += bytesInFrame;
@@ -208,7 +208,7 @@ public class QuicStream {
 
         @Override
         public void write(int dataByte) throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false));
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false), f -> {});
             currentOffset += 1;
         }
 
@@ -219,7 +219,7 @@ public class QuicStream {
 
         @Override
         public void close() throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true));
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), f -> {});
         }
     }
 

@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -69,7 +70,7 @@ class QuicConnectionTest {
         Thread.sleep(1000);  // Give connection a chance to send packet.
 
         // First InitialPacket should not contain a token.
-        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString());
+        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString(), any(Consumer.class));
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
@@ -80,7 +81,7 @@ class QuicConnectionTest {
                 p.getToken() != null
                 && Arrays.equals(p.getToken(), new byte[] { 0x01, 0x02, 0x03 })
                 && Arrays.equals(p.getDestinationConnectionId(), new byte[] { 0x0b, 0x0b, 0x0b, 0x0b })
-        ), anyString());
+        ), anyString(), any(Consumer.class));
     }
 
     @Test
@@ -107,7 +108,7 @@ class QuicConnectionTest {
         // Simulate a second RetryPacket is received
         connection.process(retryPacket, null);
 
-        verify(sender, never()).send(any(QuicPacket.class), anyString());
+        verify(sender, never()).send(any(QuicPacket.class), anyString(), any(Consumer.class));
     }
 
     private RetryPacket createRetryPacket(byte[] originalDestinationConnectionId) {
@@ -138,7 +139,7 @@ class QuicConnectionTest {
         RetryPacket retryPacket = createRetryPacket(new byte[] { 0x03, 0x0a, 0x0d, 0x09 });
         connection.process(retryPacket, null);
 
-        verify(sender, never()).send(any(QuicPacket.class), anyString());
+        verify(sender, never()).send(any(QuicPacket.class), anyString(), any(Consumer.class));
     }
 
     @Test
@@ -256,15 +257,15 @@ class QuicConnectionTest {
         long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
 
         connection.slideFlowControlWindow(10);
-        verify(sender, never()).send(any(QuicPacket.class), anyString());  // No initial update, value is advertised in transport parameters.
+        verify(sender, never()).send(any(QuicPacket.class), anyString(), any(Consumer.class));  // No initial update, value is advertised in transport parameters.
 
         connection.slideFlowControlWindow((int) flowControlIncrement);
-        verify(sender, times(1)).send(any(QuicPacket.class), anyString());
+        verify(sender, times(1)).send(any(QuicPacket.class), anyString(), any(Consumer.class));
 
         connection.slideFlowControlWindow((int) (flowControlIncrement * 0.8));
-        verify(sender, times(1)).send(any(QuicPacket.class), anyString());
+        verify(sender, times(1)).send(any(QuicPacket.class), anyString(), any(Consumer.class));
 
         connection.slideFlowControlWindow((int) (flowControlIncrement * 0.21));
-        verify(sender, times(2)).send(any(QuicPacket.class), anyString());
+        verify(sender, times(2)).send(any(QuicPacket.class), anyString(), any(Consumer.class));
     }
 }
