@@ -153,7 +153,4 @@ public class RecoveryManager {
         }
     }
 
-    interface ProbeSender {
-        void sendProbe();
-    }
 }

@@ -36,7 +36,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 40;
     private int defaultRttVar = 10;
-    private RecoveryManager.ProbeSender probeSender;
+    private ProbeSender probeSender;
 
     @BeforeEach
     void initObjectUnderTest() {
@@ -44,7 +44,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
-        probeSender = mock(RecoveryManager.ProbeSender.class);
+        probeSender = mock(ProbeSender.class);
         recoveryManager = new RecoveryManager(rttEstimator, probeSender, mock(Logger.class));
     }
 

@@ -35,7 +35,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
-public class Sender implements FrameProcessor {
+public class Sender implements ProbeSender, FrameProcessor {
 
     private final DatagramSocket socket;
     private final int maxPacketSize;
@@ -56,6 +56,8 @@ public class Sender implements FrameProcessor {
     private AckGenerator[] ackGenerators;
     private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
+    private RecoveryManager recoveryManager;
+
 
     private int receiverMaxAckDelay;
 
@@ -74,6 +76,7 @@ public class Sender implements FrameProcessor {
         packetSentLog = new ConcurrentHashMap<>();
         congestionController = new CongestionController(log);
         rttEstimater = new RttEstimator(log);
+        recoveryManager = new RecoveryManager(rttEstimater, this, log);
 
         ackGenerators = new AckGenerator[3];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
@@ -99,6 +102,7 @@ public class Sender implements FrameProcessor {
                     String logMessage = null;
                     EncryptionLevel level = null;
                     long packetNumber = -1;
+                    Consumer<QuicPacket> packetLostCallback = p -> {};
 
                     boolean packetWaiting = incomingPacketQueue.peek() != null;
                     boolean ackWaiting = false;
@@ -112,6 +116,7 @@ public class Sender implements FrameProcessor {
                         packet = queued.packet;
                         level = packet.getEncryptionLevel();
                         logMessage = queued.logMessage;
+                        packetLostCallback = queued.packetLostCallback;
                     }
 
                     packetNumber = generatePacketNumber(level);
@@ -149,7 +154,7 @@ public class Sender implements FrameProcessor {
                     log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
                     log.sent(sent, packet);
 
-                    logSent(packet, sent);
+                    logSent(packet, sent, packetLostCallback);
                     congestionController.registerInFlight(packet);
                 }
                 catch (InterruptedException interrupted) {
@@ -217,6 +222,10 @@ public class Sender implements FrameProcessor {
 
         computeRttSample(ackFrame, encryptionLevel, timeReceived);
 
+        if (encryptionLevel == EncryptionLevel.App) {
+            recoveryManager.onAckReceived(ackFrame, encryptionLevel);
+        }
+
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             PacketId id = new PacketId(encryptionLevel, pn);
             if (packetSentLog.containsKey(id)) {
@@ -252,7 +261,7 @@ public class Sender implements FrameProcessor {
         }
     }
 
-    private void logSent(QuicPacket packet, Instant sent) {
+    private void logSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (packet.isCrypto()) {
             if (!cryptoInFlight) {
                 log.debug("Start crypto in flight.");
@@ -260,6 +269,9 @@ public class Sender implements FrameProcessor {
             cryptoInFlight = true;
         }
         packetSentLog.put(packet.getId(), new PacketAckStatus(sent, packet));
+        if (packet.getEncryptionLevel() == EncryptionLevel.App) {
+            recoveryManager.packetSent(packet, sent, packetLostCallback);
+        }
         int rtt = rttEstimater.getSmoothedRtt();
         int timeout = (int) (2 * rtt * Math.pow(2, failedCryptoRetries));
         schedule(() -> checkIsAcked(packet.getId()), timeout, TimeUnit.MILLISECONDS);
@@ -316,6 +328,11 @@ public class Sender implements FrameProcessor {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
     }
 
+    @Override
+    public void sendProbe() {
+        System.out.println("SHOULD SEND PROBE!!!");
+    }
+
 
     private static class PacketAckStatus {
         final Instant timeSent;
@@ -344,7 +361,7 @@ public class Sender implements FrameProcessor {
     private static class WaitingPacket {
         final QuicPacket packet;
         final String logMessage;
-        private final Consumer<QuicPacket> packetLostCallback;
+        final Consumer<QuicPacket> packetLostCallback;
 
         public WaitingPacket(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
             this.packet = packet;
