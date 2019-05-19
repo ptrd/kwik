@@ -33,6 +33,7 @@ public class RecoveryManager {
     private int receiverMaxAckDelay;
     private volatile ScheduledFuture<?> lossDetectionTimer;
     private volatile int ptoCount;
+    private volatile Instant lastAckElicitingSent;
 
 
     RecoveryManager(RttEstimator rttEstimater, ProbeSender sender, Logger logger) {
@@ -53,11 +54,11 @@ public class RecoveryManager {
             lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
         }
         else if (ackElicitingInFlight()) {
-            int timeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
-            timeout *= (int) (Math.pow(2, ptoCount));
-            int pto = timeout;
+            int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
+            ptoTimeout *= (int) (Math.pow(2, ptoCount));
+            int timerTrigger = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
             lossDetectionTimer.cancel(false);
-            lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
+            lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timerTrigger, TimeUnit.MILLISECONDS);
         }
         else {
             lossDetectionTimer.cancel(false);
@@ -94,9 +95,12 @@ public class RecoveryManager {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
+        if (packet.isAckEliciting()) {
+            lastAckElicitingSent = sent;
+        }
         if (packet.getEncryptionLevel() == EncryptionLevel.App) {
             lossDetector.packetSent(packet, sent, packetLostCallback);
-            setLossDetectionTimer();
+            setLossDetectionTimer();  // TODO: why call this for ack-only packets?
         }
     }
 

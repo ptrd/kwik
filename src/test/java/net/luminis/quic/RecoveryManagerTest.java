@@ -21,7 +21,10 @@ package net.luminis.quic;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.mockito.Mockito.*;
@@ -90,18 +93,29 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void whenProbeIsNotAckedAnotherOneIsSent() throws InterruptedException {
-        recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
+        doAnswer(new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
+                // Necessary to trigger setting the lastAckElicitingSent
+                recoveryManager.packetSent(createPacket(3), Instant.now(), p -> {});
+                return null;
+            }
+        }).when(probeSender).sendProbe();
 
-        int probeTimeout = defaultRtt + 4 * defaultRttVar;
-        Thread.sleep(probeTimeout + 10);
+        Instant firstPacketTime = Instant.now();
+        recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
+
+        int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(firstProbeTimeout + 10);
 
         verify(probeSender, times(1)).sendProbe();
 
-        probeTimeout *= 2;
-        Thread.sleep(probeTimeout - 20);
+        int secondProbeTimeout = firstProbeTimeout * 2;
+        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 20;
+        Thread.sleep(sleepTime);
         verify(probeSender, times(1)).sendProbe();  // Not yet
 
-        Thread.sleep(20);
+        Thread.sleep(20 + 10);
         verify(probeSender, times(2)).sendProbe();  // Yet it should
     }
 
@@ -118,7 +132,7 @@ class RecoveryManagerTest extends RecoveryTests {
     }
 
     @Test
-    void whenAckElicitingPacketsAreNotAckedProbeIsSentForLastOnly()  throws InterruptedException {
+    void whenAckElicitingPacketsAreNotAckedProbeIsSentForLastOnly() throws InterruptedException {
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
         int delta = 10;
         recoveryManager.packetSent(createPacket(10), Instant.now(), p -> {});
@@ -135,6 +149,30 @@ class RecoveryManagerTest extends RecoveryTests {
 
         verify(probeSender, never()).sendProbe();
         Thread.sleep(probeTimeout + delta);
+        verify(probeSender, times(1)).sendProbe();
+    }
+
+    @Test
+    void probeTimeoutShouldMoveToLastAckEliciting() throws InterruptedException {
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+
+        // First ack-eliciting
+        recoveryManager.packetSent(createPacket(10), Instant.now(), p -> {});
+
+        Thread.sleep(probeTimeout / 2);
+        // Second ack-eliciting
+        recoveryManager.packetSent(createPacket(11), Instant.now(), p -> {});
+
+        Thread.sleep(probeTimeout / 2);
+        System.out.println("nu een ack op 10");
+        // Ack on first packet, second packet must be the baseline for the probe-timeout
+        recoveryManager.onAckReceived(new AckFrame(10), EncryptionLevel.App);
+
+        // No Probe timeout yet!
+        verify(probeSender, never()).sendProbe();
+
+        Thread.sleep(probeTimeout / 2);
+        // Now, second packet was sent more than probe-timeout ago, so now we should have a probe timeout
         verify(probeSender, times(1)).sendProbe();
     }
 }
