@@ -147,7 +147,7 @@ class LossDetectorTest extends RecoveryTests {
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
         assertThat(lossDetector.getLossTime()).isNotNull();
 
-        Thread.sleep(Duration.between(lossDetector.getLossTime(), Instant.now()).toMillis());
+        Thread.sleep(Duration.between(lossDetector.getLossTime(), Instant.now()).toMillis() + 1);
         lossDetector.detectLostPackets();
 
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(6)));

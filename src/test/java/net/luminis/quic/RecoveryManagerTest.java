@@ -164,7 +164,6 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(createPacket(11), Instant.now(), p -> {});
 
         Thread.sleep(probeTimeout / 2);
-        System.out.println("nu een ack op 10");
         // Ack on first packet, second packet must be the baseline for the probe-timeout
         recoveryManager.onAckReceived(new AckFrame(10), EncryptionLevel.App);
 

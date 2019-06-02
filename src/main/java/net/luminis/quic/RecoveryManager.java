@@ -37,6 +37,7 @@ public class RecoveryManager {
     private volatile ScheduledFuture<?> lossDetectionTimer;
     private volatile int ptoCount;
     private volatile Instant lastAckElicitingSent;
+    private volatile Instant timerExpiration;
 
 
     RecoveryManager(RttEstimator rttEstimater, ProbeSender sender, Logger logger) {
@@ -52,34 +53,34 @@ public class RecoveryManager {
     void setLossDetectionTimer() {
         Instant lossTime = lossDetector.getLossTime();
         if (lossTime != null) {
-            boolean cancelled = lossDetectionTimer.cancel(false);
-            if (! cancelled) {
-                log.error("Cancelling lost detection timer failed.");
-            }
+            lossDetectionTimer.cancel(false);
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
             String timeSet = timeNow();
-            lossDetectionTimer = schedule(() -> lossDetectionTimeout(timeSet), timeout, TimeUnit.MILLISECONDS);
+            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(timeSet), timeout);
         }
         else if (ackElicitingInFlight()) {
             int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
             ptoTimeout *= (int) (Math.pow(2, ptoCount));
-            int timerTrigger = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
-            boolean cancelled = lossDetectionTimer.cancel(false);
-            if (! cancelled) {
-                log.error("Cancelling lost detection timer failed.");
-            }
+            int timeout = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
+            lossDetectionTimer.cancel(false);
             String timeSet = timeNow();
-            lossDetectionTimer = schedule(() -> lossDetectionTimeout(timeSet), timerTrigger, TimeUnit.MILLISECONDS);
+            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(timeSet), timeout);
         }
         else {
-            boolean cancelled = lossDetectionTimer.cancel(false);
-            if (! cancelled) {
-                log.error("Cancelling lost detection timer failed.");
-            }
+            unschedule();
         }
     }
 
     private void lossDetectionTimeout(String timeSet) {
+        // Because cancelling the ScheduledExecutor task quite often fails, double check whether the timer should expire.
+        if (timerExpiration == null) {
+            // Timer was cancelled, but it still fired; ignore
+            return;
+        }
+        else if (Instant.now().isBefore(timerExpiration)) {
+            // Old timer task was cancelled, but it still fired; just ignore.
+            return;
+        }
         Instant lossTime = lossDetector.getLossTime();
         if (lossTime != null) {
             lossDetector.detectLostPackets();
@@ -93,14 +94,21 @@ public class RecoveryManager {
         setLossDetectionTimer();
     }
 
-    ScheduledFuture<?> schedule(Runnable runnable, int timeout, TimeUnit timeUnit) {
+    ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
+        lossDetectionTimer.cancel(false);
+        timerExpiration = Instant.now().plusMillis(timeout);
         return scheduler.schedule(() -> {
             try {
                 runnable.run();
             } catch (Exception error) {
                 log.error("Runtime exception occurred while processing scheduled task", error);
             }
-        }, timeout, timeUnit);
+        }, timeout, TimeUnit.MILLISECONDS);
+    }
+
+    void unschedule() {
+        lossDetectionTimer.cancel(false);
+        timerExpiration = null;
     }
 
     public void onAckReceived(AckFrame ackFrame, EncryptionLevel encryptionLevel) {
