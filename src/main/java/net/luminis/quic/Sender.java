@@ -330,7 +330,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     @Override
     public void sendProbe() {
-        System.out.println("SHOULD SEND PROBE!!!");
+        connection.ping();
     }
 
 
