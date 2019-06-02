@@ -37,6 +37,7 @@ public abstract class BaseLogger implements Logger {
     private volatile boolean logPackets = false;
     private volatile boolean logInfo = false;
     private volatile boolean logStats = false;
+    private volatile boolean logRecovery = false;
     private volatile boolean useRelativeTime = false;
     private final DateTimeFormatter timeFormatter;
     private Instant start;
@@ -78,6 +79,11 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void logStats(boolean enabled) {
         logStats = enabled;
+    }
+
+    @Override
+    public void logRecovery(boolean enabled) {
+        logRecovery = enabled;
     }
 
     @Override
@@ -217,6 +223,13 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void error(String message, Throwable error) {
         log("Error: " + message + ": " + error, error);
+    }
+
+    @Override
+    public void recovery(String message) {
+        if (logRecovery) {
+            log(formatTime(Instant.now()) + " " + message);
+        }
     }
 
     @Override

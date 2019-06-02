@@ -35,8 +35,8 @@ public class Quic {
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
-        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrsiSD]: " +
-                "(p)ackets received/sent, (d)ecrypted bytes, (r)aw bytes, (s)tats, (i)nfo, (S)ecrets, (D)ebug; default is \"is\", use (n)one to disable");
+        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrsiRSD]: " +
+                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"is\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
         cmdLineOptions.addOption("14", "use Quic version IETF_draft_14");
         cmdLineOptions.addOption("15", "use Quic version IETF_draft_15");
@@ -128,8 +128,11 @@ public class Quic {
                 logger.logDebug(false);
                 logger.logStats(false);
             }
-            if (logArg.contains("r")) {
+            if (logArg.contains("R")) {
                 logger.logRaw(true);
+            }
+            if (logArg.contains("r")) {
+                logger.logRecovery(true);
             }
             if (logArg.contains("d")) {
                 logger.logDecrypted(true);

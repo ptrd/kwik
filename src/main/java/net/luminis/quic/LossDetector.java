@@ -19,10 +19,12 @@
 package net.luminis.quic;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 
 public class LossDetector {
@@ -112,6 +114,15 @@ public class LossDetector {
         return inflight;
     }
 
+    // For debugging
+    List<PacketAckStatus> getInFlight() {
+        return packetSentLog.values().stream()
+                .filter(p -> p.packet.isAckEliciting())
+                .filter(p -> !p.acked && !p.lost)
+                .collect(Collectors.toList());
+    }
+
+
     private boolean pnTooOld(PacketAckStatus p) {
         return p.packet.getPacketNumber() <= largestAcked - kPacketThreshold;
     }
@@ -152,5 +163,14 @@ public class LossDetector {
         public Instant timeSent() {
             return timeSent;
         }
+
+        @Override
+        public String toString() {
+            return "Packet "
+                + packet.getEncryptionLevel().name().charAt(0) + "|"
+                + (packet.packetNumber >= 0? packet.packetNumber: ".") + "|"
+                + "L" + "|" + status();
+        }
+
     }
 }

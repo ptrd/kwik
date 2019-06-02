@@ -37,6 +37,8 @@ public interface Logger {
 
     void logStats(boolean enabled);
 
+    void logRecovery(boolean enabled);
+
     void useRelativeTime(boolean enabled);
 
     void debug(String message);
@@ -78,4 +80,6 @@ public interface Logger {
     void error(String message, Throwable error);
 
     void stats(String message);
+
+    void recovery(String message);
 }

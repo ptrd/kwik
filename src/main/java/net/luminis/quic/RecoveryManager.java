@@ -20,6 +20,9 @@ package net.luminis.quic;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
@@ -49,31 +52,43 @@ public class RecoveryManager {
     void setLossDetectionTimer() {
         Instant lossTime = lossDetector.getLossTime();
         if (lossTime != null) {
-            lossDetectionTimer.cancel(false);
+            boolean cancelled = lossDetectionTimer.cancel(false);
+            if (! cancelled) {
+                log.error("Cancelling lost detection timer failed.");
+            }
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
-            lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timeout, TimeUnit.MILLISECONDS);
+            String timeSet = timeNow();
+            lossDetectionTimer = schedule(() -> lossDetectionTimeout(timeSet), timeout, TimeUnit.MILLISECONDS);
         }
         else if (ackElicitingInFlight()) {
             int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
             ptoTimeout *= (int) (Math.pow(2, ptoCount));
             int timerTrigger = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
-            lossDetectionTimer.cancel(false);
-            lossDetectionTimer = schedule(() -> lossDetectionTimeout(), timerTrigger, TimeUnit.MILLISECONDS);
+            boolean cancelled = lossDetectionTimer.cancel(false);
+            if (! cancelled) {
+                log.error("Cancelling lost detection timer failed.");
+            }
+            String timeSet = timeNow();
+            lossDetectionTimer = schedule(() -> lossDetectionTimeout(timeSet), timerTrigger, TimeUnit.MILLISECONDS);
         }
         else {
-            lossDetectionTimer.cancel(false);
+            boolean cancelled = lossDetectionTimer.cancel(false);
+            if (! cancelled) {
+                log.error("Cancelling lost detection timer failed.");
+            }
         }
     }
 
-    private void lossDetectionTimeout() {
+    private void lossDetectionTimeout(String timeSet) {
         Instant lossTime = lossDetector.getLossTime();
         if (lossTime != null) {
             lossDetector.detectLostPackets();
         }
         else {
+            log.recovery("Sending probe " + ptoCount + ", because no ack since " + lastAckElicitingSent
+                    + ". Current RTT: " + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar() + ". Time set: " + timeSet);
             sender.sendProbe();
             ptoCount++;
-            System.out.println("PROBE SENT");
         }
         setLossDetectionTimer();
     }
@@ -151,6 +166,12 @@ public class RecoveryManager {
         public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             return null;
         }
+    }
+
+    String timeNow() {
+        LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+        return timeFormatter.format(localTimeNow);
     }
 
 }
