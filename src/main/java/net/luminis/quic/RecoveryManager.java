@@ -55,23 +55,21 @@ public class RecoveryManager {
         if (lossTime != null) {
             lossDetectionTimer.cancel(false);
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
-            String timeSet = timeNow();
-            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(timeSet), timeout);
+            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
         else if (ackElicitingInFlight()) {
             int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
             ptoTimeout *= (int) (Math.pow(2, ptoCount));
             int timeout = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
             lossDetectionTimer.cancel(false);
-            String timeSet = timeNow();
-            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(timeSet), timeout);
+            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
         else {
             unschedule();
         }
     }
 
-    private void lossDetectionTimeout(String timeSet) {
+    private void lossDetectionTimeout() {
         // Because cancelling the ScheduledExecutor task quite often fails, double check whether the timer should expire.
         if (timerExpiration == null) {
             // Timer was cancelled, but it still fired; ignore
@@ -86,8 +84,7 @@ public class RecoveryManager {
             lossDetector.detectLostPackets();
         }
         else {
-            log.recovery("Sending probe " + ptoCount + ", because no ack since " + lastAckElicitingSent
-                    + ". Current RTT: " + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar() + ". Time set: " + timeSet);
+            log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
             sender.sendProbe();
             ptoCount++;
         }
