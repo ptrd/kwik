@@ -109,6 +109,7 @@ public class RecoveryManager {
     }
 
     public void onAckReceived(AckFrame ackFrame, EncryptionLevel encryptionLevel) {
+        ptoCount = 0;
         if (encryptionLevel == EncryptionLevel.App) {
             lossDetector.onAckReceived(ackFrame);
         }

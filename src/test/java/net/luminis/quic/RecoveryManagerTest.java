@@ -93,14 +93,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void whenProbeIsNotAckedAnotherOneIsSent() throws InterruptedException {
-        doAnswer(new Answer<Void>() {
-            @Override
-            public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                // Necessary to trigger setting the lastAckElicitingSent
-                recoveryManager.packetSent(createPacket(3), Instant.now(), p -> {});
-                return null;
-            }
-        }).when(probeSender).sendProbe();
+        mockSendingProbe(3, 4);
 
         Instant firstPacketTime = Instant.now();
         recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
@@ -173,5 +166,51 @@ class RecoveryManagerTest extends RecoveryTests {
         Thread.sleep(probeTimeout / 2);
         // Now, second packet was sent more than probe-timeout ago, so now we should have a probe timeout
         verify(probeSender, times(1)).sendProbe();
+    }
+
+    @Test
+    void whenProbesAreAckedProbeTimeoutIsResetToNormal() throws InterruptedException {
+        mockSendingProbe(3, 4, 5);
+
+        Instant firstPacketTime = Instant.now();
+        recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
+
+        int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(firstProbeTimeout + 10);
+
+        verify(probeSender, times(1)).sendProbe();
+
+        int secondProbeTimeout = firstProbeTimeout * 2;
+        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 20;
+        Thread.sleep(sleepTime);
+        verify(probeSender, times(1)).sendProbe();  // Not yet
+
+        Thread.sleep(20 + 10);
+        verify(probeSender, times(2)).sendProbe();  // Yet it should
+
+        // Receive Ack, should reset PTO count
+        recoveryManager.onAckReceived(new AckFrame(3), EncryptionLevel.App);
+
+        recoveryManager.packetSent(createPacket(5), Instant.now(), p -> {});
+
+        Thread.sleep(firstProbeTimeout + 10);
+
+        verify(probeSender, times(3)).sendProbe();
+    }
+
+
+    private void mockSendingProbe(int... packetNumbers) {
+        doAnswer(new Answer<Void>() {
+            private int count;
+
+            @Override
+            public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
+                // Necessary to trigger setting the lastAckElicitingSent, which normally happens when a real probe is sent.
+                int packetNumber = count < packetNumbers.length? packetNumbers[count++]: 666;
+                recoveryManager.packetSent(createPacket(packetNumber), Instant.now(), p -> {});
+                return null;
+            }
+        }).when(probeSender).sendProbe();
+
     }
 }
