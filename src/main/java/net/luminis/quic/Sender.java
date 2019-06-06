@@ -326,6 +326,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
+        recoveryManager.setReceiverMaxAckDelay(receiverMaxAckDelay);
     }
 
     @Override
