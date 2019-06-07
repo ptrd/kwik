@@ -63,4 +63,13 @@ public class MaxStreamDataFrame extends QuicFrame {
         buffer.get(bytes);
         return bytes;
     }
+
+    public int getStreamId() {
+        return streamId;
+    }
+
+    public long getMaxData() {
+        return maxData;
+    }
+
 }

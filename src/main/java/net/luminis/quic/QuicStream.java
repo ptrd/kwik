@@ -165,7 +165,7 @@ public class QuicStream {
                 connection.slideFlowControlWindow(1);
                 if (receiverMaxData - lastCommunicatedMaxData > receiverMaxDataIncrement) {
                     // Avoid sending updates which every single byte read...
-                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData), f -> {});
+                    connection.send(new MaxStreamDataFrame(streamId, receiverMaxData), this::retransmitMaxData);
                     lastCommunicatedMaxData = receiverMaxData;
                 }
 
@@ -180,6 +180,11 @@ public class QuicStream {
                     return read();
                 }
             }
+        }
+
+        private void retransmitMaxData(QuicFrame lostFrame) {
+            connection.send(new MaxStreamDataFrame(streamId, receiverMaxData), this::retransmitMaxData);
+            log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
         }
     }
 

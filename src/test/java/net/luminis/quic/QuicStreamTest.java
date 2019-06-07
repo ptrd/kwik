@@ -346,6 +346,37 @@ class QuicStreamTest {
         assertThat(retransmittedFrame).isEqualTo(lostFrame);
     }
 
+    @Test
+    void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws IOException {
+        float factor = QuicStream.receiverMaxDataIncrementFactor;
+        int initialWindow = 1000;
+        when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
+
+        quicStream = new QuicStream(0, connection, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
+
+        InputStream inputStream = quicStream.getInputStream();
+        inputStream.read(new byte[(int) (initialWindow * factor + 1)]);
+
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+        MaxStreamDataFrame lostFrame = (MaxStreamDataFrame) sendFrameCaptor.getValue();
+
+        // Advance flow control window (but not so much a new MaxStreamDataFrame is sent...)
+        inputStream.read(new byte[(int) (initialWindow * factor / 2)]);
+
+        // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
+        lostFrameCallbackCaptor.getValue().accept(lostFrame);
+
+        ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection, times(2)).send(resendFrameCaptor.capture(), any(Consumer.class));
+
+        MaxStreamDataFrame retransmittedFrame = (MaxStreamDataFrame) resendFrameCaptor.getValue();
+        assertThat(retransmittedFrame).isInstanceOf(MaxStreamDataFrame.class);
+        assertThat(retransmittedFrame.getMaxData()).isGreaterThanOrEqualTo(lostFrame.getMaxData() + (int) (initialWindow * factor / 2));
+    }
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {
