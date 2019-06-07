@@ -120,7 +120,6 @@ public class QuicStream {
         return streamId;
     }
 
-
     private class StreamInputStream extends InputStream {
 
         @Override
@@ -199,7 +198,7 @@ public class QuicStream {
             int offsetInDataArray = off;
             while (remaining > 0) {
                 int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), f -> {});
+                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), this::retransmitStreamFrame);
                 remaining -= bytesInFrame;
                 offsetInDataArray += bytesInFrame;
                 currentOffset += bytesInFrame;
@@ -220,6 +219,11 @@ public class QuicStream {
         @Override
         public void close() throws IOException {
             connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), f -> {});
+        }
+
+        private void retransmitStreamFrame(QuicFrame frame) {
+            connection.send(frame, this::retransmitStreamFrame);
+            log.recovery("Retransmitted lost stream frame " + frame);
         }
     }
 

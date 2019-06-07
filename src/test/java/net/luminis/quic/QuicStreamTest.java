@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
+import org.mockito.Captor;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -320,7 +321,30 @@ class QuicStreamTest {
         verify(connection, times(5)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
     }
 
+    @Test
+    void lostStreamFrameShouldBeRetransmitted() throws IOException {
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
 
+        quicStream.getOutputStream().write("this frame might get lost".getBytes());
+        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+
+        QuicFrame lostFrame = sendFrameCaptor.getValue();
+        Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
+
+        // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
+        lostFrameCallback.accept(lostFrame);
+
+        ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+
+        verify(connection, times(2)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+
+        QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
+
+        assertThat(retransmittedFrame).isInstanceOf(StreamFrame.class);
+        assertThat(retransmittedFrame).isEqualTo(lostFrame);
+    }
 
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
