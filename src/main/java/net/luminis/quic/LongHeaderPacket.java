@@ -156,37 +156,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         log.debug("Length (PN + payload): " + length);
 
         NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            parsePacketNumberAndPayload(buffer, flags, length, serverSecrets, log);
-        }
-        else {
-            int protectedPackageNumberLength = 1;   // Assuming packet number is 1 byte (which is of course not always the case...)
-            byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
-            buffer.get(protectedPackageNumber);
-
-            int currentPosition = buffer.position();
-            byte[] frameHeader = new byte[buffer.position()];
-            buffer.position(0);
-            buffer.get(frameHeader);
-            buffer.position(currentPosition);
-
-            byte[] payload = new byte[length - protectedPackageNumberLength];
-            buffer.get(payload, 0, length - protectedPackageNumberLength);
-
-            packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
-            log.decrypted("Unprotected packet number: " + packetNumber);
-
-            log.encrypted("Encrypted payload", payload);
-
-            frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // Assuming packet number is 1 byte
-            log.encrypted("Frame header", frameHeader);
-
-            byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
-            log.decrypted("Decrypted payload", frameBytes);
-
-            frames = new ArrayList<>();
-            parseFrames(frameBytes, log);
-        }
+        parsePacketNumberAndPayload(buffer, flags, length, serverSecrets, log);
 
         packetSize = buffer.position() - startPosition;
         return this;

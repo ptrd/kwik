@@ -260,33 +260,6 @@ abstract public class QuicPacket {
 
     }
 
-    byte[] createProtectedPacketNumber(byte[] ciphertext, long packetNumber, NodeSecrets secrets) {
-
-        //int sampleOffset = 6 + initialConnectionId.length + sourceConnectionId.length + 2 /* length(payload_length) */ + 4;
-        int sampleOffset = 3;    // TODO
-        byte[] sample = new byte[16];
-        System.arraycopy(ciphertext, sampleOffset, sample,0,16);
-        byte[] encryptedPn = encryptAesCtr(secrets.getPn(), sample, new byte[] { (byte) packetNumber });   // TODO: if pn > 1 byte
-        return encryptedPn;
-    }
-
-    int unprotectPacketNumber(byte[] ciphertext, byte[] protectedPacketNumber, NodeSecrets secrets) {
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.4:
-        // "The sampled ciphertext starts after allowing for a 4 octet packet number..."
-        int sampleOffset = 4 - protectedPacketNumber.length;
-        // "...unless this would cause the sample to extend past the end of the packet. If the sample
-        // would extend past the end of the packet, the end of the packet is sampled."
-        if (sampleOffset + 16 > ciphertext.length) {
-            sampleOffset = ciphertext.length - 16;
-        }
-        byte[] sample = new byte[16];
-        System.arraycopy(ciphertext, sampleOffset, sample,0,16);
-        // AES is symmetric, so decrypt is the same as encrypt
-        byte[] decryptedPn = encryptAesCtr(secrets.getPn(), sample, protectedPacketNumber);
-        return decryptedPn[0];   // TODO: assuming one byte
-    }
-
-
     byte[] encryptAesCtr(byte[] key, byte[] initVector, byte[] value) {
         try {
             IvParameterSpec iv = new IvParameterSpec(initVector);
@@ -325,15 +298,6 @@ abstract public class QuicPacket {
     }
 
     protected void parseFrames(byte[] frameBytes, Logger log) {
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            parseFramesDraft17(frameBytes, log);
-        }
-        else {
-            parseFramesPreDraft17(frameBytes, log);
-        }
-    }
-
-    protected void parseFramesDraft17(byte[] frameBytes, Logger log) {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         while (buffer.remaining() > 0) {
@@ -407,84 +371,6 @@ abstract public class QuicPacket {
         }
     }
 
-    protected void parseFramesPreDraft17(byte[] frameBytes, Logger log) {
-        ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
-
-        while (buffer.remaining() > 0) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
-            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
-            buffer.mark();
-            int frameType = buffer.get();
-            buffer.reset();
-            switch (frameType) {
-                case 0x00:
-                    frames.add(new Padding().parse(buffer, log));
-                    break;
-                case 0x01:
-                    if (quicVersion == Version.IETF_draft_14) {
-                        log.debug("Received RST Stream frame (not yet implemented).");
-                    }
-                    throw new NotYetImplementedException();
-                case 0x02:
-                    log.debug("Received Connection Close frame (not yet implemented).");
-                    throw new NotYetImplementedException();
-                case 0x03:
-                    frames.add(new ApplicationCloseFrame().parse(buffer, log));
-                    break;
-                case 0x04:
-                    frames.add(new MaxDataFrame().parse(buffer, log));
-                    break;
-                case 0x05:
-                    frames.add(new MaxStreamDataFrame().parse(buffer, log));
-                    break;
-                case 0x06:
-                    frames.add(new MaxStreamIdFrame().parse(buffer, log));
-                    break;
-                case 0x07:
-                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x0b:
-                    frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x0c:
-                    frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x0d:
-                    if (quicVersion == Version.IETF_draft_14)
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                case 0x18:
-                    frames.add(new CryptoFrame().parse(buffer, log));
-                    break;
-                case 0x19:
-                    frames.add(new NewTokenFrame().parse(buffer, log));
-                    break;
-                case 0x1a:
-                    if (quicVersion.atLeast(Version.IETF_draft_15))
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                case 0x1b:
-                    if (quicVersion.atLeast(Version.IETF_draft_15))
-                        frames.add(new AckFrame().parse(buffer, log));
-                    else
-                        throw new NotYetImplementedException();
-                    break;
-                default:
-                    if ((frameType >= 0x10) && (frameType <= 0x17)) {
-                        frames.add(new StreamFrame().parse(buffer, log));
-                    }
-                    else {
-                        System.out.println("NYI frame type: " + frameType);
-                        throw new NotYetImplementedException();
-                    }
-            }
-        }
-    }
-
     public long getPacketNumber() {
         if (packetNumber >= 0) {
             return packetNumber;
@@ -513,29 +399,24 @@ abstract public class QuicPacket {
         packetBuffer.put(encryptedPayload);
 
         byte[] protectedPacketNumber;
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
-            byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, clientSecrets);
+        byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
+        byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, clientSecrets);
 
-            protectedPacketNumber = new byte[encodedPacketNumber.length];
-            for (int i = 0; i < encodedPacketNumber.length; i++) {
-                protectedPacketNumber[i] = (byte) (encodedPacketNumber[i] ^ mask[1+i]);
-            }
+        protectedPacketNumber = new byte[encodedPacketNumber.length];
+        for (int i = 0; i < encodedPacketNumber.length; i++) {
+            protectedPacketNumber[i] = (byte) (encodedPacketNumber[i] ^ mask[1+i]);
+        }
 
-            byte flags = packetBuffer.get(0);
-            if ((flags & 0x80) == 0x80) {
-                // Long header: 4 bits masked
-                flags ^= mask[0] & 0x0f;
-            }
-            else {
-                // Short header: 5 bits masked
-                flags ^= mask[0] & 0x1f;
-            }
-            packetBuffer.put(0, flags);
+        byte flags = packetBuffer.get(0);
+        if ((flags & 0x80) == 0x80) {
+            // Long header: 4 bits masked
+            flags ^= mask[0] & 0x0f;
         }
         else {
-            protectedPacketNumber = createProtectedPacketNumber(encryptedPayload, packetNumber, clientSecrets);
+            // Short header: 5 bits masked
+            flags ^= mask[0] & 0x1f;
         }
+        packetBuffer.put(0, flags);
 
         int currentPosition = packetBuffer.position();
         packetBuffer.position(packetNumberPosition);

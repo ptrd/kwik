@@ -56,18 +56,10 @@ public class NewConnectionIdFrame extends QuicFrame {
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
 
-        if (quicVersion.equals(Version.IETF_draft_14) || quicVersion.atLeast(Version.IETF_draft_17)) {
-            sequenceNr = VariableLengthInteger.parse(buffer);
-            int connectionIdLength = buffer.get();
-            connectionId = new byte[connectionIdLength];
-            buffer.get(connectionId);
-        }
-        else if (quicVersion.atLeast(Version.IETF_draft_15)) {
-            int connectionIdLength = buffer.get();
-            sequenceNr = VariableLengthInteger.parse(buffer);
-            connectionId = new byte[connectionIdLength];
-            buffer.get(connectionId);
-        }
+        sequenceNr = VariableLengthInteger.parse(buffer);
+        int connectionIdLength = buffer.get();
+        connectionId = new byte[connectionIdLength];
+        buffer.get(connectionId);
 
         byte[] statelessResetToken = new byte[128 / 8];
         buffer.get(statelessResetToken);

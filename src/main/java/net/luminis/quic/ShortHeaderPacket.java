@@ -76,38 +76,7 @@ public class ShortHeaderPacket extends QuicPacket {
             //   endpoint before the final TLS handshake messages are received."
             throw new MissingKeysException("Missing application keys");
         }
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, log);
-        }
-        else {
-            int protectedPackageNumberLength = 1;   // Assuming packet number is 1 byte (which is of course not always the case...)
-            byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
-            buffer.get(protectedPackageNumber);
-
-            int currentPosition = buffer.position();
-            byte[] frameHeader = new byte[buffer.position()];
-            buffer.position(0);
-            buffer.get(frameHeader);
-            buffer.position(currentPosition);
-
-            int length = buffer.limit();
-            byte[] payload = new byte[length - buffer.position()];
-            buffer.get(payload);
-
-            packetNumber = unprotectPacketNumber(payload, protectedPackageNumber, serverSecrets);
-            log.decrypted("Unprotected packet number: " + packetNumber);
-
-            log.encrypted("Encrypted payload", payload);
-
-            frameHeader[frameHeader.length - 1] = (byte) packetNumber;   // Assuming packet number is 1 byte
-            log.encrypted("Frame header", frameHeader);
-
-            byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
-            log.decrypted("Decrypted payload", frameBytes);
-
-            frames = new ArrayList<>();
-            parseFrames(frameBytes, log);
-        }
+        parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, log);
 
         packetSize = buffer.position() - startPosition;
         return this;
@@ -124,19 +93,14 @@ public class ShortHeaderPacket extends QuicPacket {
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         byte flags;
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
-            // "|0|1|S|R|R|K|P P|"
-            // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin
-            //      Bit, set as described in [SPIN]."
-            // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
-            //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
-            flags = 0x40;  // 0100 0000
-            flags = encodePacketNumberLength(flags, packetNumber);
-        }
-        else {
-            flags = 0x30;
-        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
+        // "|0|1|S|R|R|K|P P|"
+        // "Spin Bit (S):  The sixth bit (0x20) of byte 0 is the Latency Spin
+        //      Bit, set as described in [SPIN]."
+        // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
+        //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
+        flags = 0x40;  // 0100 0000
+        flags = encodePacketNumberLength(flags, packetNumber);
         buffer.put(flags);
         buffer.put(destinationConnectionId);
 

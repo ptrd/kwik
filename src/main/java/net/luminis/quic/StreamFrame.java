@@ -59,7 +59,7 @@ public class StreamFrame extends QuicFrame {
         isFinal = fin;
 
         ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.length);
-        byte baseType = (byte) (quicVersion.atLeast(Version.IETF_draft_17)? 0x08: 0x10);
+        byte baseType = (byte) 0x08;
         byte frameType = (byte) (baseType | 0x04 | 0x02 | 0x00);  // OFF-bit, LEN-bit, (no) FIN-bit
         if (fin) {
             frameType |= 0x01;

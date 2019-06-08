@@ -23,6 +23,6 @@ import net.luminis.tls.TlsState;
 public class QuicTlsState extends TlsState {
 
     public QuicTlsState(Version quicVersion) {
-        super(quicVersion.atLeast(Version.IETF_draft_17)? "tls13 ": "quic ");
+        super("tls13 ");
     }
 }

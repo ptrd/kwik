@@ -93,6 +93,9 @@ public class QuicConnection implements PacketProcessor {
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
         this(host, port, quicVersion, log, host);
+        if (! quicVersion.atLeast(Version.IETF_draft_17)) {
+            throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
+        }
     }
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
@@ -281,11 +284,7 @@ public class QuicConnection implements PacketProcessor {
 
         try {
             QuicPacket packet;
-            if (quicVersion.atLeast(Version.IETF_draft_17)) {
-                packet = parsePacket(data);
-            } else {
-                packet = parsePacketPreDraft17(data);
-            }
+            packet = parsePacket(data);
 
             log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
@@ -359,52 +358,6 @@ public class QuicConnection implements PacketProcessor {
         return packet;
     }
 
-    QuicPacket parsePacketPreDraft17(ByteBuffer data) throws MissingKeysException {
-        int flags = data.get();
-        int version = data.getInt();
-        data.rewind();
-
-        QuicPacket packet;
-
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
-        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
-        //  will be identified as a Version Negotiation packet based on the
-        //  Version field having a value of 0."
-        if (version == 0) {
-            packet = new VersionNegotationPacket().parse(data, log);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5
-        // "An Initial packet uses long headers with a type value of 0x7F."
-        else if ((flags & 0xff) == 0xff) {
-            packet = new InitialPacket(quicVersion).parse(data, connectionSecrets, log);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.7
-        // "A Retry packet uses a long packet header with a type value of 0x7E."
-        else if ((flags & 0xff) == 0xfe) {
-            // Retry packet....
-            throw new NotYetImplementedException();
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.6
-        // "A Handshake packet uses long headers with a type value of 0x7D."
-        else if ((flags & 0xff) == 0xfd) {
-            packet = new HandshakePacket(quicVersion).parse(data, connectionSecrets, log);
-        }
-        else if ((flags & 0xff) == 0xfc) {
-            // 0-RTT Protected
-            throw new NotYetImplementedException();
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.3
-        // "The most significant bit (0x80) of octet 0 is set to 0 for the short header."
-        else if ((flags & 0x80) == 0x00) {
-            // ShortHeader
-            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, log);
-        }
-        else {
-            throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
-        }
-        return packet;
-    }
-
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
@@ -419,9 +372,7 @@ public class QuicConnection implements PacketProcessor {
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
         Extension[] quicExtensions = new Extension[] {
-                quicVersion.atLeast(Version.IETF_draft_17)?
-                        new QuicTransportParametersExtension(quicVersion, transportParams):
-                        new QuicTransportParametersExtensionPreDraft17(quicVersion),
+                new QuicTransportParametersExtension(quicVersion, transportParams),
                 new ECPointFormatExtension(),
                 new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),
         };

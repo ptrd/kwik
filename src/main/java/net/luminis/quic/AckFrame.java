@@ -53,16 +53,7 @@ public class AckFrame extends QuicFrame {
         stringRepresentation = String.valueOf(largestAcknowledged);
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
-
-        if (quicVersion.equals(Version.IETF_draft_14)) {
-            buffer.put((byte) 0x0d);
-        }
-        else if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            buffer.put((byte) 0x02);
-        }
-        else if (quicVersion.atLeast(Version.IETF_draft_15)) {
-            buffer.put((byte) 0x1a);
-        }
+        buffer.put((byte) 0x02);
 
         VariableLengthInteger.encode(packetNumber, buffer);
         VariableLengthInteger.encode(0, buffer);
@@ -86,16 +77,7 @@ public class AckFrame extends QuicFrame {
         largestAcknowledged = acknowledgedPacketNumbers.get(0);
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
-
-        if (quicVersion.equals(Version.IETF_draft_14)) {
-            buffer.put((byte) 0x0d);
-        }
-        else if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            buffer.put((byte) 0x02);
-        }
-        else if (quicVersion.atLeast(Version.IETF_draft_15)) {
-            buffer.put((byte) 0x1a);
-        }
+        buffer.put((byte) 0x02);
 
         VariableLengthInteger.encode(largestAcknowledged, buffer);
         VariableLengthInteger.encode(ackDelay, buffer);

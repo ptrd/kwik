@@ -32,7 +32,7 @@ public class CryptoFrame extends QuicFrame {
         cryptoData = payload;
         length = payload.length;
         ByteBuffer frameBuffer = ByteBuffer.allocate(3 * 4 + payload.length);
-        VariableLengthInteger.encode(quicVersion.atLeast(Version.IETF_draft_17)? 0x06: 0x18, frameBuffer);
+        VariableLengthInteger.encode(0x06, frameBuffer);
         VariableLengthInteger.encode(offset, frameBuffer);
         VariableLengthInteger.encode(payload.length, frameBuffer);
         frameBuffer.put(payload);

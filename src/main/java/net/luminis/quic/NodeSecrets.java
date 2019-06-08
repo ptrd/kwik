@@ -87,23 +87,13 @@ public class NodeSecrets {
     private void computeKeys(byte[] secret) {
 
         String prefix;
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
-            // "The current encryption level secret and the label "quic key" are
-            //   input to the KDF to produce the AEAD key; the label "quic iv" is used
-            //   to derive the IV, see Section 5.3.  The header protection key uses
-            //   the "quic hp" label, see Section 5.4).  Using these labels provides
-            //   key separation between QUIC and TLS, see Section 9.4."
-            prefix = "quic ";
-        }
-        else {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1
-            // "The keys used for packet protection are computed from the TLS secrets
-            //   using the method described in Section 7.3 of [TLS13]), except that
-            //   the label for HKDF-Expand-Label uses the prefix "quic " rather than
-            //   "tls13 ""
-            prefix = "";
-        }
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
+        // "The current encryption level secret and the label "quic key" are
+        //   input to the KDF to produce the AEAD key; the label "quic iv" is used
+        //   to derive the IV, see Section 5.3.  The header protection key uses
+        //   the "quic hp" label, see Section 5.4).  Using these labels provides
+        //   key separation between QUIC and TLS, see Section 9.4."
+        prefix = "quic ";
 
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
@@ -113,32 +103,19 @@ public class NodeSecrets {
         writeIV = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
         log.secret(nodeRole + " iv", writeIV);
 
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
-            // "The header protection key uses the "quic hp" label"
-            hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", (short) 16);
-            log.secret(nodeRole + " hp", hp);
-        }
-        else {
-            // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1: 'to derive a packet number protection key (the "pn" label")'
-            pn = hkdfExpandLabel(quicVersion, secret, prefix + "pn", "", (short) 16);
-            log.secret(nodeRole + " pn", pn);
-        }
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
+        // "The header protection key uses the "quic hp" label"
+        hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", (short) 16);
+        log.secret(nodeRole + " hp", hp);
     }
 
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
     static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
 
         byte[] prefix;
-        if (quicVersion.atLeast(Version.IETF_draft_17)) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
-            // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
-            prefix = "tls13 ".getBytes(ISO_8859_1);
-        }
-        else {
-            // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.1: 'the label for HKDF-Expand-Label uses the prefix "quic " rather than "tls13 "'
-            prefix = "quic ".getBytes(ISO_8859_1);
-        }
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
+        // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
+        prefix = "tls13 ".getBytes(ISO_8859_1);
 
         ByteBuffer hkdfLabel = ByteBuffer.allocate(2 + 1 + prefix.length + label.getBytes(ISO_8859_1).length + 1 + context.getBytes(ISO_8859_1).length);
         hkdfLabel.putShort(length);

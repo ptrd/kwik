@@ -132,13 +132,9 @@ public class CryptoStream {
         int extensionType = buffer.getShort();
         buffer.rewind();
         if ((extensionType & 0xffff) == 0xffa5) {
-            if (quicVersion.atLeast(Version.IETF_draft_17)) {
-                QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(quicVersion);
-                transportParametersExtension.parse(buffer, log);
-                connection.setPeerTransportParameters(transportParametersExtension.getTransportParameters());
-            } else {
-                new QuicTransportParametersExtensionPreDraft17().parse(buffer, log);
-            }
+            QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(quicVersion);
+            transportParametersExtension.parse(buffer, log);
+            connection.setPeerTransportParameters(transportParametersExtension.getTransportParameters());
         }
         else {
             log.debug("Crypto stream: unsupported extension " + extensionType);

@@ -26,6 +26,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
+import javax.management.Query;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -33,6 +34,7 @@ import java.util.Arrays;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -268,4 +270,17 @@ class QuicConnectionTest {
         connection.slideFlowControlWindow((int) (flowControlIncrement * 0.21));
         verify(sender, times(2)).send(any(QuicPacket.class), anyString(), any(Consumer.class));
     }
+
+    @Test
+    void testMinimumQuicVersionIs17() {
+        assertThatThrownBy(
+                () -> new QuicConnection("localhost", 443, Version.IETF_draft_16, Mockito.mock(Logger.class)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void testQuicVersion17IsSupported() throws Exception {
+        assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_17, Mockito.mock(Logger.class))).isNotNull();
+    }
+
 }
