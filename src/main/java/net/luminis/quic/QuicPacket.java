@@ -85,7 +85,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, Logger log) {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, long largestPacketNumber, Logger log) {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
         // "When removing packet protection, an endpoint
@@ -139,6 +139,7 @@ abstract public class QuicPacket {
             unprotectedPacketNumber[i] = (byte) (protectedPackageNumber[i] ^ mask[1+i]);
         }
         packetNumber = bytesToInt(unprotectedPacketNumber);
+        packetNumber = decodePacketNumber(packetNumber, largestPacketNumber, protectedPackageNumberLength * 8);
         log.decrypted("Unprotected packet number: " + packetNumber);
 
         currentPosition = buffer.position();
@@ -258,6 +259,23 @@ abstract public class QuicPacket {
             throw new RuntimeException();
         }
 
+    }
+
+    static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {
+        long expectedPacketNumber = largestPacketNumber + 1;
+        long pnWindow = 1 << bits;
+        long pnHalfWindow = pnWindow / 2;
+        long pnMask = ~ (pnWindow - 1);
+
+        long candidatePn = (expectedPacketNumber & pnMask) | truncatedPacketNumber;
+        if (candidatePn <= expectedPacketNumber - pnHalfWindow) {
+            return candidatePn + pnWindow;
+        }
+        if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn > pnWindow) {
+            return candidatePn - pnWindow;
+        }
+
+        return candidatePn;
     }
 
     byte[] encryptAesCtr(byte[] key, byte[] initVector, byte[] value) {

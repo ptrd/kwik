@@ -56,7 +56,7 @@ public class ShortHeaderPacket extends QuicPacket {
         }
     }
 
-    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, Logger log) throws MissingKeysException {
+    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, long largestPacketNumber, Logger log) throws MissingKeysException {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         byte flags = buffer.get();
@@ -76,7 +76,7 @@ public class ShortHeaderPacket extends QuicPacket {
             //   endpoint before the final TLS handshake messages are received."
             throw new MissingKeysException("Missing application keys");
         }
-        parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, log);
+        parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, largestPacketNumber, log);
 
         packetSize = buffer.position() - startPosition;
         return this;

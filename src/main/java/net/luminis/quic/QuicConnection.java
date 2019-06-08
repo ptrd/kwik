@@ -85,6 +85,7 @@ public class QuicConnection implements PacketProcessor {
     private long flowControlMax;
     private long flowControlLastAdvertised;
     private long flowControlIncrement;
+    private long largestPacketNumber;
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -327,7 +328,7 @@ public class QuicConnection implements PacketProcessor {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "An Initial packet uses long headers with a type value of 0x0."
         else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
-            packet = new InitialPacket(quicVersion).parse(data, connectionSecrets, log);
+            packet = new InitialPacket(quicVersion).parse(data, connectionSecrets, largestPacketNumber, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
         // "A Retry packet uses a long packet header with a type value of 0x3"
@@ -338,7 +339,7 @@ public class QuicConnection implements PacketProcessor {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
         // "A Handshake packet uses long headers with a type value of 0x2."
         else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
-            packet = new HandshakePacket(quicVersion).parse(data, connectionSecrets, log);
+            packet = new HandshakePacket(quicVersion).parse(data, connectionSecrets, largestPacketNumber, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
         // "|  0x1 | 0-RTT Protected | Section 12.1 |"
@@ -350,10 +351,14 @@ public class QuicConnection implements PacketProcessor {
         // "|0|1|S|R|R|K|P P|"
         else if ((flags & 0xc0) == 0x40) {  // 0100 0000
             // ShortHeader
-            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, log);
+            packet = new ShortHeaderPacket(quicVersion).parse(data, this, connectionSecrets, largestPacketNumber, log);
         }
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
+        }
+
+        if (packet.getPacketNumber() > largestPacketNumber) {
+            largestPacketNumber = packet.getPacketNumber();
         }
         return packet;
     }

@@ -94,4 +94,52 @@ class QuicPacketTest {
         assertThat(newFlags).isEqualTo((byte) 0x03);
     }
 
+    @Test
+    void decodeFullyEncodedPacketNumber() {
+        long pn = QuicPacket.decodePacketNumber(65455, 65454, 16);
+        assertThat(pn).isEqualTo(65455);
+    }
+
+    //   0               256              512              768              1024
+    //   |................|................|................|................|
+    //                             e                                                e = expected
+    //                     -------384------
+    //
+    // received pn: 44
+    //     44               300               556                                   possible values
+    @Test
+    void decodeTruncatedPacketNumberCandidateIsRight() {
+        long pn = QuicPacket.decodePacketNumber(44, 384, 8);
+        assertThat(pn).isEqualTo(300);
+    }
+
+    //   0               256              512              768              1024
+    //   |................|................|................|................|
+    //                      e                                                       e = expected
+    //              -------268------
+    //
+    // received pn: 254
+    //                  254             510              766                        possible values
+    @Test
+    void decodeTruncatedPacketNumberCandidateIsTooLarge() {
+        long pn = QuicPacket.decodePacketNumber(254, 268, 8);
+        assertThat(pn).isEqualTo(254);
+    }
+
+    //   0               256              512              768              1024
+    //   |................|................|................|................|
+    //                                    e                                         e = expected
+    //                            -------510------
+    //
+    // received pn: 10
+    //     10               266              522              778                   possible values
+    @Test
+    void decodeTruncatedPacketNumberCandidateIsTooSmall() {
+        long pn = QuicPacket.decodePacketNumber(10, 510, 8);
+        assertThat(pn).isEqualTo(522);
+    }
+
+
+
+
 }
