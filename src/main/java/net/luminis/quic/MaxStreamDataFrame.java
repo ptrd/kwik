@@ -51,7 +51,7 @@ public class MaxStreamDataFrame extends QuicFrame {
 
     @Override
     byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(9);
+        ByteBuffer buffer = ByteBuffer.allocate(17);
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.10
         // "The MAX_STREAM_DATA frame (type=0x11)..."
         buffer.put((byte) 0x11);

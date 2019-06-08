@@ -40,7 +40,7 @@ public class MaxDataFrame extends QuicFrame {
 
     @Override
     byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(5);
+        ByteBuffer buffer = ByteBuffer.allocate(9);
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
         // "The MAX_DATA frame (type=0x10)..."
         buffer.put((byte) 0x10);
