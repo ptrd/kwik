@@ -389,7 +389,7 @@ abstract public class QuicPacket {
         }
     }
 
-    public long getPacketNumber() {
+    public Long getPacketNumber() {
         if (packetNumber >= 0) {
             return packetNumber;
         }

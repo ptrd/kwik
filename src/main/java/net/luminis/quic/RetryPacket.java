@@ -83,6 +83,12 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
+    public Long getPacketNumber() {
+        // Retry Packet doesn't have a packet number
+        return null;
+    }
+
+    @Override
     public void accept(PacketProcessor processor, Instant time) {
         processor.process(this, time);
     }

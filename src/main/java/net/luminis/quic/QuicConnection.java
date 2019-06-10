@@ -357,7 +357,7 @@ public class QuicConnection implements PacketProcessor {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
 
-        if (packet.getPacketNumber() > largestPacketNumber) {
+        if (packet.getPacketNumber() != null && packet.getPacketNumber() > largestPacketNumber) {
             largestPacketNumber = packet.getPacketNumber();
         }
         return packet;
