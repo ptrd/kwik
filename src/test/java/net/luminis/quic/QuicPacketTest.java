@@ -139,7 +139,22 @@ class QuicPacketTest {
         assertThat(pn).isEqualTo(522);
     }
 
+    @Test
+    void decodeFourBytesPacketNumber() {
+        long pn = QuicPacket.decodePacketNumber(65455, 65454, 32);
+        assertThat(pn).isEqualTo(65455);
+    }
 
-
+    //   0                    4294967296               8589934592
+    //   |........................|........................|.................
+    //                                                                           e = expected
+    //                             -4494967300-
+    //
+    // received pn: 200000004
+    @Test
+    void decodeFourBytesTruncatedPacketNumber() {
+        long pn = QuicPacket.decodePacketNumber(200000004, 4494967299L, 32);
+        assertThat(pn).isEqualTo(4494967300L);
+    }
 
 }

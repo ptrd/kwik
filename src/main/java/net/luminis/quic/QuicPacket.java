@@ -263,7 +263,7 @@ abstract public class QuicPacket {
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {
         long expectedPacketNumber = largestPacketNumber + 1;
-        long pnWindow = 1 << bits;
+        long pnWindow = 1L << bits;
         long pnHalfWindow = pnWindow / 2;
         long pnMask = ~ (pnWindow - 1);
 
