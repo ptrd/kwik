@@ -135,7 +135,7 @@ public class QuicConnection implements PacketProcessor {
      * Set up the connection with the server.
      */
     public void connect(int connectionTimeout) throws IOException {
-        connect(connectionTimeout, "hq-15");
+        connect(connectionTimeout, "hq-20");
     }
 
     public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
