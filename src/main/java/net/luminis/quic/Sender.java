@@ -300,6 +300,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         packetStatus.resent = true;
         QuicPacket newPacket = packet.copy();
         send(newPacket, "retransmit " + packet.getId(), p -> {});
+        log.recovery("Retransmitted crypto, because lost packet " + packet);
     }
 
     void logStatistics() {
