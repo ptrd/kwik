@@ -93,6 +93,13 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
+    public Long getPacketNumber() {
+        // Version Negotiation Packet doesn't have a packet number
+        return null;
+    }
+
+
+    @Override
     public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets) {
         return new byte[0];
     }
