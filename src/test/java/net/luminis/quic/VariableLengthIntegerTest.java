@@ -121,6 +121,27 @@ class VariableLengthIntegerTest {
     }
 
     @Test
+    void parseLongValueGreaterThanMaxInteger() {
+        // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
+        // "the eight byte sequence c2 19 7c 5e ff 14 e8 8c (in
+        //   hexadecimal) decodes to the decimal value 151288809941952652;"
+        byte[] rawBytes = { (byte) 0xc2, (byte) 0x19, (byte) 0x7c, (byte) 0x5e,
+                (byte) 0xff, (byte) 0x14, (byte) 0xe8, (byte) 0x8c };
+
+        long value = VariableLengthInteger.parseLong(wrap(rawBytes));
+        assertThat(value).isEqualTo(151288809941952652L);
+    }
+
+    @Test
+    void parseMaxLong() {
+        byte[] rawBytes = { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
+                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
+
+        long value = VariableLengthInteger.parseLong(wrap(rawBytes));
+        assertThat(value).isEqualTo(4611686018427387903L);
+    }
+
+    @Test
     void encodeSingleByteInteger() {
         ByteBuffer buffer = ByteBuffer.allocate(8);
         int encodedSize = VariableLengthInteger.encode(37, buffer);
