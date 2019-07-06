@@ -201,35 +201,34 @@ public class Quic {
 
         boolean interactiveMode = cmd.hasOption("i");
 
-
         try {
-            QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
-
-            quicConnection.connect(connectionTimeout * 1000);
-
-            if (keepAliveTime > 0) {
-                quicConnection.keepAlive(keepAliveTime);
-            }
-            if (http09Request != null) {
-                doHttp09Request(quicConnection, http09Request);
-            }
             if (interactiveMode) {
-                new InteractiveShell(quicConnection).start();
+                new InteractiveShell(host, port, quicVersion, logger).start();
             }
             else {
+                QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
+                quicConnection.connect(connectionTimeout * 1000);
+
                 if (keepAliveTime > 0) {
-                    try {
-                        Thread.sleep((keepAliveTime + 30) * 1000);
-                    } catch (InterruptedException e) {
+                    quicConnection.keepAlive(keepAliveTime);
+                }
+                if (http09Request != null) {
+                    doHttp09Request(quicConnection, http09Request);
+                } else {
+                    if (keepAliveTime > 0) {
+                        try {
+                            Thread.sleep((keepAliveTime + 30) * 1000);
+                        } catch (InterruptedException e) {
+                        }
                     }
                 }
-            }
 
-            quicConnection.close();
+                quicConnection.close();
 
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                }
             }
 
             System.out.println("Terminating Kwik");

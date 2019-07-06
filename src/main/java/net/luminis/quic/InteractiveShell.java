@@ -30,13 +30,21 @@ import java.util.stream.Collectors;
 
 public class InteractiveShell {
 
-    private final QuicConnection quicConnection;
     private final Map<String, Consumer<String>> commands;
     private boolean running;
     private Map<String, String> history;
+    private final String host;
+    private final int port;
+    private final Version quicVersion;
+    private final Logger logger;
+    private QuicConnection quicConnection;
 
-    public InteractiveShell(QuicConnection quicConnection) {
-        this.quicConnection = quicConnection;
+    public InteractiveShell(String host, int port, Version quicVersion, Logger logger) {
+        this.host = host;
+        this.port = port;
+        this.quicVersion = quicVersion;
+        this.logger = logger;
+
         commands = new HashMap<>();
         history = new LinkedHashMap<>();
         setupCommands();
@@ -44,6 +52,7 @@ public class InteractiveShell {
 
     private void setupCommands() {
         commands.put("help", this::help);
+        commands.put("connect", this::connect);
         commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
         commands.put("cids_new", this::newConnectionIds);
@@ -97,6 +106,29 @@ public class InteractiveShell {
         }
     }
 
+    private void connect(String arg) {
+        int connectionTimeout = 3000;
+        if (arg != null && !arg.isBlank()) {
+            try {
+                connectionTimeout = Integer.parseInt(arg);
+                if (connectionTimeout < 100) {
+                    System.out.println("Connection timeout must be at least 100 ms");
+                    return;
+                }
+            } catch (NumberFormatException notANumber) {
+                System.out.println("Connection timeout argument must be an integer value");
+                return;
+            }
+        }
+
+        try {
+            quicConnection = new QuicConnection(host, port, quicVersion, logger);
+            quicConnection.connect(connectionTimeout);
+            System.out.println("Ok, connected to " + host + "\n");
+        } catch (IOException e) {
+            System.out.println("\nError: " + e);
+        }
+    }
 
     private void newConnectionIds(String arg) {
         byte[][] newConnectionIds = quicConnection.newConnectionIds(3);
@@ -137,7 +169,7 @@ public class InteractiveShell {
     }
 
     private void error(Exception error) {
-        System.out.println("error: " + error.getMessage());
+        System.out.println("error: " + error);
     }
 
     private void prompt() {
