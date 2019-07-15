@@ -38,7 +38,7 @@ public class StopSendingFrame extends QuicFrame {
         buffer.get();
 
         streamId = VariableLengthInteger.parse(buffer);
-        errorCode = buffer.getShort() & 0xffff;
+        errorCode = VariableLengthInteger.parse(buffer);
 
         return this;
     }

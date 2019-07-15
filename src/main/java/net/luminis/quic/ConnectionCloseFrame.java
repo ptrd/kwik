@@ -36,7 +36,7 @@ public class ConnectionCloseFrame extends QuicFrame {
             throw new RuntimeException();  // Programming error
         }
 
-        errorCode = buffer.getShort();
+        errorCode = VariableLengthInteger.parse(buffer);
         if (frameType == 0x1c) {
             triggeringFrameType = VariableLengthInteger.parse(buffer);
         }
