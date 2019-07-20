@@ -107,14 +107,26 @@ public abstract class LongHeaderPacket extends QuicPacket {
         packetBuffer.put(packetType);
         // Version
         packetBuffer.put(quicVersion.getBytes());
-        // DCIL / SCIL
-        byte dcil = (byte) ((destinationConnectionId.length - 3) << 4);
-        byte scil = (byte) (sourceConnectionId.length - 3);
-        packetBuffer.put((byte) (dcil | scil));
-        // Destination connection id
-        packetBuffer.put(destinationConnectionId);
-        // Source connection id, 8 bytes
-        packetBuffer.put(sourceConnectionId);
+        if (quicVersion.atLeast(Version.IETF_draft_22)) {
+            // DCID Len
+            packetBuffer.put((byte) destinationConnectionId.length);
+            // Destination connection id
+            packetBuffer.put(destinationConnectionId);
+            // SCID Len
+            packetBuffer.put((byte) sourceConnectionId.length);
+            // Source connection id, 8 bytes
+            packetBuffer.put(sourceConnectionId);
+        }
+        else {
+            // DCIL / SCIL
+            byte dcil = (byte) ((destinationConnectionId.length - 3) << 4);
+            byte scil = (byte) (sourceConnectionId.length - 3);
+            packetBuffer.put((byte) (dcil | scil));
+            // Destination connection id
+            packetBuffer.put(destinationConnectionId);
+            // Source connection id, 8 bytes
+            packetBuffer.put(sourceConnectionId);
+        }
     }
 
     protected abstract byte getPacketType();
@@ -139,15 +151,27 @@ public abstract class LongHeaderPacket extends QuicPacket {
             throw new ProtocolError("Server uses unsupported Quic version");
         }
 
-        byte dcilScil = buffer.get();
-        int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
-        int srcConnIdLength = (dcilScil & 0x0f) + 3;
+        if (quicVersion.atLeast(Version.IETF_draft_22)) {
+            int dstConnIdLength = buffer.get();
+            destinationConnectionId = new byte[dstConnIdLength];
+            buffer.get(destinationConnectionId);
 
-        destinationConnectionId = new byte[dstConnIdLength];
-        buffer.get(destinationConnectionId);
+            int srcConnIdLength = buffer.get();
+            sourceConnectionId = new byte[srcConnIdLength];
+            buffer.get(sourceConnectionId);
+        }
+        else
+        {
+            byte dcilScil = buffer.get();
+            int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
+            int srcConnIdLength = (dcilScil & 0x0f) + 3;
+
+            destinationConnectionId = new byte[dstConnIdLength];
+            buffer.get(destinationConnectionId);
+            sourceConnectionId = new byte[srcConnIdLength];
+            buffer.get(sourceConnectionId);
+        }
         log.debug("Destination connection id", destinationConnectionId);
-        sourceConnectionId = new byte[srcConnIdLength];
-        buffer.get(sourceConnectionId);
         log.debug("Source connection id", sourceConnectionId);
 
         parseAdditionalFields(buffer);

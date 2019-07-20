@@ -323,7 +323,7 @@ public class QuicConnection implements PacketProcessor {
         //  will be identified as a Version Negotiation packet based on the
         //  Version field having a value of 0."
         if (version == 0) {
-            packet = new VersionNegotationPacket().parse(data, log);
+            packet = new VersionNegotationPacket(quicVersion).parse(data, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "An Initial packet uses long headers with a type value of 0x0."
