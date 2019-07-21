@@ -450,6 +450,9 @@ public class QuicConnection implements PacketProcessor {
                 log.debug("Ignoring RetryPacket, because already processed one.");
             }
         }
+        else {
+            log.error("Discarding Retry packet, because destination connection id's do not match");
+        }
     }
 
     void processFrames(QuicPacket packet, Instant timeReceived) {

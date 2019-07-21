@@ -33,9 +33,11 @@ public class RetryPacket extends QuicPacket {
 
 
     public RetryPacket(Version quicVersion) {
+        this.quicVersion = quicVersion;
     }
 
     public RetryPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destinationConnectionId, byte[] originalDestinationConnectionId, byte[] retryToken) {
+        this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destinationConnectionId;
         this.originalDestinationConnectionId = originalDestinationConnectionId;
@@ -84,7 +86,12 @@ public class RetryPacket extends QuicPacket {
         log.debug("Destination connection id", destinationConnectionId);
         log.debug("Source connection id", sourceConnectionId);
 
-        originalDestinationConnectionId = new byte[odcil + 3];
+        if (quicVersion.atLeast(Version.IETF_draft_22)) {
+            originalDestinationConnectionId = new byte[odcil];
+        }
+        else {
+            originalDestinationConnectionId = new byte[odcil + 3];
+        }
         buffer.get(originalDestinationConnectionId);
 
         int retryTokenLength = buffer.remaining();
