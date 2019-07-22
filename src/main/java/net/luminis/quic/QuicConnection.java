@@ -491,6 +491,10 @@ public class QuicConnection implements PacketProcessor {
             }
             else if (frame instanceof NewConnectionIdFrame) {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
+                if (((NewConnectionIdFrame) frame).getRetirePriorTo() != 0) {
+                    // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
+                    log.info("Peer sends retire connection id; not impemented yet.");
+                }
             }
             else if (frame instanceof RetireConnectionIdFrame) {
                 retireConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
@@ -630,18 +634,18 @@ public class QuicConnection implements PacketProcessor {
         return newConnectionId;
     }
 
-    public byte[][] newConnectionIds(int count) {
+    public byte[][] newConnectionIds(int count, int retirePriorTo) {
         QuicPacket packet = createPacket(App, null);
-        byte[][] newConnectionIds = new byte[3][];
+        byte[][] newConnectionIds = new byte[count][];
 
         for (int i = 0; i < count; i++) {
             byte[] newSourceConnectionId = new byte[sourceConnectionId.length];
             random.nextBytes(newSourceConnectionId);
             newConnectionIds[i] = newSourceConnectionId;
-            int sequenceNr = sourceConnectionIds.size();
+            int sequenceNr = sourceConnectionIds.keySet().stream().max(Integer::compareTo).get() + 1;
             sourceConnectionIds.put(sequenceNr, newSourceConnectionId);
             log.debug("New generated source connection id", newSourceConnectionId);
-            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, newSourceConnectionId));
+            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, retirePriorTo, newSourceConnectionId));
         }
 
         send(packet, "new connection id's");

@@ -25,6 +25,7 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     private Version quicVersion;
     private int sequenceNr;
+    private int retirePriorTo;
     private byte[] connectionId;
     private static Random random = new Random();
 
@@ -32,9 +33,10 @@ public class NewConnectionIdFrame extends QuicFrame {
         this.quicVersion = quicVersion;
     }
 
-    public NewConnectionIdFrame(Version quicVersion, int sequenceNr, byte[] newSourceConnectionId) {
+    public NewConnectionIdFrame(Version quicVersion, int sequenceNr, int retirePriorTo, byte[] newSourceConnectionId) {
         this.quicVersion = quicVersion;
         this.sequenceNr = sequenceNr;
+        this.retirePriorTo = retirePriorTo;
         connectionId = newSourceConnectionId;
     }
 
@@ -43,6 +45,7 @@ public class NewConnectionIdFrame extends QuicFrame {
         ByteBuffer buffer = ByteBuffer.allocate(30);
         buffer.put((byte) 0x18);
         VariableLengthInteger.encode(sequenceNr, buffer);
+        VariableLengthInteger.encode(retirePriorTo, buffer);
         buffer.put((byte) connectionId.length);
         buffer.put(connectionId);
         random.ints(16).forEach(i -> buffer.put((byte) i));
@@ -57,6 +60,7 @@ public class NewConnectionIdFrame extends QuicFrame {
         buffer.get();
 
         sequenceNr = VariableLengthInteger.parse(buffer);
+        retirePriorTo = VariableLengthInteger.parse(buffer);
         int connectionIdLength = buffer.get();
         connectionId = new byte[connectionIdLength];
         buffer.get(connectionId);
@@ -69,7 +73,7 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewConnectionIdFrame[" + sequenceNr + "]";
+        return "NewConnectionIdFrame[" + sequenceNr + "," + retirePriorTo + "]";
     }
 
     public int getSequenceNr() {
@@ -80,4 +84,7 @@ public class NewConnectionIdFrame extends QuicFrame {
         return connectionId;
     }
 
+    public int getRetirePriorTo() {
+        return retirePriorTo;
+    }
 }

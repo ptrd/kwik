@@ -130,8 +130,24 @@ public class InteractiveShell {
         }
     }
 
-    private void newConnectionIds(String arg) {
-        byte[][] newConnectionIds = quicConnection.newConnectionIds(3);
+    private void newConnectionIds(String args) {
+        int newConnectionIdCount = 1;
+        int retirePriorTo = 0;  // i.e. no retirement.
+
+        if (!args.isEmpty()) {
+            try {
+                Object[] intArgs = Stream.of(args.split(" +")).map(arg -> Integer.parseInt(arg)).toArray();
+                newConnectionIdCount = (int) intArgs[0];
+                if (intArgs.length > 1) {
+                    retirePriorTo = (int) intArgs[1];
+                }
+            } catch (NumberFormatException notANumber) {
+                System.out.println("Expected arguments: [<number of new ids>] [<sequence number to retire cids prior to>]");
+                return;
+            }
+        }
+
+        byte[][] newConnectionIds = quicConnection.newConnectionIds(newConnectionIdCount, retirePriorTo);
         System.out.println("Generated new (source) connection id's: " +
                 Arrays.stream(newConnectionIds)
                         .map(cid -> ByteUtils.bytesToHex(cid))
