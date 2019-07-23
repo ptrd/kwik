@@ -627,11 +627,16 @@ public class QuicConnection implements PacketProcessor {
         int currentIndex = destConnectionIds.entrySet().stream()
                 .filter(entry -> entry.getValue().equals(destConnectionId))
                 .mapToInt(entry -> entry.getKey())
-                .findFirst().orElse(0);
-        byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
-        log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
-        destConnectionId = newConnectionId;
-        return newConnectionId;
+                .findFirst().orElseThrow();
+        if (destConnectionIds.containsKey(currentIndex + 1)) {
+            byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
+            log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+            destConnectionId = newConnectionId;
+            return newConnectionId;
+        }
+        else {
+            return null;
+        }
     }
 
     public byte[][] newConnectionIds(int count, int retirePriorTo) {

@@ -165,7 +165,12 @@ public class InteractiveShell {
 
     private void nextDestinationConnectionId(String arg) {
         byte[] newConnectionId = quicConnection.nextDestinationConnectionId();
-        System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        if (newConnectionId != null) {
+            System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        }
+        else {
+            System.out.println("Cannot switch to next destination connect id, because there is none available");
+        }
     }
 
     private void help(String arg) {
