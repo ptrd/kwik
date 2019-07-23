@@ -30,7 +30,6 @@ public class ShortHeaderPacket extends QuicPacket {
 
     private byte[] destinationConnectionId;
     private byte[] packetBytes;
-    private byte[] connectionId;
 
     /**
      * Constructs an empty short header packet for use with the parse() method.
@@ -49,7 +48,6 @@ public class ShortHeaderPacket extends QuicPacket {
     public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
         this.destinationConnectionId = destinationConnectionId;
-        connectionId = destinationConnectionId;
         frames = new ArrayList<>();
         if (frame != null) {
             frames.add(frame);
@@ -64,7 +62,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
         byte[] sourceConnectionId = connection.getSourceConnectionId();
         byte[] packetConnectionId = new byte[sourceConnectionId.length];
-        connectionId = packetConnectionId;
+        destinationConnectionId = packetConnectionId;
         buffer.get(packetConnectionId);
         log.debug("Destination connection id", packetConnectionId);
 
@@ -136,13 +134,17 @@ public class ShortHeaderPacket extends QuicPacket {
         }
     }
 
+    public byte[] getDestinationConnectionId() {
+        return destinationConnectionId;
+    }
+
     @Override
     public String toString() {
         return "Packet "
                 + getEncryptionLevel().name().charAt(0) + "|"
                 + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "S" + "|"
-                + ByteUtils.bytesToHex(connectionId) + "|"
+                + ByteUtils.bytesToHex(destinationConnectionId) + "|"
                 + packetSize + "|"
                 + frames.size() + "  "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));

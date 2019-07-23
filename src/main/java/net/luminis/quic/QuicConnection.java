@@ -403,6 +403,10 @@ public class QuicConnection implements PacketProcessor {
 
     @Override
     public void process(ShortHeaderPacket packet, Instant time) {
+        if (! Arrays.equals(sourceConnectionId, packet.getDestinationConnectionId())) {
+            sourceConnectionId = packet.getDestinationConnectionId();
+            log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(sourceConnectionId));
+        }
         processFrames(packet, time);
     }
 
@@ -497,7 +501,11 @@ public class QuicConnection implements PacketProcessor {
                 }
             }
             else if (frame instanceof RetireConnectionIdFrame) {
-                retireConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
+                // "An endpoint sends a RETIRE_CONNECTION_ID frame (type=0x19) to
+                //   indicate that it will no longer use a connection ID that was issued
+                //   by its peer."
+                retireSourceConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
             }
             else {
                 log.debug("Ignoring " + frame);
@@ -657,15 +665,19 @@ public class QuicConnection implements PacketProcessor {
         return newConnectionIds;
     }
 
-    private void retireConnectionId(int sequenceNr) {
+    private void retireSourceConnectionId(int sequenceNr) {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
-            sourceConnectionIds.put(sequenceNr, null);
+            sourceConnectionIds.remove(sequenceNr);
         }
     }
 
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
+    }
+
+    public Map<Integer, byte[]> getSourceConnectionIds() {
+        return sourceConnectionIds;
     }
 
     public byte[] getDestinationConnectionId() {

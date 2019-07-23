@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class InteractiveShell {
@@ -94,7 +95,7 @@ public class InteractiveShell {
                             error(error);
                         }
                     } else {
-                        unknown();
+                        unknown(cmd);
                     }
                 }
                 if (running) {
@@ -156,6 +157,10 @@ public class InteractiveShell {
 
     private void printConnectionIds(String arg) {
         System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
+        System.out.println("Generated source connection id's:");
+        quicConnection.getSourceConnectionIds().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
         System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
         System.out.println("Available destination connection id's:");
         quicConnection.getDestinationConnectionIds().entrySet().stream()
@@ -181,8 +186,8 @@ public class InteractiveShell {
         running = false;
     }
 
-    private void unknown() {
-        System.out.println("unknown command");
+    private void unknown(String cmd) {
+        System.out.println("unknown command: " + cmd);
     }
 
     private void sendPing(String arg) {
