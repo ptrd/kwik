@@ -26,6 +26,7 @@ public class CryptoFrame extends QuicFrame {
     private int offset;
     private int length;
     private byte[] cryptoData;
+    private byte[] bytes;
 
     public CryptoFrame(Version quicVersion, byte[] payload) {
         offset = 0;
@@ -37,9 +38,9 @@ public class CryptoFrame extends QuicFrame {
         VariableLengthInteger.encode(payload.length, frameBuffer);
         frameBuffer.put(payload);
 
-        cryptoData = new byte[frameBuffer.position()];
+        bytes = new byte[frameBuffer.position()];
         frameBuffer.rewind();
-        frameBuffer.get(cryptoData);
+        frameBuffer.get(bytes);
     }
 
     public CryptoFrame() {
@@ -65,7 +66,7 @@ public class CryptoFrame extends QuicFrame {
     }
 
     public byte[] getBytes() {
-        return cryptoData;
+        return bytes;
     }
 
     public byte[] getCryptoData() {

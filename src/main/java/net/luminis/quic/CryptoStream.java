@@ -35,6 +35,8 @@ public class CryptoStream {
     private final ConnectionSecrets connectionSecrets;
     private TlsState tlsState;
     private final Logger log;
+    private List<Message> messages;
+    private TlsMessageParser tlsMessageParser;
 
 
     public CryptoStream(Version quicVersion, QuicConnection connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
@@ -44,6 +46,9 @@ public class CryptoStream {
         this.connectionSecrets = connectionSecrets;
         this.tlsState = tlsState;
         this.log = log;
+
+        messages = new ArrayList<>();
+        tlsMessageParser = new TlsMessageParser();
     }
 
     public void add(CryptoFrame cryptoFrame) {
@@ -82,8 +87,9 @@ public class CryptoStream {
             buffer.rewind();
             try {
                 while (buffer.remaining() > 0) {
-                    Object msg = HandshakeRecord.parseHandshakeMessage(buffer, tlsState);
+                    Message msg = tlsMessageParser.parse(buffer, tlsState);
                     log.debug(this + " Detected " + msg.getClass().getSimpleName());
+                    messages.add(msg);
                     if (msg instanceof ServerHello) {
                         // Server Hello provides a new secret, so
                         connectionSecrets.computeHandshakeSecrets(tlsState);
@@ -114,6 +120,10 @@ public class CryptoStream {
             // Wait for more frames
             log.debug(this + " Crypto stream contains non-contiguous frames, wait for more");
         }
+    }
+
+    public List<Message> getTlsMessages() {
+        return messages;
     }
 
     private boolean contiguousFrames() {
