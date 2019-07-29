@@ -180,7 +180,7 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
-        int parameterId = buffer.getShort();
+        int parameterId = buffer.getShort() & 0xffff;
         int size = buffer.getShort();
 
         if (parameterId == initial_max_stream_data_bidi_local.value) {
@@ -242,6 +242,10 @@ public class QuicTransportParametersExtension extends Extension {
             buffer.get(originalConnectionId);
             log.debug("- original connection id: ", originalConnectionId);
             params.setOriginalConnectionId(originalConnectionId);
+        }
+        else {
+            log.error("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
+            buffer.get(new byte[size]);
         }
     }
 

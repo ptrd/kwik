@@ -137,4 +137,14 @@ class QuicTransportParametersExtensionTest {
         assertThat(transportParametersExtension.getTransportParameters().getAckDelayExponent()).isEqualTo(7);
     }
 
+    @Test
+    void unknownTransportParameterShouldBeIgnored() throws Exception {
+        //                                           ext size  params size unknonw id size  dummy value    idle id size  0x40 | 27 10 (10000)
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 00     00 00       ff f9      00 05 01 02 03 04 05 00 01   00 00 67 10".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+
+        assertThat(transportParametersExtension.getTransportParameters().getIdleTimeout()).isEqualTo(10_000);
+    }
 }
