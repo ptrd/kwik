@@ -28,8 +28,8 @@ public class CryptoFrame extends QuicFrame {
     private byte[] cryptoData;
     private byte[] bytes;
 
-    public CryptoFrame(Version quicVersion, byte[] payload) {
-        offset = 0;
+    public CryptoFrame(Version quicVersion, int offset, byte[] payload) {
+        this.offset = offset;
         cryptoData = payload;
         length = payload.length;
         ByteBuffer frameBuffer = ByteBuffer.allocate(3 * 4 + payload.length);
@@ -44,6 +44,10 @@ public class CryptoFrame extends QuicFrame {
     }
 
     public CryptoFrame() {
+    }
+
+    public CryptoFrame(Version quicVersion, byte[] payload) {
+        this(quicVersion, 0, payload);
     }
 
     public CryptoFrame parse(ByteBuffer buffer, Logger log) {

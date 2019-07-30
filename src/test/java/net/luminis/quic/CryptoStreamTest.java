@@ -28,6 +28,7 @@ import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Function;
@@ -62,6 +63,55 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first crypto frame"));
     }
 
+    @Test
+    void parserWaitsForAllFramesNeededToParseWholeMessage() throws Exception {
+        setParseFunction(buffer -> {
+            // Simulate message can only be parsed when all 3 frames are present
+            if (buffer.limit() > 23) {
+                buffer.position(buffer.limit());
+                return new String(buffer.array());
+            }
+            else {
+                throw new BufferUnderflowException();
+            }
+
+        });
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 0, "first frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 11, "second frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 23, "last crypto frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first framesecond framelast crypto frame"));
+    }
+
+    @Test
+    void parserWaitsForAllOutOfOrderFramesNeededToParseWholeMessage() throws Exception {
+        setParseFunction(buffer -> {
+            // Simulate message can only be parsed when all 3 frames are present
+            if (buffer.limit() > 23) {
+                buffer.position(buffer.limit());
+                return new String(buffer.array());
+            }
+            else {
+                throw new BufferUnderflowException();
+            }
+
+        });
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 23, "last crypto frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 0, "first frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 11, "second frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first framesecond framelast crypto frame"));
+    }
+
+
     private void setParseFunction(Function<ByteBuffer, String> parseFunction) throws Exception {
         when(messageParser.parse(any(ByteBuffer.class), any(TlsState.class))).thenAnswer(new Answer<Message>() {
             @Override
@@ -90,6 +140,11 @@ class CryptoStreamTest {
         @Override
         public int hashCode() {
             return Objects.hash(contents);
+        }
+
+        @Override
+        public String toString() {
+            return "Message: " + contents;
         }
     }
 
