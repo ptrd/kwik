@@ -111,6 +111,34 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first framesecond framelast crypto frame"));
     }
 
+    @Test
+    void handleRetransmittedFramesWithDifferentSegmentation() throws Exception {
+        setParseFunction(buffer -> {
+            // Simulate message can only be parsed when all 3 frames are present
+            if (buffer.limit() > 23) {
+                buffer.position(buffer.limit());
+                return new String(buffer.array());
+            }
+            else {
+                throw new BufferUnderflowException();
+            }
+
+        });
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 23, "last crypto frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 0, "first frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        // Simulate second frame is never received, but all crypto content is retransmitted in different frames.
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 0, "first framesecond ".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), 18, "framelast crypto frame".getBytes()));
+        assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first framesecond framelast crypto frame"));
+    }
+
 
     private void setParseFunction(Function<ByteBuffer, String> parseFunction) throws Exception {
         when(messageParser.parse(any(ByteBuffer.class), any(TlsState.class))).thenAnswer(new Answer<Message>() {
