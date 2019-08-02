@@ -21,7 +21,7 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 
-public class CryptoFrame extends QuicFrame {
+public class CryptoFrame extends QuicFrame implements Comparable<CryptoFrame> {
 
     private int offset;
     private int length;
@@ -84,4 +84,19 @@ public class CryptoFrame extends QuicFrame {
     public int getLength() {
         return length;
     }
+
+    public int getUpToOffset() {
+        return offset + length;
+    }
+
+    @Override
+    public int compareTo(CryptoFrame other) {
+        if (this.offset != other.offset) {
+            return Integer.compare(this.offset, other.offset);
+        }
+        else {
+            return Integer.compare(this.length, other.length);
+        }
+    }
+
 }

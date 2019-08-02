@@ -20,15 +20,13 @@ package net.luminis.quic;
 
 import net.luminis.tls.*;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 
 public class CryptoStream {
 
-    private List<CryptoFrame> frames = new ArrayList<>();
+    private SortedSet<CryptoFrame> frames = new TreeSet<>();
     private final Version quicVersion;
     private final QuicConnection connection;
     private final EncryptionLevel encryptionLevel;
@@ -37,6 +35,7 @@ public class CryptoStream {
     private final Logger log;
     private List<Message> messages;
     private TlsMessageParser tlsMessageParser;
+    private int parsedToOffset = 0;
 
 
     public CryptoStream(Version quicVersion, QuicConnection connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
@@ -52,89 +51,130 @@ public class CryptoStream {
     }
 
     public void add(CryptoFrame cryptoFrame) {
-        int frameOffset = cryptoFrame.getOffset();
-        // Find first frame with offset larger than this and insert before.
-        boolean inserted = false;
-        for (int i = 0; !inserted && i < frames.size(); i++) {
-            if (frames.get(i).getOffset() > frameOffset) {
-                // First check whether this frame is not added already
-                if (i > 0 && frames.get(i-1).getOffset() == frameOffset) {
-                    log.debug(this + " Ignoring duplicate: " + cryptoFrame);
-                    return;
-                }
-                // Insert here.
-                frames.add(i, cryptoFrame);
-                inserted = true;
-            }
-        }
-        if (! inserted) {
-            // So offset is larger (or equal) than all existing frames.
-            // First check whether this frame is not added already
-            if (frames.size() > 0 && frames.get(frames.size() - 1).getOffset() == frameOffset) {
-                log.debug(this + " Ignoring duplicate: " + cryptoFrame);
-                return;
-            }
+        try {
+            if (cryptoFrame.getUpToOffset() > parsedToOffset) {
+                frames.add(cryptoFrame);
 
-            frames.add(cryptoFrame);
-        }
+                int availableBytes = bytesAvailable();
+                while (availableBytes >= 4) {
+                    // Determine message length (a TLS Handshake message starts with 1 byte type and 3 bytes length)
+                    ByteBuffer buffer = ByteBuffer.allocate(4);
+                    read(buffer);
+                    buffer.put(0, (byte) 0);
+                    buffer.rewind();
+                    int msgSize = buffer.getInt();
 
-        if (contiguousFrames()) {
-            // TODO: this parses all frames again, maybe keep a pointer in the stream to where it was successfully parsed.
-            ByteBuffer buffer = ByteBuffer.allocate(frames.stream().mapToInt(f -> f.getLength()).sum());
-            for (CryptoFrame frame: frames) {
-                buffer.put(frame.getCryptoData());
-            }
-            buffer.rewind();
-            try {
-                while (buffer.remaining() > 0) {
-                    Message msg = tlsMessageParser.parse(buffer, tlsState);
-                    log.debug(this + " Detected " + msg.getClass().getSimpleName());
-                    messages.add(msg);
-                    if (msg instanceof ServerHello) {
-                        // Server Hello provides a new secret, so
-                        connectionSecrets.computeHandshakeSecrets(tlsState);
-                    }
-                    else if (msg instanceof EncryptedExtensions) {
-                        for (Extension ex: ((EncryptedExtensions) msg).getExtensions()) {
-                            if (ex instanceof UnknownExtension) {
-                                parseExtension((UnknownExtension) ex);
-                            }
+                    if (availableBytes >= 4 + msgSize) {
+                        ByteBuffer msgBuffer = ByteBuffer.allocate(4 + msgSize);
+                        int read = read(msgBuffer);
+                        msgBuffer.rewind();
+                        Message tlsMessage = tlsMessageParser.parse(msgBuffer, tlsState);
+
+                        if (msgBuffer.limit() - msgBuffer.position() > 0) {
+                            throw new RuntimeException();  // Must be programming error
                         }
-                    }
-                    else if (msg instanceof FinishedMessage) {
-                        if (tlsState.isServerFinished()) {
-                            connection.finishHandshake(tlsState);
-                        }
-                    }
-                    else {
-                        log.debug(this + " Ignoring " + msg.getClass().getSimpleName());
+                        parsedToOffset += read;
+                        availableBytes -= read;
+                        removeParsedFrames();
+
+                        messages.add(tlsMessage);
+                        processMessage(tlsMessage);
+                    } else {
+                        log.debug("Cannot parse message yet, need " + (4 + msgSize) + " bytes; available: " + availableBytes);
+                        break;
                     }
                 }
-            } catch (BufferUnderflowException notYetEnough) {
-                // Don't bother, try later
-                log.debug(this + " (Received incomplete crypto message, wait for more)");
-            } catch (TlsProtocolException e) {
+            } else {
+                log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + parsedToOffset);
             }
+        }
+        catch (TlsProtocolException tlsError) {
+            log.error("Parsing TLS message failed", tlsError);
+            throw new ProtocolError("TLS error");
+        }
+    }
+
+    private int bytesAvailable() {
+        if (frames.isEmpty()) {
+            return 0;
         }
         else {
-            // Wait for more frames
-            log.debug(this + " Crypto stream contains non-contiguous frames, wait for more");
-        }
-    }
+            int available = 0;
+            int readUpTo = parsedToOffset;
+            Iterator<CryptoFrame> iterator = frames.iterator();
 
-    public List<Message> getTlsMessages() {
-        return messages;
-    }
-
-    private boolean contiguousFrames() {
-        int lastStart = 0;
-        for (CryptoFrame frame: frames) {
-            if (frame.getOffset() != lastStart) {
-                return false;
+            while (iterator.hasNext()) {
+                CryptoFrame nextFrame = iterator.next();
+                if (nextFrame.getOffset() <= readUpTo) {
+                    if (nextFrame.getUpToOffset() > readUpTo) {
+                        available += nextFrame.getUpToOffset() - readUpTo;
+                        readUpTo = nextFrame.getUpToOffset();
+                    }
+                } else {
+                    break;
+                }
             }
-            lastStart += frame.getLength();
+            return available;
         }
-        return true;
+    }
+
+    private int read(ByteBuffer buffer) {
+        if (frames.isEmpty()) {
+            return 0;
+        }
+        else {
+            int read = 0;
+            int readUpTo = parsedToOffset;
+            Iterator<CryptoFrame> iterator = frames.iterator();
+
+            while (iterator.hasNext() && buffer.remaining() > 0) {
+                CryptoFrame nextFrame = iterator.next();
+                if (nextFrame.getOffset() <= readUpTo) {
+                    if (nextFrame.getUpToOffset() > readUpTo) {
+                        int available = nextFrame.getOffset() - readUpTo + nextFrame.getLength();
+                        int bytesToRead = Integer.min(buffer.limit() - buffer.position(), available);
+                        buffer.put(nextFrame.getCryptoData(), readUpTo - nextFrame.getOffset(), bytesToRead);
+                        readUpTo += bytesToRead;
+                        read += bytesToRead;
+                    }
+                } else {
+                    break;
+                }
+            }
+            return read;
+        }
+    }
+
+    private void removeParsedFrames() {
+        Iterator<CryptoFrame> iterator = frames.iterator();
+        while (iterator.hasNext()) {
+            if (iterator.next().getUpToOffset() <= parsedToOffset) {
+                iterator.remove();
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    private void processMessage(Message msg) {
+        log.debug(this + " Detected " + msg.getClass().getSimpleName());
+        if (msg instanceof ServerHello) {
+            // Server Hello provides a new secret, so
+            connectionSecrets.computeHandshakeSecrets(tlsState);
+        } else if (msg instanceof EncryptedExtensions) {
+            for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {
+                if (ex instanceof UnknownExtension) {
+                    parseExtension((UnknownExtension) ex);
+                }
+            }
+        } else if (msg instanceof FinishedMessage) {
+            if (tlsState.isServerFinished()) {
+                connection.finishHandshake(tlsState);
+            }
+        } else {
+            log.debug(this + " Ignoring " + msg.getClass().getSimpleName());
+        }
     }
 
     private void parseExtension(UnknownExtension extension) {
@@ -155,4 +195,9 @@ public class CryptoStream {
     public String toString() {
         return "CryptoStream["  + encryptionLevel.name().charAt(0) + "]";
     }
+
+    public List<Message> getTlsMessages() {
+        return messages;
+    }
+
 }
