@@ -135,7 +135,7 @@ public class QuicConnection implements PacketProcessor {
      * Set up the connection with the server.
      */
     public void connect(int connectionTimeout) throws IOException {
-        connect(connectionTimeout, "hq-20");
+        connect(connectionTimeout, "hq-22");
     }
 
     public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
@@ -323,7 +323,7 @@ public class QuicConnection implements PacketProcessor {
         //  will be identified as a Version Negotiation packet based on the
         //  Version field having a value of 0."
         if (version == 0) {
-            packet = new VersionNegotationPacket().parse(data, log);
+            packet = new VersionNegotationPacket(quicVersion).parse(data, log);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "An Initial packet uses long headers with a type value of 0x0."
@@ -403,6 +403,10 @@ public class QuicConnection implements PacketProcessor {
 
     @Override
     public void process(ShortHeaderPacket packet, Instant time) {
+        if (! Arrays.equals(sourceConnectionId, packet.getDestinationConnectionId())) {
+            sourceConnectionId = packet.getDestinationConnectionId();
+            log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(sourceConnectionId));
+        }
         processFrames(packet, time);
     }
 
@@ -450,6 +454,9 @@ public class QuicConnection implements PacketProcessor {
                 log.debug("Ignoring RetryPacket, because already processed one.");
             }
         }
+        else {
+            log.error("Discarding Retry packet, because destination connection id's do not match");
+        }
     }
 
     void processFrames(QuicPacket packet, Instant timeReceived) {
@@ -488,9 +495,17 @@ public class QuicConnection implements PacketProcessor {
             }
             else if (frame instanceof NewConnectionIdFrame) {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
+                if (((NewConnectionIdFrame) frame).getRetirePriorTo() != 0) {
+                    // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
+                    log.info("Peer sends retire connection id; not impemented yet.");
+                }
             }
             else if (frame instanceof RetireConnectionIdFrame) {
-                retireConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
+                // "An endpoint sends a RETIRE_CONNECTION_ID frame (type=0x19) to
+                //   indicate that it will no longer use a connection ID that was issued
+                //   by its peer."
+                retireSourceConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
             }
             else {
                 log.debug("Ignoring " + frame);
@@ -620,40 +635,49 @@ public class QuicConnection implements PacketProcessor {
         int currentIndex = destConnectionIds.entrySet().stream()
                 .filter(entry -> entry.getValue().equals(destConnectionId))
                 .mapToInt(entry -> entry.getKey())
-                .findFirst().orElse(0);
-        byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
-        log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
-        destConnectionId = newConnectionId;
-        return newConnectionId;
+                .findFirst().orElseThrow();
+        if (destConnectionIds.containsKey(currentIndex + 1)) {
+            byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
+            log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+            destConnectionId = newConnectionId;
+            return newConnectionId;
+        }
+        else {
+            return null;
+        }
     }
 
-    public byte[][] newConnectionIds(int count) {
+    public byte[][] newConnectionIds(int count, int retirePriorTo) {
         QuicPacket packet = createPacket(App, null);
-        byte[][] newConnectionIds = new byte[3][];
+        byte[][] newConnectionIds = new byte[count][];
 
         for (int i = 0; i < count; i++) {
             byte[] newSourceConnectionId = new byte[sourceConnectionId.length];
             random.nextBytes(newSourceConnectionId);
             newConnectionIds[i] = newSourceConnectionId;
-            int sequenceNr = sourceConnectionIds.size();
+            int sequenceNr = sourceConnectionIds.keySet().stream().max(Integer::compareTo).get() + 1;
             sourceConnectionIds.put(sequenceNr, newSourceConnectionId);
             log.debug("New generated source connection id", newSourceConnectionId);
-            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, newSourceConnectionId));
+            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, retirePriorTo, newSourceConnectionId));
         }
 
         send(packet, "new connection id's");
         return newConnectionIds;
     }
 
-    private void retireConnectionId(int sequenceNr) {
+    private void retireSourceConnectionId(int sequenceNr) {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
-            sourceConnectionIds.put(sequenceNr, null);
+            sourceConnectionIds.remove(sequenceNr);
         }
     }
 
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
+    }
+
+    public Map<Integer, byte[]> getSourceConnectionIds() {
+        return sourceConnectionIds;
     }
 
     public byte[] getDestinationConnectionId() {

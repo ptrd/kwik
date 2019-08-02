@@ -32,6 +32,14 @@ public class VersionNegotationPacket extends QuicPacket {
 
     private int packetSize;
 
+    public VersionNegotationPacket() {
+        this(Version.getDefault());
+    }
+
+    public VersionNegotationPacket(Version quicVersion) {
+        this.quicVersion = quicVersion;
+    }
+
     public List<String> getServerSupportedVersions() {
         return serverSupportedVersions;
     }
@@ -51,16 +59,31 @@ public class VersionNegotationPacket extends QuicPacket {
             throw new ImplementationError();
         }
 
-        byte dcilScil = buffer.get();
-        int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
-        int srcConnIdLength = (dcilScil & 0x0f) + 3;
+        byte[] destinationConnectionId;
+        byte[] sourceConnectionId;
+        // Using the QUIC version of the client to determine how to parse the server's VersionNegotationPacket is a bit
+        // weird, but it is the best we can do to support versions before and after draft-22.
+        if (quicVersion.atLeast(Version.IETF_draft_22)) {
+            int dstConnIdLength = buffer.get();
+            destinationConnectionId = new byte[dstConnIdLength];
+            buffer.get(destinationConnectionId);
 
-        byte[] destConnId = new byte[dstConnIdLength];
-        buffer.get(destConnId);
-        log.debug("Destination connection id", destConnId);
-        byte[] srcConnId = new byte[srcConnIdLength];
-        buffer.get(srcConnId);
-        log.debug("Source connection id", srcConnId);
+            int srcConnIdLength = buffer.get();
+            sourceConnectionId = new byte[srcConnIdLength];
+            buffer.get(sourceConnectionId);
+        }
+        else {
+            byte dcilScil = buffer.get();
+            int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
+            int srcConnIdLength = (dcilScil & 0x0f) + 3;
+
+            destinationConnectionId = new byte[dstConnIdLength];
+            buffer.get(destinationConnectionId);
+            sourceConnectionId = new byte[srcConnIdLength];
+            buffer.get(sourceConnectionId);
+        }
+        log.debug("Destination connection id", destinationConnectionId);
+        log.debug("Source connection id", sourceConnectionId);
 
         while (buffer.remaining() >= 4) {
             int versionData = buffer.getInt();

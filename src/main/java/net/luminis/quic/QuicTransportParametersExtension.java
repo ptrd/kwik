@@ -243,6 +243,10 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- original connection id: ", originalConnectionId);
             params.setOriginalConnectionId(originalConnectionId);
         }
+        else if (parameterId == active_connection_id_limit.value) {
+            int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
+            log.debug("- active connection id limit: " + activeConnectionIdLimit);
+        }
         else {
             log.error("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
             buffer.get(new byte[size]);

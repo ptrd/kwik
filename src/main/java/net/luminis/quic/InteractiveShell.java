@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class InteractiveShell {
@@ -94,7 +95,7 @@ public class InteractiveShell {
                             error(error);
                         }
                     } else {
-                        unknown();
+                        unknown(cmd);
                     }
                 }
                 if (running) {
@@ -130,8 +131,24 @@ public class InteractiveShell {
         }
     }
 
-    private void newConnectionIds(String arg) {
-        byte[][] newConnectionIds = quicConnection.newConnectionIds(3);
+    private void newConnectionIds(String args) {
+        int newConnectionIdCount = 1;
+        int retirePriorTo = 0;  // i.e. no retirement.
+
+        if (!args.isEmpty()) {
+            try {
+                Object[] intArgs = Stream.of(args.split(" +")).map(arg -> Integer.parseInt(arg)).toArray();
+                newConnectionIdCount = (int) intArgs[0];
+                if (intArgs.length > 1) {
+                    retirePriorTo = (int) intArgs[1];
+                }
+            } catch (NumberFormatException notANumber) {
+                System.out.println("Expected arguments: [<number of new ids>] [<sequence number to retire cids prior to>]");
+                return;
+            }
+        }
+
+        byte[][] newConnectionIds = quicConnection.newConnectionIds(newConnectionIdCount, retirePriorTo);
         System.out.println("Generated new (source) connection id's: " +
                 Arrays.stream(newConnectionIds)
                         .map(cid -> ByteUtils.bytesToHex(cid))
@@ -140,6 +157,10 @@ public class InteractiveShell {
 
     private void printConnectionIds(String arg) {
         System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
+        System.out.println("Generated source connection id's:");
+        quicConnection.getSourceConnectionIds().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
         System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
         System.out.println("Available destination connection id's:");
         quicConnection.getDestinationConnectionIds().entrySet().stream()
@@ -149,7 +170,12 @@ public class InteractiveShell {
 
     private void nextDestinationConnectionId(String arg) {
         byte[] newConnectionId = quicConnection.nextDestinationConnectionId();
-        System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        if (newConnectionId != null) {
+            System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        }
+        else {
+            System.out.println("Cannot switch to next destination connect id, because there is none available");
+        }
     }
 
     private void help(String arg) {
@@ -160,8 +186,8 @@ public class InteractiveShell {
         running = false;
     }
 
-    private void unknown() {
-        System.out.println("unknown command");
+    private void unknown(String cmd) {
+        System.out.println("unknown command: " + cmd);
     }
 
     private void sendPing(String arg) {

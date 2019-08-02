@@ -35,7 +35,9 @@ public enum Version {
     IETF_draft_17(0xff000011),
     IETF_draft_18(0xff000012),
     IETF_draft_19(0xff000013),
-    IETF_draft_20(0xff000014);
+    IETF_draft_20(0xff000014),
+    IETF_draft_21(0xff000015),
+    IETF_draft_22(0xff000016);
 
     private int versionId;
 
@@ -55,7 +57,7 @@ public enum Version {
     }
 
     static Version getDefault() {
-        return IETF_draft_19;
+        return IETF_draft_22;
     }
 
     public boolean atLeast(Version other) {
@@ -79,6 +81,6 @@ public enum Version {
     }
 
     private boolean isIetfDraft(Version version) {
-        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_20.versionId;
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_22.versionId;
     }
 }

@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 public class ResetStreamFrame extends QuicFrame {
 
     private int streamId;
-    private short errorCode;
+    private int errorCode;
     private int finalSize;
 
     @Override
@@ -35,7 +35,7 @@ public class ResetStreamFrame extends QuicFrame {
     public ResetStreamFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
         streamId = VariableLengthInteger.parse(buffer);
-        errorCode = buffer.getShort();
+        errorCode = VariableLengthInteger.parse(buffer);
         finalSize = VariableLengthInteger.parse(buffer);
         return this;
     }
