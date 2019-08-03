@@ -463,6 +463,7 @@ public class QuicConnection implements PacketProcessor {
         for (QuicFrame frame: packet.getFrames()) {
             if (frame instanceof CryptoFrame) {
                 getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
+                log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
             }
             else if (frame instanceof AckFrame) {
                 if (peerTransportParams != null) {

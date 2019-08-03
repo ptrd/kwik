@@ -22,6 +22,7 @@ import net.luminis.tls.*;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 public class CryptoStream {
@@ -193,7 +194,11 @@ public class CryptoStream {
 
     @Override
     public String toString() {
-        return "CryptoStream["  + encryptionLevel.name().charAt(0) + "]";
+        return "CryptoStream["  + encryptionLevel.name().charAt(0) + "|" + messages.stream()
+                .map(msg -> msg.getClass().getSimpleName())
+                .map(name -> name.endsWith("Message")? name.substring(0, name.length() - 7): name)
+                .collect(Collectors.joining(","))
+                + "]";
     }
 
     public List<Message> getTlsMessages() {

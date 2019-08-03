@@ -148,6 +148,14 @@ public abstract class BaseLogger implements Logger {
     }
 
     @Override
+    public void receivedPacketInfo(String info) {
+        if (logPackets) {
+            int indent = formatTime(Instant.now()).length();
+            log(" ".repeat(indent) + " -< " + info);
+        }
+    }
+
+    @Override
     public void sent(Instant sent, QuicPacket packet) {
         synchronized (this) {
             if (useRelativeTime) {

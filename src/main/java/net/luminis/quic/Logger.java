@@ -82,4 +82,6 @@ public interface Logger {
     void stats(String message);
 
     void recovery(String message);
+
+    void receivedPacketInfo(String toString);
 }
