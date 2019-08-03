@@ -20,10 +20,9 @@ package net.luminis.quic;
 
 import org.apache.commons.cli.*;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 
 /**
@@ -47,6 +46,7 @@ public class Quic {
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
         cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
+        cmdLineOptions.addOption("O", "output", true, "write server response to file");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
@@ -199,6 +199,19 @@ public class Quic {
             }
         }
 
+        String outputFile = null;
+        if (cmd.hasOption("O")) {
+            outputFile = cmd.getOptionValue("O");
+            if (outputFile == null) {
+                usage();
+                System.exit(1);
+            }
+            if (!Files.isWritable(Paths.get(outputFile))) {
+                System.err.println("Output file '" + outputFile + "' is not writable.");
+                System.exit(1);
+            }
+        }
+
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
         }
@@ -217,7 +230,7 @@ public class Quic {
                     quicConnection.keepAlive(keepAliveTime);
                 }
                 if (http09Request != null) {
-                    doHttp09Request(quicConnection, http09Request);
+                    doHttp09Request(quicConnection, http09Request, outputFile);
                 } else {
                     if (keepAliveTime > 0) {
                         try {
@@ -249,7 +262,7 @@ public class Quic {
         }
     }
 
-    private static void doHttp09Request(QuicConnection quicConnection, String http09Request) throws IOException {
+    private static void doHttp09Request(QuicConnection quicConnection, String http09Request, String outputFile) throws IOException {
         if (! http09Request.startsWith("/")) {
             http09Request = "/" + http09Request;
         }
@@ -265,9 +278,19 @@ public class Quic {
 
         BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
         String line;
-        System.out.println("Server returns: ");
-        while ((line = input.readLine()) != null) {
-            System.out.println(line);
+        if (outputFile != null) {
+            FileWriter outputWriter = new FileWriter(outputFile);
+            PrintWriter out = new PrintWriter(outputWriter);
+            while ((line = input.readLine()) != null) {
+                out.println(line);
+            }
+            outputWriter.close();
+        }
+        else {
+            System.out.println("Server returns: ");
+            while ((line = input.readLine()) != null) {
+                System.out.println(line);
+            }
         }
     }
 
