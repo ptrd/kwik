@@ -57,6 +57,7 @@ public class QuicConnection implements PacketProcessor {
     private final Random random = new Random();
     private final String host;
     private final int port;
+    private final NewSessionTicket sessionTicket;
     private final TlsState tlsState;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
@@ -94,24 +95,29 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public QuicConnection(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
-        this(host, port, quicVersion, log, host);
+        this(host, port, null, quicVersion, log);
+    }
+
+    public QuicConnection(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
+        this(host, port, sessionTicket, quicVersion, log, host);
         if (! quicVersion.atLeast(Version.IETF_draft_17)) {
             throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
         }
     }
 
-    public QuicConnection(String host, int port, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
+    public QuicConnection(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
         serverAddress = InetAddress.getByName(proxyHost);
+        this.sessionTicket = sessionTicket;
         this.quicVersion = quicVersion;
         this.log = log;
 
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port, this);
         receiver = new Receiver(this, socket, 1500, log);
-        tlsState = new QuicTlsState(quicVersion);
+        tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
         connectionSecrets = new ConnectionSecrets(quicVersion, log);
         streams = new ConcurrentHashMap<>();
         sourceConnectionIds = new ConcurrentHashMap<>();
@@ -381,7 +387,14 @@ public class QuicConnection implements PacketProcessor {
                 new QuicTransportParametersExtension(quicVersion, transportParams),
                 new ECPointFormatExtension(),
                 new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),
+                null    // Placeholder: will be replaced or removed, see below.
         };
+        if (sessionTicket == null) {
+            quicExtensions = Arrays.copyOf(quicExtensions, quicExtensions.length - 1);
+        }
+        else {
+            quicExtensions[quicExtensions.length - 1] = new ClientHelloPreSharedKeyExtension(tlsState, sessionTicket);
+        }
         return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
 

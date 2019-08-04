@@ -44,6 +44,7 @@ public class Quic {
         cmdLineOptions.addOption("19", "use Quic version IETF_draft_19");
         cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("22", "use Quic version IETF_draft_22");
+        cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
@@ -224,6 +225,27 @@ public class Quic {
             }
         }
 
+        NewSessionTicket sessionTicket = null;
+        if (cmd.hasOption("R")) {
+            String sessionTicketFile = null;
+            sessionTicketFile = cmd.getOptionValue("R");
+            if (sessionTicketFile == null) {
+                usage();
+                System.exit(1);
+            }
+            if (!Files.isReadable(Paths.get(sessionTicketFile))) {
+                System.err.println("Session ticket file '" + sessionTicketFile + "' is not readable.");
+                System.exit(1);
+            }
+            byte[] ticketData = new byte[0];
+            try {
+                ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
+                sessionTicket = NewSessionTicket.deserialize(ticketData);
+            } catch (IOException e) {
+                System.err.println("Error while reading session ticket file.");
+            }
+        }
+
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
         }
@@ -235,7 +257,7 @@ public class Quic {
                 new InteractiveShell(host, port, quicVersion, logger).start();
             }
             else {
-                QuicConnection quicConnection = new QuicConnection(host, port, quicVersion, logger);
+                QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger);
                 quicConnection.connect(connectionTimeout * 1000);
 
                 if (keepAliveTime > 0) {

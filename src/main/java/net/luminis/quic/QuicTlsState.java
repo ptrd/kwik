@@ -18,10 +18,16 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsState;
 
 public class QuicTlsState extends TlsState {
 
     public QuicTlsState(Version quicVersion) {
+    }
+
+    public QuicTlsState(Version quicVersion, NewSessionTicket sessionTicket) {
+        super(sessionTicket.getPSK());
+
     }
 }
