@@ -317,7 +317,7 @@ public class Quic {
 
     private static void storeNewSessionTicket(NewSessionTicket ticket, String baseFilename) {
         int maxFiles = 100;
-        File savedSessionTicket = new File(baseFilename);
+        File savedSessionTicket = new File(baseFilename + ".bin");
         int i = 1;
         while (i <= maxFiles && savedSessionTicket.exists()) {
             savedSessionTicket = new File(baseFilename + i + ".bin");
