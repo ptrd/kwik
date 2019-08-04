@@ -18,11 +18,13 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.NewSessionTicket;
 import org.apache.commons.cli.*;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 /**
@@ -48,6 +50,7 @@ public class Quic {
         cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
         cmdLineOptions.addOption("O", "output", true, "write server response to file");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
+        cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
 
         CommandLineParser parser = new DefaultParser();
@@ -212,6 +215,15 @@ public class Quic {
             }
         }
 
+        String newSessionTicketsFilename = null;
+        if (cmd.hasOption("S")) {
+            newSessionTicketsFilename = cmd.getOptionValue("S");
+            if (newSessionTicketsFilename == null) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
         }
@@ -240,6 +252,9 @@ public class Quic {
                     }
                 }
 
+                if (newSessionTicketsFilename != null) {
+                    storeNewSessionTickets(quicConnection, newSessionTicketsFilename);
+                }
                 quicConnection.close();
 
                 try {
@@ -259,6 +274,41 @@ public class Quic {
 
         if (!interactiveMode && http09Request == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+        }
+    }
+
+    private static void storeNewSessionTickets(QuicConnection quicConnection, String baseFilename) {
+        if (quicConnection.getNewSessionTickets().isEmpty()) {
+            // Wait a little, receiver thread might still be busy processing messages.
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+            }
+
+            if (quicConnection.getNewSessionTickets().isEmpty()) {
+                System.out.println("There are new new session tickets to store.");
+            }
+        }
+
+        quicConnection.getNewSessionTickets().stream().forEach(ticket -> storeNewSessionTicket(ticket, baseFilename));
+    }
+
+    private static void storeNewSessionTicket(NewSessionTicket ticket, String baseFilename) {
+        int maxFiles = 100;
+        File savedSessionTicket = new File(baseFilename);
+        int i = 1;
+        while (i <= maxFiles && savedSessionTicket.exists()) {
+            savedSessionTicket = new File(baseFilename + i + ".bin");
+            i++;
+        }
+        if (i > maxFiles) {
+            System.out.println("Cannot store ticket: too many files with base name '" + baseFilename + "' already exist.");
+            return;
+        }
+        try {
+            Files.write(savedSessionTicket.toPath(), ticket.serialize(), StandardOpenOption.CREATE);
+        } catch (IOException e) {
+            System.err.println("Saving new session ticket failed: " + e);
         }
     }
 

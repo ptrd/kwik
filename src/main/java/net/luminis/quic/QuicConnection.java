@@ -86,6 +86,7 @@ public class QuicConnection implements PacketProcessor {
     private long flowControlLastAdvertised;
     private long flowControlIncrement;
     private long largestPacketNumber;
+    private final List<NewSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
 
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -708,6 +709,14 @@ public class QuicConnection implements PacketProcessor {
 
     public void setDefaultStreamReceiveBufferSize(long size) {
         transportParams.setInitialMaxStreamData(size);
+    }
+
+    public void addNewSessionTicket(NewSessionTicket sessionTicket) {
+        newSessionTickets.add(sessionTicket);
+    }
+
+    public List<NewSessionTicket> getNewSessionTickets() {
+        return newSessionTickets;
     }
 
 }
