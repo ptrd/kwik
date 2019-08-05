@@ -178,18 +178,6 @@ public class CryptoStream {
                 connection.finishHandshake(tlsState);
             }
         } else if (msg instanceof NewSessionTicketMessage) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-22#section-4.5
-            // "TLS MUST provide a NewSessionTicket
-            //   message that contains the "early_data" extension with a
-            //   max_early_data_size of 0xffffffff;"
-            if (((NewSessionTicketMessage) msg).getEarlyDataExtension() == null
-                    || ((NewSessionTicketMessage) msg).getEarlyDataExtension().getMaxEarlyDataSize() != 0xffffffffL) {
-                // "A client MUST treat
-                //   receipt of a NewSessionTicket that contains an "early_data" extension
-                //   with any other value as a connection error of type
-                //   PROTOCOL_VIOLATION."
-                throw new ProtocolError("Invalid TLS early data size.");
-            }
             connection.addNewSessionTicket(new NewSessionTicket(tlsState, (NewSessionTicketMessage) msg));
 
         } else {
