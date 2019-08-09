@@ -21,12 +21,14 @@ package net.luminis.quic;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 
@@ -37,10 +39,11 @@ class RecoveryManagerTest extends RecoveryTests {
     private int defaultRtt = 40;
     private int defaultRttVar = 10;
     private ProbeSender probeSender;
+    private RttEstimator rttEstimator;
 
     @BeforeEach
     void initObjectUnderTest() {
-        RttEstimator rttEstimator = mock(RttEstimator.class);
+        rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
@@ -198,6 +201,22 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(probeSender, times(3)).sendProbe();
     }
 
+    @Test
+    void earliestLossTimeIsFound() throws Exception {
+        LossDetector[] detectors = new LossDetector[3];
+        FieldSetter.setField(recoveryManager, recoveryManager.getClass().getDeclaredField("lossDetectors"), detectors);
+
+        for (int i = 0; i < 3; i++) {
+            detectors[i] = mock(LossDetector.class);
+        }
+
+        Instant someInstant = Instant.now();
+        when(detectors[0].getLossTime()).thenReturn(someInstant);
+        when(detectors[1].getLossTime()).thenReturn(null);
+        when(detectors[2].getLossTime()).thenReturn(someInstant.minusMillis(100));
+
+        assertThat(recoveryManager.getEarliestLossTime().pnSpace.ordinal()).isEqualTo(2);
+    }
 
     private void mockSendingProbe(int... packetNumbers) {
         doAnswer(new Answer<Void>() {

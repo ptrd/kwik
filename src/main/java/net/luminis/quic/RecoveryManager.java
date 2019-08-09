@@ -25,11 +25,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 public class RecoveryManager {
 
     private final RttEstimator rttEstimater;
-    private final LossDetector lossDetector;
+    private final LossDetector[] lossDetectors = new LossDetector[EncryptionLevel.values().length];
     private final ProbeSender sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
@@ -42,7 +43,9 @@ public class RecoveryManager {
 
     RecoveryManager(RttEstimator rttEstimater, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
-        lossDetector = new LossDetector(this, rttEstimater);
+        for (EncryptionLevel pnSpace: EncryptionLevel.values()) {
+            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater);
+        }
         this.sender = sender;
         log = logger;
 
@@ -51,7 +54,8 @@ public class RecoveryManager {
     }
 
     void setLossDetectionTimer() {
-        Instant lossTime = lossDetector.getLossTime();
+        PnSpaceLossTime earliestLossTime = getEarliestLossTime();
+        Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectionTimer.cancel(false);
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
@@ -79,9 +83,11 @@ public class RecoveryManager {
             // Old timer task was cancelled, but it still fired; just ignore.
             return;
         }
-        Instant lossTime = lossDetector.getLossTime();
+
+        PnSpaceLossTime earliestLossTime = getEarliestLossTime();
+        Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
-            lossDetector.detectLostPackets();
+            lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
         }
         else {
             log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
@@ -89,6 +95,23 @@ public class RecoveryManager {
             ptoCount++;
         }
         setLossDetectionTimer();
+    }
+
+    PnSpaceLossTime getEarliestLossTime() {
+        PnSpaceLossTime earliestLossTime = null;
+        for (EncryptionLevel pnSpace: EncryptionLevel.values()) {
+            Instant pnSpaceLossTime = lossDetectors[pnSpace.ordinal()].getLossTime();
+            if (pnSpaceLossTime != null) {
+                if (earliestLossTime == null) {
+                    earliestLossTime = new PnSpaceLossTime(pnSpace, pnSpaceLossTime);
+                } else {
+                    if (! earliestLossTime.lossTime.isBefore(pnSpaceLossTime)) {
+                        earliestLossTime = new PnSpaceLossTime(pnSpace, pnSpaceLossTime);
+                    }
+                }
+            }
+        }
+        return earliestLossTime;
     }
 
     ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
@@ -111,7 +134,7 @@ public class RecoveryManager {
     public void onAckReceived(AckFrame ackFrame, EncryptionLevel encryptionLevel) {
         ptoCount = 0;
         if (encryptionLevel == EncryptionLevel.App) {
-            lossDetector.onAckReceived(ackFrame);
+            lossDetectors[encryptionLevel.ordinal()].onAckReceived(ackFrame);
         }
     }
 
@@ -120,13 +143,13 @@ public class RecoveryManager {
             lastAckElicitingSent = sent;
         }
         if (packet.getEncryptionLevel() == EncryptionLevel.App) {
-            lossDetector.packetSent(packet, sent, packetLostCallback);
+            lossDetectors[packet.getEncryptionLevel().ordinal()].packetSent(packet, sent, packetLostCallback);
             setLossDetectionTimer();  // TODO: why call this for ack-only packets?
         }
     }
 
     private boolean ackElicitingInFlight() {
-        return lossDetector.ackElicitingInFlight();
+        return Stream.of(lossDetectors).anyMatch(detector -> detector.ackElicitingInFlight());
     }
 
     void shutdown() {
@@ -180,4 +203,13 @@ public class RecoveryManager {
         return timeFormatter.format(localTimeNow);
     }
 
+    static class PnSpaceLossTime {
+        public EncryptionLevel pnSpace;
+        public Instant lossTime;
+
+        public PnSpaceLossTime(EncryptionLevel pnSpace, Instant pnSpaceLossTime) {
+            this.pnSpace = pnSpace;
+            lossTime = pnSpaceLossTime;
+        }
+    }
 }
