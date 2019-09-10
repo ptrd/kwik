@@ -37,7 +37,8 @@ class RecoveryManagerTest extends RecoveryTests {
     private RecoveryManager recoveryManager;
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 40;
-    private int defaultRttVar = 10;
+    private int defaultRttVar = defaultRtt / 4;
+    private int epsilon = defaultRtt / 4;  // A small value to check for events that should occur at a specified time; the epsilon is the variance allowed.
     private ProbeSender probeSender;
     private RttEstimator rttEstimator;
 
@@ -89,7 +90,7 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
 
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
-        Thread.sleep(probeTimeout + 10);
+        Thread.sleep(probeTimeout + epsilon);
 
         verify(probeSender, times(1)).sendProbe();
     }
@@ -102,16 +103,16 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
 
         int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
-        Thread.sleep(firstProbeTimeout + 10);
+        Thread.sleep(firstProbeTimeout + epsilon);
 
         verify(probeSender, times(1)).sendProbe();
 
         int secondProbeTimeout = firstProbeTimeout * 2;
-        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 20;
+        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 2 * epsilon;
         Thread.sleep(sleepTime);
         verify(probeSender, times(1)).sendProbe();  // Not yet
 
-        Thread.sleep(20 + 10);
+        Thread.sleep(2 * epsilon + 1 * epsilon);
         verify(probeSender, times(2)).sendProbe();  // Yet it should
     }
 
@@ -122,7 +123,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
 
-        Thread.sleep(probeTimeout + 10);
+        Thread.sleep(probeTimeout + 5 * epsilon);  // Because checking for "never", use large epsilon
 
         verify(probeSender, never()).sendProbe();
     }
@@ -130,7 +131,7 @@ class RecoveryManagerTest extends RecoveryTests {
     @Test
     void whenAckElicitingPacketsAreNotAckedProbeIsSentForLastOnly() throws InterruptedException {
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
-        int delta = 10;
+        int delta = epsilon;
         recoveryManager.packetSent(createPacket(10), Instant.now(), p -> {});
         Thread.sleep(probeTimeout - delta);
         recoveryManager.packetSent(createPacket(11), Instant.now(), p -> {});
@@ -179,16 +180,16 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
 
         int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
-        Thread.sleep(firstProbeTimeout + 10);
+        Thread.sleep(firstProbeTimeout + epsilon);
 
         verify(probeSender, times(1)).sendProbe();
 
         int secondProbeTimeout = firstProbeTimeout * 2;
-        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 20;
+        long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 2 * epsilon;
         Thread.sleep(sleepTime);
         verify(probeSender, times(1)).sendProbe();  // Not yet
 
-        Thread.sleep(20 + 10);
+        Thread.sleep(2 * epsilon + 1 * epsilon);
         verify(probeSender, times(2)).sendProbe();  // Yet it should
 
         // Receive Ack, should reset PTO count
@@ -196,7 +197,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         recoveryManager.packetSent(createPacket(5), Instant.now(), p -> {});
 
-        Thread.sleep(firstProbeTimeout + 10);
+        Thread.sleep(firstProbeTimeout + epsilon);
 
         verify(probeSender, times(3)).sendProbe();
     }
