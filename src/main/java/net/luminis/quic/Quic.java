@@ -39,9 +39,6 @@ public class Quic {
         cmdLineOptions.addOption("l", "log", true, "logging options: [pdrsiRSD]: " +
                 "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"is\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
-        cmdLineOptions.addOption("17", "use Quic version IETF_draft_17");
-        cmdLineOptions.addOption("18", "use Quic version IETF_draft_18");
-        cmdLineOptions.addOption("19", "use Quic version IETF_draft_19");
         cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("22", "use Quic version IETF_draft_22");
         cmdLineOptions.addOption("23", "use Quic version IETF_draft_23");
@@ -166,15 +163,6 @@ public class Quic {
         }
         else if (cmd.hasOption("20")) {
             quicVersion = Version.IETF_draft_20;
-        }
-        else if (cmd.hasOption("19")) {
-            quicVersion = Version.IETF_draft_19;
-        }
-        else if (cmd.hasOption("18")) {
-            quicVersion = Version.IETF_draft_18;
-        }
-        else if (cmd.hasOption("17")) {
-            quicVersion = Version.IETF_draft_17;
         }
 
         int connectionTimeout = 5;
