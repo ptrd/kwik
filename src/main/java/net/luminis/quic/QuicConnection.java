@@ -142,7 +142,8 @@ public class QuicConnection implements PacketProcessor {
      * Set up the connection with the server.
      */
     public void connect(int connectionTimeout) throws IOException {
-        connect(connectionTimeout, "hq-22");
+        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        connect(connectionTimeout, alpn);
     }
 
     public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
