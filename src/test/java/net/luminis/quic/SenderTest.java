@@ -126,24 +126,6 @@ class SenderTest {
     }
 
     @Test
-    void testRetransmit() throws Exception {
-        sender.start(null);
-
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial,"packet 1"), "packet 1", p -> {});
-
-        waitForSender();
-        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Initial)));
-        clearInvocations(socket);
-
-        try {
-            Thread.sleep(300);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.Initial)));
-    }
-
-    @Test
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
         sender.start(null);
 
@@ -159,7 +141,9 @@ class SenderTest {
         }
     }
 
+    @Test
     void receivingPacketLeadsToSendAckPacket() throws IOException  {
+        sender.start(null);
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
                 .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
 
@@ -178,24 +162,6 @@ class SenderTest {
         waitForSender();
 
         verify(socket, never()).send(any(DatagramPacket.class));
-    }
-
-    @Test
-    void handshakeCryptoShouldBeRetransmitWhenNotAcked() throws Exception {
-        sender.start(null);
-
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.Handshake,"packet H2"), "packet H2", p -> {});
-
-        waitForSender();
-        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.Handshake)));
-        clearInvocations(socket);
-
-        try {
-            Thread.sleep(300);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.Handshake)));
     }
 
 

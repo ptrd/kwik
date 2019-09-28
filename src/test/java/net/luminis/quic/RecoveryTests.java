@@ -18,10 +18,17 @@
  */
 package net.luminis.quic;
 
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 public abstract class RecoveryTests {
+
+    byte[] srcCid = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+    byte[] destCid = new byte[] { 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
 
     QuicPacket createPacket(int packetNumber, QuicFrame frame) {
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
@@ -43,4 +50,16 @@ public abstract class RecoveryTests {
         return packets;
     }
 
+    QuicPacket createCryptoPacket(int packetNumber) {
+        LongHeaderPacket packet = new InitialPacket(Version.getDefault(), srcCid, destCid, null, new CryptoFrame());
+        packet.packetNumber = packetNumber;
+        return packet;
+    }
+
+    // For debugging recovery tests....
+    String timeNow() {
+        LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+        return timeFormatter.format(localTimeNow);
+    }
 }

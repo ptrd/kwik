@@ -88,10 +88,15 @@ public class RttEstimator {
     }
 
     public int getRttVar() {
-        // Not exactly according to specification, but rtt-var is only used for computing PTO and in that computation,
-        // 4 * rtt-var should be at least 1; for this implementation, an rtt-var that is a few ms too large won't matter.
+        // Rtt-var is only used for computing PTO.
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-5.3
+        // "The initial probe timeout for a new connection or new path SHOULD be set to twice the initial RTT"
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-5.2.1
+        // "PTO = smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay"
+        // Hence, using an initial rtt-var of initial-rtt / 4, will result in an initial PTO of twice the initial RTT.
+        // After the first packet is received, the rttVar will be computed from the real RTT sample.
         if (rttVar == 0) {
-            return 1;
+            return initialRtt / 4;
         }
         else {
             return rttVar;

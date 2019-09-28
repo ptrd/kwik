@@ -203,4 +203,69 @@ class LossDetectorTest extends RecoveryTests {
 
         assertThat(lossDetector.getLossTime()).isNull();
     }
+
+    @Test
+    void detectUnacked() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        assertThat(lossDetector.unAcked()).isNotEmpty();
+    }
+
+    @Test
+    void ackedPacketIsNotDetectedAsUnacked() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(2));
+
+        assertThat(lossDetector.unAcked()).isEmpty();
+    }
+
+    @Test
+    void lostPacketIsNotDetectedAsUnacked() throws InterruptedException {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(3), Instant.now(), p -> {});
+
+        Thread.sleep(defaultRtt * 2);
+        lossDetector.onAckReceived(new AckFrame(3));  // So 2 will be lost.
+        lossDetector.detectLostPackets();
+
+        assertThat(lossDetector.unAcked()).isEmpty();
+    }
+
+    @Test
+    void nonAckElicitingIsNotDetectedAsUnacked() {
+        lossDetector.packetSent(createPacket(2, new AckFrame(0)), Instant.now(), p -> {});
+
+        assertThat(lossDetector.unAcked()).isEmpty();
+    }
+
+    @Test
+    void whenResetNoPacketsAreUnacked() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+        lossDetector.reset();
+
+        assertThat(lossDetector.unAcked()).isEmpty();
+    }
+
+    @Test
+    void whenResetLossTimeIsUnset() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(3), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(3));
+
+        lossDetector.detectLostPackets();
+        assertThat(lossDetector.getLossTime()).isNotNull();
+
+        lossDetector.reset();
+        assertThat(lossDetector.getLossTime()).isNull();
+    }
+
+    @Test
+    void whenResetNoAckElicitingAreInFlight() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        assertThat(lossDetector.ackElicitingInFlight()).isTrue();
+
+        lossDetector.reset();
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
 }

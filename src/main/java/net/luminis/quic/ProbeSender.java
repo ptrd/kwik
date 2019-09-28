@@ -18,7 +18,14 @@
  */
 package net.luminis.quic;
 
+import java.util.List;
+import java.util.function.Consumer;
+
 interface ProbeSender {
     
     void sendProbe();
+
+    void sendProbe(List<QuicFrame> frame, EncryptionLevel level);
+
+
 }

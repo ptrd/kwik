@@ -27,6 +27,9 @@ import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -165,6 +168,7 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.onAckReceived(new AckFrame(10), EncryptionLevel.App);
 
         // No Probe timeout yet!
+        Thread.sleep(epsilon);
         verify(probeSender, never()).sendProbe();
 
         Thread.sleep(probeTimeout / 2);
@@ -218,6 +222,23 @@ class RecoveryManagerTest extends RecoveryTests {
 
         assertThat(recoveryManager.getEarliestLossTime().pnSpace.ordinal()).isEqualTo(2);
     }
+
+    @Test
+    void initialPacketRetransmit() throws InterruptedException {
+
+        Instant firstPacketTime = Instant.now();
+        recoveryManager.packetSent(createCryptoPacket(0), firstPacketTime, lostPacket -> lostPacketHandler.process(lostPacket));
+        Duration delay = Duration.between(firstPacketTime, Instant.now());
+
+        Thread.sleep(((int) (defaultRtt * 1.8)) - delay.toMillis());
+        verify(probeSender, times(0)).sendProbe(anyList(), any(EncryptionLevel.class));
+
+        Thread.sleep(((int) (defaultRtt * 0.2)) + delay.toMillis() + epsilon);
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+
+        verify(lostPacketHandler, times(0)).process(any(InitialPacket.class));
+    }
+
 
     private void mockSendingProbe(int... packetNumbers) {
         doAnswer(new Answer<Void>() {

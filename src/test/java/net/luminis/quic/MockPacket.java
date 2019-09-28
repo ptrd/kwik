@@ -71,7 +71,7 @@ public class MockPacket extends QuicPacket {
 
     @Override
     public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets) {
-        ByteBuffer buffer = ByteBuffer.allocate(packetSize);
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);
         buffer.putInt(encryptionLevel.ordinal());
         return buffer.array();

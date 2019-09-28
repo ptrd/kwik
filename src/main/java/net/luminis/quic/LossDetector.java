@@ -56,8 +56,7 @@ public class LossDetector {
                 packetSentLog.get(pn).acked = true;
             }
             else if (!packetSentLog.containsKey(pn)) {
-                // for the tests
-                throw new RuntimeException();
+                // Incorrect ack received.
             }
         });
 
@@ -114,6 +113,14 @@ public class LossDetector {
         return inflight;
     }
 
+    List<QuicPacket> unAcked() {
+        return packetSentLog.values().stream()
+                .filter(p -> !p.acked && !p.lost)
+                .filter(p -> !p.packet.isAckOnly())
+                .map(p -> p.packet)
+                .collect(Collectors.toList());
+    }
+
     // For debugging
     List<PacketAckStatus> getInFlight() {
         return packetSentLog.values().stream()
@@ -135,6 +142,11 @@ public class LossDetector {
         packetAckStatus.lostPacketCallback.accept(packetAckStatus.packet);
         packetAckStatus.lost = true;
         lost++;
+    }
+
+    public void reset() {
+        packetSentLog.clear();
+        lossTime = null;
     }
 
     private static class PacketAckStatus {

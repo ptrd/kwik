@@ -18,11 +18,13 @@
  */
 package net.luminis.quic;
 
+import javax.sound.midi.SysexMessage;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -90,11 +92,30 @@ public class RecoveryManager {
             lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
         }
         else {
-            log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
-            sender.sendProbe();
+            sendProbe();
             ptoCount++;
         }
         setLossDetectionTimer();
+    }
+
+    private void sendProbe() {
+        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        List<QuicPacket> unAckedInitialPackets = lossDetectors[EncryptionLevel.Initial.ordinal()].unAcked();
+        if (! unAckedInitialPackets.isEmpty()) {
+            // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
+            // All frames need to be resent, because Initial packet wil contain padding.
+            sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial);
+        }
+        else {
+            List<QuicPacket> handshakes = lossDetectors[EncryptionLevel.Handshake.ordinal()].unAcked();
+
+            if (! handshakes.isEmpty()) {
+                // TODO
+            }
+            else {
+                sender.sendProbe();
+            }
+        }
     }
 
     PnSpaceLossTime getEarliestLossTime() {
@@ -133,19 +154,16 @@ public class RecoveryManager {
 
     public void onAckReceived(AckFrame ackFrame, EncryptionLevel encryptionLevel) {
         ptoCount = 0;
-        if (encryptionLevel == EncryptionLevel.App) {
-            lossDetectors[encryptionLevel.ordinal()].onAckReceived(ackFrame);
-        }
+        lossDetectors[encryptionLevel.ordinal()].onAckReceived(ackFrame);
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (packet.isAckEliciting()) {
             lastAckElicitingSent = sent;
         }
-        if (packet.getEncryptionLevel() == EncryptionLevel.App) {
-            lossDetectors[packet.getEncryptionLevel().ordinal()].packetSent(packet, sent, packetLostCallback);
-            setLossDetectionTimer();  // TODO: why call this for ack-only packets?
-        }
+
+        lossDetectors[packet.getEncryptionLevel().ordinal()].packetSent(packet, sent, packetLostCallback);
+        setLossDetectionTimer();  // TODO: why call this for ack-only packets?
     }
 
     private boolean ackElicitingInFlight() {
@@ -158,6 +176,10 @@ public class RecoveryManager {
 
     public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
+    }
+
+    public void stopRecovery(EncryptionLevel level) {
+        lossDetectors[level.ordinal()].reset();
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {

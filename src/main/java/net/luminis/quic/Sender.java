@@ -48,8 +48,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
-    private volatile boolean cryptoInFlight;
-    private volatile int failedCryptoRetries;
     private final RttEstimator rttEstimater;
     private QuicConnection connection;
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
@@ -57,9 +55,8 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
     private RecoveryManager recoveryManager;
-
-
     private int receiverMaxAckDelay;
+
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
         this.socket = socket;
@@ -85,6 +82,14 @@ public class Sender implements ProbeSender, FrameProcessor {
     public void send(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
         log.debug("queing " + packet);
         incomingPacketQueue.add(new WaitingPacket(packet, logMessage, packetLostCallback));
+    }
+
+    public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
+        QuicPacket packet = connection.createPacket(level, frames.get(0));
+        for (int i = 1; i < frames.size(); i++) {
+            packet.addFrame(frames.get(i));
+        }
+        connection.send(packet, "probe with data");
     }
 
     public void start(ConnectionSecrets secrets) {
@@ -222,9 +227,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
         computeRttSample(ackFrame, encryptionLevel, timeReceived);
 
-        if (encryptionLevel == EncryptionLevel.App) {
-            recoveryManager.onAckReceived(ackFrame, encryptionLevel);
-        }
+        recoveryManager.onAckReceived(ackFrame, encryptionLevel);
 
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             PacketId id = new PacketId(encryptionLevel, pn);
@@ -235,22 +238,6 @@ public class Sender implements ProbeSender, FrameProcessor {
                 packetSentLog.get(id).acked = true;
             }
         });
-
-        if (cryptoInFlight) {
-            failedCryptoRetries = 0;  // When an ack is received, reset the timeout value for crypto timeouts.
-            cryptoInFlight = packetSentLog.values().stream()
-                    .filter(p -> !p.acked && !p.resent)
-                    .filter(p -> p.packet.isCrypto())
-                    .findFirst()
-                    .isPresent();
-            if (!cryptoInFlight) {
-                log.debug("No crypto in flight anymore.");
-            }
-            else {
-                log.debug("Still crypto in flight: " + packetSentLog.values().stream().filter(p -> p.packet.isCrypto())
-                        .map(p -> p.packet).collect(Collectors.toList()));
-            }
-        }
     }
 
     private void computeRttSample(AckFrame ack, EncryptionLevel encryptionLevel, Instant timeReceived) {
@@ -262,45 +249,8 @@ public class Sender implements ProbeSender, FrameProcessor {
     }
 
     private void logSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        if (packet.isCrypto()) {
-            if (!cryptoInFlight) {
-                log.debug("Start crypto in flight.");
-            }
-            cryptoInFlight = true;
-        }
         packetSentLog.put(packet.getId(), new PacketAckStatus(sent, packet));
-        if (packet.getEncryptionLevel() == EncryptionLevel.App) {
-            recoveryManager.packetSent(packet, sent, packetLostCallback);
-        }
-        int rtt = rttEstimater.getSmoothedRtt();
-        int timeout = (int) (2 * rtt * Math.pow(2, failedCryptoRetries));
-        schedule(() -> checkIsAcked(packet.getId()), timeout, TimeUnit.MILLISECONDS);
-    }
-
-    private void checkIsAcked(PacketId id) {
-        if (cryptoInFlight) {
-            // TODO: all unack'd crypto's should be resent, but for a client there can only be one (i think)
-            PacketAckStatus ackStatus = packetSentLog.get(id);
-            if (ackStatus.packet.isCrypto() && !ackStatus.acked) {
-                if (ackStatus.resent) {
-                    throw new IllegalStateException();
-                }
-                if (! ackStatus.packet.isCrypto()) {
-                    throw new IllegalStateException();
-                }
-                failedCryptoRetries++;
-                log.debug("Packet " + id + " not acked; retransmitting");
-                retransmit(ackStatus);
-            }
-        }
-    }
-
-    private void retransmit(PacketAckStatus packetStatus) {
-        QuicPacket packet = packetStatus.packet;
-        packetStatus.resent = true;
-        QuicPacket newPacket = packet.copy();
-        send(newPacket, "retransmit " + packet.getId(), p -> {});
-        log.recovery("Retransmitted crypto, because lost packet " + packet);
+        recoveryManager.packetSent(packet, sent, packetLostCallback);
     }
 
     void logStatistics() {
@@ -308,17 +258,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         packetSentLog.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e -> e.getValue()).forEach(e -> {
             log.stats(e.packet.getId() + "\t" + e.status() + "\t" + e.packet);
         });
-    }
-
-    void schedule(Runnable runnable, int timeout, TimeUnit timeUnit) {
-        scheduler.schedule(() -> {
-            try {
-                runnable.run();
-            }
-            catch (Exception error) {
-                log.error("Runtime exception occurred while processing scheduled task", error);
-            }
-        }, timeout, timeUnit);
     }
 
     public CongestionController getCongestionController() {
@@ -333,6 +272,10 @@ public class Sender implements ProbeSender, FrameProcessor {
     @Override
     public void sendProbe() {
         connection.ping();
+    }
+
+    public void stopRecovery(EncryptionLevel level) {
+        recoveryManager.stopRecovery(level);
     }
 
 
