@@ -35,7 +35,7 @@ public class QuicConstants {
         initial_max_streams_uni(9),
         ack_delay_exponent(10),
         max_ack_delay(11),
-        disable_migration(12),
+        disable_active_migration(12),
         preferred_address(13),
         active_connection_id_limit(14),
         // (65535)

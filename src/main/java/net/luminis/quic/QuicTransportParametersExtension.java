@@ -221,7 +221,7 @@ public class QuicTransportParametersExtension extends Extension {
             long maxUniStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
         }
-        else if (parameterId == disable_migration.value) {
+        else if (parameterId == disable_active_migration.value) {
             log.debug("- disable migration");
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
