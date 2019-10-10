@@ -212,7 +212,7 @@ public class QuicStream {
 
         @Override
         public void write(int dataByte) throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false), f -> {});
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false), this::retransmitStreamFrame);
             currentOffset += 1;
         }
 
@@ -223,7 +223,7 @@ public class QuicStream {
 
         @Override
         public void close() throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), f -> {});
+            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame);
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {

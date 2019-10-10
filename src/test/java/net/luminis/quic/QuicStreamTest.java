@@ -377,6 +377,34 @@ class QuicStreamTest {
         assertThat(retransmittedFrame.getMaxData()).isGreaterThanOrEqualTo(lostFrame.getMaxData() + (int) (initialWindow * factor / 2));
     }
 
+    @Test
+    void lostFinalFrameShouldBeRetransmitted() throws IOException {
+        quicStream.getOutputStream().write("just a stream frame".getBytes());
+        verify(connection, times(1)).send(any(QuicFrame.class), any(Consumer.class));
+
+        quicStream.getOutputStream().close();  // Close will send an empty final frame.
+
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection, times(2)).send(resendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+
+        QuicFrame lostFrame = resendFrameCaptor.getValue();
+        Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
+
+        // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
+        lostFrameCallback.accept(lostFrame);
+
+        ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+
+        verify(connection, times(3)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+
+        QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
+
+        assertThat(retransmittedFrame).isInstanceOf(StreamFrame.class);
+        assertThat(((StreamFrame) retransmittedFrame).isFinal()).isTrue();
+    }
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {
