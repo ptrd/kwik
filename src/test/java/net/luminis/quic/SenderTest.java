@@ -164,6 +164,34 @@ class SenderTest {
         verify(socket, never()).send(any(DatagramPacket.class));
     }
 
+    @Test
+    void whenWaitForCongestionControllerIsInteruptedBecauseOfProcessedPacketWaitingPacketShouldRemainWaiting() throws Exception {
+        setCongestionWindowSize(1212);
+        sender.start(null);
+
+        // Send first packet to fill up cwnd
+        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new AckFrame(), "first packet");
+        sender.send(firstPacket, "first packet", p -> {});
+        waitForSender();
+        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
+        reset(socket);
+
+        // Send second packet and third packet, which will both be queued because of cwnd
+        sender.send(new MockPacket(1, 1200, EncryptionLevel.App, new AckFrame(), "large packet"), "large packet", p -> {});
+        waitForSender();
+        sender.send(new MockPacket(2, 120, EncryptionLevel.App, new AckFrame(), "third packet"), "third packet", p -> {});
+        waitForSender();
+
+        // Simulate incoming packet; sender will be interrupted because maybe an ack must be sent.
+        sender.packetProcessed(EncryptionLevel.App);
+
+        // Now, increase cwnd.
+        sender.getCongestionController().registerAcked(firstPacket);
+        waitForSender();
+        // The first waiting packet should be sent.
+        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));
+    }
+
 
     private PacketMatcher matchesPacket(int packetNumber, EncryptionLevel encryptionLevel ) {
         return new PacketMatcher(packetNumber, encryptionLevel);

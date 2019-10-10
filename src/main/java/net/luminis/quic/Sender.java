@@ -135,7 +135,12 @@ public class Sender implements ProbeSender, FrameProcessor {
                         log.debug("Congestion controller will not allow sending queued packet " + packet);
                         log.debug("Non-acked packets: " + getNonAcknowlegded());
                         hasBeenWaiting = true;
-                        congestionController.waitForUpdate();
+                        try {
+                            congestionController.waitForUpdate();
+                        }
+                        catch (InterruptedException interrupted) {
+                            log.debug("Wait for CC update is interrupted");
+                        }
                         log.debug("re-evaluating");
                     }
 
@@ -164,6 +169,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                 }
                 catch (InterruptedException interrupted) {
                     // Someone interrupted, maybe because an Ack has to be sent.
+                    log.debug("Sender wait interrupted...");
                 }
             }
         }
