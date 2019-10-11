@@ -530,6 +530,24 @@ public class QuicConnection implements PacketProcessor {
                 //   by its peer."
                 retireSourceConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
             }
+            else if (frame instanceof ConnectionCloseFrame) {
+                ConnectionCloseFrame close = (ConnectionCloseFrame) frame;
+                if (close.hasTransportError()) {
+                    if (close.hasTlsError()) {
+                        log.error("Connection closed by peer with TLS error " + close.getTlsError() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
+                    }
+                    else {
+                        log.error("Connection closed by peer with transport error " + close.getErrorCode() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
+                    }
+                }
+                else if (close.hasApplicationProtocolError()) {
+                    log.error("Connection closed by peer with application protocol error " + close.getErrorCode() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
+                }
+                else {
+                    log.info("Peer is closing the connection.");
+                }
+                abortConnection(null);
+            }
             else {
                 log.debug("Ignoring " + frame);
             }
@@ -644,7 +662,9 @@ public class QuicConnection implements PacketProcessor {
             connectionState = Status.Error;
         }
 
+        if (error != null) {
         log.error("Aborting connection because of error", error);
+        }
         handshakeFinishedCondition.countDown();
         sender.shutdown();
         receiver.shutdown();

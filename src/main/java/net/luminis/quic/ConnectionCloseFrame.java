@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 
 public class ConnectionCloseFrame extends QuicFrame {
@@ -26,12 +27,13 @@ public class ConnectionCloseFrame extends QuicFrame {
     private int triggeringFrameType;
     private byte[] reasonPhrase;
     private int tlsError = -1;
+    private int frameType;
 
     public ConnectionCloseFrame(Version quicVersion) {
     }
 
     public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) {
-        int frameType = buffer.get() & 0xff;
+        frameType = buffer.get() & 0xff;
         if (frameType != 0x1c && frameType != 0x1d) {
             throw new RuntimeException();  // Programming error
         }
@@ -45,17 +47,54 @@ public class ConnectionCloseFrame extends QuicFrame {
             reasonPhrase = new byte[reasonPhraseLength];
             buffer.get(reasonPhrase);
         }
-        else {
-            reasonPhrase = new byte[0];
-        }
 
         if (errorCode > 256) {
             tlsError = errorCode - 256;
         }
 
-        // TODO: move to frame post processing
-        log.error("Connection closed by peer with " + (tlsError >= 0? "TLS error " + tlsError: "error code " + errorCode) );
         return this;
+    }
+
+    public boolean hasTransportError() {
+        return frameType == 0x1c && errorCode != 0;
+    }
+
+    public boolean hasTlsError() {
+        return errorCode >= 0x0100 && errorCode < 0x0200;
+    }
+
+    public long getTlsError() {
+        if (hasTlsError()) {
+            return errorCode - 0x0100;
+        }
+        else {
+            throw new IllegalStateException("Close does not have a TLS error");
+        }
+    }
+
+    public int getErrorCode() {
+        return errorCode;
+    }
+
+    public boolean hasReasonPhrase() {
+        return reasonPhrase != null;
+    }
+
+    public String getReasonPhrase() {
+        try {
+            return new String(reasonPhrase, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            // Impossible: UTF-8 is always supported.
+            return null;
+        }
+    }
+
+    public boolean hasApplicationProtocolError() {
+        return frameType == 0x1d && errorCode != 0;
+    }
+
+    public boolean hasError() {
+        return hasTransportError() || hasApplicationProtocolError();
     }
 
     @Override
