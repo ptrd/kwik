@@ -182,6 +182,10 @@ public class RecoveryManager {
         lossDetectors[level.ordinal()].reset();
     }
 
+    public long getLost() {
+        return Stream.of(lossDetectors).mapToLong(ld -> ld.getLost()).sum();
+    }
+
     private static class NullScheduledFuture implements ScheduledFuture<Void> {
         @Override
         public int compareTo(Delayed o) {

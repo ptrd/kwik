@@ -56,6 +56,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
     private RecoveryManager recoveryManager;
     private int receiverMaxAckDelay;
+    private volatile long sent;
 
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
@@ -254,9 +255,10 @@ public class Sender implements ProbeSender, FrameProcessor {
         }
     }
 
-    private void logSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        packetSentLog.put(packet.getId(), new PacketAckStatus(sent, packet));
-        recoveryManager.packetSent(packet, sent, packetLostCallback);
+    private void logSent(QuicPacket packet, Instant sendTime, Consumer<QuicPacket> packetLostCallback) {
+        sent++;
+        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
+        recoveryManager.packetSent(packet, sendTime, packetLostCallback);
     }
 
     void logStatistics() {
@@ -273,6 +275,13 @@ public class Sender implements ProbeSender, FrameProcessor {
     public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
         recoveryManager.setReceiverMaxAckDelay(receiverMaxAckDelay);
+    }
+
+    public Statistics getStats() {
+        Statistics stats = new Statistics();
+        stats.setSent(sent);
+        stats.setLost(recoveryManager.getLost());
+        return stats;
     }
 
     @Override

@@ -149,6 +149,10 @@ public class LossDetector {
         lossTime = null;
     }
 
+    public long getLost() {
+        return lost;
+    }
+
     private static class PacketAckStatus {
         final Instant timeSent;
         final QuicPacket packet;

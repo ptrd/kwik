@@ -663,7 +663,7 @@ public class QuicConnection implements PacketProcessor {
         }
 
         if (error != null) {
-        log.error("Aborting connection because of error", error);
+            log.error("Aborting connection because of error", error);
         }
         handshakeFinishedCondition.countDown();
         sender.shutdown();
@@ -712,6 +712,10 @@ public class QuicConnection implements PacketProcessor {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
             sourceConnectionIds.remove(sequenceNr);
         }
+    }
+
+    public Statistics getStats() {
+        return sender.getStats();
     }
 
 
