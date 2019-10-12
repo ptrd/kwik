@@ -43,10 +43,10 @@ public class RecoveryManager {
     private volatile Instant timerExpiration;
 
 
-    RecoveryManager(RttEstimator rttEstimater, ProbeSender sender, Logger logger) {
+    RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         for (EncryptionLevel pnSpace: EncryptionLevel.values()) {
-            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater);
+            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);
         }
         this.sender = sender;
         log = logger;

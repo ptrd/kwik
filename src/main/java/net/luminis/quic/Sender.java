@@ -74,7 +74,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         packetSentLog = new ConcurrentHashMap<>();
         congestionController = new CongestionController(log);
         rttEstimater = new RttEstimator(log);
-        recoveryManager = new RecoveryManager(rttEstimater, this, log);
+        recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
 
         ackGenerators = new AckGenerator[3];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
@@ -241,7 +241,6 @@ public class Sender implements ProbeSender, FrameProcessor {
             if (packetSentLog.containsKey(id)) {
                 Duration ackDuration = Duration.between(Instant.now(), packetSentLog.get(id).timeSent);
                 log.debug("Ack duration for " + id + ": " + ackDuration);
-                congestionController.registerAcked(packetSentLog.get(id).packet);
                 packetSentLog.get(id).acked = true;
             }
         });

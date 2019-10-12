@@ -31,6 +31,7 @@ public class LossDetector {
 
     private final RecoveryManager recoveryManager;
     private final RttEstimator rttEstimater;
+    private final CongestionController congestionController;
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketAckStatus> packetSentLog;
@@ -39,9 +40,10 @@ public class LossDetector {
     private volatile Instant lossTime;
 
 
-    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator) {
+    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController) {
         this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
+        this.congestionController = congestionController;
         packetSentLog = new ConcurrentHashMap<>();
     }
 
@@ -54,6 +56,7 @@ public class LossDetector {
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             if (packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked) {
                 packetSentLog.get(pn).acked = true;
+                congestionController.registerAcked(packetSentLog.get(pn).packet);
             }
             else if (!packetSentLog.containsKey(pn)) {
                 // Incorrect ack received.
