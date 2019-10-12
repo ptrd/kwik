@@ -145,6 +145,7 @@ public class LossDetector {
         packetAckStatus.lostPacketCallback.accept(packetAckStatus.packet);
         packetAckStatus.lost = true;
         lost++;
+        congestionController.registerLost(packetAckStatus.packet);
     }
 
     public void reset() {

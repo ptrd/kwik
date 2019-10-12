@@ -20,15 +20,17 @@ package net.luminis.quic;
 
 public interface CongestionController {
 
-    boolean canSend(int bytes);
+    void registerInFlight(QuicPacket sentPacket);
 
     void registerAcked(QuicPacket acknowlegdedPacket);
 
-    void registerInFlight(QuicPacket sentPacket);
+    void registerLost(QuicPacket lostPacket);
 
-    void waitForUpdate() throws InterruptedException;
+    boolean canSend(int bytes);
+
+    long getBytesInFlight();
 
     void reset();
 
-    long getBytesInFlight();
+    void waitForUpdate() throws InterruptedException;
 }

@@ -57,6 +57,14 @@ public class FixedWindowCongestionController implements CongestionController {
     }
 
     @Override
+    public void registerLost(QuicPacket lostPacket) {
+        if (! lostPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
+            bytesInFlight -= lostPacket.getSize();
+            log.debug("Bytes in flight decreased to " + bytesInFlight);
+        }
+    }
+
+    @Override
     public synchronized void registerInFlight(QuicPacket sentPacket) {
         if (! sentPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
             bytesInFlight += sentPacket.getSize();
