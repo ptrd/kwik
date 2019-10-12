@@ -29,4 +29,6 @@ public interface CongestionController {
     void waitForUpdate() throws InterruptedException;
 
     void reset();
+
+    long getBytesInFlight();
 }

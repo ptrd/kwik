@@ -47,19 +47,23 @@ public class FixedWindowCongestionController implements CongestionController {
 
     @Override
     public synchronized void registerAcked(QuicPacket acknowlegdedPacket) {
-        bytesInFlight -= acknowlegdedPacket.getSize();
-        log.debug("Bytes in flight decreased to " + bytesInFlight);
-        synchronized (lock) {
-            lock.notifyAll();
+        if (! acknowlegdedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
+            bytesInFlight -= acknowlegdedPacket.getSize();
+            log.debug("Bytes in flight decreased to " + bytesInFlight);
+            synchronized (lock) {
+                lock.notifyAll();
+            }
         }
     }
 
     @Override
     public synchronized void registerInFlight(QuicPacket sentPacket) {
-        bytesInFlight += sentPacket.getSize();
-        log.debug("Bytes in flight increased to " + bytesInFlight);
-        synchronized (lock) {
-            lock.notifyAll();
+        if (! sentPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
+            bytesInFlight += sentPacket.getSize();
+            log.debug("Bytes in flight increased to " + bytesInFlight);
+            synchronized (lock) {
+                lock.notifyAll();
+            }
         }
     }
 
@@ -74,6 +78,11 @@ public class FixedWindowCongestionController implements CongestionController {
     public void reset() {
         log.debug("Resetting congestion controller.");
         bytesInFlight = 0;
+    }
+
+    @Override
+    public long getBytesInFlight() {
+        return bytesInFlight;
     }
 }
 
