@@ -40,7 +40,7 @@ class LossDetectorTest extends RecoveryTests {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator);
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class));
     }
 
     @BeforeEach

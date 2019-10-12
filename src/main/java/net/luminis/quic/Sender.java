@@ -72,7 +72,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
         incomingPacketQueue = new LinkedBlockingQueue<>();
         packetSentLog = new ConcurrentHashMap<>();
-        congestionController = new CongestionController(log);
+        congestionController = new FixedWindowCongestionController(log);
         rttEstimater = new RttEstimator(log);
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
 

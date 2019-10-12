@@ -61,7 +61,7 @@ class QuicConnectionTest {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         InOrder recorder = inOrder(sender);
-        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
         new Thread(() -> {
             try {
@@ -90,7 +90,7 @@ class QuicConnectionTest {
     void testSecondRetryPacketShouldBeIgnored() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
         new Thread(() -> {
             try {
@@ -124,7 +124,7 @@ class QuicConnectionTest {
     void testRetryPacketWithIncorrectOriginalDestinationIdShouldBeDiscarded() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
         new Thread(() -> {
             try {
@@ -203,7 +203,7 @@ class QuicConnectionTest {
     private void simulateConnectionReceivingRetryPacket() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
         connection = Mockito.spy(connection);
 
         new Thread(() -> {
@@ -225,7 +225,7 @@ class QuicConnectionTest {
     private void simulateNormalConnection() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new CongestionController(logger));
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
         connection = Mockito.spy(connection);
 
         new Thread(() -> {

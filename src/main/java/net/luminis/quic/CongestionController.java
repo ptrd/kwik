@@ -18,56 +18,15 @@
  */
 package net.luminis.quic;
 
-/**
- * A simplistic static congestion controller, that does not allow more than approx. one packetsize in flight.
- */
-public class CongestionController {
+public interface CongestionController {
 
-    private final Logger log;
-    private final Object lock = new Object();
+    boolean canSend(int bytes);
 
-    // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-7.9.1
-    // "The RECOMMENDED value is the minimum of 10 * kMaxDatagramSize and max(2* kMaxDatagramSize, 14600))."
-    // "kMaxDatagramSize: The RECOMMENDED value is 1200 bytes."
-    private static final int initialWindowSize = 10 * 1200;
+    void registerAcked(QuicPacket acknowlegdedPacket);
 
-    private int bytesInFlight;
-    private int congestionWindow;
+    void registerInFlight(QuicPacket sentPacket);
 
+    void waitForUpdate() throws InterruptedException;
 
-    public CongestionController(Logger logger) {
-        this.log = logger;
-        congestionWindow = initialWindowSize;
-    }
-
-    public synchronized boolean canSend(int bytes) {
-        return bytesInFlight + bytes < congestionWindow;
-    }
-
-    public synchronized void registerAcked(QuicPacket acknowlegdedPacket) {
-        bytesInFlight -= acknowlegdedPacket.getSize();
-        log.debug("Bytes in flight decreased to " + bytesInFlight);
-        synchronized (lock) {
-            lock.notifyAll();
-        }
-    }
-
-    public synchronized void registerInFlight(QuicPacket sentPacket) {
-        bytesInFlight += sentPacket.getSize();
-        log.debug("Bytes in flight increased to " + bytesInFlight);
-        synchronized (lock) {
-            lock.notifyAll();
-        }
-    }
-
-    public void waitForUpdate() throws InterruptedException {
-        synchronized (lock) {
-            lock.wait();
-        }
-    }
-
-    public void reset() {
-        log.debug("Resetting congestion controller.");
-        bytesInFlight = 0;
-    }
+    void reset();
 }

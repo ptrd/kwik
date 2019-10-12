@@ -52,7 +52,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
         probeSender = mock(ProbeSender.class);
-        recoveryManager = new RecoveryManager(rttEstimator, probeSender, mock(Logger.class));
+        recoveryManager = new RecoveryManager(rttEstimator, mock(CongestionController.class), probeSender, mock(Logger.class));
     }
 
     @BeforeEach
