@@ -186,7 +186,7 @@ class SenderTest {
         sender.packetProcessed(EncryptionLevel.App);
 
         // Now, increase cwnd.
-        sender.getCongestionController().registerAcked(firstPacket);
+        sender.getCongestionController().registerAcked(new PacketInfo(null, firstPacket, null));
         waitForSender();
         // The first waiting packet should be sent.
         verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));

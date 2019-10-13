@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import java.util.List;
+
 /**
  * A simplistic congestion controller that has a fixed window size.
  */
@@ -46,9 +48,10 @@ public class FixedWindowCongestionController implements CongestionController {
     }
 
     @Override
-    public synchronized void registerAcked(QuicPacket acknowlegdedPacket) {
-        if (! acknowlegdedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
-            bytesInFlight -= acknowlegdedPacket.getSize();
+    public synchronized void registerAcked(PacketInfo acknowlegdedPacketInfo) {
+        QuicPacket ackedPacket = acknowlegdedPacketInfo.packet;
+        if (! ackedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
+            bytesInFlight -= ackedPacket.getSize();
             log.debug("Bytes in flight decreased to " + bytesInFlight);
             synchronized (lock) {
                 lock.notifyAll();
@@ -57,9 +60,15 @@ public class FixedWindowCongestionController implements CongestionController {
     }
 
     @Override
-    public void registerLost(QuicPacket lostPacket) {
-        if (! lostPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
-            bytesInFlight -= lostPacket.getSize();
+    public void registerLost(List<? extends PacketInfo> lostPackets) {
+        long lostBytes = lostPackets.stream()
+                .map(packetStatus -> packetStatus.packet)
+                .filter(lostPacket -> !lostPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame))
+                .mapToInt(packet -> packet.getSize())
+                .sum();
+        bytesInFlight -= lostBytes;
+
+        if (lostBytes > 0) {
             log.debug("Bytes in flight decreased to " + bytesInFlight);
         }
     }

@@ -20,10 +20,11 @@ package net.luminis.quic;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
+
+import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.in;
 import static org.mockito.Mockito.mock;
 
 
@@ -33,6 +34,9 @@ import static org.mockito.Mockito.mock;
 class CongestionControllerTest {
 
     private CongestionController congestionController;
+
+    // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
+    private Instant whenever = Instant.now();
 
     @BeforeEach
     void initObjectUnderTest() {
@@ -57,7 +61,7 @@ class CongestionControllerTest {
         congestionController.registerInFlight(new MockPacket(new Padding(100), new AckFrame(0)));
 
         long inFlight = congestionController.getBytesInFlight();
-        congestionController.registerAcked(ackOnlyPacket);
+        congestionController.registerAcked(new PacketInfo(whenever, ackOnlyPacket, this::noOp));
         assertThat(congestionController.getBytesInFlight()).isEqualTo(inFlight);
     }
 
@@ -76,7 +80,7 @@ class CongestionControllerTest {
         congestionController.registerInFlight(packet);
         assertThat(congestionController.getBytesInFlight()).isGreaterThan(initiallyInFlight);
 
-        congestionController.registerLost(packet);
+        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
 
         assertThat(congestionController.getBytesInFlight()).isEqualTo(initiallyInFlight);
     }
@@ -87,8 +91,11 @@ class CongestionControllerTest {
         congestionController.registerInFlight(ackOnlyPacket);
         long inFlight = congestionController.getBytesInFlight();
 
-        congestionController.registerLost(ackOnlyPacket);
+        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), ackOnlyPacket, this::noOp)));
 
         assertThat(congestionController.getBytesInFlight()).isEqualTo(inFlight);
     }
+
+    void noOp(QuicPacket packet) {}
+
 }

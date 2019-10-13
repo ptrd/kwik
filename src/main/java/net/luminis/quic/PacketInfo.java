@@ -18,21 +18,31 @@
  */
 package net.luminis.quic;
 
-import java.util.List;
+import java.time.Instant;
+import java.util.function.Consumer;
 
-public interface CongestionController {
+class PacketInfo {
 
-    void registerInFlight(QuicPacket sentPacket);
+    final Instant timeSent;
+    final QuicPacket packet;
+    final Consumer<QuicPacket> lostPacketCallback;
 
-    void registerAcked(PacketInfo acknowlegdedPacket);
+    public PacketInfo(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
+        this.timeSent = sent;
+        this.packet = packet;
+        this.lostPacketCallback = lostPacketCallback;
+    }
 
-    void registerLost(List<? extends PacketInfo> lostPackets);
+    public Instant timeSent() {
+        return timeSent;
+    }
 
-    boolean canSend(int bytes);
+    @Override
+    public String toString() {
+        return "Packet "
+            + packet.getEncryptionLevel().name().charAt(0) + "|"
+            + (packet.packetNumber >= 0? packet.packetNumber: ".");
+    }
 
-    long getBytesInFlight();
-
-    void reset();
-
-    void waitForUpdate() throws InterruptedException;
 }
+
