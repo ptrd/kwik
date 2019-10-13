@@ -43,6 +43,11 @@ class CongestionControllerTest {
         congestionController = new FixedWindowCongestionController(mock(Logger.class));
     }
 
+    @Test
+    void initialValueForCwnd() {
+        assertThat(congestionController.getWindowSize()).isEqualTo(12_000);
+    }
+
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-3
     // "Packets that contain only ACK frames do not count toward
     //      congestion control limits"

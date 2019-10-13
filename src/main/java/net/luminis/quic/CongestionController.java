@@ -32,6 +32,8 @@ public interface CongestionController {
 
     long getBytesInFlight();
 
+    long getWindowSize();
+
     void reset();
 
     void waitForUpdate() throws InterruptedException;

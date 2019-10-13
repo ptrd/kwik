@@ -216,7 +216,7 @@ class SenderTest {
 
     private void setCongestionWindowSize(int cwnd) throws Exception {
         CongestionController congestionController = sender.getCongestionController();
-        FieldSetter.setField(congestionController, congestionController.getClass().getDeclaredField("congestionWindow"), cwnd);
+        FieldSetter.setField(congestionController, congestionController.getClass().getSuperclass().getDeclaredField("congestionWindow"), cwnd);
     }
 
     static class PacketMatcher implements ArgumentMatcher<DatagramPacket> {
