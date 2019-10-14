@@ -184,7 +184,44 @@ class NewRenoCongestionControllerTest {
         assertThat(congestionController.getWindowSize()).isGreaterThanOrEqualTo(2400);
     }
 
-    // TODO: congestion avoidance
+    @Test
+    void congestionAvoidance() {
+        long initialCwnd = congestionController.getWindowSize();
+        assertThat(initialCwnd).isEqualTo(12000);
+
+        QuicPacket packet = new MockPacket(new Padding(800));
+        congestionController.registerInFlight(packet);
+        congestionController.registerLost(List.of(new PacketInfo(whenever, packet, this::noOp)));
+
+        // As tested before (whenPacketLostCongestionWindowHalves)
+        assertThat(congestionController.getWindowSize()).isEqualTo(6000);
+
+        assertThat(((NewRenoCongestionController) congestionController).getMode()).isEqualTo(NewRenoCongestionController.Mode.CongestionAvoidance);
+
+        MockPacket newPacket = new MockPacket(0, 1000, EncryptionLevel.App);
+        congestionController.registerInFlight(newPacket);
+        congestionController.registerAcked(new PacketInfo(Instant.now(), newPacket, this::noOp));
+        // cwnd was 6000; congestion avoidance adds 1200 * 1000 / 6000 = 200
+        assertThat(congestionController.getWindowSize()).isEqualTo(6200);
+    }
+
+    @Test
+    void onceInCongestionAvoidanceModeItNeverLeavesThatMode() {
+        QuicPacket packet = new MockPacket(new Padding(800));
+        congestionController.registerInFlight(packet);
+        congestionController.registerLost(List.of(new PacketInfo(whenever, packet, this::noOp)));
+
+        assertThat(((NewRenoCongestionController) congestionController).getMode()).isEqualTo(NewRenoCongestionController.Mode.CongestionAvoidance);
+
+        congestionController.registerInFlight(packet);
+        congestionController.registerInFlight(packet);
+        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
+        congestionController.registerInFlight(packet);
+        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
+        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
+
+        assertThat(((NewRenoCongestionController) congestionController).getMode()).isEqualTo(NewRenoCongestionController.Mode.CongestionAvoidance);
+    }
 
     private void noOp(QuicPacket packet) {}
 }

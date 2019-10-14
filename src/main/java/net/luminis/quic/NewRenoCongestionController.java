@@ -39,6 +39,8 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     // "Minimum congestion window in bytes.  The RECOMMENDED value is 2 * kMaxDatagramSize."
     protected int kMinimumWindow = 2 * 1200;
 
+    protected int kMaxDatagramSize = 1200;
+
     private long slowStartThreshold = Long.MAX_VALUE;
     private Instant congestionRecoveryStartTime;
 
@@ -53,7 +55,14 @@ public class NewRenoCongestionController extends AbstractCongestionController im
         // "it defines the end of recovery as a packet sent after the start of recovery being acknowledged"
         if (acknowlegdedPacket.timeSent.isAfter(congestionRecoveryStartTime)) {
             super.registerAcked(acknowlegdedPacket);
-            congestionWindow += acknowlegdedPacket.packet.getSize();
+            if (congestionWindow < slowStartThreshold) {
+                // i.e. mode is slow start
+                congestionWindow += acknowlegdedPacket.packet.getSize();
+            }
+            else {
+                // i.e. mode is congestion avoidance
+                congestionWindow += kMaxDatagramSize * acknowlegdedPacket.packet.getSize() / congestionWindow;
+            }
         }
     }
 
