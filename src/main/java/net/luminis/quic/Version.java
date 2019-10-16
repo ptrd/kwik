@@ -26,6 +26,7 @@ public enum Version {
 
     GoogleQuic_44(0x51303434),
     GoogleQuic_45(0x51303435),
+    reserved_1(0x1a2a3a4a),
     IETF_draft_11(0xff00000b),
     IETF_draft_12(0xff00000c),
     IETF_draft_13(0xff00000d),
@@ -66,9 +67,14 @@ public enum Version {
         if (isIetfDraft(this) && isIetfDraft(other)) {
             return this.versionId >= other.versionId;
         }
+        else if (isReserved()) {
+            // Reserved is considered equivalent to latest
+            return true;
+        }
         else {
             throw new RuntimeException();
         }
+
     }
 
     public boolean before(Version other) {
@@ -76,9 +82,17 @@ public enum Version {
         if (isIetfDraft(this) && isIetfDraft(other)) {
             return this.versionId < other.versionId;
         }
+        else if (isReserved()) {
+            // Reserved is considered equivalent to latest
+            return false;
+        }
         else {
             throw new RuntimeException();
         }
+    }
+
+    public boolean isReserved() {
+        return this.equals(reserved_1);
     }
 
     private boolean isIetfDraft(Version version) {

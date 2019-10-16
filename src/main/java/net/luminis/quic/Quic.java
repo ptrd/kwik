@@ -42,6 +42,7 @@ public class Quic {
         cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("22", "use Quic version IETF_draft_22");
         cmdLineOptions.addOption("23", "use Quic version IETF_draft_23");
+        cmdLineOptions.addOption(null, "reservedVersion", false, "");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
@@ -163,6 +164,9 @@ public class Quic {
         }
         else if (cmd.hasOption("20")) {
             quicVersion = Version.IETF_draft_20;
+        }
+        else if (cmd.hasOption("reservedVersion")) {
+            quicVersion = Version.reserved_1;
         }
 
         int connectionTimeout = 5;
