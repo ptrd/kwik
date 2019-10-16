@@ -104,7 +104,10 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "ConnectionCloseFrame[" + (tlsError >= 0? "TLS " + tlsError: errorCode) + "|" + triggeringFrameType + "|" + new String(reasonPhrase) + "]";
+        return "ConnectionCloseFrame["
+                + (tlsError >= 0? "TLS " + tlsError: errorCode) + "|"
+                + triggeringFrameType + "|"
+                + (reasonPhrase != null? new String(reasonPhrase): "") + "]";
     }
 
 }
