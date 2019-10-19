@@ -39,6 +39,8 @@ public interface Logger {
 
     void logRecovery(boolean enabled);
 
+    void logCongestionControl(boolean enabled);
+
     void useRelativeTime(boolean enabled);
 
     void debug(String message);
@@ -82,6 +84,8 @@ public interface Logger {
     void stats(String message);
 
     void recovery(String message);
+
+    void cc(String message);
 
     void receivedPacketInfo(String toString);
 }

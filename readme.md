@@ -47,10 +47,11 @@ and run the `quic.sh` script or `java -jar build/libs/quic.jar`.
                                     '/index.html'
      -i,--interactive               start interactive shell
      -k,--keepAlive <arg>           connection keep alive time in seconds
-     -l,--log <arg>                 logging options: [pdrsiRSD]: (p)ackets
+     -l,--log <arg>                 logging options: [pdrcsiRSD]: (p)ackets
                                     received/sent, (d)ecrypted bytes, (r)ecovery,
-                                    (s)tats, (i)nfo, (R)aw bytes, (S)ecrets,
-                                    (D)ebug; default is "pi", use (n)one to disable
+                                    (c)ongestion control, (s)tats, (i)nfo, (R)aw
+                                    bytes, (S)ecrets, (D)ebug; default is "ip", use
+                                    (n)one to disable
      -L,--logFile <arg>             file to write log message too
      -O,--output <arg>              write server response to file
      -R,--resumption key <arg>      session ticket file

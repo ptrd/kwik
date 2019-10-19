@@ -36,8 +36,8 @@ public class Quic {
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
-        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrsiRSD]: " +
-                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"is\", use (n)one to disable");
+        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
+                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"ip\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
         cmdLineOptions.addOption("20", "use Quic version IETF_draft_20");
         cmdLineOptions.addOption("22", "use Quic version IETF_draft_22");
@@ -117,7 +117,7 @@ public class Quic {
         logger.logInfo(true);
 
         if (cmd.hasOption('l')) {
-            String logArg = cmd.getOptionValue('l', "is");
+            String logArg = cmd.getOptionValue('l', "ip");
 
             if (logArg.contains("n")) {
                 logger.logRaw(false);
@@ -133,6 +133,9 @@ public class Quic {
             }
             if (logArg.contains("r")) {
                 logger.logRecovery(true);
+            }
+            if (logArg.contains("c")) {
+                logger.logCongestionControl(true);
             }
             if (logArg.contains("d")) {
                 logger.logDecrypted(true);

@@ -58,10 +58,12 @@ public class NewRenoCongestionController extends AbstractCongestionController im
             if (congestionWindow < slowStartThreshold) {
                 // i.e. mode is slow start
                 congestionWindow += acknowlegdedPacket.packet.getSize();
+                log.cc("Cwnd(+): " + congestionWindow + " (slow start); inflight: " + bytesInFlight);
             }
             else {
                 // i.e. mode is congestion avoidance
                 congestionWindow += kMaxDatagramSize * acknowlegdedPacket.packet.getSize() / congestionWindow;
+                log.cc("Cwnd(+): " + congestionWindow + " (congestion avoidance); inflight: " + bytesInFlight);
             }
         }
     }
@@ -91,6 +93,7 @@ public class NewRenoCongestionController extends AbstractCongestionController im
             if (congestionWindow < kMinimumWindow) {
                 congestionWindow = kMinimumWindow;
             }
+            log.cc("Cwnd(-): " + congestionWindow + "; inflight: " + bytesInFlight);
             slowStartThreshold = congestionWindow;
         }
     }
