@@ -53,15 +53,14 @@ public class LossDetector {
 
     public void onAckReceived(AckFrame ackFrame) {
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
-        ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
-            if (packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked) {
-                packetSentLog.get(pn).acked = true;
-                congestionController.registerAcked(packetSentLog.get(pn));
-            }
-            else if (!packetSentLog.containsKey(pn)) {
-                // Incorrect ack received.
-            }
-        });
+
+        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
+                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked)
+                .map(pn -> packetSentLog.get(pn))
+                .collect(Collectors.toList());
+        newlyAcked.forEach(packet -> packet.acked = true);
+
+        newlyAcked.forEach(packet -> congestionController.registerAcked(packet));
 
         detectLostPackets();
 
