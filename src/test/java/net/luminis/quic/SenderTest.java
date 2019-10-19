@@ -41,6 +41,9 @@ class SenderTest {
     private DatagramSocket socket;
     private QuicConnection connection;
 
+    // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
+    private Instant whenever = Instant.now();
+
     @BeforeAll
     static void initLogger() {
         logger = new SysOutLogger();
@@ -186,7 +189,7 @@ class SenderTest {
         sender.packetProcessed(EncryptionLevel.App);
 
         // Now, increase cwnd.
-        sender.getCongestionController().registerAcked(new PacketInfo(null, firstPacket, null));
+        sender.getCongestionController().registerAcked(new PacketInfo(whenever, firstPacket, null));
         waitForSender();
         // The first waiting packet should be sent.
         verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));

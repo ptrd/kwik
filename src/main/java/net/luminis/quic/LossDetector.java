@@ -90,7 +90,9 @@ public class LossDetector {
                 .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
                 .filter(p -> !p.packet.isAckOnly())
                 .collect(Collectors.toList());
-        declareLost(lostPackets);
+        if (!lostPackets.isEmpty()) {
+            declareLost(lostPackets);
+        }
 
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
