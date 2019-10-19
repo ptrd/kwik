@@ -34,18 +34,33 @@ class LossDetectorTest extends RecoveryTests {
     private LossDetector lossDetector;
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 10;
+    private CongestionController congestionController;
 
     @BeforeEach
     void initObjectUnderTest() {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class));
+        congestionController = mock(CongestionController.class);
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController);
     }
 
     @BeforeEach
     void initLostPacketCallback() {
         lostPacketHandler = mock(LostPacketHandler.class);
+    }
+
+    @Test
+    void congestionControllerIsOnlyCalledOncePerAck() {
+        List<QuicPacket> packets = createPackets(1, 2, 3);
+        lossDetector.packetSent(packets.get(0), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
+
+        verify(congestionController, times(2)).registerAcked(any(PacketInfo.class));
     }
 
     @Test
