@@ -51,10 +51,10 @@ public class NewRenoCongestionController extends AbstractCongestionController im
 
     @Override
     public synchronized void registerAcked(PacketInfo acknowlegdedPacket) {
+        super.registerAcked(acknowlegdedPacket);
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-6.4
         // "it defines the end of recovery as a packet sent after the start of recovery being acknowledged"
         if (acknowlegdedPacket.timeSent.isAfter(congestionRecoveryStartTime)) {
-            super.registerAcked(acknowlegdedPacket);
             if (congestionWindow < slowStartThreshold) {
                 // i.e. mode is slow start
                 congestionWindow += acknowlegdedPacket.packet.getSize();
