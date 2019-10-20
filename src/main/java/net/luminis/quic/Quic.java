@@ -344,17 +344,13 @@ public class Quic {
             Thread.sleep(500);
         } catch (InterruptedException e) {}
 
-        BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
-        String line;
         if (outputFile != null) {
-            FileWriter outputWriter = new FileWriter(outputFile);
-            PrintWriter out = new PrintWriter(outputWriter);
-            while ((line = input.readLine()) != null) {
-                out.println(line);
-            }
-            outputWriter.close();
+            FileOutputStream out = new FileOutputStream(outputFile);
+            quicStream.getInputStream().transferTo(out);
         }
         else {
+            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+            String line;
             System.out.println("Server returns: ");
             while ((line = input.readLine()) != null) {
                 System.out.println(line);
