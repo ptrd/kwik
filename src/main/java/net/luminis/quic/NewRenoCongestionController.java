@@ -78,17 +78,9 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     public void registerLost(List<? extends PacketInfo> lostPackets) {
         super.registerLost(lostPackets);
 
-        PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet.getPacketNumber().compareTo(p2.packet.getPacketNumber())).get();
-
-        fireCongestionEvent(largest.timeSent);
-    }
-
-    public Mode getMode() {
-        if (congestionWindow < slowStartThreshold) {
-            return Mode.SlowStart;
-        }
-        else {
-            return Mode.CongestionAvoidance;
+        if (! lostPackets.isEmpty()) {
+            PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet.getPacketNumber().compareTo(p2.packet.getPacketNumber())).get();
+            fireCongestionEvent(largest.timeSent);
         }
     }
 
@@ -101,6 +93,15 @@ public class NewRenoCongestionController extends AbstractCongestionController im
             }
             log.cc("Cwnd(-): " + congestionWindow + "; inflight: " + bytesInFlight);
             slowStartThreshold = congestionWindow;
+        }
+    }
+
+    public Mode getMode() {
+        if (congestionWindow < slowStartThreshold) {
+            return Mode.SlowStart;
+        }
+        else {
+            return Mode.CongestionAvoidance;
         }
     }
 

@@ -64,6 +64,24 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
+    void congestionControllerRegisterAckedNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.onAckReceived(new AckFrame(1));
+
+        verify(congestionController, times(1)).registerAcked(argThat(MoreArgumentMatchers.emptyList()));
+    }
+
+    @Test
+    void congestionControllerRegisterLostNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.onAckReceived(new AckFrame(4));
+
+        verify(congestionController, times(0)).registerLost(anyList());
+    }
+
+    @Test
     void withoutAcksNothingIsDeclaredLost() {
         int count = 10;
         Instant now = Instant.now();

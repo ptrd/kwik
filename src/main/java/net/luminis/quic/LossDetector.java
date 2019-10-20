@@ -61,7 +61,7 @@ public class LossDetector {
 
         newlyAcked.forEach(packet -> packet.acked = true);
 
-        congestionController.registerAcked(newlyAcked);
+        congestionController.registerAcked(filterInFlight(newlyAcked));
 
         detectLostPackets();
 
@@ -162,6 +162,12 @@ public class LossDetector {
 
     public long getLost() {
         return lost;
+    }
+
+    private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
+        return packets.stream()
+                .filter(packetInfo -> !packetInfo.packet.isAckOnly())
+                .collect(Collectors.toList());
     }
 
     private static class PacketStatus extends PacketInfo {

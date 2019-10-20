@@ -39,7 +39,7 @@ public class AbstractCongestionController implements CongestionController {
 
     @Override
     public synchronized void registerInFlight(QuicPacket sentPacket) {
-        if (! sentPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
+        if (! sentPacket.isAckOnly()) {
             bytesInFlight += sentPacket.getSize();
             log.debug("Bytes in flight increased to " + bytesInFlight);
             synchronized (lock) {
@@ -52,7 +52,6 @@ public class AbstractCongestionController implements CongestionController {
     public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
         int bytesInFlightAcked = acknowlegdedPackets.stream()
                 .map(packetInfo -> ((PacketInfo) packetInfo).packet)
-                .filter(ackedPacket -> !ackedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame))
                 .mapToInt(packet -> packet.getSize())
                 .sum();
 
@@ -69,7 +68,6 @@ public class AbstractCongestionController implements CongestionController {
     public void registerLost(List<? extends PacketInfo> lostPackets) {
         long lostBytes = lostPackets.stream()
                 .map(packetStatus -> packetStatus.packet)
-                .filter(lostPacket -> !lostPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame))
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= lostBytes;

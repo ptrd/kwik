@@ -60,17 +60,6 @@ class CongestionControllerTest {
     }
 
     @Test
-    void packetWithOnlyAckFramesDoesNotCountTowardCongestionControlWhenAcked() {
-        MockPacket ackOnlyPacket = new MockPacket(new AckFrame(0));
-        congestionController.registerInFlight(ackOnlyPacket);
-        congestionController.registerInFlight(new MockPacket(new Padding(100), new AckFrame(0)));
-
-        long inFlight = congestionController.getBytesInFlight();
-        congestionController.registerAcked(List.of(new PacketInfo(whenever, ackOnlyPacket, this::noOp)));
-        assertThat(congestionController.getBytesInFlight()).isEqualTo(inFlight);
-    }
-
-    @Test
     void packetWithAckFrameAmongstOthersDoesCountTowardCongestionControl() {
         long initiallyInFlight = congestionController.getBytesInFlight();
         congestionController.registerInFlight(new MockPacket(new Padding(100), new AckFrame(0)));
@@ -88,17 +77,6 @@ class CongestionControllerTest {
         congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
 
         assertThat(congestionController.getBytesInFlight()).isEqualTo(initiallyInFlight);
-    }
-
-    @Test
-    void lostPacketWithOnlyAckFramesMustNotDecreaseBytesInFlight() {
-        MockPacket ackOnlyPacket = new MockPacket(new AckFrame(0));
-        congestionController.registerInFlight(ackOnlyPacket);
-        long inFlight = congestionController.getBytesInFlight();
-
-        congestionController.registerLost(List.of(new PacketInfo(Instant.now(), ackOnlyPacket, this::noOp)));
-
-        assertThat(congestionController.getBytesInFlight()).isEqualTo(inFlight);
     }
 
     void noOp(QuicPacket packet) {}
