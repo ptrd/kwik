@@ -206,7 +206,7 @@ public class Quic {
                 usage();
                 System.exit(1);
             }
-            if (!Files.isWritable(Paths.get(outputFile))) {
+            if (Files.exists(Paths.get(outputFile)) && !Files.isWritable(Paths.get(outputFile))) {
                 System.err.println("Output file '" + outputFile + "' is not writable.");
                 System.exit(1);
             }
