@@ -68,6 +68,18 @@ class CongestionControllerTest {
     }
 
     @Test
+    void ackedPacketMustDecreaseBytesInFlight() {
+        long initiallyInFlight = congestionController.getBytesInFlight();
+        MockPacket packet = new MockPacket(new Padding(100), new AckFrame(0));
+        congestionController.registerInFlight(packet);
+        assertThat(congestionController.getBytesInFlight()).isGreaterThan(initiallyInFlight);
+
+        congestionController.registerAcked(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
+
+        assertThat(congestionController.getBytesInFlight()).isEqualTo(initiallyInFlight);
+    }
+
+    @Test
     void lostPacketMustDecreaseBytesInFlight() {
         long initiallyInFlight = congestionController.getBytesInFlight();
         MockPacket packet = new MockPacket(new Padding(100), new AckFrame(0));
