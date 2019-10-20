@@ -66,7 +66,7 @@ class CongestionControllerTest {
         congestionController.registerInFlight(new MockPacket(new Padding(100), new AckFrame(0)));
 
         long inFlight = congestionController.getBytesInFlight();
-        congestionController.registerAcked(new PacketInfo(whenever, ackOnlyPacket, this::noOp));
+        congestionController.registerAcked(List.of(new PacketInfo(whenever, ackOnlyPacket, this::noOp)));
         assertThat(congestionController.getBytesInFlight()).isEqualTo(inFlight);
     }
 

@@ -24,7 +24,7 @@ public interface CongestionController {
 
     void registerInFlight(QuicPacket sentPacket);
 
-    void registerAcked(PacketInfo acknowlegdedPacket);
+    void registerAcked(List<? extends PacketInfo> acknowlegdedPackets);
 
     void registerLost(List<? extends PacketInfo> lostPackets);
 

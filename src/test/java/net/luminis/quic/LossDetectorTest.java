@@ -60,7 +60,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
         lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
 
-        verify(congestionController, times(2)).registerAcked(any(PacketInfo.class));
+        verify(congestionController, times(2)).registerAcked(any(List.class));
     }
 
     @Test

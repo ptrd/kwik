@@ -58,9 +58,10 @@ public class LossDetector {
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked)
                 .map(pn -> packetSentLog.get(pn))
                 .collect(Collectors.toList());
+
         newlyAcked.forEach(packet -> packet.acked = true);
 
-        newlyAcked.forEach(packet -> congestionController.registerAcked(packet));
+        congestionController.registerAcked(newlyAcked);
 
         detectLostPackets();
 

@@ -49,10 +49,15 @@ public class AbstractCongestionController implements CongestionController {
     }
 
     @Override
-    public synchronized void registerAcked(PacketInfo acknowlegdedPacketInfo) {
-        QuicPacket acknowlegdedPacket = acknowlegdedPacketInfo.packet;
-        if (! acknowlegdedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame)) {
-            bytesInFlight -= acknowlegdedPacket.getSize();
+    public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
+        int bytesInFlightAcked = acknowlegdedPackets.stream()
+                .map(packetInfo -> ((PacketInfo) packetInfo).packet)
+                .filter(ackedPacket -> !ackedPacket.getFrames().stream().allMatch(frame -> frame instanceof AckFrame))
+                .mapToInt(packet -> packet.getSize())
+                .sum();
+
+        if (bytesInFlightAcked > 0) {
+            bytesInFlight -= bytesInFlightAcked;
             log.debug("Bytes in flight decreased to " + bytesInFlight);
             synchronized (lock) {
                 lock.notifyAll();

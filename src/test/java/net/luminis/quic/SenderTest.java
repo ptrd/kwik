@@ -30,6 +30,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -189,7 +190,7 @@ class SenderTest {
         sender.packetProcessed(EncryptionLevel.App);
 
         // Now, increase cwnd.
-        sender.getCongestionController().registerAcked(new PacketInfo(whenever, firstPacket, null));
+        sender.getCongestionController().registerAcked(List.of(new PacketInfo(whenever, firstPacket, null)));
         waitForSender();
         // The first waiting packet should be sent.
         verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));

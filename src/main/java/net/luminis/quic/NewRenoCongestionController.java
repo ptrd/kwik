@@ -20,7 +20,7 @@ package net.luminis.quic;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Stream;
 
 // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-6
 // "QUIC's congestion control is based on TCP NewReno [RFC6582]."
@@ -50,21 +50,27 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     }
 
     @Override
-    public synchronized void registerAcked(PacketInfo acknowlegdedPacket) {
-        super.registerAcked(acknowlegdedPacket);
+    public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
+        super.registerAcked(acknowlegdedPackets);
+
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-6.4
-        // "it defines the end of recovery as a packet sent after the start of recovery being acknowledged"
-        if (acknowlegdedPacket.timeSent.isAfter(congestionRecoveryStartTime)) {
+        // "QUIC defines the end of recovery as a packet sent after the start of recovery being acknowledged"
+        Stream<QuicPacket> notBeforeRecovery = acknowlegdedPackets.stream()
+                .filter(ackedPacket -> ackedPacket.timeSent.isAfter(congestionRecoveryStartTime))
+                .map(ackedPacket -> ackedPacket.packet);
+
+        long previousCwnd = congestionWindow;
+        notBeforeRecovery.forEach(p -> {
             if (congestionWindow < slowStartThreshold) {
                 // i.e. mode is slow start
-                congestionWindow += acknowlegdedPacket.packet.getSize();
-                log.cc("Cwnd(+): " + congestionWindow + " (slow start); inflight: " + bytesInFlight);
-            }
-            else {
+                congestionWindow += p.getSize();
+            } else {
                 // i.e. mode is congestion avoidance
-                congestionWindow += kMaxDatagramSize * acknowlegdedPacket.packet.getSize() / congestionWindow;
-                log.cc("Cwnd(+): " + congestionWindow + " (congestion avoidance); inflight: " + bytesInFlight);
+                congestionWindow += kMaxDatagramSize * p.getSize() / congestionWindow;
             }
+        });
+        if (congestionWindow != previousCwnd) {
+            log.cc("Cwnd(+): " + congestionWindow + " (" + getMode() + "); inflight: " + bytesInFlight);
         }
     }
 
