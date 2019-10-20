@@ -30,6 +30,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -40,6 +41,9 @@ class SenderTest {
     private Sender sender;
     private DatagramSocket socket;
     private QuicConnection connection;
+
+    // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
+    private Instant whenever = Instant.now();
 
     @BeforeAll
     static void initLogger() {
@@ -186,7 +190,7 @@ class SenderTest {
         sender.packetProcessed(EncryptionLevel.App);
 
         // Now, increase cwnd.
-        sender.getCongestionController().registerAcked(firstPacket);
+        sender.getCongestionController().registerAcked(List.of(new PacketInfo(whenever, firstPacket, null)));
         waitForSender();
         // The first waiting packet should be sent.
         verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));
@@ -216,7 +220,7 @@ class SenderTest {
 
     private void setCongestionWindowSize(int cwnd) throws Exception {
         CongestionController congestionController = sender.getCongestionController();
-        FieldSetter.setField(congestionController, congestionController.getClass().getDeclaredField("congestionWindow"), cwnd);
+        FieldSetter.setField(congestionController, congestionController.getClass().getSuperclass().getDeclaredField("congestionWindow"), cwnd);
     }
 
     static class PacketMatcher implements ArgumentMatcher<DatagramPacket> {

@@ -34,6 +34,7 @@ class LossDetectorTest extends RecoveryTests {
     private LossDetector lossDetector;
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 10;
+    private CongestionController congestionController;
 
     @BeforeEach
     void initObjectUnderTest() {
@@ -41,11 +42,44 @@ class LossDetectorTest extends RecoveryTests {
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class));
+        congestionController = mock(CongestionController.class);
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController);
     }
 
     @BeforeEach
     void initLostPacketCallback() {
         lostPacketHandler = mock(LostPacketHandler.class);
+    }
+
+    @Test
+    void congestionControllerIsOnlyCalledOncePerAck() {
+        List<QuicPacket> packets = createPackets(1, 2, 3);
+        lossDetector.packetSent(packets.get(0), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
+        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)));
+
+        verify(congestionController, times(2)).registerAcked(any(List.class));
+    }
+
+    @Test
+    void congestionControllerRegisterAckedNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.onAckReceived(new AckFrame(1));
+
+        verify(congestionController, times(1)).registerAcked(argThat(MoreArgumentMatchers.emptyList()));
+    }
+
+    @Test
+    void congestionControllerRegisterLostNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.onAckReceived(new AckFrame(4));
+
+        verify(congestionController, times(0)).registerLost(anyList());
     }
 
     @Test

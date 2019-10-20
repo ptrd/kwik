@@ -18,23 +18,26 @@
  */
 package net.luminis.quic;
 
+import org.mockito.ArgumentMatcher;
+
 import java.util.List;
 
-public interface CongestionController {
+public class MoreArgumentMatchers {
 
-    void registerInFlight(QuicPacket sentPacket);
+    static ArgumentMatcher<List> emptyList() {
+        return new ArgumentMatcher<List>() {
+            public boolean matches(List list) {
+                return list.isEmpty();
+            }
+        };
+    }
 
-    void registerAcked(List<? extends PacketInfo> acknowlegdedPackets);
-
-    void registerLost(List<? extends PacketInfo> lostPackets);
-
-    boolean canSend(int bytes);
-
-    long getBytesInFlight();
-
-    long getWindowSize();
-
-    void reset();
-
-    void waitForUpdate() throws InterruptedException;
+    static ArgumentMatcher<List> nonEmptyList() {
+        return new ArgumentMatcher<List>() {
+            public boolean matches(List list) {
+                return !list.isEmpty();
+            }
+        };
+    }
 }
+

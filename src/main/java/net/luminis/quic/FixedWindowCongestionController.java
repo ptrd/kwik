@@ -20,21 +20,19 @@ package net.luminis.quic;
 
 import java.util.List;
 
-public interface CongestionController {
+/**
+ * A simplistic congestion controller that has a fixed window size.
+ */
+public class FixedWindowCongestionController extends AbstractCongestionController implements CongestionController {
 
-    void registerInFlight(QuicPacket sentPacket);
+    public FixedWindowCongestionController(Logger logger) {
+        super(logger);
+        congestionWindow = initialWindowSize;
+    }
 
-    void registerAcked(List<? extends PacketInfo> acknowlegdedPackets);
-
-    void registerLost(List<? extends PacketInfo> lostPackets);
-
-    boolean canSend(int bytes);
-
-    long getBytesInFlight();
-
-    long getWindowSize();
-
-    void reset();
-
-    void waitForUpdate() throws InterruptedException;
+    public FixedWindowCongestionController(int initialWindowSize, Logger logger) {
+        super(logger);
+        congestionWindow = initialWindowSize;
+    }
 }
+

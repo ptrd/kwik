@@ -34,7 +34,7 @@ public class LossDetector {
     private final CongestionController congestionController;
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
-    private final Map<Long, PacketAckStatus> packetSentLog;
+    private final Map<Long, PacketStatus> packetSentLog;
     private volatile long largestAcked;
     private volatile long lost;
     private volatile Instant lossTime;
@@ -48,20 +48,20 @@ public class LossDetector {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
-        packetSentLog.put(packet.getPacketNumber(), new PacketAckStatus(sent, packet, lostPacketCallback));
+        packetSentLog.put(packet.getPacketNumber(), new PacketStatus(sent, packet, lostPacketCallback));
     }
 
     public void onAckReceived(AckFrame ackFrame) {
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
-        ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
-            if (packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked) {
-                packetSentLog.get(pn).acked = true;
-                congestionController.registerAcked(packetSentLog.get(pn).packet);
-            }
-            else if (!packetSentLog.containsKey(pn)) {
-                // Incorrect ack received.
-            }
-        });
+
+        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
+                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked)
+                .map(pn -> packetSentLog.get(pn))
+                .collect(Collectors.toList());
+
+        newlyAcked.forEach(packet -> packet.acked = true);
+
+        congestionController.registerAcked(filterInFlight(newlyAcked));
 
         detectLostPackets();
 
@@ -85,11 +85,14 @@ public class LossDetector {
         // "In-flight:  Packets are considered in-flight when they have been sent
         //      and neither acknowledged nor declared lost, and they are not ACK-
         //      only."
-        packetSentLog.values().stream()
+        List<PacketStatus> lostPackets = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
                 .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
                 .filter(p -> !p.packet.isAckOnly())
-                .forEach(p -> declareLost(p));
+                .collect(Collectors.toList());
+        if (!lostPackets.isEmpty()) {
+            declareLost(lostPackets);
+        }
 
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
@@ -125,7 +128,7 @@ public class LossDetector {
     }
 
     // For debugging
-    List<PacketAckStatus> getInFlight() {
+    List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
                 .filter(p -> p.packet.isAckEliciting())
                 .filter(p -> !p.acked && !p.lost)
@@ -133,18 +136,23 @@ public class LossDetector {
     }
 
 
-    private boolean pnTooOld(PacketAckStatus p) {
+    private boolean pnTooOld(PacketStatus p) {
         return p.packet.getPacketNumber() <= largestAcked - kPacketThreshold;
     }
 
-    private boolean sentTimeTooLongAgo(PacketAckStatus p, Instant lostSendTime) {
+    private boolean sentTimeTooLongAgo(PacketStatus p, Instant lostSendTime) {
         return p.packet.getPacketNumber() <= largestAcked && p.timeSent.isBefore(lostSendTime);
     }
 
-    private void declareLost(PacketAckStatus packetAckStatus) {
-        packetAckStatus.lostPacketCallback.accept(packetAckStatus.packet);
-        packetAckStatus.lost = true;
-        lost++;
+    private void declareLost(List<PacketStatus> lostPacketsInfo) {
+        lostPacketsInfo.stream().forEach(packetAckStatus -> {
+            packetAckStatus.lostPacketCallback.accept(packetAckStatus.packet);
+            packetAckStatus.lost = true;
+        });
+
+        lost += lostPacketsInfo.size();
+
+        congestionController.registerLost(lostPacketsInfo);
     }
 
     public void reset() {
@@ -156,17 +164,18 @@ public class LossDetector {
         return lost;
     }
 
-    private static class PacketAckStatus {
-        final Instant timeSent;
-        final QuicPacket packet;
-        private final Consumer<QuicPacket> lostPacketCallback;
-        public boolean lost;
+    private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
+        return packets.stream()
+                .filter(packetInfo -> !packetInfo.packet.isAckOnly())
+                .collect(Collectors.toList());
+    }
+
+    private static class PacketStatus extends PacketInfo {
+        boolean lost;
         boolean acked;
 
-        public PacketAckStatus(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
-            this.timeSent = sent;
-            this.packet = packet;
-            this.lostPacketCallback = lostPacketCallback;
+        public PacketStatus(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
+            super(sent, packet, lostPacketCallback);
         }
 
         public String status() {
@@ -179,17 +188,12 @@ public class LossDetector {
             }
         }
 
-        public Instant timeSent() {
-            return timeSent;
-        }
-
         @Override
         public String toString() {
             return "Packet "
-                + packet.getEncryptionLevel().name().charAt(0) + "|"
-                + (packet.packetNumber >= 0? packet.packetNumber: ".") + "|"
-                + "L" + "|" + status();
+                    + packet.getEncryptionLevel().name().charAt(0) + "|"
+                    + (packet.packetNumber >= 0 ? packet.packetNumber : ".") + "|"
+                    + "L" + "|" + status();
         }
-
     }
 }

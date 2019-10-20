@@ -20,6 +20,8 @@ package net.luminis.quic;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
+import java.util.stream.Stream;
 
 public class MockPacket extends QuicPacket {
 
@@ -31,6 +33,7 @@ public class MockPacket extends QuicPacket {
         this.packetSize = packetSize;
         this.encryptionLevel = EncryptionLevel.App;
         this.message = message;
+        this.frames.add(new StreamFrame(0, message.getBytes(), false));
     }
 
     public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel) {
@@ -38,7 +41,8 @@ public class MockPacket extends QuicPacket {
         this.packetSize = packetSize;
         this.encryptionLevel = encryptionLevel;
         this.message = "";
-        this.frames.add(new MaxStreamsFrame());
+        this.frames.add(new StreamFrame(0, "dummy stream frame".getBytes(), false));
+
     }
 
     public MockPacket(int packetNumber, int packetSize, EncryptionLevel encryptionLevel, QuicFrame frame) {
@@ -62,6 +66,13 @@ public class MockPacket extends QuicPacket {
         this.encryptionLevel = encryptionLevel;
         this.frames.add(frame);
         this.message = message;
+    }
+
+    public MockPacket(QuicFrame... frames) {
+        this.packetNumber = 0;
+        this.packetSize = 10 + Stream.of(frames).mapToInt(f -> f.getBytes().length).sum() + 16;
+        this.encryptionLevel = EncryptionLevel.App;
+        this.frames.addAll(List.of(frames));
     }
 
     @Override
