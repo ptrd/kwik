@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.QuicFrame;
+
 import java.nio.ByteBuffer;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-19.1
@@ -56,7 +58,7 @@ public class Padding extends QuicFrame {
     }
 
     @Override
-    byte[] getBytes() {
+    public byte[] getBytes() {
         return new byte[length];
     }
 

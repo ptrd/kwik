@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.*;
 import net.luminis.tls.*;
 
 import java.io.IOException;

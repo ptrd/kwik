@@ -16,35 +16,14 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
-import net.luminis.tls.ByteUtils;
 
-import java.nio.ByteBuffer;
+public abstract class QuicFrame {
 
-public class NewTokenFrame extends QuicFrame {
+    public abstract byte[] getBytes();
 
-    private byte[] newToken;
-
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
-    }
-
-    public NewTokenFrame parse(ByteBuffer buffer, Logger log) {
-        buffer.get();
-
-        int tokenLength = VariableLengthInteger.parse(buffer);
-        newToken = new byte[tokenLength];
-        buffer.get(newToken);
-
-        log.debug("Got New Token: ", newToken);
-
-        return this;
-    }
-
-    @Override
-    public String toString() {
-        return "NewTokenFrame[" + ByteUtils.bytesToHex(newToken) + "]";
+    public boolean isAckEliciting() {
+        return true;
     }
 }

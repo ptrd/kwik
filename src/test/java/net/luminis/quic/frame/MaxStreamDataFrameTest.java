@@ -1,5 +1,6 @@
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
+import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

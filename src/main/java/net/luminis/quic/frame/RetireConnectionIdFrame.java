@@ -16,42 +16,39 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.Version;
 
 import java.nio.ByteBuffer;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-19.4
-public class ApplicationCloseFrame extends QuicFrame {
 
-    private int errorCode;
-    private String reasonPhrase;
+public class RetireConnectionIdFrame extends QuicFrame {
 
-    public ApplicationCloseFrame parse(ByteBuffer buffer, Logger log) {
-        if (buffer.get() != 0x03) {
-            throw new RuntimeException();  // Would be a programming error.
-        }
+    private int sequenceNr;
 
-        errorCode = buffer.getShort() & 0xffff;
-        int reasonPhraseLength = VariableLengthInteger.parse(buffer);
-        if (reasonPhraseLength > 0) {
-            byte[] data = new byte[reasonPhraseLength];
-            buffer.get(data);
-            reasonPhrase = new String(data);
-        }
-        else {
-            reasonPhrase = "";
-        }
+    public RetireConnectionIdFrame(Version quicVersion) {
+    }
 
+    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
+        buffer.get();
+        sequenceNr = VariableLengthInteger.parse(buffer);
         return this;
     }
 
     @Override
-    byte[] getBytes() {
+    public byte[] getBytes() {
         return new byte[0];
     }
 
     @Override
     public String toString() {
-        return "ApplicationCloseFrame[" + errorCode + "/" + reasonPhrase + "]";
+        return "RetireConnectionIdFrame[" + sequenceNr + "]";
+    }
+
+    public int getSequenceNr() {
+        return sequenceNr;
     }
 }

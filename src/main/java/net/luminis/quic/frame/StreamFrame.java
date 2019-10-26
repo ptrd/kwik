@@ -16,7 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.Version;
 
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
@@ -102,7 +106,7 @@ public class StreamFrame extends QuicFrame {
     }
 
     @Override
-    byte[] getBytes() {
+    public byte[] getBytes() {
         return frameData;
     }
 
@@ -131,7 +135,7 @@ public class StreamFrame extends QuicFrame {
         return isFinal;
     }
 
-    static int maxOverhead() {
+    static public int maxOverhead() {
         return 1  // frame type
         + 4 // stream id
         + 4 // offset

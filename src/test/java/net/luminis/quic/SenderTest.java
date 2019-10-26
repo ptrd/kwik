@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.QuicFrame;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

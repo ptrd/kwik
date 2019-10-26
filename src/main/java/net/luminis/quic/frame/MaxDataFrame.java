@@ -16,46 +16,37 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.10
-public class MaxStreamDataFrame extends QuicFrame {
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
+public class MaxDataFrame extends QuicFrame {
 
-    private int streamId;
     private long maxData;
 
-
-    public MaxStreamDataFrame() {
+    public MaxDataFrame() {
     }
 
-    public MaxStreamDataFrame(int stream, long maxData) {
-        this.streamId = stream;
-        this.maxData = maxData;
+    public MaxDataFrame(long flowControlMax) {
+        maxData = flowControlMax;
     }
 
-    public MaxStreamDataFrame parse(ByteBuffer buffer, Logger log) {
+    public MaxDataFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
-
-        streamId = VariableLengthInteger.parse(buffer);
         maxData = VariableLengthInteger.parse(buffer);
-
         return this;
     }
 
     @Override
-    public String toString() {
-        return "MaxStreamDataFrame[" + streamId + ":" + maxData + "]";
-    }
-
-    @Override
-    byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(17);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.10
-        // "The MAX_STREAM_DATA frame (type=0x11)..."
-        buffer.put((byte) 0x11);
-        VariableLengthInteger.encode(streamId, buffer);
+    public byte[] getBytes() {
+        ByteBuffer buffer = ByteBuffer.allocate(9);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
+        // "The MAX_DATA frame (type=0x10)..."
+        buffer.put((byte) 0x10);
         VariableLengthInteger.encode(maxData, buffer);
 
         byte[] bytes = new byte[buffer.position()];
@@ -64,12 +55,9 @@ public class MaxStreamDataFrame extends QuicFrame {
         return bytes;
     }
 
-    public int getStreamId() {
-        return streamId;
-    }
-
-    public long getMaxData() {
-        return maxData;
+    @Override
+    public String toString() {
+        return "MaxDataFrame[" + maxData + "]";
     }
 
 }

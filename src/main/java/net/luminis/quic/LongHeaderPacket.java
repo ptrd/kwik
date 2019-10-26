@@ -19,12 +19,12 @@
 package net.luminis.quic;
 
 
+import net.luminis.quic.frame.QuicFrame;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static net.luminis.quic.EncryptionLevel.Initial;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.2
 public abstract class LongHeaderPacket extends QuicPacket {

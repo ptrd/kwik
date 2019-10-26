@@ -16,32 +16,40 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.Version;
 
 import java.nio.ByteBuffer;
 
+// https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.5
+public class StopSendingFrame extends QuicFrame {
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-19.14
-public class StreamsBlockedFrame extends QuicFrame {
+    private int streamId;
+    private int errorCode;
 
-    private boolean bidirectional;
-    private int streamLimit;
+    public StopSendingFrame(Version quicVersion) {
+    }
 
-    public StreamsBlockedFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        bidirectional = frameType == 0x16;
-        streamLimit = VariableLengthInteger.parse(buffer);
+    @Override
+    public byte[] getBytes() {
+        return new byte[0];
+    }
+
+    public StopSendingFrame parse(ByteBuffer buffer, Logger log) {
+        buffer.get();
+
+        streamId = VariableLengthInteger.parse(buffer);
+        errorCode = VariableLengthInteger.parse(buffer);
 
         return this;
     }
 
     @Override
-    byte[] getBytes() {
-        return new byte[0];
+    public String toString() {
+        return "StopSendingFrame[" + streamId + ":" + errorCode + "]";
     }
 
-    @Override
-    public String toString() {
-        return "StreamsBlockedFrame[" + (bidirectional? "B": "U") + "|" + streamLimit + "]";
-    }
 }

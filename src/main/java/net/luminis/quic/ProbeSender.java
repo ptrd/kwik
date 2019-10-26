@@ -18,8 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.QuicFrame;
+
 import java.util.List;
-import java.util.function.Consumer;
 
 interface ProbeSender {
     

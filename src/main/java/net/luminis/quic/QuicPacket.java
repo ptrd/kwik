@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.*;
+
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;

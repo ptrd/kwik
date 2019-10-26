@@ -16,32 +16,21 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
-import java.nio.ByteBuffer;
+enum StreamType {
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
-public class StreamDataBlockedFrame extends QuicFrame {
+    ClientInitiatedBidirectional(0, "CIB"),
+    ServerInitiatedBidirectional(1, "SIB"),
+    ClientInitiatedUnidirectional(2, "CIU"),
+    ServerInitiatedUnidirectional(3, "SIU"),
+    ;
 
-    private int streamId;
-    private int streamDataLimit;
+    public final int value;
+    public final String abbrev;
 
-    public StreamDataBlockedFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        streamId = VariableLengthInteger.parse(buffer);
-        streamDataLimit = VariableLengthInteger.parse(buffer);
-
-        return this;
+    StreamType(int value, String abbrev) {
+        this.value = value;
+        this.abbrev = abbrev;
     }
-
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
-    }
-
-    @Override
-    public String toString() {
-        return "StreamDataBlockedFrame[" + streamId + "|" + streamDataLimit + "]";
-    }
-
 }

@@ -16,35 +16,35 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
 
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
+public class StreamDataBlockedFrame extends QuicFrame {
 
-public class RetireConnectionIdFrame extends QuicFrame {
+    private int streamId;
+    private int streamDataLimit;
 
-    private int sequenceNr;
+    public StreamDataBlockedFrame parse(ByteBuffer buffer, Logger log) {
+        byte frameType = buffer.get();
+        streamId = VariableLengthInteger.parse(buffer);
+        streamDataLimit = VariableLengthInteger.parse(buffer);
 
-    public RetireConnectionIdFrame(Version quicVersion) {
-    }
-
-    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
-        buffer.get();
-        sequenceNr = VariableLengthInteger.parse(buffer);
         return this;
     }
 
     @Override
-    byte[] getBytes() {
+    public byte[] getBytes() {
         return new byte[0];
     }
 
     @Override
     public String toString() {
-        return "RetireConnectionIdFrame[" + sequenceNr + "]";
+        return "StreamDataBlockedFrame[" + streamId + "|" + streamDataLimit + "]";
     }
 
-    public int getSequenceNr() {
-        return sequenceNr;
-    }
 }

@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.QuicFrame;
+
 import java.nio.ByteBuffer;
 import java.time.Instant;
 

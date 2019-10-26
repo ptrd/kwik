@@ -1,4 +1,4 @@
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
 /*
  * Copyright © 2019 Peter Doornbosch
@@ -18,6 +18,7 @@ package net.luminis.quic;
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import net.luminis.quic.frame.MaxDataFrame;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -16,32 +16,36 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
 
-public class MaxStreamIdFrame extends QuicFrame {
+// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.4
+public class ResetStreamFrame extends QuicFrame {
 
-    private int maxStreamId;
+    private int streamId;
+    private int errorCode;
+    private int finalSize;
 
-    public MaxStreamIdFrame parse(ByteBuffer buffer, Logger log) {
-        if (buffer.get() != 0x06) {
-            throw new RuntimeException();  // Would be a programming error.
-        }
+    @Override
+    public byte[] getBytes() {
+        return new byte[0];
+    }
 
-        maxStreamId = VariableLengthInteger.parse(buffer);
-
+    public ResetStreamFrame parse(ByteBuffer buffer, Logger log) {
+        byte frameType = buffer.get();
+        streamId = VariableLengthInteger.parse(buffer);
+        errorCode = VariableLengthInteger.parse(buffer);
+        finalSize = VariableLengthInteger.parse(buffer);
         return this;
     }
 
     @Override
     public String toString() {
-        return "MaxStreamIdFrame[" + maxStreamId + "]";
-    }
-
-    @Override
-    byte[] getBytes() {
-        return new byte[0];
+        return "ResetStreamFrame[" + streamId + "|" + errorCode + "|" + finalSize + "]";
     }
 
 }

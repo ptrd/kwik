@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.PingFrame;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.Executors;

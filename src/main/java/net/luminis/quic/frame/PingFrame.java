@@ -16,30 +16,31 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
+
+
+import net.luminis.quic.Logger;
+import net.luminis.quic.Version;
 
 import java.nio.ByteBuffer;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
-public class DataBlockedFrame extends QuicFrame {
+public class PingFrame extends QuicFrame {
 
-    private int streamDataLimit;
+    public PingFrame(Version quicVersion) {
+    }
 
-    public DataBlockedFrame parse(ByteBuffer buffer, Logger log) {
-        byte frameType = buffer.get();
-        streamDataLimit = VariableLengthInteger.parse(buffer);
-
+    public PingFrame parse(ByteBuffer buffer, Logger log) {
+        buffer.get();
         return this;
     }
 
     @Override
-    byte[] getBytes() {
-        return new byte[0];
+    public byte[] getBytes() {
+        return new byte[] { 0x01 };
     }
 
     @Override
     public String toString() {
-        return "DataBlockedFrame[" + streamDataLimit + "]";
+        return "PingFrame[]";
     }
-
 }

@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.QuicFrame;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;

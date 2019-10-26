@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.StreamFrame;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

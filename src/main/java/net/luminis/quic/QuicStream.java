@@ -18,6 +18,10 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StreamFrame;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;

@@ -58,7 +58,7 @@ public enum Version {
         return version.orElseThrow(() -> new UnknownVersionException());
     }
 
-    static Version getDefault() {
+    static public Version getDefault() {
         return IETF_draft_23;
     }
 

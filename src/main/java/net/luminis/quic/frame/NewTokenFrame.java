@@ -16,21 +16,37 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
-enum StreamType {
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
+import net.luminis.tls.ByteUtils;
 
-    ClientInitiatedBidirectional(0, "CIB"),
-    ServerInitiatedBidirectional(1, "SIB"),
-    ClientInitiatedUnidirectional(2, "CIU"),
-    ServerInitiatedUnidirectional(3, "SIU"),
-    ;
+import java.nio.ByteBuffer;
 
-    public final int value;
-    public final String abbrev;
+public class NewTokenFrame extends QuicFrame {
 
-    StreamType(int value, String abbrev) {
-        this.value = value;
-        this.abbrev = abbrev;
+    private byte[] newToken;
+
+    @Override
+    public byte[] getBytes() {
+        return new byte[0];
+    }
+
+    public NewTokenFrame parse(ByteBuffer buffer, Logger log) {
+        buffer.get();
+
+        int tokenLength = VariableLengthInteger.parse(buffer);
+        newToken = new byte[tokenLength];
+        buffer.get(newToken);
+
+        log.debug("Got New Token: ", newToken);
+
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "NewTokenFrame[" + ByteUtils.bytesToHex(newToken) + "]";
     }
 }

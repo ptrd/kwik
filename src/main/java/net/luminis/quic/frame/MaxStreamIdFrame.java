@@ -16,28 +16,35 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
+import net.luminis.quic.Logger;
+import net.luminis.quic.VariableLengthInteger;
 
 import java.nio.ByteBuffer;
 
-public class PingFrame extends QuicFrame {
+public class MaxStreamIdFrame extends QuicFrame {
 
-    public PingFrame(Version quicVersion) {
-    }
+    private int maxStreamId;
 
-    public PingFrame parse(ByteBuffer buffer, Logger log) {
-        buffer.get();
+    public MaxStreamIdFrame parse(ByteBuffer buffer, Logger log) {
+        if (buffer.get() != 0x06) {
+            throw new RuntimeException();  // Would be a programming error.
+        }
+
+        maxStreamId = VariableLengthInteger.parse(buffer);
+
         return this;
     }
 
     @Override
-    byte[] getBytes() {
-        return new byte[] { 0x01 };
+    public String toString() {
+        return "MaxStreamIdFrame[" + maxStreamId + "]";
     }
 
     @Override
-    public String toString() {
-        return "PingFrame[]";
+    public byte[] getBytes() {
+        return new byte[0];
     }
+
 }

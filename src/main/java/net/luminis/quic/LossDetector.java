@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.AckFrame;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
