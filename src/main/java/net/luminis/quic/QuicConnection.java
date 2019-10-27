@@ -505,7 +505,7 @@ public class QuicConnection implements PacketProcessor {
                         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-2.1
                         // "servers initiate odd-numbered streams"
                         log.info("Receiving data for server-initiated stream " + streamId);
-                        stream = new QuicStream(quicVersion, streamId, this, log);
+                        stream = new QuicStream(quicVersion, streamId, this, null, log);
                         streams.put(streamId, stream);
                         stream.add((StreamFrame) frame);
                         if (serverStreamCallback != null) {
@@ -562,7 +562,7 @@ public class QuicConnection implements PacketProcessor {
 
     public QuicStream createStream(boolean bidirectional) {
         int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(quicVersion, streamId, this, log);
+        QuicStream stream = new QuicStream(quicVersion, streamId, this, null, log);
         streams.put(streamId, stream);
         return stream;
     }

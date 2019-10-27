@@ -59,6 +59,8 @@ public class StreamFrame extends QuicFrame {
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
         this.streamId = streamId;
         this.offset = streamOffset;
+        this.streamData = new byte[dataLength];
+        ByteBuffer.wrap(streamData).put(applicationData, dataOffset, dataLength);  // Not necessary, but for testing.
         this.length = dataLength;
         isFinal = fin;
 

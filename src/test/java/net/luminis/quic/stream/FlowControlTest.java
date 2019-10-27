@@ -29,8 +29,6 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -52,7 +50,7 @@ class FlowControlTest {
         int initialMaxData = 1000;
         FlowControl fc = new FlowControl(initialMaxData, 9999, 9999, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(1, conn), Long.MAX_VALUE)).isEqualTo(initialMaxData);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(1, conn, null), Long.MAX_VALUE)).isEqualTo(initialMaxData);
     }
 
     @Test
@@ -64,7 +62,7 @@ class FlowControlTest {
         // A client initiated stream is limited by the server's initial remote
         FlowControl fc = new FlowControl(initialMaxData, 9999, initialServerMaxStreamData, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
@@ -76,7 +74,7 @@ class FlowControlTest {
         // A server initiated stream is limited by the server's initial local
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, 9999, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
@@ -88,7 +86,7 @@ class FlowControlTest {
         // A client initiated stream is limited by the server's initial remote
         FlowControl fc = new FlowControl(initialMaxData, 9999, 9999, initialServerMaxStreamData);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
@@ -96,9 +94,9 @@ class FlowControlTest {
         int initialMaxData = 900;
         int initialServerMaxStreamData = 500;
         int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream1 = new QuicStream(streamId1, conn);
+        QuicStream stream1 = new QuicStream(streamId1, conn, null);
         int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream2 = new QuicStream(streamId2, conn);
+        QuicStream stream2 = new QuicStream(streamId2, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -113,7 +111,7 @@ class FlowControlTest {
         int initialMaxData = 100;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn);
+        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -131,9 +129,9 @@ class FlowControlTest {
         int initialMaxData = 300;
         int initialServerMaxStreamData = 1000;
         int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream1 = new QuicStream(streamId1, conn);
+        QuicStream stream1 = new QuicStream(streamId1, conn, null);
         int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream2 = new QuicStream(streamId2, conn);
+        QuicStream stream2 = new QuicStream(streamId2, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -150,7 +148,7 @@ class FlowControlTest {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn);
+        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -165,7 +163,7 @@ class FlowControlTest {
         int initialMaxData = 100;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn);
+        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -190,7 +188,7 @@ class FlowControlTest {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn);
+        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
 
@@ -215,7 +213,7 @@ class FlowControlTest {
         int initialMaxData = 1000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn);
+        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
         assertThat(fc.increaseFlowControlLimit(stream, 100)).isEqualTo(100);

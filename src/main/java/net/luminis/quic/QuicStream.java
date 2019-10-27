@@ -21,9 +21,11 @@ package net.luminis.quic;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.stream.FlowControl;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
@@ -43,6 +45,7 @@ public class QuicStream {
     private final Version quicVersion;
     private final int streamId;
     private final QuicConnection connection;
+    private final FlowControl flowController;
     private final Logger log;
     private final BlockingQueue<StreamFrame> queuedFrames;
     private StreamFrame currentFrame;
@@ -58,18 +61,19 @@ public class QuicStream {
     private final long receiverMaxDataIncrement;
 
 
-    public QuicStream(int streamId, QuicConnection connection) {
-        this(Version.getDefault(), streamId, connection, new NullLogger());
+    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController) {
+        this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
 
-    public QuicStream(int streamId, QuicConnection connection, Logger log) {
-        this(Version.getDefault(), streamId, connection, log);
+    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
+        this(Version.getDefault(), streamId, connection, flowController, log);
     }
 
-    public QuicStream(Version quicVersion, int streamId, QuicConnection connection, Logger log) {
+    public QuicStream(Version quicVersion, int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
+        this.flowController = flowController;
         this.log = log;
         queuedFrames = new LinkedBlockingQueue<>();  // Queued frames are the ones eligible for reading, because they are contiguous
         receivedFrames = new ConcurrentHashMap<>();  // Received frames are the ones not (yet) eligible for reading, because they are non-contiguous
@@ -224,22 +228,27 @@ public class QuicStream {
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            int maxDataPerFrame = connection.getMaxPacketSize() - StreamFrame.maxOverhead() - connection.getMaxShortHeaderPacketOverhead();
-            int remaining = len;
-            int offsetInDataArray = off;
-            while (remaining > 0) {
-                int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), this::retransmitStreamFrame);
-                remaining -= bytesInFrame;
-                offsetInDataArray += bytesInFrame;
-                currentOffset += bytesInFrame;
+            long flowControlLimit = flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + len);
+            if (currentOffset + len <= flowControlLimit) {
+                sendData(data, off, len);
+            }
+            else {
+                int sizeOfFirstWrite = (int) (flowControlLimit - currentOffset);
+                sendData(data, off, sizeOfFirstWrite);
+
+                try {
+                    flowController.waitForFlowControlCredits(QuicStream.this);
+                } catch (InterruptedException e) {
+                    throw new InterruptedIOException();
+                }
+
+                write(data, off + sizeOfFirstWrite, len - sizeOfFirstWrite);    // TODO: refactor recursion to while
             }
         }
 
         @Override
         public void write(int dataByte) throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[] {(byte) dataByte}, false), this::retransmitStreamFrame);
-            currentOffset += 1;
+            write(new byte[] { (byte) dataByte }, 0, 1);
         }
 
         @Override
@@ -250,6 +259,19 @@ public class QuicStream {
         @Override
         public void close() throws IOException {
             connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame);
+        }
+
+        private void sendData(byte[] data, int off, int len) {
+            int maxDataPerFrame = connection.getMaxPacketSize() - StreamFrame.maxOverhead() - connection.getMaxShortHeaderPacketOverhead();
+            int remaining = len;
+            int offsetInDataArray = off;
+            while (remaining > 0) {
+                int bytesInFrame = Math.min(maxDataPerFrame, remaining);
+                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), this::retransmitStreamFrame);
+                remaining -= bytesInFrame;
+                offsetInDataArray += bytesInFrame;
+                currentOffset += bytesInFrame;
+            }
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
