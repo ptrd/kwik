@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.*;
+import net.luminis.quic.stream.FlowControl;
 import net.luminis.tls.*;
 
 import java.io.IOException;
@@ -79,6 +80,7 @@ public class QuicConnection implements PacketProcessor {
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
+    private volatile FlowControl flowController;
     private Map<Integer, byte[]> destConnectionIds;
     private Map<Integer, byte[]> sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -562,7 +564,7 @@ public class QuicConnection implements PacketProcessor {
 
     public QuicStream createStream(boolean bidirectional) {
         int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(quicVersion, streamId, this, null, log);
+        QuicStream stream = new QuicStream(quicVersion, streamId, this, flowController, log);
         streams.put(streamId, stream);
         return stream;
     }
@@ -631,6 +633,11 @@ public class QuicConnection implements PacketProcessor {
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
         peerTransportParams = transportParameters;
+        flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
+                peerTransportParams.getInitialMaxStreamDataBidiLocal(),
+                peerTransportParams.getInitialMaxStreamDataBidiRemote(),
+                peerTransportParams.getInitialMaxStreamDataUni());
+
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
 
         if (processedRetryPacket) {

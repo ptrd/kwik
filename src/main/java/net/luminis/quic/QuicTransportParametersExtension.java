@@ -164,10 +164,12 @@ public class QuicTransportParametersExtension extends Extension {
         if (parameterId == initial_max_stream_data_bidi_local.value) {
             int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
+            params.setInitialMaxStreamDataBidiLocal(maxStreamDataBidiLocal);
         }
         else if (parameterId == initial_max_data.value) {
             long maxData = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max data: " + maxData);
+            params.setInitialMaxData(maxData);
         }
         else if (parameterId == initial_max_streams_bidi.value) {
             long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
@@ -205,10 +207,12 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
             long maxStreamDataBidiRemote = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max stream data bidi remote: " + maxStreamDataBidiRemote);
+            params.setInitialMaxStreamDataBidiRemote(maxStreamDataBidiRemote);
         }
         else if (parameterId == initial_max_stream_data_uni.value) {
             long maxStreamDataUni = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max stream data uni: " + maxStreamDataUni);
+            params.setInitialMaxStreamDataUni(maxStreamDataUni);
         }
         else if (parameterId == max_ack_delay.value) {
             int maxAckDelay = VariableLengthInteger.parse(buffer);

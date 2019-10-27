@@ -92,16 +92,32 @@ public class TransportParameters {
         return initialMaxData;
     }
 
+    public void setInitialMaxData(long initialMaxData) {
+        this.initialMaxData = initialMaxData;
+    }
+
     public long getInitialMaxStreamDataBidiLocal() {
         return initialMaxStreamDataBidiLocal;
+    }
+
+    public void setInitialMaxStreamDataBidiLocal(long initialMaxStreamDataBidiLocal) {
+        this.initialMaxStreamDataBidiLocal = initialMaxStreamDataBidiLocal;
     }
 
     public long getInitialMaxStreamDataBidiRemote() {
         return initialMaxStreamDataBidiRemote;
     }
 
+    public void setInitialMaxStreamDataBidiRemote(long initialMaxStreamDataBidiRemote) {
+        this.initialMaxStreamDataBidiRemote = initialMaxStreamDataBidiRemote;
+    }
+
     public long getInitialMaxStreamDataUni() {
         return initialMaxStreamDataUni;
+    }
+
+    public void setInitialMaxStreamDataUni(long initialMaxStreamDataUni) {
+        this.initialMaxStreamDataUni = initialMaxStreamDataUni;
     }
 
     public void setInitialMaxStreamData(long maxStreamData) {
