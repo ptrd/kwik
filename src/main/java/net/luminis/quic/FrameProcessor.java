@@ -24,6 +24,6 @@ import java.time.Instant;
 
 public interface FrameProcessor {
 
-    void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant time);
+    void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived);
 
 }

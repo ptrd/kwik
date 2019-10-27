@@ -55,6 +55,10 @@ public class MaxDataFrame extends QuicFrame {
         return bytes;
     }
 
+    public long getMaxData() {
+        return maxData;
+    }
+
     @Override
     public String toString() {
         return "MaxDataFrame[" + maxData + "]";

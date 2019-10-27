@@ -58,6 +58,10 @@ public class QuicStream {
     private final long receiverMaxDataIncrement;
 
 
+    public QuicStream(int streamId, QuicConnection connection) {
+        this(Version.getDefault(), streamId, connection, new NullLogger());
+    }
+
     public QuicStream(int streamId, QuicConnection connection, Logger log) {
         this(Version.getDefault(), streamId, connection, log);
     }
@@ -122,6 +126,24 @@ public class QuicStream {
 
     public int getStreamId() {
         return streamId;
+    }
+
+    public boolean isUnidirectional() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-2.1
+        // "The second least significant bit (0x2) of the stream ID distinguishes
+        //   between bidirectional streams (with the bit set to 0) and
+        //   unidirectional streams (with the bit set to 1)."
+        return (streamId & 0x0002) == 0x0002;
+    }
+
+    public boolean isClientInitiatedBidirectional() {
+        // "Client-initiated streams have even-numbered stream IDs (with the bit set to 0)"
+        return (streamId & 0x0003) == 0x0000;
+    }
+
+    public boolean isServerInitiatedBidirectional() {
+        // "server-initiated streams have odd-numbered stream IDs"
+        return (streamId & 0x0003) == 0x0001;
     }
 
     private class StreamInputStream extends InputStream {

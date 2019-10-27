@@ -426,6 +426,27 @@ class QuicStreamTest {
         return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
     }
 
+    @Test
+    void isUnidirectional() {
+        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnection.class));
+        assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
+
+        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnection.class));
+        assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
+    }
+
+    @Test
+    void isClientInitiatedBidirectional() {
+        QuicStream stream = new QuicStream(0, mock(QuicConnection.class));
+        assertThat(stream.isClientInitiatedBidirectional()).isTrue();
+    }
+
+    @Test
+    void isServerInitiatedBidirectional() {
+        QuicStream stream = new QuicStream(1, mock(QuicConnection.class));
+        assertThat(stream.isServerInitiatedBidirectional()).isTrue();
+    }
+
     /**
      * Mockito Argumentmatcher for checking StreamFrame arguments.
      */
