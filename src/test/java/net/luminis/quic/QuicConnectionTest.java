@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.MaxDataFrame;
+import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import javax.management.Query;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
@@ -281,6 +284,45 @@ class QuicConnectionTest {
     @Test
     void testQuicVersion20IsSupported() throws Exception {
         assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_20, Mockito.mock(Logger.class))).isNotNull();
+    }
+
+    @Test
+    void receivingTransportParametersInitializesFlowController() {
+        connection.setPeerTransportParameters(new TransportParameters(30, 9000, 1, 1));
+        QuicStream stream = connection.createStream(true);
+        assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
+    }
+
+    @Test
+    void receivingMaxStreamDataFrameIncreasesFlowControlLimit() {
+        TransportParameters parameters = new TransportParameters();
+        parameters.setInitialMaxData(100_000);
+        parameters.setInitialMaxStreamDataBidiRemote(9000);
+        connection.setPeerTransportParameters(parameters);
+
+        QuicStream stream = connection.createStream(true);
+        assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), new byte[] { 0x00, 0x01, 0x02, 0x03 },
+                        new MaxStreamDataFrame(stream.getStreamId(), 10_000)), Instant.now());
+
+        assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(10_000);
+    }
+
+    @Test
+    void receivingMaxDataFrameIncreasesFlowControlLimit() {
+        TransportParameters parameters = new TransportParameters();
+        parameters.setInitialMaxData(1_000);
+        parameters.setInitialMaxStreamDataBidiRemote(9000);
+        connection.setPeerTransportParameters(parameters);
+
+        QuicStream stream = connection.createStream(true);
+        assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(1000);
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), new byte[] { 0x00, 0x01, 0x02, 0x03 },
+                        new MaxDataFrame(4_000)), Instant.now());
+
+        assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(4_000);
     }
 
 }

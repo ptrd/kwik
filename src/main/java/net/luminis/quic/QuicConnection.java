@@ -519,6 +519,12 @@ public class QuicConnection implements PacketProcessor {
                     }
                 }
             }
+            else if (frame instanceof MaxStreamDataFrame) {
+                flowController.process(frame, packet.getEncryptionLevel(), timeReceived);
+            }
+            else if (frame instanceof MaxDataFrame) {
+                flowController.process(frame, packet.getEncryptionLevel(), timeReceived);
+            }
             else if (frame instanceof NewConnectionIdFrame) {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
                 if (((NewConnectionIdFrame) frame).getRetirePriorTo() != 0) {
@@ -762,6 +768,10 @@ public class QuicConnection implements PacketProcessor {
 
     public void setDefaultStreamReceiveBufferSize(long size) {
         transportParams.setInitialMaxStreamData(size);
+    }
+
+    public FlowControl getFlowController() {
+        return flowController;
     }
 
     public void addNewSessionTicket(NewSessionTicket sessionTicket) {
