@@ -41,6 +41,10 @@ public interface Logger {
 
     void logCongestionControl(boolean enabled);
 
+    boolean logFlowControl();
+
+    void logFlowControl(boolean enabled);
+
     void useRelativeTime(boolean enabled);
 
     void debug(String message);
@@ -87,5 +91,8 @@ public interface Logger {
 
     void cc(String message);
 
+    void fc(String message);
+
     void receivedPacketInfo(String toString);
+
 }

@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.FrameProcessor;
-import net.luminis.quic.ImplementationError;
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -57,13 +54,19 @@ public class FlowControl implements FrameProcessor {
     private long maxDataAssigned;
     private Map<Integer, Long> maxStreamDataAllowed;
     private Map<Integer, Long> maxStreamDataAssigned;
+    private final Logger log;
 
 
     public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
+        this(initialMaxData, initialMaxStreamDataBidiLocal, initialMaxStreamDataBidiRemote, initialMaxStreamDataUni, new NullLogger());
+    }
+
+    public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni, Logger log) {
         this.initialMaxData = initialMaxData;
         this.initialMaxStreamDataBidiLocal = initialMaxStreamDataBidiLocal;
         this.initialMaxStreamDataBidiRemote = initialMaxStreamDataBidiRemote;
         this.initialMaxStreamDataUni = initialMaxStreamDataUni;
+        this.log = log;
 
         maxDataAllowed = initialMaxData;
         maxDataAssigned = 0;
@@ -105,13 +108,26 @@ public class FlowControl implements FrameProcessor {
      * @throws InterruptedException
      */
     public void waitForFlowControlCredits(QuicStream stream) throws InterruptedException {
+        if (log.logFlowControl()) {
+            // This piece of code can be part of a race condition, but for logging this is less problematic; logging from a synchronized block is worse.
+            if (currentStreamCredits(stream) == 0) {
+                log.fc("Flow control: stream " + stream.getStreamId() + " blocked");
+            }
+        }
+
+        boolean wasBlocked = false;
         synchronized (this) {
             while (true) {
                 if (currentStreamCredits(stream) > 0) {
-                    return;
+                    break;
                 }
+                wasBlocked = true;
                 this.wait();
             }
+        }
+
+        if (wasBlocked && log.logFlowControl()) {
+            log.fc("Flow control: stream " + stream.getStreamId() + " not blocked anymore");
         }
     }
 

@@ -642,7 +642,8 @@ public class QuicConnection implements PacketProcessor {
         flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
                 peerTransportParams.getInitialMaxStreamDataBidiLocal(),
                 peerTransportParams.getInitialMaxStreamDataBidiRemote(),
-                peerTransportParams.getInitialMaxStreamDataUni());
+                peerTransportParams.getInitialMaxStreamDataUni(),
+                log);
 
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
 

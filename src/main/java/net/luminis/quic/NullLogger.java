@@ -60,6 +60,16 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public boolean logFlowControl() {
+        return false;
+    }
+
+    @Override
+    public void logFlowControl(boolean enabled) {
+
+    }
+
+    @Override
     public void useRelativeTime(boolean enabled) {
     }
 
@@ -149,6 +159,10 @@ public class NullLogger implements Logger {
 
     @Override
     public void cc(String message) {
+    }
+
+    @Override
+    public void fc(String message) {
     }
 
     @Override
