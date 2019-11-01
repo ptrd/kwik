@@ -307,14 +307,7 @@ public class QuicConnection implements PacketProcessor {
 
             log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
-
-            // TODO: strictly speaking, processing packet received event, which includes generating acks, should be done after processing the packet itself, see
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-13.1
-            // "A packet MUST NOT be acknowledged until packet protection has been
-            //   successfully removed and all frames contained in the packet have been
-            //   processed."
-            sender.processPacketReceived(packet);
-            packet.accept(this, timeReceived);
+            processPacket(timeReceived, packet);
 
             if (data.position() < data.limit()) {
                 parsePackets(datagram, timeReceived, data.slice());
@@ -379,6 +372,16 @@ public class QuicConnection implements PacketProcessor {
             largestPacketNumber = packet.getPacketNumber();
         }
         return packet;
+    }
+
+    private void processPacket(Instant timeReceived, QuicPacket packet) {
+        // TODO: strictly speaking, processing packet received event, which includes generating acks, should be done after processing the packet itself, see
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-13.1
+        // "A packet MUST NOT be acknowledged until packet protection has been
+        //   successfully removed and all frames contained in the packet have been
+        //   processed."
+        sender.processPacketReceived(packet);
+        packet.accept(this, timeReceived);
     }
 
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
