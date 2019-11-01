@@ -87,7 +87,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, long largestPacketNumber, Logger log) {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
         // "When removing packet protection, an endpoint
@@ -232,7 +232,7 @@ abstract public class QuicPacket {
         }
     }
 
-    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) {
+    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) throws DecryptionException {
         ByteBuffer nonceInput = ByteBuffer.allocate(12);
         nonceInput.putInt(0);
         nonceInput.putLong(packetNumber);
@@ -255,7 +255,7 @@ abstract public class QuicPacket {
             // Inappropriate runtime environment
             throw new QuicRuntimeException(e);
         } catch (AEADBadTagException decryptError) {
-            throw new ProtocolError("Cannot decrypt payload");
+            throw new DecryptionException();
         } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();

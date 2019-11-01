@@ -54,7 +54,7 @@ public class ShortHeaderPacket extends QuicPacket {
         }
     }
 
-    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, long largestPacketNumber, Logger log) throws MissingKeysException {
+    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, long largestPacketNumber, Logger log) throws MissingKeysException, DecryptionException {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         byte flags = buffer.get();
@@ -72,11 +72,15 @@ public class ShortHeaderPacket extends QuicPacket {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
             // "Due to reordering and loss, protected packets might be received by an
             //   endpoint before the final TLS handshake messages are received."
-            throw new MissingKeysException("Missing application keys");
+            throw new MissingKeysException(getEncryptionLevel());
         }
-        parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, largestPacketNumber, log);
+        try {
+            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, largestPacketNumber, log);
+        }
+        finally {
+            packetSize = buffer.position() - startPosition;
+        }
 
-        packetSize = buffer.position() - startPosition;
         return this;
     }
 

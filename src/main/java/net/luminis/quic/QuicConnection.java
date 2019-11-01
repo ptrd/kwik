@@ -300,29 +300,35 @@ public class QuicConnection implements PacketProcessor {
 
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
         int packetStart = data.position();
+        EncryptionLevel highestEncryptionLevelInPacket = null;
 
+        QuicPacket packet;
         try {
-            QuicPacket packet;
             packet = parsePacket(data);
+            if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
+                highestEncryptionLevelInPacket = packet.getEncryptionLevel();
+            }
 
             log.received(timeReceived, datagram, packet);
             log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
             processPacket(timeReceived, packet);
-
-            if (data.position() < data.limit()) {
-                parsePackets(datagram, timeReceived, data.slice());
-            }
-            else {
-                // Processed all packets in the datagram. Select the "highest" level for ack (obviously a TODO)
-                sender.packetProcessed(packet.getEncryptionLevel());
-            }
         }
-        catch (MissingKeysException noKeys) {
-            log.debug("Discarding packets because of missing keys.");
+        catch (DecryptionException | MissingKeysException cannotParse) {
+            int packetSize = data.position() - packetStart;
+            log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
+        }
+
+        if (data.position() < data.limit()) {
+            parsePackets(datagram, timeReceived, data.slice());
+        }
+        else {
+            // Processed all packets in the datagram. Select the "highest" level for ack.
+            if (highestEncryptionLevelInPacket != null)
+                sender.packetProcessed(highestEncryptionLevelInPacket);
         }
     }
 
-    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException {
+    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException {
         int flags = data.get();
         int version = data.getInt();
         data.rewind();

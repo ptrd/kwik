@@ -18,13 +18,10 @@
  */
 package net.luminis.quic;
 
-public enum EncryptionLevel {
+public class DecryptionException extends Exception {
 
-    Initial,
-    Handshake,
-    App;
-
-    public boolean higher(EncryptionLevel other) {
-        return this.ordinal() > other.ordinal();
+    @Override
+    public String toString() {
+        return "Decryption Error";
     }
 }

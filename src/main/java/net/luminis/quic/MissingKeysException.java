@@ -20,7 +20,15 @@ package net.luminis.quic;
 
 public class MissingKeysException extends Exception {
 
-    public MissingKeysException(String message) {
-        super(message);
+    private final EncryptionLevel encryptionLevel;
+
+    public MissingKeysException(EncryptionLevel encryptionLevel) {
+        this.encryptionLevel = encryptionLevel;
     }
+
+    @Override
+    public String toString() {
+        return "Missing keys for encryption level " + encryptionLevel;
+    }
+
 }
