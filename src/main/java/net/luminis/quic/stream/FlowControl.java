@@ -112,6 +112,8 @@ public class FlowControl implements FrameProcessor {
             // This piece of code can be part of a race condition, but for logging this is less problematic; logging from a synchronized block is worse.
             if (currentStreamCredits(stream) == 0) {
                 log.fc("Flow control: stream " + stream.getStreamId() + " blocked");
+                // Note that with the current (Sender) implementation, blocking might be caused by congestion control all well.
+                // That's why no (stream) data blocked frame should be sent at this point.
             }
         }
 
