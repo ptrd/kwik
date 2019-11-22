@@ -367,7 +367,17 @@ public class Quic {
         } catch (InterruptedException e) {}
 
         if (outputFile != null) {
-            FileOutputStream out = new FileOutputStream(outputFile);
+            FileOutputStream out;
+            if (new File(outputFile).isDirectory()) {
+                String fileName = http09Request;
+                if (fileName.equals("/")) {
+                    fileName = "index";
+                }
+                out = new FileOutputStream(new File(outputFile, fileName));
+            }
+            else {
+                out = new FileOutputStream(outputFile);
+            }
             quicStream.getInputStream().transferTo(out);
         }
         else {
