@@ -368,6 +368,6 @@ public class Quic {
     public static void usage() {
         HelpFormatter helpFormatter = new HelpFormatter();
         helpFormatter.setWidth(79);
-        helpFormatter.printHelp("quic <host>:<port> OR quic <host> <port>", cmdLineOptions);
+        helpFormatter.printHelp("kwik <host>:<port> OR kwik <host> <port>", cmdLineOptions);
     }
 }

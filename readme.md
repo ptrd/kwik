@@ -35,9 +35,9 @@ Implemented QUIC features:
 ## Usage
 
 Build the client with gradle (`gradle build`)
-and run the `quic.sh` script or `java -jar build/libs/quic.jar`. 
+and run the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 
-    usage: quic <host>:<port> OR quic <host> <port>
+    usage: kwik <host>:<port> OR quic <host> <port>
      -20                            use Quic version IETF_draft_20
      -22                            use Quic version IETF_draft_22
      -23                            use Quic version IETF_draft_23
