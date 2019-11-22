@@ -22,6 +22,8 @@ import net.luminis.tls.NewSessionTicket;
 import org.apache.commons.cli.*;
 
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -59,6 +61,7 @@ public class Quic {
 
         String host = null;
         int port = -1;
+        String http09Request = null;
 
         List<String> args = cmd.getArgList();
         if (args.size() == 0) {
@@ -67,7 +70,20 @@ public class Quic {
         }
         if (args.size() == 1) {
             String arg = args.get(0);
-            if (arg.contains(":")) {
+            if (arg.startsWith("http")) {
+                try {
+                    URL url = new URL(arg);
+                    host = url.getHost();
+                    port = url.getPort();
+                    if (! url.getPath().isEmpty()) {
+                        http09Request = url.getPath();
+                    }
+                } catch (MalformedURLException e) {
+                    System.out.println("Cannot parse URL '" + arg + "'");
+                    return;
+                }
+            }
+            else if (arg.contains(":")) {
                 host = arg.split(":")[0];
                 try {
                     port = Integer.parseInt(arg.split(":")[1]);
@@ -197,7 +213,6 @@ public class Quic {
             }
         }
 
-        String http09Request = null;
         if (cmd.hasOption("H")) {
             http09Request = cmd.getOptionValue("H");
             if (http09Request == null) {
@@ -368,6 +383,6 @@ public class Quic {
     public static void usage() {
         HelpFormatter helpFormatter = new HelpFormatter();
         helpFormatter.setWidth(79);
-        helpFormatter.printHelp("kwik <host>:<port> OR kwik <host> <port>", cmdLineOptions);
+        helpFormatter.printHelp("kwik <host>:<port> OR kwik <host> <port> \tOR kwik http[s]://host:port[/path]", cmdLineOptions);
     }
 }
