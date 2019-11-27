@@ -39,6 +39,7 @@ public class Receiver {
     private final Logger log;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
+    private volatile boolean isClosing = false;
 
     public Receiver(QuicConnection connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
         this.connection = connection;
@@ -62,6 +63,7 @@ public class Receiver {
     }
 
     public void shutdown() {
+        isClosing = true;
         receiverThread.interrupt();
     }
 
@@ -101,9 +103,14 @@ public class Receiver {
             log.debug("Terminating receive loop");
         }
         catch (IOException e) {
-            // This is probably fatal
-            log.error("IOException while receiving datagrams", e);
-            connection.abortConnection(e);
+            if (! isClosing) {
+                // This is probably fatal
+                log.error("IOException while receiving datagrams", e);
+                connection.abortConnection(e);
+            }
+            else {
+                log.debug("closing receiver");
+            }
         }
         catch (Throwable fatal) {
             log.error("IOException while receiving datagrams", fatal);

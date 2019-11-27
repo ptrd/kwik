@@ -2,11 +2,11 @@ package net.luminis.quic;
 
 import org.mockito.ArgumentMatcher;
 
-class PacketMatcher implements ArgumentMatcher<QuicPacket> {
+class PacketMatcherByPacketNumber implements ArgumentMatcher<QuicPacket> {
 
     private int packetNumber;
 
-    PacketMatcher(int packetNumber) {
+    PacketMatcherByPacketNumber(int packetNumber) {
         this.packetNumber = packetNumber;
     }
 

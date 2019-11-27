@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,6 +45,7 @@ import static org.mockito.Mockito.*;
 class QuicConnectionTest {
 
     private static Logger logger;
+    private final byte[] destinationConnectionId = { 0x00, 0x01, 0x02, 0x03 };
 
     private QuicConnection connection;
     private byte[] originalDestinationId;
@@ -303,7 +305,7 @@ class QuicConnectionTest {
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), new byte[] { 0x00, 0x01, 0x02, 0x03 },
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
                         new MaxStreamDataFrame(stream.getStreamId(), 10_000)), Instant.now());
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(10_000);
@@ -319,10 +321,52 @@ class QuicConnectionTest {
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(1000);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), new byte[] { 0x00, 0x01, 0x02, 0x03 },
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
                         new MaxDataFrame(4_000)), Instant.now());
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(4_000);
     }
 
+    @Test
+    void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionClose() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
+                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+
+        verify(sender).send(argThat(new PacketMatcherByFrameClass(ConnectionCloseFrame.class)), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionCloseOnce() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
+                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
+                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+        connection.processFrames(
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
+                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+
+        verify(sender, times(1)).send(argThat(new PacketMatcherByFrameClass(ConnectionCloseFrame.class)), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void closingConnectedConnectionTriggersConnectionClose() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+
+        connection.close();
+
+        verify(sender).send(argThat(new PacketMatcherByFrameClass(ConnectionCloseFrame.class)), anyString(), any(Consumer.class));
+    }
 }

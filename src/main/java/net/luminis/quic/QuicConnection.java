@@ -51,6 +51,8 @@ public class QuicConnection implements PacketProcessor {
         Handshaking,
         HandshakeError,
         Connected,
+        Closing,
+        Draining,
         Error
     }
 
@@ -78,6 +80,7 @@ public class QuicConnection implements PacketProcessor {
     private int nextStreamId;
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
+    private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
     private volatile FlowControl flowController;
@@ -538,7 +541,7 @@ public class QuicConnection implements PacketProcessor {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
                 if (((NewConnectionIdFrame) frame).getRetirePriorTo() != 0) {
                     // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
-                    log.info("Peer sends retire connection id; not impemented yet.");
+                    log.info("Peer sends retire connection id; not implemented yet.");
                 }
             }
             else if (frame instanceof RetireConnectionIdFrame) {
@@ -550,21 +553,7 @@ public class QuicConnection implements PacketProcessor {
             }
             else if (frame instanceof ConnectionCloseFrame) {
                 ConnectionCloseFrame close = (ConnectionCloseFrame) frame;
-                if (close.hasTransportError()) {
-                    if (close.hasTlsError()) {
-                        log.error("Connection closed by peer with TLS error " + close.getTlsError() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
-                    }
-                    else {
-                        log.error("Connection closed by peer with transport error " + close.getErrorCode() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
-                    }
-                }
-                else if (close.hasApplicationProtocolError()) {
-                    log.error("Connection closed by peer with application protocol error " + close.getErrorCode() + (close.hasReasonPhrase()? ": " + close.getReasonPhrase():""));
-                }
-                else {
-                    log.info("Peer is closing the connection.");
-                }
-                abortConnection(null);
+                handlePeerClosing(close);
             }
             else {
                 log.debug("Ignoring " + frame);
@@ -585,11 +574,85 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public void close() {
-        sender.shutdown();
+        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+            log.debug("Already closing");
+            return;
+        }
         if (keepAliveActor != null) {
             keepAliveActor.shutdown();
         }
-        // TODO
+        sender.stop();
+        connectionState = Status.Closing;
+        streams.values().stream().forEach(s -> s.abort());
+        send(new ConnectionCloseFrame(quicVersion), f -> {});
+
+        int closingPeriod = 3 * sender.getPto();
+        log.debug("closing/draining for " + closingPeriod + " ms");
+        try {
+            drainingSignal.await(closingPeriod, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {}
+
+        log.debug("leaving draining state (terminating)");
+        terminate();
+    }
+
+    private void handlePeerClosing(ConnectionCloseFrame closing) {
+        if (connectionState != Status.Closing) {
+            if (closing.hasError()) {
+                log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));
+            }
+            else {
+                log.info("Peer is closing");
+            }
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-10.3
+            // "An endpoint that receives a CONNECTION_CLOSE frame
+            //   MAY send a single packet containing a CONNECTION_CLOSE frame before
+            //   entering the draining state, using a CONNECTION_CLOSE frame and a
+            //   NO_ERROR code if appropriate."
+            if (connectionState == Status.Connected) {   // Only if we have Application keys  TODO: also when no Application keys available
+                send(new ConnectionCloseFrame(quicVersion), f -> {});  // TODO: number of connection close packets sent should be limited.
+            }
+            else if (connectionState == Status.Handshaking) {
+                connectionState = Status.HandshakeError;
+                handshakeFinishedCondition.countDown();
+            }
+            connectionState = Status.Draining;
+            // We're done!
+            terminate();
+        }
+        else if (connectionState == Status.Closing) {
+            if (closing.hasError()) {
+                log.error("Peer confirmed closing with " + determineClosingErrorMessage(closing));
+            }
+            else {
+                log.info("Peer confirmed closing; entering draining state.");
+            }
+            connectionState = Status.Draining;
+            drainingSignal.countDown();
+        }
+    }
+
+    private String determineClosingErrorMessage(ConnectionCloseFrame closing) {
+        if (closing.hasTransportError()) {
+            if (closing.hasTlsError()) {
+                return "TLS error " + closing.getTlsError() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
+            }
+            else {
+                return "transport error " + closing.getErrorCode() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
+            }
+        }
+        else if (closing.hasApplicationProtocolError()) {
+            return "application protocol error " + closing.getErrorCode() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
+        }
+        else {
+            return "";
+        }
+    }
+
+    private void terminate() {
+        sender.shutdown();
+        receiver.shutdown();
+        socket.close();
     }
 
     private synchronized int generateClientStreamId(boolean bidirectional) {
@@ -679,19 +742,22 @@ public class QuicConnection implements PacketProcessor {
      * @param error  the exception that caused the trouble
      */
     void abortConnection(Throwable error) {
-        if (connectionState == Status.Handshaking) {
-            connectionState = Status.HandshakeError;
+        if (error != null) {
+            if (connectionState == Status.Handshaking) {
+                connectionState = Status.HandshakeError;
+            } else {
+                connectionState = Status.Error;
+            }
         }
         else {
-            connectionState = Status.Error;
+            connectionState = Status.Closing;
         }
 
         if (error != null) {
             log.error("Aborting connection because of error", error);
         }
         handshakeFinishedCondition.countDown();
-        sender.shutdown();
-        receiver.shutdown();
+        terminate();
         streams.values().stream().forEach(s -> s.abort());
     }
 

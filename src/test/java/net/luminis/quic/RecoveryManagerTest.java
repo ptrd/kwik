@@ -83,7 +83,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         Thread.sleep(defaultRtt);
 
-        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(1)));
+        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(1)));
     }
 
     @Test

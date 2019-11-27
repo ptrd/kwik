@@ -54,6 +54,7 @@ public class InteractiveShell {
     private void setupCommands() {
         commands.put("help", this::help);
         commands.put("connect", this::connect);
+        commands.put("close", this::close);
         commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
         commands.put("cids_new", this::newConnectionIds);
@@ -128,6 +129,12 @@ public class InteractiveShell {
             System.out.println("Ok, connected to " + host + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);
+        }
+    }
+
+    private void close(String arg) {
+        if (quicConnection != null) {
+            quicConnection.close();
         }
     }
 

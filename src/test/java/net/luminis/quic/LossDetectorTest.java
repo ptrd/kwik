@@ -117,7 +117,7 @@ class LossDetectorTest extends RecoveryTests {
 
         lossDetector.onAckReceived(new AckFrame(List.of(2L, 3L, 4L)));
 
-        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(1)));
+        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(1)));
     }
 
     @Test
@@ -143,7 +143,7 @@ class LossDetectorTest extends RecoveryTests {
 
         lossDetector.onAckReceived(new AckFrame(List.of(8L)));
 
-        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(6)));
+        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 
     @Test
@@ -185,7 +185,7 @@ class LossDetectorTest extends RecoveryTests {
         Thread.sleep(Duration.between(lossDetector.getLossTime(), Instant.now()).toMillis() + 1);
         lossDetector.detectLostPackets();
 
-        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcher(6)));
+        verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 
     @Test

@@ -179,6 +179,13 @@ public class RecoveryManager {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
     }
 
+    public void stopRecovery() {
+        for (EncryptionLevel level: EncryptionLevel.values()) {
+            stopRecovery(level);
+        }
+        lossDetectionTimer.cancel(true);
+    }
+
     public void stopRecovery(EncryptionLevel level) {
         lossDetectors[level.ordinal()].reset();
     }

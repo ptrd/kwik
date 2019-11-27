@@ -96,6 +96,17 @@ public class Sender implements ProbeSender, FrameProcessor {
         connection.send(packet, "probe with data");
     }
 
+    public void stop() {
+        // Stop sending packets, so discard any packet waiting to be send.
+        incomingPacketQueue.clear();
+        // No more retransmissions either.
+        recoveryManager.stopRecovery();
+    }
+
+    public int getPto() {
+        return rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
+    }
+
     public void start(ConnectionSecrets secrets) {
         connectionSecrets = secrets;
         senderThread.start();

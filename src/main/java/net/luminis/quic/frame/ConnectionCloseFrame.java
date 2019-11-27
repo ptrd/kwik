@@ -29,11 +29,21 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     private int errorCode;
     private int triggeringFrameType;
-    private byte[] reasonPhrase;
+    private byte[] reasonPhrase = new byte[0];
     private int tlsError = -1;
     private int frameType;
 
+    /**
+     * Creates a connection close frame for a normal connection close without errors
+     * @param quicVersion
+     */
     public ConnectionCloseFrame(Version quicVersion) {
+        frameType = 0x1c;
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-20
+        // "NO_ERROR (0x0):  An endpoint uses this with CONNECTION_CLOSE to
+        //      signal that the connection is being closed abruptly in the absence
+        //      of any error."
+        errorCode = 0x00;
     }
 
     public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) {
@@ -103,7 +113,22 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.put((byte) 0x1c);
+        VariableLengthInteger.encode(errorCode, buffer);
+        VariableLengthInteger.encode(0, buffer);
+        VariableLengthInteger.encode(reasonPhrase.length, buffer);
+        buffer.put(reasonPhrase);
+
+        byte[] bytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(bytes);
+        return bytes;
+    }
+
+    @Override
+    public boolean isAckEliciting() {
+        return false;
     }
 
     @Override
@@ -111,7 +136,7 @@ public class ConnectionCloseFrame extends QuicFrame {
         return "ConnectionCloseFrame["
                 + (tlsError >= 0? "TLS " + tlsError: errorCode) + "|"
                 + triggeringFrameType + "|"
-                + (reasonPhrase != null? new String(reasonPhrase): "") + "]";
+                + (reasonPhrase != null? new String(reasonPhrase): "-") + "]";
     }
 
 }
