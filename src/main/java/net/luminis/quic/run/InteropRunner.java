@@ -28,13 +28,19 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 public class InteropRunner extends Quic {
 
+    public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
-    public static List TESTCASES = List.of(TC_RESUMPTION);
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION);
 
     public static File outputDir;
 
@@ -56,11 +62,16 @@ public class InteropRunner extends Quic {
         }
 
         try {
-            URL url1 = new URL(args[2]);
-            URL url2 = new URL(args[3]);
+            List<URL> downloadUrls = new ArrayList<>();
+            for (int i = 2; i < args.length; i++) {
+                downloadUrls.add(new URL(args[i]));
+            }
 
+            if (testCase.equals("transfer")) {
+                testTransfer(downloadUrls);
+            }
             if (testCase.equals("resumption")) {
-                testResumption(url1, url2);
+                testResumption(downloadUrls);
             }
         } catch (MalformedURLException e) {
             System.out.println("Invalid (second) argument: cannot parse URL '" + args[1] + "'");
@@ -69,7 +80,44 @@ public class InteropRunner extends Quic {
         }
     }
 
-    private static void testResumption(URL url1, URL url2) throws IOException {
+    private static void testTransfer(List<URL> downloadUrls) throws IOException {
+        URL url1 = downloadUrls.get(0);
+        SysOutLogger logger = new SysOutLogger();
+        logger.logPackets(true);
+
+        QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
+        connection.connect(5_000);
+
+        ForkJoinPool myPool = new ForkJoinPool(downloadUrls.size());
+        try {
+            myPool.submit(() ->
+                    downloadUrls.parallelStream()
+                            .forEach(url -> {
+                                try {
+                                    doHttp09Request(connection, url.getPath(), outputDir.getAbsolutePath());
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }))
+                    .get(5, TimeUnit.MINUTES);
+            System.out.println("Downloaded " + downloadUrls);
+        } catch (InterruptedException e) {
+            logger.error("download tasks interrupted", e);
+        } catch (ExecutionException e) {
+            logger.error("download tasks failed", e);
+        } catch (TimeoutException e) {
+            logger.error("download tasks timed out...", e);
+        }
+
+        connection.close();
+    }
+
+    private static void testResumption(List<URL> downloadUrls) throws IOException {
+        if (downloadUrls.size() != 2) {
+            throw new IllegalArgumentException("expected 2 download URLs");
+        }
+        URL url1 = downloadUrls.get(0);
+        URL url2 = downloadUrls.get(1);
         SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
 
