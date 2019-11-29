@@ -352,7 +352,7 @@ public class Quic {
         }
     }
 
-    private static void doHttp09Request(QuicConnection quicConnection, String http09Request, String outputFile) throws IOException {
+    public static void doHttp09Request(QuicConnection quicConnection, String http09Request, String outputFile) throws IOException {
         if (! http09Request.startsWith("/")) {
             http09Request = "/" + http09Request;
         }
