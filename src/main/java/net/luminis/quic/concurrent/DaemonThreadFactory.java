@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.concurrent;
 
 
 import java.util.concurrent.ThreadFactory;
@@ -26,12 +26,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Creates daemon threads. Java's default thread factory used in executors creates non-daemon threads that
  * prevent JVM from shutting down.
  */
-class DaemonThreadFactory implements ThreadFactory {
+public class DaemonThreadFactory implements ThreadFactory {
 
     private final String threadBaseName;
     private final AtomicInteger threadNumber = new AtomicInteger(1);
 
-    DaemonThreadFactory(String threadBaseName) {
+    public DaemonThreadFactory(String threadBaseName) {
         this.threadBaseName = threadBaseName;
     }
 
