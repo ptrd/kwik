@@ -83,7 +83,7 @@ public class InteropRunner extends Quic {
     private static void testTransfer(List<URL> downloadUrls) throws IOException {
         URL url1 = downloadUrls.get(0);
         SysOutLogger logger = new SysOutLogger();
-        logger.logPackets(true);
+        // logger.logPackets(true);
 
         QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
         connection.connect(5_000);
