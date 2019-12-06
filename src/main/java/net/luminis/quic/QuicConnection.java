@@ -106,7 +106,7 @@ public class QuicConnection implements PacketProcessor {
 
     public QuicConnection(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
         this(host, port, sessionTicket, quicVersion, log, host);
-        if (! quicVersion.atLeast(Version.IETF_draft_20)) {
+        if (! quicVersion.atLeast(Version.IETF_draft_23)) {
             throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
         }
     }

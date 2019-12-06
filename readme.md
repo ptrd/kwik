@@ -2,7 +2,7 @@
 
 ## A QUIC client Java library
 
-Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-19) protocol in Java.
+Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-24) protocol in Java.
 
 Kwik can be used to transport HTTP3, but it is not a HTTP3 client.
 If you're looking for a HTTP3 client, check out [Flupke](https://bitbucket.org/pjtr/flupke).
@@ -24,7 +24,7 @@ For the time being, this project is for educational purposes only.
 The status of the project is proof of concept: it is possible to set up a connection with a QUIC server and exchange
 data. See [Flupke](https://bitbucket.org/pjtr/flupke) for a sample HTTP3 client.
 
-Kwik supports IETF draft-20, draft-22 and draft-23.
+Kwik supports IETF draft-23 and draft-24.
 
 Implemented QUIC features:
 
@@ -38,9 +38,8 @@ Build the client with gradle (`gradle build`)
 and run the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 
     usage: kwik <host>:<port> OR quic <host> <port> OR kwik http[s]://host:port
-     -20                            use Quic version IETF_draft_20
-     -22                            use Quic version IETF_draft_22
      -23                            use Quic version IETF_draft_23
+     -24                            use Quic version IETF_draft_24
      -c,--connectionTimeout <arg>   connection timeout in seconds
      -h,--help                      show help
      -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.

@@ -30,26 +30,6 @@ public class ConnectionSecrets {
         Server
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-14#section-5.1.1
-    public static final byte[] STATIC_SALT_DRAFT_14 = new byte[] {
-            (byte) 0x9c, (byte) 0x10, (byte) 0x8f, (byte) 0x98,
-            (byte) 0x52, (byte) 0x0a, (byte) 0x5c, (byte) 0x5c,
-            (byte) 0x32, (byte) 0x96, (byte) 0x8e, (byte) 0x95,
-            (byte) 0x0e, (byte) 0x8a, (byte) 0x2c, (byte) 0x5f,
-            (byte) 0xe0, (byte) 0x6d, (byte) 0x6c, (byte) 0x38 };
-
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.2
-    public static final byte[] STATIC_SALT_DRAFT_17 = new byte[] {
-            (byte) 0xef, (byte) 0x4f, (byte) 0xb0, (byte) 0xab, (byte) 0xb4, (byte) 0x74, (byte) 0x70, (byte) 0xc4,
-            (byte) 0x1b, (byte) 0xef, (byte) 0xcf, (byte) 0x80, (byte) 0x31, (byte) 0x33, (byte) 0x4f, (byte) 0xae,
-            (byte) 0x48, (byte) 0x5e, (byte) 0x09, (byte) 0xa0 };
-
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-21#section-5.2
-    public static final byte[] STATIC_SALT_DRAFT_21 = new byte[] {
-            (byte) 0x7f, (byte) 0xbc, (byte) 0xdb, (byte) 0x0e, (byte) 0x7c, (byte) 0x66, (byte) 0xbb, (byte) 0xe9,
-            (byte) 0x19, (byte) 0x3a, (byte) 0x96, (byte) 0xcd, (byte) 0x21, (byte) 0x51, (byte) 0x9e, (byte) 0xbd,
-            (byte) 0x7a, (byte) 0x02, (byte) 0x64, (byte) 0x4a };
-
     // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-5.2
     public static final byte[] STATIC_SALT_DRAFT_23 = new byte[] {
             (byte) 0xc3, (byte) 0xee, (byte) 0xf7, (byte) 0x12, (byte) 0xc7, (byte) 0x2e, (byte) 0xbb, (byte) 0x5a,
@@ -77,7 +57,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion.atLeast(Version.IETF_draft_23)? STATIC_SALT_DRAFT_23: quicVersion.before(Version.IETF_draft_21)? STATIC_SALT_DRAFT_17: STATIC_SALT_DRAFT_21;
+        byte[] initialSalt = STATIC_SALT_DRAFT_23;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);

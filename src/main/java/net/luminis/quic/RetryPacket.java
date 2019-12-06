@@ -50,9 +50,6 @@ public class RetryPacket extends QuicPacket {
 
         byte flags = buffer.get();
         int odcil = 0;
-        if (quicVersion.before(Version.IETF_draft_22)) {
-            odcil = (flags & 0x0f);
-        }
 
         try {
             Version quicVersion = Version.parse(buffer.getInt());
@@ -61,37 +58,19 @@ public class RetryPacket extends QuicPacket {
             throw new ProtocolError("Server uses unsupported Quic version");
         }
 
-        if (quicVersion.atLeast(Version.IETF_draft_22)) {
-            int dstConnIdLength = buffer.get();
-            destinationConnectionId = new byte[dstConnIdLength];
-            buffer.get(destinationConnectionId);
+        int dstConnIdLength = buffer.get();
+        destinationConnectionId = new byte[dstConnIdLength];
+        buffer.get(destinationConnectionId);
 
-            int srcConnIdLength = buffer.get();
-            sourceConnectionId = new byte[srcConnIdLength];
-            buffer.get(sourceConnectionId);
+        int srcConnIdLength = buffer.get();
+        sourceConnectionId = new byte[srcConnIdLength];
+        buffer.get(sourceConnectionId);
 
-            odcil = buffer.get();
-        }
-        else
-        {
-            byte dcilScil = buffer.get();
-            int dstConnIdLength = ((dcilScil & 0xf0) >> 4) + 3;
-            int srcConnIdLength = (dcilScil & 0x0f) + 3;
-
-            destinationConnectionId = new byte[dstConnIdLength];
-            buffer.get(destinationConnectionId);
-            sourceConnectionId = new byte[srcConnIdLength];
-            buffer.get(sourceConnectionId);
-        }
+        odcil = buffer.get();
         log.debug("Destination connection id", destinationConnectionId);
         log.debug("Source connection id", sourceConnectionId);
 
-        if (quicVersion.atLeast(Version.IETF_draft_22)) {
-            originalDestinationConnectionId = new byte[odcil];
-        }
-        else {
-            originalDestinationConnectionId = new byte[odcil + 3];
-        }
+        originalDestinationConnectionId = new byte[odcil];
         buffer.get(originalDestinationConnectionId);
 
         int retryTokenLength = buffer.remaining();

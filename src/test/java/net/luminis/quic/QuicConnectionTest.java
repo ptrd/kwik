@@ -277,15 +277,15 @@ class QuicConnectionTest {
     }
 
     @Test
-    void testMinimumQuicVersionIs20() {
+    void testMinimumQuicVersionIs23() {
         assertThatThrownBy(
                 () -> new QuicConnection("localhost", 443, Version.IETF_draft_19, Mockito.mock(Logger.class)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void testQuicVersion20IsSupported() throws Exception {
-        assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_20, Mockito.mock(Logger.class))).isNotNull();
+    void testQuicVersion23IsSupported() throws Exception {
+        assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_23, Mockito.mock(Logger.class))).isNotNull();
     }
 
     @Test
