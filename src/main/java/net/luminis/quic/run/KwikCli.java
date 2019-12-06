@@ -69,7 +69,7 @@ public class KwikCli {
         }
         if (args.size() == 1) {
             String arg = args.get(0);
-            if (arg.startsWith("http")) {
+            if (arg.startsWith("http://") || arg.startsWith("https://")) {
                 try {
                     URL url = new URL(arg);
                     host = url.getHost();
