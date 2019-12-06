@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.Quic;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.SysOutLogger;
 import net.luminis.quic.Version;
@@ -36,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 
-public class InteropRunner extends Quic {
+public class InteropRunner extends KwikCli {
 
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";

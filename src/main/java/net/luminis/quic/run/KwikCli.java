@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.run;
 
+import net.luminis.quic.*;
 import net.luminis.tls.NewSessionTicket;
 import org.apache.commons.cli.*;
 
@@ -30,9 +31,9 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 /**
- * Set up a QUIC connection with a QUIC server.
+ * Command line interface for Kwik
  */
-public class Quic {
+public class KwikCli {
 
     private static Options cmdLineOptions;
 

@@ -49,7 +49,7 @@ test {
 
 jar {
     manifest {
-        attributes 'Main-Class': 'net.luminis.quic.Quic'
+        attributes 'Main-Class': 'net.luminis.quic.run.KwikCli'
     }
 
     doFirst {
