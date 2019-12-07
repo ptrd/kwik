@@ -132,7 +132,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     protected void checkPacketType(byte flags) {
-        if ((flags & 0x80) != 0x00) {
+        if ((flags & 0xc0) != 0x40) {
             // Programming error: this method shouldn't have been called if packet is not a Short Frame
             throw new RuntimeException();
         }
