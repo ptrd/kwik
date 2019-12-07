@@ -124,6 +124,7 @@ abstract public class QuicPacket {
             // Short header: 5 bits masked
             decryptedFlags = (byte) (flags ^ mask[0] & 0x1f);
         }
+        setUnprotectedHeader(decryptedFlags);
         buffer.position(currentPosition);
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
@@ -173,6 +174,8 @@ abstract public class QuicPacket {
         frames = new ArrayList<>();
         parseFrames(frameBytes, log);
     }
+
+    protected void setUnprotectedHeader(byte decryptedFlags) {}
 
     byte[] createHeaderProtectionMask(byte[] sample, NodeSecrets secrets) {
         return createHeaderProtectionMask(sample, 4, secrets);

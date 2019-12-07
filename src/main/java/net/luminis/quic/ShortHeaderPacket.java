@@ -30,6 +30,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
     private byte[] destinationConnectionId;
     private byte[] packetBytes;
+    private short keyPhaseBit;
 
     /**
      * Constructs an empty short header packet for use with the parse() method.
@@ -82,6 +83,11 @@ public class ShortHeaderPacket extends QuicPacket {
         }
 
         return this;
+    }
+
+    @Override
+    protected void setUnprotectedHeader(byte decryptedFlags) {
+        keyPhaseBit = (short) ((decryptedFlags & 0x04) >> 2);
     }
 
     protected EncryptionLevel getEncryptionLevel() {
@@ -147,7 +153,7 @@ public class ShortHeaderPacket extends QuicPacket {
         return "Packet "
                 + getEncryptionLevel().name().charAt(0) + "|"
                 + (packetNumber >= 0? packetNumber: ".") + "|"
-                + "S" + "|"
+                + "S" + keyPhaseBit + "|"
                 + ByteUtils.bytesToHex(destinationConnectionId) + "|"
                 + packetSize + "|"
                 + frames.size() + "  "
