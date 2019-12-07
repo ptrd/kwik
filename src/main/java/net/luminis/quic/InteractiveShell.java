@@ -57,6 +57,7 @@ public class InteractiveShell {
         commands.put("close", this::close);
         commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
+        commands.put("params", this::printParams);
         commands.put("cids_new", this::newConnectionIds);
         commands.put("cids_next", this::nextDestinationConnectionId);
         commands.put("cids_show", this::printConnectionIds);
@@ -199,6 +200,11 @@ public class InteractiveShell {
 
     private void sendPing(String arg) {
         quicConnection.ping();
+    }
+
+    private void printParams(String arg) {
+        TransportParameters parameters = quicConnection.getPeerTransportParameters();
+        System.out.println("Server idle time: " + parameters.getIdleTimeout());
     }
 
     private void error(Exception error) {

@@ -709,6 +709,10 @@ public class QuicConnection implements PacketProcessor {
         ;
     }
 
+    public TransportParameters getPeerTransportParameters() {
+        return peerTransportParams;
+    }
+
     void setPeerTransportParameters(TransportParameters transportParameters) {
         peerTransportParams = transportParameters;
         flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
