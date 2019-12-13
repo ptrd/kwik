@@ -406,17 +406,13 @@ public class QuicConnection implements PacketProcessor {
         boolean compatibilityMode = false;
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
-        Extension[] quicExtensions = new Extension[] {
-                new QuicTransportParametersExtension(quicVersion, transportParams),
-                new ECPointFormatExtension(),
-                new ApplicationLayerProtocolNegotiationExtension(alpnProtocol),
-                null    // Placeholder: will be replaced or removed, see below.
-        };
-        if (sessionTicket == null) {
-            quicExtensions = Arrays.copyOf(quicExtensions, quicExtensions.length - 1);
-        }
-        else {
-            quicExtensions[quicExtensions.length - 1] = new ClientHelloPreSharedKeyExtension(tlsState, sessionTicket);
+        List<Extension> quicExtensions = new ArrayList<>();
+        quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
+        quicExtensions.add(new ECPointFormatExtension());
+        quicExtensions.add(new ApplicationLayerProtocolNegotiationExtension(alpnProtocol));
+
+        if (sessionTicket != null) {
+            quicExtensions.add(new ClientHelloPreSharedKeyExtension(tlsState, sessionTicket));
         }
         return new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions).getBytes();
     }
