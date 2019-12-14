@@ -73,9 +73,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.frames = frames;
     }
 
-    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
+    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
-        Keys clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
         frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
@@ -88,7 +87,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         addLength(packetBuffer, encodedPacketNumber.length, frameBytes.limit());
         packetBuffer.put(encodedPacketNumber);
 
-        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, frameBytes, 0, clientSecrets);
+        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, frameBytes, 0, keys);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();

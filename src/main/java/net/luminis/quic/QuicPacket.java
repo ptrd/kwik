@@ -471,7 +471,7 @@ abstract public class QuicPacket {
 
     protected abstract EncryptionLevel getEncryptionLevel();
 
-    public abstract byte[] generatePacketBytes(long packetNumber, ConnectionSecrets secrets);
+    public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
 
     public List<QuicFrame> getFrames() {
         return frames;

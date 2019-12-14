@@ -144,7 +144,9 @@ public class Sender implements ProbeSender, FrameProcessor {
                     if (packet == null) {
                         packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
                     }
-                    byte[] packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);  // TODO: more efficient would be to estimate packet size
+
+                    Keys keys = connectionSecrets.getClientSecrets(packet.getEncryptionLevel());// Assuming client role
+                    byte[] packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
 
                     boolean hasBeenWaiting = false;
                     while (! congestionController.canSend(packetData.length)) {
@@ -171,7 +173,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                     if (ackGenerator.hasAckToSend()) {
                         AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
                         packet.addFrame(ackToSend);
-                        packetData = packet.generatePacketBytes(packetNumber, connectionSecrets);
+                        packetData = packet.generatePacketBytes(packetNumber, keys);
                     }
 
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);

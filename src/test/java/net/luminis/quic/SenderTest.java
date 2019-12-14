@@ -67,7 +67,7 @@ class SenderTest {
     @Test
     void testSingleSend() throws Exception {
         setCongestionWindowSize(1250);
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
         waitForSender();
 
@@ -77,7 +77,7 @@ class SenderTest {
     @Test
     void testSenderIsCongestionControlled() throws Exception {
         setCongestionWindowSize(1250);
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2", p -> {});
 
@@ -96,7 +96,7 @@ class SenderTest {
     @Test
     void testSenderCongestionControlWithUnrelatedAck() throws Exception {
         setCongestionWindowSize(1250);
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
 
         sender.send(new MockPacket(0, 12, EncryptionLevel.Initial,"initial"), "packet 1", p -> {});
         sender.send(new MockPacket(0, 1230, "packet 1"), "packet 1", p -> {});
@@ -116,7 +116,7 @@ class SenderTest {
     @Test
     void testSenderCongestionControlWithIncorrectAck() throws Exception {
         setCongestionWindowSize(1250);
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
 
         sender.send(new MockPacket(0, 1240, "packet 1"), "packet 1", p -> {});
         sender.send(new MockPacket(1, 1240, "packet 2"), "packet 2", p -> {});
@@ -134,7 +134,7 @@ class SenderTest {
 
     @Test
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
 
         sender.send(new MockPacket(0, 1240, EncryptionLevel.Initial, new AckFrame(), "packet 1"), "packet 1", p -> {});
         waitForSender();
@@ -150,7 +150,7 @@ class SenderTest {
 
     @Test
     void receivingPacketLeadsToSendAckPacket() throws IOException  {
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
                 .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
 
@@ -174,7 +174,7 @@ class SenderTest {
     @Test
     void whenWaitForCongestionControllerIsInteruptedBecauseOfProcessedPacketWaitingPacketShouldRemainWaiting() throws Exception {
         setCongestionWindowSize(1212);
-        sender.start(null);
+        sender.start(mock(ConnectionSecrets.class));
 
         // Send first packet to fill up cwnd
         MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new AckFrame(), "first packet");

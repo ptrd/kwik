@@ -95,9 +95,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
+    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
-        Keys clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         byte flags;
@@ -119,7 +118,7 @@ public class ShortHeaderPacket extends QuicPacket {
         frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
         frameBytes.flip();
 
-        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, clientSecrets);
+        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, keys);
 
         buffer.limit(buffer.position());
         packetSize = buffer.limit();
