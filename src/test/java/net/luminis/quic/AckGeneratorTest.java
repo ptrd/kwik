@@ -92,7 +92,7 @@ class AckGeneratorTest {
         AckFrame ack1 = ackGenerator.generateAckForPacket(1);
         assertThat(ack1.getAckedPacketNumbers()).containsOnly(0L, 1L);
 
-        ackGenerator.process(new AckFrame(1), EncryptionLevel.Initial);
+        ackGenerator.process(new AckFrame(1));
 
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(false);
     }
@@ -105,7 +105,7 @@ class AckGeneratorTest {
         AckFrame ack1 = ackGenerator.generateAckForPacket(6);
         assertThat(ack1.getAckedPacketNumbers()).containsOnly(0L, 1L);
 
-        ackGenerator.process(new AckFrame(6), EncryptionLevel.Initial);  // This acks the ack sent in packet 6 -> ack1
+        ackGenerator.process(new AckFrame(6));  // This acks the ack sent in packet 6 -> ack1
         ackGenerator.packetReceived(new MockPacket(2, 83, EncryptionLevel.Initial));
 
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(true);

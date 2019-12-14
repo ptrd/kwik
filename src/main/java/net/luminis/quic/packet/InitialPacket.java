@@ -79,6 +79,11 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
+    public PnSpace getPnSpace() {
+        return PnSpace.Initial;
+    }
+
+    @Override
     public void accept(PacketProcessor processor, Instant time) {
         processor.process(this, time);
     }

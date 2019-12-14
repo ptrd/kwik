@@ -105,6 +105,11 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
+    public PnSpace getPnSpace() {
+        return null;
+    }
+
+    @Override
     public Long getPacketNumber() {
         // Version Negotiation Packet doesn't have a packet number
         return null;

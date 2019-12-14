@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 public class RecoveryManager {
 
     private final RttEstimator rttEstimater;
-    private final LossDetector[] lossDetectors = new LossDetector[EncryptionLevel.values().length];
+    private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
     private final ProbeSender sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
@@ -48,7 +48,7 @@ public class RecoveryManager {
 
     RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
-        for (EncryptionLevel pnSpace: EncryptionLevel.values()) {
+        for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);
         }
         this.sender = sender;
@@ -103,14 +103,14 @@ public class RecoveryManager {
 
     private void sendProbe() {
         log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
-        List<QuicPacket> unAckedInitialPackets = lossDetectors[EncryptionLevel.Initial.ordinal()].unAcked();
+        List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
         if (! unAckedInitialPackets.isEmpty()) {
             // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
             // All frames need to be resent, because Initial packet wil contain padding.
             sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial);
         }
         else {
-            List<QuicPacket> handshakes = lossDetectors[EncryptionLevel.Handshake.ordinal()].unAcked();
+            List<QuicPacket> handshakes = lossDetectors[PnSpace.Handshake.ordinal()].unAcked();
 
             if (! handshakes.isEmpty()) {
                 // TODO
@@ -123,7 +123,7 @@ public class RecoveryManager {
 
     PnSpaceLossTime getEarliestLossTime() {
         PnSpaceLossTime earliestLossTime = null;
-        for (EncryptionLevel pnSpace: EncryptionLevel.values()) {
+        for (PnSpace pnSpace: PnSpace.values()) {
             Instant pnSpaceLossTime = lossDetectors[pnSpace.ordinal()].getLossTime();
             if (pnSpaceLossTime != null) {
                 if (earliestLossTime == null) {
@@ -155,9 +155,9 @@ public class RecoveryManager {
         timerExpiration = null;
     }
 
-    public void onAckReceived(AckFrame ackFrame, EncryptionLevel encryptionLevel) {
+    public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace) {
         ptoCount = 0;
-        lossDetectors[encryptionLevel.ordinal()].onAckReceived(ackFrame);
+        lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame);
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
@@ -165,7 +165,7 @@ public class RecoveryManager {
             lastAckElicitingSent = sent;
         }
 
-        lossDetectors[packet.getEncryptionLevel().ordinal()].packetSent(packet, sent, packetLostCallback);
+        lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
         setLossDetectionTimer();  // TODO: why call this for ack-only packets?
     }
 
@@ -182,14 +182,14 @@ public class RecoveryManager {
     }
 
     public void stopRecovery() {
-        for (EncryptionLevel level: EncryptionLevel.values()) {
-            stopRecovery(level);
+        for (PnSpace pnSpace: PnSpace.values()) {
+            stopRecovery(pnSpace);
         }
         lossDetectionTimer.cancel(true);
     }
 
-    public void stopRecovery(EncryptionLevel level) {
-        lossDetectors[level.ordinal()].reset();
+    public void stopRecovery(PnSpace pnSpace) {
+        lossDetectors[pnSpace.ordinal()].reset();
     }
 
     public long getLost() {
@@ -240,10 +240,10 @@ public class RecoveryManager {
     }
 
     static class PnSpaceLossTime {
-        public EncryptionLevel pnSpace;
+        public PnSpace pnSpace;
         public Instant lossTime;
 
-        public PnSpaceLossTime(EncryptionLevel pnSpace, Instant pnSpaceLossTime) {
+        public PnSpaceLossTime(PnSpace pnSpace, Instant pnSpaceLossTime) {
             this.pnSpace = pnSpace;
             lossTime = pnSpaceLossTime;
         }

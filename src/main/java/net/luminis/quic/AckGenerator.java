@@ -58,9 +58,8 @@ public class AckGenerator {
     /**
      * Process a received AckFrame.
      * @param receivedAck
-     * @param encryptionLevel
      */
-    public synchronized void process(QuicFrame receivedAck, EncryptionLevel encryptionLevel) {
+    public synchronized void process(QuicFrame receivedAck) {
         // Find max packet number that had an ack sent with it...
         ((AckFrame) receivedAck).getAckedPacketNumbers().stream()
                 .filter(pn -> ackSentWithPacket.containsKey(pn))

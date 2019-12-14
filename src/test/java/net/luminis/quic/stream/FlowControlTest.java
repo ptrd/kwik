@@ -19,6 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.frame.MaxDataFrame;
@@ -117,10 +118,10 @@ class FlowControlTest {
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        fc.process(new MaxDataFrame(300), EncryptionLevel.App, null);
+        fc.process(new MaxDataFrame(300), PnSpace.App, null);
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(300);
 
-        fc.process(new MaxDataFrame(400), EncryptionLevel.App, null);
+        fc.process(new MaxDataFrame(400), PnSpace.App, null);
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(400);
     }
 
@@ -138,7 +139,7 @@ class FlowControlTest {
         assertThat(fc.increaseFlowControlLimit(stream1, 200)).isEqualTo(200);
         assertThat(fc.increaseFlowControlLimit(stream2, 200)).isEqualTo(100);
 
-        fc.process(new MaxDataFrame(600), EncryptionLevel.App, null);
+        fc.process(new MaxDataFrame(600), PnSpace.App, null);
         assertThat(fc.increaseFlowControlLimit(stream1, 400)).isEqualTo(400);
         assertThat(fc.increaseFlowControlLimit(stream2, 400)).isEqualTo(200);
     }
@@ -154,7 +155,7 @@ class FlowControlTest {
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        fc.process(new MaxStreamDataFrame(streamId, 300), EncryptionLevel.App, null);
+        fc.process(new MaxStreamDataFrame(streamId, 300), PnSpace.App, null);
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(300);
     }
 
@@ -173,7 +174,7 @@ class FlowControlTest {
         Instant start = Instant.now();
         executeAsyncWithDelay(() -> {
             // Receive MaxDataFrame that increments max data to 200
-            fc.process(new MaxDataFrame(200), EncryptionLevel.App, null);
+            fc.process(new MaxDataFrame(200), PnSpace.App, null);
         }, timeUntilMaxDataFrameIsReceived);
 
         fc.waitForFlowControlCredits(stream);
@@ -198,7 +199,7 @@ class FlowControlTest {
         Instant start = Instant.now();
         executeAsyncWithDelay(() -> {
             // Receive MaxStreamDataFrame that increments max data to 200
-            fc.process(new MaxStreamDataFrame(streamId, 300), EncryptionLevel.App, null);
+            fc.process(new MaxStreamDataFrame(streamId, 300), PnSpace.App, null);
         }, timeUntilMaxDataFrameIsReceived);
 
         fc.waitForFlowControlCredits(stream);

@@ -76,7 +76,7 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(createPacket(1), now.minusMillis(defaultRtt / 2), lostPacket -> lostPacketHandler.process(lostPacket));
         recoveryManager.packetSent(createPacket(2), now, p -> {});
 
-        recoveryManager.onAckReceived(new AckFrame(2), EncryptionLevel.App);
+        recoveryManager.onAckReceived(new AckFrame(2), PnSpace.App);
 
         long startVerify = System.currentTimeMillis();
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
@@ -165,7 +165,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         Thread.sleep(probeTimeout / 2);
         // Ack on first packet, second packet must be the baseline for the probe-timeout
-        recoveryManager.onAckReceived(new AckFrame(10), EncryptionLevel.App);
+        recoveryManager.onAckReceived(new AckFrame(10), PnSpace.App);
 
         // No Probe timeout yet!
         Thread.sleep(epsilon);
@@ -197,7 +197,7 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(probeSender, times(2)).sendProbe();  // Yet it should
 
         // Receive Ack, should reset PTO count
-        recoveryManager.onAckReceived(new AckFrame(3), EncryptionLevel.App);
+        recoveryManager.onAckReceived(new AckFrame(3), PnSpace.App);
 
         recoveryManager.packetSent(createPacket(5), Instant.now(), p -> {});
 

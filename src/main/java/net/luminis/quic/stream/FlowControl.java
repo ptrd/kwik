@@ -168,12 +168,12 @@ public class FlowControl implements FrameProcessor {
 
 
     @Override
-    public void process(QuicFrame frame, EncryptionLevel encryptionLevel, Instant time) {
+    public void process(QuicFrame frame, PnSpace pnSpace, Instant time) {
         if (frame instanceof MaxDataFrame) {
-            process((MaxDataFrame) frame, encryptionLevel, time);
+            process((MaxDataFrame) frame);
         }
         else if (frame instanceof MaxStreamDataFrame) {
-            process((MaxStreamDataFrame) frame, encryptionLevel, time);
+            process((MaxStreamDataFrame) frame);
         }
         else {
             throw new ImplementationError();
@@ -183,11 +183,11 @@ public class FlowControl implements FrameProcessor {
         }
     }
 
-    private void process(MaxDataFrame frame, EncryptionLevel encryptionLevel, Instant timeReceived) {
+    private void process(MaxDataFrame frame) {
         maxDataAllowed = frame.getMaxData();
     }
 
-    private void process(MaxStreamDataFrame frame, EncryptionLevel encryptionLevel, Instant timeReceived) {
+    private void process(MaxStreamDataFrame frame) {
         synchronized (this) {
             int streamId = frame.getStreamId();
             long maxStreamData = frame.getMaxData();

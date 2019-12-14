@@ -86,6 +86,17 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
+    public PnSpace getPnSpace() {
+        switch (encryptionLevel) {
+            case Initial: return PnSpace.Initial;
+            case Handshake: return PnSpace.Handshake;
+            case App: return PnSpace.App;
+            default:
+                return null;
+        }
+    }
+
+    @Override
     public byte[] generatePacketBytes(long packetNumber, Keys keys) {
         ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);

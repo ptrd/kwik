@@ -87,8 +87,14 @@ public class ShortHeaderPacket extends QuicPacket {
         keyPhaseBit = (short) ((decryptedFlags & 0x04) >> 2);
     }
 
+    @Override
     public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.App;
+    }
+
+    @Override
+    public PnSpace getPnSpace() {
+        return PnSpace.App;
     }
 
     @Override

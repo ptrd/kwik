@@ -57,7 +57,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private QuicConnection connection;
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
     private AckGenerator[] ackGenerators;
-    private final long[] lastPacketNumber = new long[EncryptionLevel.values().length];
+    private final long[] lastPacketNumber = new long[PnSpace.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
     private RecoveryManager recoveryManager;
     private int receiverMaxAckDelay;
@@ -141,7 +141,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                         packetLostCallback = queued.packetLostCallback;
                     }
 
-                    packetNumber = generatePacketNumber(level);
+                    packetNumber = generatePacketNumber(level.relatedPnSpace());
                     if (packet == null) {
                         packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
                     }
@@ -209,9 +209,9 @@ public class Sender implements ProbeSender, FrameProcessor {
         senderThread.interrupt();
     }
 
-    private long generatePacketNumber(EncryptionLevel encryptionLevel) {
+    private long generatePacketNumber(PnSpace pnSpace) {
         synchronized (lastPacketNumber) {
-            return lastPacketNumber[encryptionLevel.ordinal()]++;
+            return lastPacketNumber[pnSpace.ordinal()]++;
         }
     }
 
@@ -235,27 +235,27 @@ public class Sender implements ProbeSender, FrameProcessor {
     /**
      * Process incoming acknowledgement.
      * @param ackFrame
-     * @param encryptionLevel
+     * @param pnSpace
      * @param timeReceived
      */
-    public synchronized void process(QuicFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
+    public synchronized void process(QuicFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (ackFrame instanceof AckFrame) {
-            processAck((AckFrame) ackFrame, encryptionLevel, timeReceived);
+            processAck((AckFrame) ackFrame, pnSpace, timeReceived);
         }
         else {
             throw new RuntimeException();  // Would be programming error.
         }
     }
 
-    private void processAck(AckFrame ackFrame, EncryptionLevel encryptionLevel, Instant timeReceived) {
-        ackGenerators[encryptionLevel.ordinal()].process(ackFrame, encryptionLevel);
+    private void processAck(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
+        ackGenerators[pnSpace.ordinal()].process(ackFrame);
 
-        computeRttSample(ackFrame, encryptionLevel, timeReceived);
+        computeRttSample(ackFrame, pnSpace, timeReceived);
 
-        recoveryManager.onAckReceived(ackFrame, encryptionLevel);
+        recoveryManager.onAckReceived(ackFrame, pnSpace);
 
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
-            PacketId id = new PacketId(encryptionLevel, pn);
+            PacketId id = new PacketId(pnSpace, pn);
             if (packetSentLog.containsKey(id)) {
                 Duration ackDuration = Duration.between(Instant.now(), packetSentLog.get(id).timeSent);
                 log.debug("Ack duration for " + id + ": " + ackDuration);
@@ -264,8 +264,8 @@ public class Sender implements ProbeSender, FrameProcessor {
         });
     }
 
-    private void computeRttSample(AckFrame ack, EncryptionLevel encryptionLevel, Instant timeReceived) {
-        PacketId largestPnPacket = new PacketId(encryptionLevel, ack.getLargestAcknowledged());
+    private void computeRttSample(AckFrame ack, PnSpace pnSpace, Instant timeReceived) {
+        PacketId largestPnPacket = new PacketId(pnSpace, ack.getLargestAcknowledged());
         PacketAckStatus packetStatus = packetSentLog.get(largestPnPacket);
         if (packetStatus != null) {
             rttEstimater.addSample(timeReceived, packetStatus.timeSent, ack.getAckDelay());
@@ -306,7 +306,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         connection.ping();
     }
 
-    public void stopRecovery(EncryptionLevel level) {
+    public void stopRecovery(PnSpace level) {
         recoveryManager.stopRecovery(level);
     }
 

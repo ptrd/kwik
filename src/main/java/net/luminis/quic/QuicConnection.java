@@ -66,7 +66,6 @@ public class QuicConnection implements PacketProcessor {
     private final TlsState tlsState;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
-    private final int[] lastPacketNumber = new int[EncryptionLevel.values().length];
     private final Sender sender;
     private final Receiver receiver;
     private final ECPrivateKey privateKey;
@@ -270,7 +269,7 @@ public class QuicConnection implements PacketProcessor {
             // TODO tlsState.discardKeys(Initial);
             // "Endpoints MUST NOT send Initial packets after this point. This results in abandoning loss recovery state
             // for the Initial encryption level and ignoring any outstanding Initial packets."
-            sender.stopRecovery(Initial);
+            sender.stopRecovery(PnSpace.Initial);
 
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
@@ -405,6 +404,9 @@ public class QuicConnection implements PacketProcessor {
     }
 
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.6
+        // "There is a separate flow of cryptographic handshake data in each
+        //   encryption level"
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
                 cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsState, log));
@@ -483,10 +485,6 @@ public class QuicConnection implements PacketProcessor {
                 log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
                 generateInitialKeys();
 
-                synchronized (lastPacketNumber) {
-                    lastPacketNumber[Initial.ordinal()] = 0;
-                }
-
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
                 // "A Retry or Version Negotiation packet causes a client to send another
                 //   Initial packet, effectively restarting the connection process and
@@ -513,7 +511,7 @@ public class QuicConnection implements PacketProcessor {
                 if (peerTransportParams != null) {
                     ((AckFrame) frame).setDelayExponent(peerTransportParams.getAckDelayExponent());
                 }
-                sender.process(frame, packet.getEncryptionLevel(), timeReceived);
+                sender.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof StreamFrame) {
                 int streamId = ((StreamFrame) frame).getStreamId();
@@ -539,10 +537,10 @@ public class QuicConnection implements PacketProcessor {
                 }
             }
             else if (frame instanceof MaxStreamDataFrame) {
-                flowController.process(frame, packet.getEncryptionLevel(), timeReceived);
+                flowController.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof MaxDataFrame) {
-                flowController.process(frame, packet.getEncryptionLevel(), timeReceived);
+                flowController.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof NewConnectionIdFrame) {
                 destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());

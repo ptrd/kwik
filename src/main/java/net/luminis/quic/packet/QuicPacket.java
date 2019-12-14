@@ -472,6 +472,8 @@ abstract public class QuicPacket {
 
     public abstract EncryptionLevel getEncryptionLevel();
 
+    public abstract PnSpace getPnSpace();
+
     public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
 
     public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException;
@@ -481,7 +483,7 @@ abstract public class QuicPacket {
     }
 
     public PacketId getId() {
-        return new PacketId(getEncryptionLevel(), getPacketNumber());
+        return new PacketId(getPnSpace(), getPacketNumber());
     }
 
     public abstract void accept(PacketProcessor processor, Instant time);

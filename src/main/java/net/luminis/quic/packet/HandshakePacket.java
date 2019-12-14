@@ -20,6 +20,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.PacketProcessor;
+import net.luminis.quic.PnSpace;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 
@@ -60,6 +61,11 @@ public class HandshakePacket extends LongHeaderPacket {
     @Override
     public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.Handshake;
+    }
+
+    @Override
+    public PnSpace getPnSpace() {
+        return PnSpace.Handshake;
     }
 
     @Override

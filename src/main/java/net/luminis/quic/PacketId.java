@@ -22,11 +22,11 @@ import java.util.Objects;
 
 public class PacketId implements Comparable<PacketId> {
 
-    private final EncryptionLevel encryptionLevel;
+    private final PnSpace pnSpace;
     private final long packetNumber;
 
-    public PacketId(EncryptionLevel encryptionLevel, long packetNumber) {
-        this.encryptionLevel = encryptionLevel;
+    public PacketId(PnSpace pnSpace, long packetNumber) {
+        this.pnSpace = pnSpace;
         this.packetNumber = packetNumber;
     }
 
@@ -36,25 +36,25 @@ public class PacketId implements Comparable<PacketId> {
         if (o == null || getClass() != o.getClass()) return false;
         PacketId packetId = (PacketId) o;
         return packetNumber == packetId.packetNumber &&
-                encryptionLevel == packetId.encryptionLevel;
+                pnSpace == packetId.pnSpace;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(encryptionLevel, packetNumber);
+        return Objects.hash(pnSpace, packetNumber);
     }
 
     @Override
     public String toString() {
-        return encryptionLevel.name().charAt(0) + "|" + packetNumber;
+        return pnSpace.name().charAt(0) + "|" + packetNumber;
     }
 
     @Override
     public int compareTo(PacketId other) {
-        if (this.encryptionLevel.ordinal() < other.encryptionLevel.ordinal()) {
+        if (this.pnSpace.ordinal() < other.pnSpace.ordinal()) {
             return -1;
         }
-        else if (this.encryptionLevel.ordinal() > other.encryptionLevel.ordinal()) {
+        else if (this.pnSpace.ordinal() > other.pnSpace.ordinal()) {
             return 1;
         }
         else {

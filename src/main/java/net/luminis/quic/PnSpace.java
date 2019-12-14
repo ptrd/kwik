@@ -18,22 +18,9 @@
  */
 package net.luminis.quic;
 
-public enum EncryptionLevel {
+public enum PnSpace {
 
     Initial,
     Handshake,
     App;
-
-    public boolean higher(EncryptionLevel other) {
-        return this.ordinal() > other.ordinal();
-    }
-
-    public PnSpace relatedPnSpace() {
-        switch(this) {
-            case Initial: return PnSpace.Initial;
-            case Handshake: return PnSpace.Handshake;
-            case App: return PnSpace.App;
-            default: return null;   // Never gets here
-        }
-    }
 }
