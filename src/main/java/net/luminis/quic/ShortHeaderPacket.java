@@ -67,7 +67,7 @@ public class ShortHeaderPacket extends QuicPacket {
         buffer.get(packetConnectionId);
         log.debug("Destination connection id", packetConnectionId);
 
-        NodeSecrets serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
+        Keys serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
         if (serverSecrets == null) {
             // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
             // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
@@ -97,7 +97,7 @@ public class ShortHeaderPacket extends QuicPacket {
     @Override
     public byte[] generatePacketBytes(long packetNumber, ConnectionSecrets connectionSecrets) {
         this.packetNumber = packetNumber;
-        NodeSecrets clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
+        Keys clientSecrets = connectionSecrets.getClientSecrets(getEncryptionLevel());
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         byte flags;

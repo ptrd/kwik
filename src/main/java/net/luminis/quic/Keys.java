@@ -28,7 +28,7 @@ import java.nio.charset.Charset;
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Client;
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Server;
 
-public class NodeSecrets {
+public class Keys {
 
     public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
@@ -41,13 +41,13 @@ public class NodeSecrets {
     private byte[] pn;
     private byte[] hp;
 
-    public NodeSecrets(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
+    public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
     }
 
-    public NodeSecrets(Version quicVersion, byte[] initialSecret, ConnectionSecrets.NodeRole nodeRole, Logger log) {
+    public Keys(Version quicVersion, byte[] initialSecret, ConnectionSecrets.NodeRole nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;

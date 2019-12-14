@@ -38,8 +38,8 @@ public class ConnectionSecrets {
 
     private Logger log;
 
-    private NodeSecrets[] clientSecrets = new NodeSecrets[EncryptionLevel.values().length];
-    private NodeSecrets[] serverSecrets = new NodeSecrets[EncryptionLevel.values().length];
+    private Keys[] clientSecrets = new Keys[EncryptionLevel.values().length];
+    private Keys[] serverSecrets = new Keys[EncryptionLevel.values().length];
 
     public ConnectionSecrets(Version quicVersion, Logger log) {
         this.quicVersion = quicVersion;
@@ -62,35 +62,35 @@ public class ConnectionSecrets {
 
         log.secret("Initial secret", initialSecret);
 
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(quicVersion, initialSecret, NodeRole.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new NodeSecrets(quicVersion, initialSecret, NodeRole.Server, log);
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Server, log);
     }
 
     public synchronized void computeHandshakeSecrets(TlsState tlsState) {
-        NodeSecrets handshakeSecrets = new NodeSecrets(quicVersion, NodeRole.Client, log);
+        Keys handshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
         handshakeSecrets.computeHandshakeKeys(tlsState);
         clientSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
 
-        handshakeSecrets = new NodeSecrets(quicVersion, NodeRole.Server, log);
+        handshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
         handshakeSecrets.computeHandshakeKeys(tlsState);
         serverSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
     }
 
     public synchronized void computeApplicationSecrets(TlsState tlsState) {
-        NodeSecrets applicationSecrets = new NodeSecrets(quicVersion, NodeRole.Client, log);
+        Keys applicationSecrets = new Keys(quicVersion, NodeRole.Client, log);
         applicationSecrets.computeApplicationKeys(tlsState);
         clientSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
 
-        applicationSecrets = new NodeSecrets(quicVersion, NodeRole.Server, log);
+        applicationSecrets = new Keys(quicVersion, NodeRole.Server, log);
         applicationSecrets.computeApplicationKeys(tlsState);
         serverSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
     }
 
-    public synchronized NodeSecrets getClientSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Keys getClientSecrets(EncryptionLevel encryptionLevel) {
         return clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized NodeSecrets getServerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Keys getServerSecrets(EncryptionLevel encryptionLevel) {
         return serverSecrets[encryptionLevel.ordinal()];
     }
 }

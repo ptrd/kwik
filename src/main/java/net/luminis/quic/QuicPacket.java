@@ -87,7 +87,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, NodeSecrets serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
         // "When removing packet protection, an endpoint
@@ -177,11 +177,11 @@ abstract public class QuicPacket {
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
 
-    byte[] createHeaderProtectionMask(byte[] sample, NodeSecrets secrets) {
+    byte[] createHeaderProtectionMask(byte[] sample, Keys secrets) {
         return createHeaderProtectionMask(sample, 4, secrets);
     }
 
-    byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, NodeSecrets secrets) {
+    byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, Keys secrets) {
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4
         // "The same number of bytes are always sampled, but an allowance needs
         //   to be made for the endpoint removing protection, which will not know
@@ -196,7 +196,7 @@ abstract public class QuicPacket {
     }
 
 
-    byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) {
+    byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) {
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
         // "The nonce, N, is formed by combining the packet
@@ -235,7 +235,7 @@ abstract public class QuicPacket {
         }
     }
 
-    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, NodeSecrets secrets) throws DecryptionException {
+    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) throws DecryptionException {
         ByteBuffer nonceInput = ByteBuffer.allocate(12);
         nonceInput.putInt(0);
         nonceInput.putLong(packetNumber);
@@ -403,7 +403,7 @@ abstract public class QuicPacket {
         }
     }
 
-    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, NodeSecrets clientSecrets) {
+    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
