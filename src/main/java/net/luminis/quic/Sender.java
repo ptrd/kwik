@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.io.IOException;
 import java.net.DatagramPacket;

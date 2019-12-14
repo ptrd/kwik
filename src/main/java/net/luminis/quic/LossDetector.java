@@ -19,6 +19,8 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Instant;
 import java.util.List;
@@ -90,7 +92,7 @@ public class LossDetector {
         List<PacketStatus> lostPackets = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
                 .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
-                .filter(p -> !p.packet.isAckOnly())
+                .filter(p -> !p.packet().isAckOnly())
                 .collect(Collectors.toList());
         if (!lostPackets.isEmpty()) {
             declareLost(lostPackets);
@@ -98,9 +100,9 @@ public class LossDetector {
 
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
-                .filter(p -> p.packet.getPacketNumber() <= largestAcked)
-                .filter(p -> !p.packet.isAckOnly())
-                .map(p -> p.timeSent)
+                .filter(p -> p.packet().getPacketNumber() <= largestAcked)
+                .filter(p -> !p.packet().isAckOnly())
+                .map(p -> p.timeSent())
                 .min(Instant::compareTo);
 
         if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
@@ -114,7 +116,7 @@ public class LossDetector {
 
     boolean ackElicitingInFlight() {
         boolean inflight = packetSentLog.values().stream()
-                    .filter(p -> p.packet.isAckEliciting())
+                    .filter(p -> p.packet().isAckEliciting())
                     .filter(p -> !p.acked && !p.lost)
                     .findFirst()
                     .isPresent();
@@ -124,31 +126,31 @@ public class LossDetector {
     List<QuicPacket> unAcked() {
         return packetSentLog.values().stream()
                 .filter(p -> !p.acked && !p.lost)
-                .filter(p -> !p.packet.isAckOnly())
-                .map(p -> p.packet)
+                .filter(p -> !p.packet().isAckOnly())
+                .map(p -> p.packet())
                 .collect(Collectors.toList());
     }
 
     // For debugging
     List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
-                .filter(p -> p.packet.isAckEliciting())
+                .filter(p -> p.packet().isAckEliciting())
                 .filter(p -> !p.acked && !p.lost)
                 .collect(Collectors.toList());
     }
 
 
     private boolean pnTooOld(PacketStatus p) {
-        return p.packet.getPacketNumber() <= largestAcked - kPacketThreshold;
+        return p.packet().getPacketNumber() <= largestAcked - kPacketThreshold;
     }
 
     private boolean sentTimeTooLongAgo(PacketStatus p, Instant lostSendTime) {
-        return p.packet.getPacketNumber() <= largestAcked && p.timeSent.isBefore(lostSendTime);
+        return p.packet().getPacketNumber() <= largestAcked && p.timeSent().isBefore(lostSendTime);
     }
 
     private void declareLost(List<PacketStatus> lostPacketsInfo) {
         lostPacketsInfo.stream().forEach(packetAckStatus -> {
-            packetAckStatus.lostPacketCallback.accept(packetAckStatus.packet);
+            packetAckStatus.lostPacketCallback().accept(packetAckStatus.packet());
             packetAckStatus.lost = true;
         });
 
@@ -168,7 +170,7 @@ public class LossDetector {
 
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
         return packets.stream()
-                .filter(packetInfo -> !packetInfo.packet.isAckOnly())
+                .filter(packetInfo -> !packetInfo.packet().isAckOnly())
                 .collect(Collectors.toList());
     }
 
@@ -193,8 +195,8 @@ public class LossDetector {
         @Override
         public String toString() {
             return "Packet "
-                    + packet.getEncryptionLevel().name().charAt(0) + "|"
-                    + (packet.packetNumber >= 0 ? packet.packetNumber : ".") + "|"
+                    + packet().getEncryptionLevel().name().charAt(0) + "|"
+                    + (packet().getPacketNumber() >= 0 ? packet().getPacketNumber() : ".") + "|"
                     + "L" + "|" + status();
         }
     }

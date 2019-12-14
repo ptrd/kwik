@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.packet;
 
+import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 
 import javax.crypto.*;
@@ -469,7 +470,7 @@ abstract public class QuicPacket {
         }
     }
 
-    protected abstract EncryptionLevel getEncryptionLevel();
+    public abstract EncryptionLevel getEncryptionLevel();
 
     public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
 

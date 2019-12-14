@@ -16,10 +16,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.packet;
 
 
+import net.luminis.quic.*;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

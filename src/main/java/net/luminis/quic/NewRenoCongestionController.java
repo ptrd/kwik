@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Stream;
@@ -56,8 +59,8 @@ public class NewRenoCongestionController extends AbstractCongestionController im
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-6.4
         // "QUIC defines the end of recovery as a packet sent after the start of recovery being acknowledged"
         Stream<QuicPacket> notBeforeRecovery = acknowlegdedPackets.stream()
-                .filter(ackedPacket -> ackedPacket.timeSent.isAfter(congestionRecoveryStartTime))
-                .map(ackedPacket -> ackedPacket.packet);
+                .filter(ackedPacket -> ackedPacket.timeSent().isAfter(congestionRecoveryStartTime))
+                .map(ackedPacket -> ackedPacket.packet());
 
         long previousCwnd = congestionWindow;
         notBeforeRecovery.forEach(p -> {
@@ -79,8 +82,8 @@ public class NewRenoCongestionController extends AbstractCongestionController im
         super.registerLost(lostPackets);
 
         if (! lostPackets.isEmpty()) {
-            PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet.getPacketNumber().compareTo(p2.packet.getPacketNumber())).get();
-            fireCongestionEvent(largest.timeSent);
+            PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet().getPacketNumber().compareTo(p2.packet().getPacketNumber())).get();
+            fireCongestionEvent(largest.timeSent());
         }
     }
 

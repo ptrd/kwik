@@ -16,9 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.packet;
 
+import net.luminis.quic.*;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -85,7 +87,7 @@ public class ShortHeaderPacket extends QuicPacket {
         keyPhaseBit = (short) ((decryptedFlags & 0x04) >> 2);
     }
 
-    protected EncryptionLevel getEncryptionLevel() {
+    public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.App;
     }
 

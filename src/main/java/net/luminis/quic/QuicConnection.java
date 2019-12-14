@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.*;
+import net.luminis.quic.packet.*;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.tls.*;
 
@@ -188,7 +189,7 @@ public class QuicConnection implements PacketProcessor {
     public void ping() {
         if (connectionState == Status.Connected) {
             QuicPacket packet = createPacket(App, new PingFrame(quicVersion));
-            packet.frames.add(new Padding(20));  // TODO: find out minimum packet size, and let packet take care of it.
+            packet.getFrames().add(new Padding(20));  // TODO: find out minimum packet size, and let packet take care of it.
             send(packet, "ping");
         }
         else {

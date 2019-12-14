@@ -16,7 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.packet;
+
+import net.luminis.quic.*;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -97,7 +100,7 @@ public class VersionNegotationPacket extends QuicPacket {
     }
 
     @Override
-    protected EncryptionLevel getEncryptionLevel() {
+    public EncryptionLevel getEncryptionLevel() {
         return null;
     }
 

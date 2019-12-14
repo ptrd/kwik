@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
+
 import java.util.List;
 
 public interface CongestionController {

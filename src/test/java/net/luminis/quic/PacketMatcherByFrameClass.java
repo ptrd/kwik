@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.QuicPacket;
 import org.mockito.ArgumentMatcher;
 
 public class PacketMatcherByFrameClass implements ArgumentMatcher<QuicPacket> {

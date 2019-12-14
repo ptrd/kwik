@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.util.ArrayList;
 import java.util.HashMap;

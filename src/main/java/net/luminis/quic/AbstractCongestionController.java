@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
+
 import java.util.List;
 
 public class AbstractCongestionController implements CongestionController {
@@ -51,7 +54,7 @@ public class AbstractCongestionController implements CongestionController {
     @Override
     public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
         int bytesInFlightAcked = acknowlegdedPackets.stream()
-                .map(packetInfo -> ((PacketInfo) packetInfo).packet)
+                .map(packetInfo -> ((PacketInfo) packetInfo).packet())
                 .mapToInt(packet -> packet.getSize())
                 .sum();
 
@@ -67,7 +70,7 @@ public class AbstractCongestionController implements CongestionController {
     @Override
     public void registerLost(List<? extends PacketInfo> lostPackets) {
         long lostBytes = lostPackets.stream()
-                .map(packetStatus -> packetStatus.packet)
+                .map(packetStatus -> packetStatus.packet())
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= lostBytes;

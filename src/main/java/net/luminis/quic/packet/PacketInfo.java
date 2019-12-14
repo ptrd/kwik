@@ -16,12 +16,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.packet;
 
 import java.time.Instant;
 import java.util.function.Consumer;
 
-class PacketInfo {
+public class PacketInfo {
 
     final Instant timeSent;
     final QuicPacket packet;
@@ -35,6 +35,14 @@ class PacketInfo {
 
     public Instant timeSent() {
         return timeSent;
+    }
+
+    public QuicPacket packet() {
+        return packet;
+    }
+
+    public Consumer lostPacketCallback() {
+        return lostPacketCallback;
     }
 
     @Override

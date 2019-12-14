@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;

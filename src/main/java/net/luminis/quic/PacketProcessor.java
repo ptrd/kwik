@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.*;
+
 import java.time.Instant;
 
 public interface PacketProcessor {

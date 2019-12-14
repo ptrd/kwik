@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -80,7 +81,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    protected EncryptionLevel getEncryptionLevel() {
+    public EncryptionLevel getEncryptionLevel() {
         return encryptionLevel;
     }
 

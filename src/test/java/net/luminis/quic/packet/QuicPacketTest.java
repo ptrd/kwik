@@ -1,9 +1,9 @@
-package net.luminis.quic;
+package net.luminis.quic.packet;
 
+import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class QuicPacketTest {
 

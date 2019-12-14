@@ -19,6 +19,8 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.packet.VersionNegotationPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

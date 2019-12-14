@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.PingFrame;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -55,7 +56,7 @@ public class KeepAliveActor {
 
     private void ping() {
         QuicPacket packet = connection.createPacket(App, new PingFrame(quicVersion));
-        packet.frames.add(new Padding(20));  // TODO: find out minimum packet size
+        packet.getFrames().add(new Padding(20));  // TODO: find out minimum packet size
         connection.send(packet, "ping");
 
         scheduleNextPing();

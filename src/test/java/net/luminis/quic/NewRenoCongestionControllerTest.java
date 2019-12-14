@@ -18,13 +18,13 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

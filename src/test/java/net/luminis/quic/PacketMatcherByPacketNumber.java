@@ -1,5 +1,6 @@
 package net.luminis.quic;
 
+import net.luminis.quic.packet.QuicPacket;
 import org.mockito.ArgumentMatcher;
 
 class PacketMatcherByPacketNumber implements ArgumentMatcher<QuicPacket> {

@@ -48,18 +48,18 @@ public enum Version {
         this.versionId = versionId;
     }
 
-    byte[] getBytes() {
+    public byte[] getBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
         buffer.putInt(versionId);
         return buffer.array();
     }
 
-    static Version parse(int input) throws UnknownVersionException {
+    public static Version parse(int input) throws UnknownVersionException {
         Optional<Version> version = Stream.of(Version.values()).filter(candidate -> candidate.versionId == input).findFirst();
         return version.orElseThrow(() -> new UnknownVersionException());
     }
 
-    static public Version getDefault() {
+    public static Version getDefault() {
         return IETF_draft_24;
     }
 

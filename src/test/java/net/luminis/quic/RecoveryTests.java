@@ -21,6 +21,11 @@ package net.luminis.quic;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.LongHeaderPacket;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.time.Instant;
 import java.time.LocalTime;
@@ -36,7 +41,7 @@ public abstract class RecoveryTests {
 
     QuicPacket createPacket(int packetNumber, QuicFrame frame) {
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
-        packet.packetNumber = packetNumber;
+        setPacketNumber(packet, packetNumber);
         return packet;
     }
 
@@ -48,7 +53,7 @@ public abstract class RecoveryTests {
         List<QuicPacket> packets = new ArrayList<>();
         for (int packetNumber: packetNumbers) {
             ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new MaxDataFrame(1024));
-            packet.packetNumber = packetNumber;
+            setPacketNumber(packet, packetNumber);
             packets.add(packet);
         }
         return packets;
@@ -56,8 +61,16 @@ public abstract class RecoveryTests {
 
     QuicPacket createCryptoPacket(int packetNumber) {
         LongHeaderPacket packet = new InitialPacket(Version.getDefault(), srcCid, destCid, null, new CryptoFrame());
-        packet.packetNumber = packetNumber;
+        setPacketNumber(packet, packetNumber);
         return packet;
+    }
+
+    void setPacketNumber(QuicPacket packet, int packetNumber) {
+        try {
+            FieldSetter.setField(packet, QuicPacket.class.getDeclaredField("packetNumber"), packetNumber);
+        } catch (NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // For debugging recovery tests....
