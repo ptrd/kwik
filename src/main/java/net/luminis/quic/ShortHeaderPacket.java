@@ -55,34 +55,29 @@ public class ShortHeaderPacket extends QuicPacket {
         }
     }
 
-    public ShortHeaderPacket parse(ByteBuffer buffer, QuicConnection connection, ConnectionSecrets connectionSecrets, long largestPacketNumber, Logger log) throws MissingKeysException, DecryptionException {
+    @Override
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         byte flags = buffer.get();
         checkPacketType(flags);
 
-        byte[] sourceConnectionId = connection.getSourceConnectionId();
-        byte[] packetConnectionId = new byte[sourceConnectionId.length];
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1
+        // "Packets with short headers (Section 17.3) only include the
+        //   Destination Connection ID and omit the explicit length.  The length
+        //   of the Destination Connection ID field is expected to be known to
+        //   endpoints."
+        byte[] packetConnectionId = new byte[sourceConnectionIdLength];
         destinationConnectionId = packetConnectionId;
         buffer.get(packetConnectionId);
         log.debug("Destination connection id", packetConnectionId);
 
-        Keys serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
-        if (serverSecrets == null) {
-            // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
-            // "Due to reordering and loss, protected packets might be received by an
-            //   endpoint before the final TLS handshake messages are received."
-            throw new MissingKeysException(getEncryptionLevel());
-        }
         try {
-            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), serverSecrets, largestPacketNumber, log);
+            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), keys, largestPacketNumber, log);
         }
         finally {
             packetSize = buffer.position() - startPosition;
         }
-
-        return this;
     }
 
     @Override

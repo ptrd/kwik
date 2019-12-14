@@ -46,7 +46,8 @@ public class VersionNegotationPacket extends QuicPacket {
 
     List<String> serverSupportedVersions = new ArrayList<>();
 
-    public VersionNegotationPacket parse(ByteBuffer buffer, Logger log) {
+    @Override
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
         log.debug("Parsing VersionNegotationPacket");
         buffer.get();     // Type
 
@@ -85,7 +86,6 @@ public class VersionNegotationPacket extends QuicPacket {
         }
 
         packetSize = buffer.limit();
-        return this;
     }
 
     private String parseVersion(int versionData) {

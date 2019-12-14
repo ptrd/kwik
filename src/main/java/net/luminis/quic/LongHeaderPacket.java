@@ -125,7 +125,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
-    public LongHeaderPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
         int startPosition = buffer.position();
         log.debug("Parsing " + this.getClass().getSimpleName());
         byte flags = buffer.get();
@@ -153,15 +153,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int length = VariableLengthInteger.parse(buffer);
         log.debug("Length (PN + payload): " + length);
 
-        Keys serverSecrets = connectionSecrets.getServerSecrets(getEncryptionLevel());
         try {
-            parsePacketNumberAndPayload(buffer, flags, length, serverSecrets, largestPacketNumber, log);
+            parsePacketNumberAndPayload(buffer, flags, length, keys, largestPacketNumber, log);
         }
         finally {
             packetSize = buffer.position() - startPosition;
         }
-
-        return this;
     }
 
     @Override

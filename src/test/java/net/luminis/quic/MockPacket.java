@@ -93,6 +93,10 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
+    public void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    }
+
+    @Override
     public boolean isCrypto() {
         return ( encryptionLevel.equals(EncryptionLevel.Initial) || encryptionLevel.equals(EncryptionLevel.Handshake))
                 && (frames.size() == 0) || frames.stream().filter(frame -> frame instanceof CryptoFrame).findAny().isPresent();

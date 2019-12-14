@@ -44,7 +44,8 @@ public class RetryPacket extends QuicPacket {
         this.retryToken = retryToken;
     }
 
-    public RetryPacket parse(ByteBuffer buffer, ConnectionSecrets connectionSecrets, Logger log) {
+    @Override
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         packetSize = buffer.limit();
 
@@ -76,8 +77,6 @@ public class RetryPacket extends QuicPacket {
         int retryTokenLength = buffer.remaining();
         retryToken = new byte[retryTokenLength];
         buffer.get(retryToken);
-
-        return this;
     }
 
     @Override
