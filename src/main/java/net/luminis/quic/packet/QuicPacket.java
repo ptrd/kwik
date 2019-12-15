@@ -20,6 +20,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.log.Logger;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;

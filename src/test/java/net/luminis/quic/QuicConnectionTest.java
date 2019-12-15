@@ -21,6 +21,8 @@ package net.luminis.quic;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;

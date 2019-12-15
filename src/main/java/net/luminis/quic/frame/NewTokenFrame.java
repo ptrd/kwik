@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.Logger;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.tls.ByteUtils;
 

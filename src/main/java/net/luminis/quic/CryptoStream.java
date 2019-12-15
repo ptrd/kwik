@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
 
 import java.nio.ByteBuffer;

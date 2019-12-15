@@ -20,7 +20,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 
 import java.nio.ByteBuffer;

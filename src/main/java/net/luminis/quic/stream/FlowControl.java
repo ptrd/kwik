@@ -22,6 +22,8 @@ import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 
 import java.time.Instant;
 import java.util.HashMap;

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import java.util.List;
+import net.luminis.quic.log.Logger;
 
 /**
  * A simplistic congestion controller that has a fixed window size.

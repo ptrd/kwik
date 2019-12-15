@@ -21,7 +21,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

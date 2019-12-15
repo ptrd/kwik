@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 import net.luminis.tls.Extension;
 

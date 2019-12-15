@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.stream.FlowControl;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

@@ -18,8 +18,7 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.Logger;
-import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

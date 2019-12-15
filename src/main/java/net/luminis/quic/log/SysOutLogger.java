@@ -16,55 +16,44 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.log;
 
-import java.io.*;
+import net.luminis.quic.log.BaseLogger;
+
 import java.nio.ByteBuffer;
 
-
-public class FileLogger extends BaseLogger {
-
-    private File logFile;
-    private PrintStream logStream;
-
-    public FileLogger(File logFile) throws IOException {
-        this.logFile = logFile;
-        logStream = new PrintStream(new BufferedOutputStream(new FileOutputStream(logFile)));
-    }
+public class SysOutLogger extends BaseLogger {
 
     @Override
     protected void log(String message) {
         synchronized (this) {
-            logStream.println(message);
-            logStream.flush();
+            System.out.println(message);
         }
     }
 
     @Override
-    protected void log(String message, Throwable ex) {
+    protected void log(String message, Throwable error) {
         synchronized (this) {
-            logStream.println(message);
-            ex.printStackTrace(logStream);
-            logStream.flush();
+            System.out.println(message);
+            error.printStackTrace();
         }
+
     }
 
     @Override
     protected void logWithHexDump(String message, byte[] data, int length) {
         synchronized (this) {
-            logStream.println(message);
-            logStream.println(byteToHexBlock(data, length));
-            logStream.flush();
+            System.out.println(message);
+            System.out.println(byteToHexBlock(data, length));
         }
-
     }
 
     @Override
     protected void logWithHexDump(String message, ByteBuffer data, int offset, int length) {
         synchronized (this) {
-            logStream.println(message);
-            logStream.println(byteToHexBlock(data, offset, length));
-            logStream.flush();
+            System.out.println(message);
+            System.out.println(byteToHexBlock(data, offset, length));
         }
     }
+
 }

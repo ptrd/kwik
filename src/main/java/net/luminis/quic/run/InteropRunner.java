@@ -19,7 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.SysOutLogger;
+import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
 import net.luminis.tls.NewSessionTicket;
 

@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.log.Logger;
+
 import java.time.Duration;
 import java.time.Instant;
 

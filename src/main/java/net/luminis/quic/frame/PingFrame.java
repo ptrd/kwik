@@ -19,7 +19,7 @@
 package net.luminis.quic.frame;
 
 
-import net.luminis.quic.Logger;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
 
 import java.nio.ByteBuffer;
