@@ -861,6 +861,17 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public void addNewSessionTicket(NewSessionTicket sessionTicket) {
+        if (sessionTicket.hasEarlyDataExtension()) {
+            if (sessionTicket.getEarlyDataMaxSize() != 0xffffffffL) {
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-24#section-4.5
+                // "Servers MUST NOT send
+                //   the "early_data" extension with a max_early_data_size set to any
+                //   value other than 0xffffffff.  A client MUST treat receipt of a
+                //   NewSessionTicket that contains an "early_data" extension with any
+                //   other value as a connection error of type PROTOCOL_VIOLATION."
+                log.error("Invalid quic new session ticket (invalid early data size); ignoring ticket.");
+            }
+        }
         newSessionTickets.add(sessionTicket);
     }
 
