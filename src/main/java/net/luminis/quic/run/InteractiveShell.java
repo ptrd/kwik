@@ -209,6 +209,7 @@ public class InteractiveShell {
     private void printParams(String arg) {
         TransportParameters parameters = quicConnection.getPeerTransportParameters();
         System.out.println("Server idle time: " + parameters.getIdleTimeout());
+        System.out.println("Server initial max data: " + parameters.getInitialMaxData());
     }
 
     private void error(Exception error) {
