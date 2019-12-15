@@ -167,7 +167,10 @@ public class CryptoStream {
             connectionSecrets.computeHandshakeSecrets(tlsState);
         } else if (msg instanceof EncryptedExtensions) {
             for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {
-                if (ex instanceof UnknownExtension) {
+                if (ex instanceof EarlyDataExtension) {
+                    connection.setEarlyDataStatus(EarlyDataStatus.Accepted);
+                }
+                else if (ex instanceof UnknownExtension) {
                     parseExtension((UnknownExtension) ex);
                 }
             }
@@ -177,7 +180,6 @@ public class CryptoStream {
             }
         } else if (msg instanceof NewSessionTicketMessage) {
             connection.addNewSessionTicket(new NewSessionTicket(tlsState, (NewSessionTicketMessage) msg));
-
         } else {
             log.debug(this + " Ignoring " + msg.getClass().getSimpleName());
         }

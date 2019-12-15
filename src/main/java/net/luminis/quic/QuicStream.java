@@ -130,6 +130,23 @@ public class QuicStream {
         }
     }
 
+    /**
+     * Write early data, assuming the provided data is complete and fits into one StreamFrame.
+     * @param earlyData
+     */
+    public void writeEarlyData(byte[] earlyData) {
+        if (earlyData.length > 1000) {
+            log.error("0-RTT data is limited to 1000 bytes.");
+            return;
+        }
+        // TODO: to make this more generally applicable (not just for http (09) requests:
+        // - do not assume stream is complete, i.e. make explicit whether output must be closed or not
+        // - update output stream offset
+        // - update (and respect) flow control
+        // - accept more data (up to server initial max data)
+        connection.sendEarlyData(new StreamFrame(quicVersion, streamId, currentOffset, earlyData, 0, earlyData.length, true), f -> {});
+    }
+
     public int getStreamId() {
         return streamId;
     }

@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static net.luminis.quic.EarlyDataStatus.*;
 import static net.luminis.quic.EncryptionLevel.*;
 import static net.luminis.tls.Tls13.generateKeys;
 
@@ -95,7 +96,7 @@ public class QuicConnection implements PacketProcessor {
     private long flowControlIncrement;
     private long largestPacketNumber;
     private final List<NewSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
-
+    private volatile EarlyDataStatus earlyDataStatus = None;
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
         this(host, port, Version.getDefault(), log);
@@ -150,10 +151,24 @@ public class QuicConnection implements PacketProcessor {
      */
     public void connect(int connectionTimeout) throws IOException {
         String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
-        connect(connectionTimeout, alpn);
+        connect(connectionTimeout, alpn, null);
     }
 
-    public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
+    /**
+     * Set up the connection with the server, enabling use of 0-RTT data.
+     * The early data is sent on a bidirectional stream and is assumed to be complete (i.e. the output stream is closed
+     * after sending the data).
+     * @param connectionTimeout
+     * @param earlyData
+     * @return
+     * @throws IOException
+     */
+    public QuicStream connect(int connectionTimeout, byte[] earlyData) throws IOException {
+        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        return connect(connectionTimeout, alpn, earlyData);
+    }
+
+    public synchronized QuicStream connect(int connectionTimeout, String applicationProtocol, byte[] earlyData) throws IOException {
         this.applicationProtocol = applicationProtocol;
         generateConnectionIds(8, 8);
         generateInitialKeys();
@@ -162,7 +177,7 @@ public class QuicConnection implements PacketProcessor {
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        startHandshake(applicationProtocol);
+        QuicStream earlyDataStream = startHandshake(applicationProtocol, earlyData);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -176,6 +191,13 @@ public class QuicConnection implements PacketProcessor {
         catch (InterruptedException e) {
             throw new RuntimeException();  // Should not happen.
         }
+        if (earlyData != null) {
+            if (earlyDataStatus != Accepted) {
+                log.info("Server did not accept early data; retransmitting request");
+                earlyDataStream.getOutputStream().write(earlyData);
+            }
+        }
+        return earlyDataStream;
     }
 
     public void keepAlive(int seconds) {
@@ -251,9 +273,10 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    private void startHandshake(String applicationProtocol) {
-        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol);
+    private QuicStream startHandshake(String applicationProtocol, byte[] earlyData) {
+        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, earlyData != null);
         tlsState.clientHelloSend(privateKey, clientHello);
+        connectionSecrets.computeEarlySecrets(tlsState);
 
         InitialPacket clientHelloPacket = (InitialPacket) createPacket(EncryptionLevel.Initial, new CryptoFrame(quicVersion, clientHello));
         // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-14)
@@ -261,6 +284,20 @@ public class QuicConnection implements PacketProcessor {
 
         connectionState = Status.Handshaking;
         sender.send(clientHelloPacket, "client hello", p -> {});
+
+        if (earlyData != null) {
+            // TODO: check length (< initial max data of previous session)
+            // TODO: init flowcontroller with remembered TP values
+            // TODO: and update flowcontroller when TP's are received!
+            flowController = new FlowControl(1048576, 1048576, 1048576, 1048576);
+            QuicStream earlyDataStream = createStream(true);
+            earlyDataStream.writeEarlyData(earlyData);
+            earlyDataStatus = Requested;
+            return earlyDataStream;
+        }
+        else {
+            return null;
+        }
     }
 
     void finishHandshake(TlsState tlsState) {
@@ -287,6 +324,9 @@ public class QuicConnection implements PacketProcessor {
     QuicPacket createPacket(EncryptionLevel level, QuicFrame frame) {
         QuicPacket packet;
         switch (level) {
+            case ZeroRTT:
+                packet = new ZeroRttPacket(quicVersion, sourceConnectionId, destConnectionId, frame);
+                break;
             case Initial:
                 packet = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, frame);
                 break;
@@ -416,7 +456,7 @@ public class QuicConnection implements PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private byte[] createClientHello(String host, ECPublicKey publicKey, String alpnProtocol) {
+    private byte[] createClientHello(String host, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
         boolean compatibilityMode = false;
         byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
@@ -424,6 +464,9 @@ public class QuicConnection implements PacketProcessor {
         quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
         quicExtensions.add(new ECPointFormatExtension());
         quicExtensions.add(new ApplicationLayerProtocolNegotiationExtension(alpnProtocol));
+        if (useEarlyData) {
+            quicExtensions.add(new EarlyDataExtension());
+        }
 
         if (sessionTicket != null) {
             quicExtensions.add(new ClientHelloPreSharedKeyExtension(tlsState, sessionTicket));
@@ -492,7 +535,7 @@ public class QuicConnection implements PacketProcessor {
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                startHandshake(applicationProtocol);
+                startHandshake(applicationProtocol, null);
             } else {
                 log.debug("Ignoring RetryPacket, because already processed one.");
             }
@@ -683,6 +726,11 @@ public class QuicConnection implements PacketProcessor {
             logMessage = "application data";
         }
         sender.send(packet, logMessage, p -> {});
+    }
+
+    void sendEarlyData(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+        QuicPacket packet = createPacket(ZeroRTT, frame);
+        sender.send(packet, "0-RTT data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
     }
 
     void slideFlowControlWindow(int size) {
@@ -879,4 +927,11 @@ public class QuicConnection implements PacketProcessor {
         return newSessionTickets;
     }
 
+    public EarlyDataStatus getEarlyDataStatus() {
+        return earlyDataStatus;
+    }
+
+    public void setEarlyDataStatus(EarlyDataStatus earlyDataStatus) {
+        this.earlyDataStatus = earlyDataStatus;
+    }
 }

@@ -57,6 +57,7 @@ public class KwikCli {
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
+        cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -209,12 +210,27 @@ public class KwikCli {
             }
         }
 
+        boolean useZeroRtt = false;
+        if (cmd.hasOption("Z")) {
+            useZeroRtt = true;
+        }
         if (cmd.hasOption("H")) {
             http09Request = cmd.getOptionValue("H");
             if (http09Request == null) {
                 usage();
                 System.exit(1);
             }
+            else {
+                if (! http09Request.startsWith("/")) {
+                    http09Request = "/" + http09Request;
+
+                }
+                http09Request = ("GET " + http09Request + "\r\n");
+            }
+        }
+        if (useZeroRtt && http09Request == null) {
+            usage();
+            System.exit(1);
         }
 
         String outputFile = null;
@@ -259,6 +275,10 @@ public class KwikCli {
                 System.err.println("Error while reading session ticket file.");
             }
         }
+        if (useZeroRtt && sessionTicket == null) {
+            System.err.println("Using 0-RTT requires a session ticket");
+            System.exit(1);
+        }
 
         if (cmd.hasOption("T")) {
             logger.useRelativeTime(true);
@@ -272,13 +292,19 @@ public class KwikCli {
             }
             else {
                 QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger);
-                quicConnection.connect(connectionTimeout * 1000);
+                QuicStream httpStream = null;
+                if (useZeroRtt && http09Request != null) {
+                    httpStream = quicConnection.connect(connectionTimeout * 1000, http09Request.getBytes());
+                }
+                else {
+                    quicConnection.connect(connectionTimeout * 1000);
+                }
 
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);
                 }
                 if (http09Request != null) {
-                    doHttp09Request(quicConnection, http09Request, outputFile);
+                    doHttp09Request(quicConnection, http09Request, httpStream, outputFile);
                 } else {
                     if (keepAliveTime > 0) {
                         try {
@@ -349,13 +375,16 @@ public class KwikCli {
     }
 
     public static void doHttp09Request(QuicConnection quicConnection, String http09Request, String outputFile) throws IOException {
-        if (! http09Request.startsWith("/")) {
-            http09Request = "/" + http09Request;
+        doHttp09Request(quicConnection, http09Request, outputFile);
+    }
+
+    public static void doHttp09Request(QuicConnection quicConnection, String http09Request, QuicStream httpStream, String outputFile) throws IOException {
+        if (httpStream == null) {
+            boolean bidirectional = true;
+            httpStream = quicConnection.createStream(bidirectional);
+            httpStream.getOutputStream().write(http09Request.getBytes());
+            httpStream.getOutputStream().close();
         }
-        boolean bidirectional = true;
-        QuicStream quicStream = quicConnection.createStream(bidirectional);
-        quicStream.getOutputStream().write(("GET " + http09Request + "\r\n").getBytes());
-        quicStream.getOutputStream().close();
 
         // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
         try {
@@ -374,10 +403,10 @@ public class KwikCli {
             else {
                 out = new FileOutputStream(outputFile);
             }
-            quicStream.getInputStream().transferTo(out);
+            httpStream.getInputStream().transferTo(out);
         }
         else {
-            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+            BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
             String line;
             System.out.println("Server returns: ");
             while ((line = input.readLine()) != null) {

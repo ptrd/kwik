@@ -83,7 +83,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         rttEstimater = new RttEstimator(log);
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
 
-        ackGenerators = new AckGenerator[3];
+        ackGenerators = new AckGenerator[PnSpace.values().length];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
     }
 
@@ -132,7 +132,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                     boolean ackWaiting = false;
                     if (!packetWaiting) {
                         level = lastReceivedMessageLevel;
-                        AckGenerator ackGenerator = ackGenerators[level.ordinal()];
+                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
                         ackWaiting = ackGenerator.hasNewAckToSend();
                     }
                     if (packetWaiting || !ackWaiting) {
@@ -172,7 +172,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                     // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
                     // an ack frame that should be coalesced with it.
 
-                    AckGenerator ackGenerator = ackGenerators[level.ordinal()];
+                    AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
                     if (ackGenerator.hasAckToSend()) {
                         AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
                         packet.addFrame(ackToSend);
@@ -230,7 +230,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     public void processPacketReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
-            ackGenerators[packet.getEncryptionLevel().ordinal()].packetReceived(packet);
+            ackGenerators[packet.getPnSpace().ordinal()].packetReceived(packet);
         }
     }
 
