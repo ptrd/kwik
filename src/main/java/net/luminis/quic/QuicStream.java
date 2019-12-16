@@ -134,7 +134,7 @@ public class QuicStream {
      * Write early data, assuming the provided data is complete and fits into one StreamFrame.
      * @param earlyData
      */
-    public void writeEarlyData(byte[] earlyData) {
+    public void writeEarlyData(byte[] earlyData, boolean fin) {
         if (earlyData.length > 1000) {
             log.error("0-RTT data is limited to 1000 bytes.");
             return;
@@ -144,7 +144,7 @@ public class QuicStream {
         // - update output stream offset
         // - update (and respect) flow control
         // - accept more data (up to server initial max data)
-        connection.sendEarlyData(new StreamFrame(quicVersion, streamId, currentOffset, earlyData, 0, earlyData.length, true), f -> {});
+        connection.sendEarlyData(new StreamFrame(quicVersion, streamId, currentOffset, earlyData, 0, earlyData.length, fin), f -> {});
     }
 
     public int getStreamId() {

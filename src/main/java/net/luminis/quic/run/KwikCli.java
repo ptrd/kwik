@@ -255,7 +255,7 @@ public class KwikCli {
             }
         }
 
-        NewSessionTicket sessionTicket = null;
+        QuicSessionTicket sessionTicket = null;
         if (cmd.hasOption("R")) {
             String sessionTicketFile = null;
             sessionTicketFile = cmd.getOptionValue("R");
@@ -270,7 +270,7 @@ public class KwikCli {
             byte[] ticketData = new byte[0];
             try {
                 ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
-                sessionTicket = NewSessionTicket.deserialize(ticketData);
+                sessionTicket = QuicSessionTicket.deserialize(ticketData);
             } catch (IOException e) {
                 System.err.println("Error while reading session ticket file.");
             }

@@ -64,7 +64,7 @@ public class QuicConnection implements PacketProcessor {
     private final Random random = new Random();
     private final String host;
     private final int port;
-    private final NewSessionTicket sessionTicket;
+    private final QuicSessionTicket sessionTicket;
     private final TlsState tlsState;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
@@ -95,7 +95,7 @@ public class QuicConnection implements PacketProcessor {
     private long flowControlLastAdvertised;
     private long flowControlIncrement;
     private long largestPacketNumber;
-    private final List<NewSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
+    private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private volatile EarlyDataStatus earlyDataStatus = None;
 
     public QuicConnection(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -106,14 +106,14 @@ public class QuicConnection implements PacketProcessor {
         this(host, port, null, quicVersion, log);
     }
 
-    public QuicConnection(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
+    public QuicConnection(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
         this(host, port, sessionTicket, quicVersion, log, host);
         if (! quicVersion.atLeast(Version.IETF_draft_23)) {
             throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
         }
     }
 
-    public QuicConnection(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
+    public QuicConnection(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -177,7 +177,19 @@ public class QuicConnection implements PacketProcessor {
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        QuicStream earlyDataStream = startHandshake(applicationProtocol, earlyData);
+        byte[] lateData = new byte[0];
+        if (earlyData != null) {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-24#section-4.5
+            // "the amount of data which
+            //   the client can send in 0-RTT is controlled by the "initial_max_data"
+            //   transport parameter supplied by the server"
+            if (earlyData.length > sessionTicket.getInitialMaxData()) {
+                earlyData = Arrays.copyOfRange(earlyData, 0, (int) sessionTicket.getInitialMaxData());
+                lateData = Arrays.copyOfRange(earlyData, (int) sessionTicket.getInitialMaxData(), earlyData.length);
+            }
+        }
+
+        QuicStream earlyDataStream = startHandshake(applicationProtocol, earlyData, lateData.length == 0);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -191,10 +203,14 @@ public class QuicConnection implements PacketProcessor {
         catch (InterruptedException e) {
             throw new RuntimeException();  // Should not happen.
         }
+
         if (earlyData != null) {
             if (earlyDataStatus != Accepted) {
                 log.info("Server did not accept early data; retransmitting request");
                 earlyDataStream.getOutputStream().write(earlyData);
+            }
+            if (lateData.length > 0) {
+                earlyDataStream.getOutputStream().write(lateData);
             }
         }
         return earlyDataStream;
@@ -273,7 +289,7 @@ public class QuicConnection implements PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionId);
     }
 
-    private QuicStream startHandshake(String applicationProtocol, byte[] earlyData) {
+    private QuicStream startHandshake(String applicationProtocol, byte[] earlyData, boolean complete) {
         byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, earlyData != null);
         tlsState.clientHelloSend(privateKey, clientHello);
         connectionSecrets.computeEarlySecrets(tlsState);
@@ -286,12 +302,13 @@ public class QuicConnection implements PacketProcessor {
         sender.send(clientHelloPacket, "client hello", p -> {});
 
         if (earlyData != null) {
-            // TODO: check length (< initial max data of previous session)
-            // TODO: init flowcontroller with remembered TP values
-            // TODO: and update flowcontroller when TP's are received!
-            flowController = new FlowControl(1048576, 1048576, 1048576, 1048576);
+            // TODO: update flowcontroller when TP's are received!
+            flowController = new FlowControl(sessionTicket.getInitialMaxData(),
+                    sessionTicket.getInitialMaxStreamDataBidiLocal(),
+                    sessionTicket.getInitialMaxStreamDataBidiRemote(),
+                    sessionTicket.getInitialMaxStreamDataUni());
             QuicStream earlyDataStream = createStream(true);
-            earlyDataStream.writeEarlyData(earlyData);
+            earlyDataStream.writeEarlyData(earlyData, complete);
             earlyDataStatus = Requested;
             return earlyDataStream;
         }
@@ -535,7 +552,7 @@ public class QuicConnection implements PacketProcessor {
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                startHandshake(applicationProtocol, null);
+                startHandshake(applicationProtocol, null, false);
             } else {
                 log.debug("Ignoring RetryPacket, because already processed one.");
             }
@@ -908,9 +925,9 @@ public class QuicConnection implements PacketProcessor {
         return flowController;
     }
 
-    public void addNewSessionTicket(NewSessionTicket sessionTicket) {
-        if (sessionTicket.hasEarlyDataExtension()) {
-            if (sessionTicket.getEarlyDataMaxSize() != 0xffffffffL) {
+    public void addNewSessionTicket(NewSessionTicket tlsSessionTicket) {
+        if (tlsSessionTicket.hasEarlyDataExtension()) {
+            if (tlsSessionTicket.getEarlyDataMaxSize() != 0xffffffffL) {
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-24#section-4.5
                 // "Servers MUST NOT send
                 //   the "early_data" extension with a max_early_data_size set to any
@@ -920,10 +937,10 @@ public class QuicConnection implements PacketProcessor {
                 log.error("Invalid quic new session ticket (invalid early data size); ignoring ticket.");
             }
         }
-        newSessionTickets.add(sessionTicket);
+        newSessionTickets.add(new QuicSessionTicket(tlsSessionTicket, peerTransportParams));
     }
 
-    public List<NewSessionTicket> getNewSessionTickets() {
+    public List<QuicSessionTicket> getNewSessionTickets() {
         return newSessionTickets;
     }
 

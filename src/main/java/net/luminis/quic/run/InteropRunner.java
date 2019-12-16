@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
-import net.luminis.tls.NewSessionTicket;
 
 import java.io.File;
 import java.io.IOException;
@@ -126,7 +126,7 @@ public class InteropRunner extends KwikCli {
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
         System.out.println("Downloaded " + url1);
 
-        List<NewSessionTicket> newSessionTickets = connection.getNewSessionTickets();
+        List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
 
         connection.close();
 
@@ -135,7 +135,7 @@ public class InteropRunner extends KwikCli {
             System.exit(1);
         }
 
-        NewSessionTicket sessionTicket = NewSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
+        QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
         QuicConnection connection2 = new QuicConnection(url2.getHost(), url2.getPort(), sessionTicket, Version.getDefault(), logger);
         connection2.connect(5_000);
