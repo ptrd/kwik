@@ -305,11 +305,13 @@ public class QuicConnection implements PacketProcessor {
 
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
         int packetStart = data.position();
+        int packetSize = 0;
         EncryptionLevel highestEncryptionLevelInPacket = null;
 
         QuicPacket packet;
         try {
             packet = parsePacket(data);
+            packetSize = data.position() - packetStart;
             if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
                 highestEncryptionLevelInPacket = packet.getEncryptionLevel();
             }
@@ -319,11 +321,11 @@ public class QuicConnection implements PacketProcessor {
             processPacket(timeReceived, packet);
         }
         catch (DecryptionException | MissingKeysException cannotParse) {
-            int packetSize = data.position() - packetStart;
+            packetSize = data.position() - packetStart;
             log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
         }
 
-        if (data.position() < data.limit()) {
+        if (packetSize > 0 && data.position() < data.limit()) {  
             parsePackets(datagram, timeReceived, data.slice());
         }
         else {
