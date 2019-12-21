@@ -322,6 +322,8 @@ public class QuicConnection implements PacketProcessor {
         }
         catch (DecryptionException | MissingKeysException cannotParse) {
             packetSize = data.position() - packetStart;
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
+            // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
             log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
         }
 
@@ -567,6 +569,10 @@ public class QuicConnection implements PacketProcessor {
                 ConnectionCloseFrame close = (ConnectionCloseFrame) frame;
                 handlePeerClosing(close);
             }
+            else if (frame instanceof PathChallengeFrame) {
+                PathResponseFrame response = new PathResponseFrame(quicVersion, ((PathChallengeFrame) frame).getData());
+                send(response, f -> {});
+            }
             else {
                 log.debug("Ignoring " + frame);
             }
@@ -698,6 +704,19 @@ public class QuicConnection implements PacketProcessor {
             flowControlLastAdvertised = flowControlMax;
         }
     }
+
+    public void changeAddress() {
+        try {
+            DatagramSocket newSocket = new DatagramSocket();
+            sender.changeAddress(newSocket);
+            receiver.changeAddress(newSocket);
+            log.info("Changed local address to " + newSocket.getLocalPort());
+        } catch (SocketException e) {
+            // Fairly impossible, as we created a socket on an ephemeral port
+            log.error("Changing local address failed", e);
+        }
+    }
+
 
 
     int getMaxPacketSize() {

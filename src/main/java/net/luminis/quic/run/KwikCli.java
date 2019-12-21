@@ -52,7 +52,7 @@ public class KwikCli {
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
-        cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
+        cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
         cmdLineOptions.addOption("O", "output", true, "write server response to file");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");

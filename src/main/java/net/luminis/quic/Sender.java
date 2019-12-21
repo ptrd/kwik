@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class Sender implements ProbeSender, FrameProcessor {
 
-    private final DatagramSocket socket;
+    private DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
     private final Thread senderThread;
@@ -310,6 +310,10 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     public void stopRecovery(PnSpace level) {
         recoveryManager.stopRecovery(level);
+    }
+
+    public void changeAddress(DatagramSocket newSocket) {
+        this.socket = newSocket;
     }
 
 
