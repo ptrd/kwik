@@ -57,6 +57,7 @@ public class KwikCli {
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
+        cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -230,6 +231,19 @@ public class KwikCli {
             }
         }
 
+        String secretsFile = null;
+        if (cmd.hasOption("secrets")) {
+            secretsFile = cmd.getOptionValue("secrets");
+            if (secretsFile == null) {
+                usage();
+                System.exit(1);
+            }
+            if (Files.exists(Paths.get(secretsFile)) && !Files.isWritable(Paths.get(secretsFile))) {
+                System.err.println("Secrets file '" + secretsFile + "' is not writable.");
+                System.exit(1);
+            }
+        }
+
         String newSessionTicketsFilename = null;
         if (cmd.hasOption("S")) {
             newSessionTicketsFilename = cmd.getOptionValue("S");
@@ -268,10 +282,11 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(host, port, quicVersion, logger).start();
+                new InteractiveShell(host, port, quicVersion, logger, secretsFile != null? Paths.get(secretsFile): null).start();
             }
             else {
-                QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger);
+                QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger,
+                        secretsFile != null? Paths.get(secretsFile): null);
                 quicConnection.connect(connectionTimeout * 1000);
 
                 if (keepAliveTime > 0) {

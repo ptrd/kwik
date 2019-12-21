@@ -27,6 +27,7 @@ import net.luminis.tls.ByteUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -42,13 +43,15 @@ public class InteractiveShell {
     private final int port;
     private final Version quicVersion;
     private final Logger logger;
+    private final Path secretsFile;
     private QuicConnection quicConnection;
 
-    public InteractiveShell(String host, int port, Version quicVersion, Logger logger) {
+    public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile) {
         this.host = host;
         this.port = port;
         this.quicVersion = quicVersion;
         this.logger = logger;
+        this.secretsFile = secretsFile;
 
         commands = new HashMap<>();
         history = new LinkedHashMap<>();
@@ -129,7 +132,7 @@ public class InteractiveShell {
         }
 
         try {
-            quicConnection = new QuicConnection(host, port, quicVersion, logger);
+            quicConnection = new QuicConnection(host, port, null, quicVersion, logger, secretsFile);
             quicConnection.connect(connectionTimeout);
             System.out.println("Ok, connected to " + host + "\n");
         } catch (IOException e) {

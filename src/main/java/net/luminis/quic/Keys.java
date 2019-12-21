@@ -37,6 +37,7 @@ public class Keys {
     private final Logger log;
     private final Version quicVersion;
 
+    private byte[] trafficSecret;
     private byte[] writeKey;
     private byte[] writeIV;
     private byte[] pn;
@@ -61,27 +62,27 @@ public class Keys {
 
     public synchronized void computeHandshakeKeys(TlsState tlsState) {
         if (nodeRole == Client) {
-            byte[] clientHandshakeTrafficSecret = tlsState.getClientHandshakeTrafficSecret();
-            log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
-            computeKeys(clientHandshakeTrafficSecret);
+            trafficSecret = tlsState.getClientHandshakeTrafficSecret();
+            log.secret("ClientHandshakeTrafficSecret: ", trafficSecret);
+            computeKeys(trafficSecret);
         }
         if (nodeRole == Server) {
-            byte[] serverHandshakeTrafficSecret = tlsState.getServerHandshakeTrafficSecret();
-            log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
-            computeKeys(serverHandshakeTrafficSecret);
+            trafficSecret = tlsState.getServerHandshakeTrafficSecret();
+            log.secret("ServerHandshakeTrafficSecret: ", trafficSecret);
+            computeKeys(trafficSecret);
         }
     }
 
     public synchronized void computeApplicationKeys(TlsState tlsState) {
         if (nodeRole == Client) {
-            byte[] clientApplicationTrafficSecret = tlsState.getClientApplicationTrafficSecret();
-            log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
-            computeKeys(clientApplicationTrafficSecret);
+            trafficSecret = tlsState.getClientApplicationTrafficSecret();
+            log.secret("ClientApplicationTrafficSecret: ", trafficSecret);
+            computeKeys(trafficSecret);
         }
         if (nodeRole == Server) {
-            byte[] serverApplicationTrafficSecret = tlsState.getServerApplicationTrafficSecret();
-            log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", serverApplicationTrafficSecret);
-            computeKeys(serverApplicationTrafficSecret);
+            trafficSecret = tlsState.getServerApplicationTrafficSecret();
+            log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", trafficSecret);
+            computeKeys(trafficSecret);
         }
     }
 
@@ -127,6 +128,10 @@ public class Keys {
         hkdfLabel.put(context.getBytes(ISO_8859_1));
         HKDF hkdf = HKDF.fromHmacSha256();
         return hkdf.expand(secret, hkdfLabel.array(), length);
+    }
+
+    public byte[] getTrafficSecret() {
+        return trafficSecret;
     }
 
     public byte[] getWriteKey() {
