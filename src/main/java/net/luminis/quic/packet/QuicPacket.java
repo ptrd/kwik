@@ -395,8 +395,9 @@ abstract public class QuicPacket {
                         frames.add(new StreamFrame().parse(buffer, log));
                     }
                     else {
-                        System.out.println("NYI frame type: " + frameType);
-                        throw new NotYetImplementedException();
+                        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
+                        // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
+                        throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
                     }
             }
         }
