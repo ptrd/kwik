@@ -31,15 +31,15 @@ import java.util.stream.Collectors;
  * Represents a Version Negotiation Packet as specified by
  * https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4
  */
-public class VersionNegotationPacket extends QuicPacket {
+public class VersionNegotiationPacket extends QuicPacket {
 
     private int packetSize;
 
-    public VersionNegotationPacket() {
+    public VersionNegotiationPacket() {
         this(Version.getDefault());
     }
 
-    public VersionNegotationPacket(Version quicVersion) {
+    public VersionNegotiationPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
     }
 

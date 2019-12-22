@@ -30,7 +30,7 @@ public interface PacketProcessor {
 
     void process(ShortHeaderPacket packet, Instant time);
 
-    void process(VersionNegotationPacket packet, Instant time);
+    void process(VersionNegotiationPacket packet, Instant time);
 
     void process(HandshakePacket packet, Instant time);
 

@@ -349,7 +349,7 @@ public class QuicConnection implements PacketProcessor {
         //  will be identified as a Version Negotiation packet based on the
         //  Version field having a value of 0."
         if (version == 0) {
-            packet = new VersionNegotationPacket(quicVersion);
+            packet = new VersionNegotiationPacket(quicVersion);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "An Initial packet uses long headers with a type value of 0x0."
@@ -382,16 +382,21 @@ public class QuicConnection implements PacketProcessor {
         else {
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
-        Keys keys = connectionSecrets.getServerSecrets(packet.getEncryptionLevel());
-        if (keys == null) {
-            // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
-            // "Due to reordering and loss, protected packets might be received by an
-            //   endpoint before the final TLS handshake messages are received."
-            throw new MissingKeysException(packet.getEncryptionLevel());
-        }
 
-        packet.parse(data, keys, largestPacketNumber, log, sourceConnectionId.length);
+        if (packet.getEncryptionLevel() != null) {
+            Keys keys = connectionSecrets.getServerSecrets(packet.getEncryptionLevel());
+            if (keys == null) {
+                // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
+                // "Due to reordering and loss, protected packets might be received by an
+                //   endpoint before the final TLS handshake messages are received."
+                throw new MissingKeysException(packet.getEncryptionLevel());
+            }
+            packet.parse(data, keys, largestPacketNumber, log, sourceConnectionId.length);
+        }
+        else {
+            packet.parse(data, null, largestPacketNumber, log, 0);
+        }
 
         if (packet.getPacketNumber() != null && packet.getPacketNumber() > largestPacketNumber) {
             largestPacketNumber = packet.getPacketNumber();
@@ -466,9 +471,9 @@ public class QuicConnection implements PacketProcessor {
     }
 
     @Override
-    public void process(VersionNegotationPacket packet, Instant time) {
-        log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
-        throw new VersionNegationFailure();
+    public void process(VersionNegotiationPacket packet, Instant time) {
+        log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
+        throw new VersionNegotiationFailure();
     }
 
     private volatile boolean processedRetryPacket = false;

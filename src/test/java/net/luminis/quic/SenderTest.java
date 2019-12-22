@@ -25,7 +25,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.RetryPacket;
-import net.luminis.quic.packet.VersionNegotationPacket;
+import net.luminis.quic.packet.VersionNegotiationPacket;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -169,7 +169,7 @@ class SenderTest {
 
     @Test
     void receivingVersionNegotationPacke() throws IOException {
-        sender.processPacketReceived(new VersionNegotationPacket());
+        sender.processPacketReceived(new VersionNegotiationPacket());
 
         waitForSender();
 

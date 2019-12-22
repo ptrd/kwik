@@ -20,7 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
-import net.luminis.quic.packet.VersionNegotationPacket;
+import net.luminis.quic.packet.VersionNegotiationPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -116,7 +116,7 @@ class AckGeneratorTest {
 
     @Test
     void receivingVersionNegotiationPacketDoesNotLeadToAck() {
-        ackGenerator.packetReceived(new VersionNegotationPacket());
+        ackGenerator.packetReceived(new VersionNegotiationPacket());
 
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(false);
     }

@@ -319,7 +319,7 @@ public class KwikCli {
         catch (IOException e) {
             System.out.println("Got IO error: " + e);
         }
-        catch (VersionNegationFailure e) {
+        catch (VersionNegotiationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
 

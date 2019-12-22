@@ -23,10 +23,8 @@ import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.packet.RetryPacket;
-import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.*;
+import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +36,7 @@ import org.mockito.internal.util.reflection.FieldSetter;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.function.Consumer;
@@ -291,6 +290,13 @@ class QuicConnectionTest {
     @Test
     void testQuicVersion23IsSupported() throws Exception {
         assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_23, Mockito.mock(Logger.class))).isNotNull();
+    }
+
+    @Test
+    void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
+        QuicConnection connection = new QuicConnection("localhost", 443, Version.IETF_draft_23, mock(Logger.class));
+        QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
+        assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);
     }
 
     @Test
