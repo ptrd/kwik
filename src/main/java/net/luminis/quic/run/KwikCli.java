@@ -48,6 +48,7 @@ public class KwikCli {
         cmdLineOptions.addOption("23", "use Quic version IETF_draft_23");
         cmdLineOptions.addOption("24", "use Quic version IETF_draft_24");
         cmdLineOptions.addOption(null, "reservedVersion", false, "");
+        cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
@@ -189,6 +190,15 @@ public class KwikCli {
             quicVersion = Version.reserved_1;
         }
 
+        String alpn = null;
+        if (cmd.hasOption("A")) {
+            alpn = cmd.getOptionValue("A", null);
+            if (alpn == null) {
+                usage();
+                System.exit(1);
+            }
+        }
+
         int connectionTimeout = 5;
         if (cmd.hasOption("c")) {
             try {
@@ -282,12 +292,17 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(host, port, quicVersion, logger, secretsFile != null? Paths.get(secretsFile): null).start();
+                new InteractiveShell(host, port, quicVersion, logger, secretsFile != null? Paths.get(secretsFile): null, alpn).start();
             }
             else {
                 QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger,
                         secretsFile != null? Paths.get(secretsFile): null);
-                quicConnection.connect(connectionTimeout * 1000);
+                if (alpn == null) {
+                    quicConnection.connect(connectionTimeout * 1000);
+                }
+                else {
+                    quicConnection.connect(connectionTimeout * 1000, alpn);
+                }
 
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);

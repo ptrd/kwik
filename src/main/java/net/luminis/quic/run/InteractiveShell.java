@@ -44,14 +44,16 @@ public class InteractiveShell {
     private final Version quicVersion;
     private final Logger logger;
     private final Path secretsFile;
+    private final String alpn;
     private QuicConnection quicConnection;
 
-    public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile) {
+    public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile, String alpn) {
         this.host = host;
         this.port = port;
         this.quicVersion = quicVersion;
         this.logger = logger;
         this.secretsFile = secretsFile;
+        this.alpn = alpn;
 
         commands = new HashMap<>();
         history = new LinkedHashMap<>();
@@ -134,7 +136,12 @@ public class InteractiveShell {
 
         try {
             quicConnection = new QuicConnection(host, port, null, quicVersion, logger, secretsFile);
-            quicConnection.connect(connectionTimeout);
+            if (alpn == null) {
+                quicConnection.connect(connectionTimeout);
+            }
+            else {
+                quicConnection.connect(connectionTimeout, alpn);
+            }
             System.out.println("Ok, connected to " + host + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);
