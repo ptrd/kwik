@@ -130,7 +130,7 @@ public class QuicConnection implements PacketProcessor {
         streams = new ConcurrentHashMap<>();
         sourceConnectionIds = new ConcurrentHashMap<>();
         destConnectionIds = new ConcurrentHashMap<>();
-        transportParams = new TransportParameters(60, 250_000, 1 , 1);
+        transportParams = new TransportParameters(60, 250_000, 3 , 3);
         flowControlMax = transportParams.getInitialMaxData();
         flowControlLastAdvertised = flowControlMax;
         flowControlIncrement = flowControlMax / 10;
