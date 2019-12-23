@@ -170,7 +170,7 @@ public class QuicConnection implements PacketProcessor {
             if (!handshakeFinished) {
                 throw new ConnectException("Connection timed out");
             }
-            else if (connectionState == Status.HandshakeError) {
+            else if (connectionState != Status.Connected) {
                 throw new ConnectException("Handshake error");
             }
         }
