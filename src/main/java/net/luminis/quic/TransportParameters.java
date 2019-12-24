@@ -34,6 +34,7 @@ public class TransportParameters {
     private boolean disableMigration;
     private PreferredAddress preferredAddress;
     private int maxAckDelay;
+    private int activeConnectionIdLimit;
 
 
     public TransportParameters() {
@@ -149,6 +150,21 @@ public class TransportParameters {
 
     public int getMaxAckDelay() {
         return maxAckDelay;
+    }
+
+    public int getActiveConnectionIdLimit() {
+        return activeConnectionIdLimit;
+    }
+
+    public void setActiveConnectionIdLimit(int activeConnectionIdLimit) {
+        this.activeConnectionIdLimit = activeConnectionIdLimit;
+    }
+
+    @Override
+    public String toString() {
+        return "\n- idle timeout\t" + idleTimeoutInSeconds +
+                "\n- cids limit\t" + activeConnectionIdLimit;
+
     }
 
     public static class PreferredAddress {

@@ -124,6 +124,10 @@ public class QuicTransportParametersExtension extends Extension {
         //      unidirectional streams until a MAX_STREAMS frame is sent."
         addTransportParameter(buffer, initial_max_streams_uni, params.getInitialMaxStreamsUni());
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-18.2
+        // "The maximum number of connection IDs from the peer that an endpoint is willing to store."
+        addTransportParameter(buffer, active_connection_id_limit, params.getActiveConnectionIdLimit());
+
         int length = buffer.position();
         buffer.limit(length);
 
@@ -229,6 +233,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == active_connection_id_limit.value) {
             int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
             log.debug("- active connection id limit: " + activeConnectionIdLimit);
+            params.setActiveConnectionIdLimit(activeConnectionIdLimit);
         }
         else {
             log.error("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
