@@ -150,12 +150,19 @@ public class QuicConnection implements PacketProcessor {
      * Set up the connection with the server.
      */
     public void connect(int connectionTimeout) throws IOException {
-        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
-        connect(connectionTimeout, alpn);
+        connect(connectionTimeout, null);
     }
 
-    public synchronized void connect(int connectionTimeout, String applicationProtocol) throws IOException {
+    public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
+        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        connect(connectionTimeout, alpn, transportParameters);
+    }
+
+    public synchronized void connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters) throws IOException {
         this.applicationProtocol = applicationProtocol;
+        if (transportParameters != null) {
+            this.transportParams = transportParameters;
+        }
         generateConnectionIds(8, 8);
         generateInitialKeys();
 
@@ -743,6 +750,10 @@ public class QuicConnection implements PacketProcessor {
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16 // encryption overhead
         ;
+    }
+
+    public TransportParameters getTransportParameters() {
+        return transportParams;
     }
 
     public TransportParameters getPeerTransportParameters() {

@@ -46,6 +46,7 @@ public class InteractiveShell {
     private final Path secretsFile;
     private final String alpn;
     private QuicConnection quicConnection;
+    private TransportParameters params;
 
     public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile, String alpn) {
         this.host = host;
@@ -58,6 +59,12 @@ public class InteractiveShell {
         commands = new HashMap<>();
         history = new LinkedHashMap<>();
         setupCommands();
+
+        initParams();
+    }
+
+    private void initParams() {
+        params = new TransportParameters(60, 250_000, 3 , 3);
     }
 
     private void setupCommands() {
@@ -66,7 +73,9 @@ public class InteractiveShell {
         commands.put("close", this::close);
         commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
-        commands.put("params", this::printParams);
+        commands.put("server_params", this::printServerParams);
+        commands.put("params", this::printClientParams);
+        commands.put("set", this::setClientParameter);
         commands.put("cids_new", this::newConnectionIds);
         commands.put("cids_next", this::nextDestinationConnectionId);
         commands.put("cids_show", this::printConnectionIds);
@@ -137,10 +146,10 @@ public class InteractiveShell {
         try {
             quicConnection = new QuicConnection(host, port, null, quicVersion, logger, secretsFile);
             if (alpn == null) {
-                quicConnection.connect(connectionTimeout);
+                quicConnection.connect(connectionTimeout, params);
             }
             else {
-                quicConnection.connect(connectionTimeout, alpn);
+                quicConnection.connect(connectionTimeout, alpn, params);
             }
             System.out.println("Ok, connected to " + host + "\n");
         } catch (IOException e) {
@@ -221,9 +230,50 @@ public class InteractiveShell {
         quicConnection.ping();
     }
 
-    private void printParams(String arg) {
-        TransportParameters parameters = quicConnection.getPeerTransportParameters();
-        System.out.println("Server idle time: " + parameters.getIdleTimeout());
+    private void printClientParams(String arg) {
+        System.out.print("Client transport parameters: ");
+        if (quicConnection != null) {
+            System.out.println(quicConnection.getTransportParameters());
+        }
+        else {
+            System.out.println(params);
+        }
+    }
+
+    private void setClientParameter(String argLine) {
+        String[] args = argLine.split("\\s+");
+        if (args.length == 2) {
+            String name = args[0];
+            String value = args[1];
+            setClientParameter(name, value);
+        } else {
+            System.out.println("Incorrect parameters; should be <name> <value>");
+        }
+    }
+
+    private void setClientParameter(String name, String value) {
+        switch (name) {
+            case "idle":
+                params.setIdleTimeout(toInt(value));
+                break;
+            case "cids":
+                params.setActiveConnectionIdLimit(toInt(value));
+                break;
+            default:
+                System.out.println("Parameter must be one of:");
+                System.out.println("- idle (idle timeout)");
+                System.out.println("- cids (active connection id limit)");
+        }
+    }
+
+    private void printServerParams(String arg) {
+        if (quicConnection != null) {
+            TransportParameters parameters = quicConnection.getPeerTransportParameters();
+            System.out.println("Server transport parameters: " + parameters);
+        }
+        else {
+            System.out.println("Server transport parameters still unknown (no connection)");
+        }
     }
 
     private void error(Exception error) {
@@ -233,5 +283,14 @@ public class InteractiveShell {
     private void prompt() {
         System.out.print("> ");
         System.out.flush();
+    }
+
+    private Integer toInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: value not an integer; using 0");
+            return 0;
+        }
     }
 }
