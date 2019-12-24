@@ -75,9 +75,9 @@ public class InteractiveShell {
         commands.put("ping", this::sendPing);
         commands.put("params", this::printClientParams);
         commands.put("server_params", this::printServerParams);
-        commands.put("cids_new", this::newConnectionIds);
-        commands.put("cids_next", this::nextDestinationConnectionId);
-        commands.put("cids_show", this::printConnectionIds);
+        commands.put("cid_new", this::newConnectionIds);
+        commands.put("cid_next", this::nextDestinationConnectionId);
+        commands.put("cid_list", this::printConnectionIds);
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
