@@ -56,7 +56,7 @@ public class InteractiveShell {
         this.secretsFile = secretsFile;
         this.alpn = alpn;
 
-        commands = new HashMap<>();
+        commands = new LinkedHashMap<>();
         history = new LinkedHashMap<>();
         setupCommands();
 
@@ -69,18 +69,18 @@ public class InteractiveShell {
 
     private void setupCommands() {
         commands.put("help", this::help);
+        commands.put("set", this::setClientParameter);
         commands.put("connect", this::connect);
         commands.put("close", this::close);
-        commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
-        commands.put("server_params", this::printServerParams);
         commands.put("params", this::printClientParams);
-        commands.put("set", this::setClientParameter);
+        commands.put("server_params", this::printServerParams);
         commands.put("cids_new", this::newConnectionIds);
         commands.put("cids_next", this::nextDestinationConnectionId);
         commands.put("cids_show", this::printConnectionIds);
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("!!", this::repeatLastCommand);
+        commands.put("quit", this::quit);
     }
 
     private void repeatLastCommand(String arg) {
@@ -215,7 +215,7 @@ public class InteractiveShell {
     }
 
     private void help(String arg) {
-        System.out.println("available commands: " + commands.keySet().stream().sorted().collect(Collectors.joining(", ")));
+        System.out.println("available commands: " + commands.keySet().stream().collect(Collectors.joining(", ")));
     }
 
     private void quit(String arg) {
@@ -247,7 +247,7 @@ public class InteractiveShell {
             String value = args[1];
             setClientParameter(name, value);
         } else {
-            System.out.println("Incorrect parameters; should be <name> <value>");
+            System.out.println("Incorrect parameters; should be <transport parameter name> <value>; just try to see supported params");
         }
     }
 
