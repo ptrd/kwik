@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.ConnectionIdStatus;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
@@ -188,16 +189,28 @@ public class InteractiveShell {
     }
 
     private void printConnectionIds(String arg) {
-        System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
-        System.out.println("Generated source connection id's:");
+        System.out.println("Source (client) connection id's:");
         quicConnection.getSourceConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
-        System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
-        System.out.println("Available destination connection id's:");
+                .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
+                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+        System.out.println("Destination (server) connection id's:");
         quicConnection.getDestinationConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
+                .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
+                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+    }
+
+    private String toString(ConnectionIdStatus connectionIdStatus) {
+        switch (connectionIdStatus) {
+            case NEW: return " ";
+            case IN_USE: return "*";
+            case USED: return ".";
+            case RETIRED: return "x";
+            default:
+                // Impossible
+                throw new RuntimeException("");
+        }
     }
 
     private void nextDestinationConnectionId(String arg) {

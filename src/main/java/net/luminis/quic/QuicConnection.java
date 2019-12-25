@@ -86,8 +86,8 @@ public class QuicConnection implements PacketProcessor {
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
     private volatile FlowControl flowController;
-    private Map<Integer, byte[]> destConnectionIds;
-    private Map<Integer, byte[]> sourceConnectionIds;
+    private Map<Integer, ConnectionIdInfo> destConnectionIds;
+    private Map<Integer, ConnectionIdInfo> sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
     private Consumer<QuicStream> serverStreamCallback;
     private String applicationProtocol;
@@ -246,13 +246,13 @@ public class QuicConnection implements PacketProcessor {
         sourceConnectionId = new byte[srcConnIdLength];
         random.nextBytes(sourceConnectionId);
         log.debug("Source connection id", sourceConnectionId);
-        sourceConnectionIds.put(0, sourceConnectionId);
+        sourceConnectionIds.put(0, new ConnectionIdInfo(sourceConnectionId, ConnectionIdStatus.IN_USE));
 
         destConnectionId = new byte[dstConnIdLength];
         random.nextBytes(destConnectionId);
         log.info("Original destination connection id", destConnectionId);
         originalDestinationConnectionId = destConnectionId;
-        destConnectionIds.put(0, destConnectionId);
+        destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId));   // TODO: waarom??
     }
 
     private void generateInitialKeys() {
@@ -454,7 +454,7 @@ public class QuicConnection implements PacketProcessor {
     @Override
     public void process(InitialPacket packet, Instant time) {
         destConnectionId = packet.getSourceConnectionId();
-        destConnectionIds.put(0, destConnectionId);
+        destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId, ConnectionIdStatus.IN_USE));
         processFrames(packet, time);
     }
 
@@ -472,6 +472,9 @@ public class QuicConnection implements PacketProcessor {
     public void process(ShortHeaderPacket packet, Instant time) {
         if (! Arrays.equals(sourceConnectionId, packet.getDestinationConnectionId())) {
             sourceConnectionId = packet.getDestinationConnectionId();
+            sourceConnectionIds.values().stream()
+                    .filter(cid -> Arrays.equals(cid.getConnectionId(), sourceConnectionId))
+                    .forEach(cid -> cid.setStatus(ConnectionIdStatus.IN_USE));
             log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(sourceConnectionId));
         }
         processFrames(packet, time);
@@ -502,7 +505,7 @@ public class QuicConnection implements PacketProcessor {
 
                 token = packet.getRetryToken();
                 destConnectionId = packet.getSourceConnectionId();
-                destConnectionIds.put(0, destConnectionId);
+                destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId));
                 log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
                 generateInitialKeys();
 
@@ -564,11 +567,7 @@ public class QuicConnection implements PacketProcessor {
                 flowController.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof NewConnectionIdFrame) {
-                destConnectionIds.put(((NewConnectionIdFrame) frame).getSequenceNr(), ((NewConnectionIdFrame) frame).getConnectionId());
-                if (((NewConnectionIdFrame) frame).getRetirePriorTo() != 0) {
-                    // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
-                    log.info("Peer sends retire connection id; not implemented yet.");
-                }
+                registerNewDestinationConnectionId((NewConnectionIdFrame) frame);
             }
             else if (frame instanceof RetireConnectionIdFrame) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
@@ -812,18 +811,28 @@ public class QuicConnection implements PacketProcessor {
         streams.values().stream().forEach(s -> s.abort());
     }
 
+    private void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
+        destConnectionIds.put(frame.getSequenceNr(), new ConnectionIdInfo(frame.getConnectionId()));
+        if (frame.getRetirePriorTo() > 0) {
+            // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
+            log.info("Peer sends retire connection id; not implemented yet.");
+        }
+    }
+
     // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-5.1.2
     // "An endpoint can change the connection ID it uses for a peer to
     //   another available one at any time during the connection. "
     public byte[] nextDestinationConnectionId() {
         int currentIndex = destConnectionIds.entrySet().stream()
-                .filter(entry -> entry.getValue().equals(destConnectionId))
+                .filter(entry -> entry.getValue().getConnectionId().equals(destConnectionId))
                 .mapToInt(entry -> entry.getKey())
                 .findFirst().orElseThrow();
         if (destConnectionIds.containsKey(currentIndex + 1)) {
-            byte[] newConnectionId = destConnectionIds.get(currentIndex + 1);
+            byte[] newConnectionId = destConnectionIds.get(currentIndex + 1).connectionId;
             log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
             destConnectionId = newConnectionId;
+            destConnectionIds.get(currentIndex).setStatus(ConnectionIdStatus.USED);
+            destConnectionIds.get(currentIndex+1).setStatus(ConnectionIdStatus.IN_USE);
             return newConnectionId;
         }
         else {
@@ -840,7 +849,7 @@ public class QuicConnection implements PacketProcessor {
             random.nextBytes(newSourceConnectionId);
             newConnectionIds[i] = newSourceConnectionId;
             int sequenceNr = sourceConnectionIds.keySet().stream().max(Integer::compareTo).get() + 1;
-            sourceConnectionIds.put(sequenceNr, newSourceConnectionId);
+            sourceConnectionIds.put(sequenceNr, new ConnectionIdInfo(newSourceConnectionId));
             log.debug("New generated source connection id", newSourceConnectionId);
             packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, retirePriorTo, newSourceConnectionId));
         }
@@ -851,7 +860,7 @@ public class QuicConnection implements PacketProcessor {
 
     private void retireSourceConnectionId(int sequenceNr) {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
-            sourceConnectionIds.remove(sequenceNr);
+            sourceConnectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);
         }
     }
 
@@ -864,7 +873,7 @@ public class QuicConnection implements PacketProcessor {
         return sourceConnectionId;
     }
 
-    public Map<Integer, byte[]> getSourceConnectionIds() {
+    public Map<Integer, ConnectionIdInfo> getSourceConnectionIds() {
         return sourceConnectionIds;
     }
 
@@ -872,7 +881,7 @@ public class QuicConnection implements PacketProcessor {
         return destConnectionId;
     }
 
-    public Map<Integer, byte[]> getDestinationConnectionIds() {
+    public Map<Integer, ConnectionIdInfo> getDestinationConnectionIds() {
         return destConnectionIds;
     }
 
