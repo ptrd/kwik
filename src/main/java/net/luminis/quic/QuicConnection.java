@@ -471,7 +471,12 @@ public class QuicConnection implements PacketProcessor {
     @Override
     public void process(ShortHeaderPacket packet, Instant time) {
         if (! Arrays.equals(sourceConnectionId, packet.getDestinationConnectionId())) {
+            // Register previous connection id as used
+            sourceConnectionIds.values().stream()
+                    .filter(cid -> Arrays.equals(cid.getConnectionId(), sourceConnectionId))
+                    .forEach(cid -> cid.setStatus(ConnectionIdStatus.USED));
             sourceConnectionId = packet.getDestinationConnectionId();
+            // Register current connection id as current
             sourceConnectionIds.values().stream()
                     .filter(cid -> Arrays.equals(cid.getConnectionId(), sourceConnectionId))
                     .forEach(cid -> cid.setStatus(ConnectionIdStatus.IN_USE));
@@ -869,6 +874,8 @@ public class QuicConnection implements PacketProcessor {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
             sourceConnectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);
         }
+        // TODO: check if enough unused cids, if not, generate new. "Sending a RETIRE_CONNECTION_ID frame also serves as a
+        //   request to the peer to send additional connection IDs for future use"
     }
 
     public Statistics getStats() {
