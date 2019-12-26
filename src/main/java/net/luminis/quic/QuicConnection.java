@@ -858,6 +858,13 @@ public class QuicConnection implements PacketProcessor {
         return newConnectionIds;
     }
 
+    public void retireDestinationConnectionId(Integer sequenceNumber) {
+        QuicPacket packet = createPacket(App, new RetireConnectionIdFrame(quicVersion, sequenceNumber));
+        packet.addFrame(new Padding(10));   // TODO: find out minimum packet size, and let packet take care of it.
+        send(packet, "retire cid");
+        destConnectionIds.get(sequenceNumber).setStatus(ConnectionIdStatus.RETIRED);
+    }
+
     private void retireSourceConnectionId(int sequenceNr) {
         if (sourceConnectionIds.containsKey(sequenceNr)) {
             sourceConnectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);

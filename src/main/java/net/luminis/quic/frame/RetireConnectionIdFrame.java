@@ -32,6 +32,10 @@ public class RetireConnectionIdFrame extends QuicFrame {
     public RetireConnectionIdFrame(Version quicVersion) {
     }
 
+    public RetireConnectionIdFrame(Version quicVersion, int sequenceNumber) {
+        this.sequenceNr = sequenceNumber;
+    }
+
     public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
         sequenceNr = VariableLengthInteger.parse(buffer);
@@ -40,7 +44,14 @@ public class RetireConnectionIdFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(10);
+        buffer.put((byte) 0x19);
+        VariableLengthInteger.encode(sequenceNr, buffer);
+
+        byte[] frameBytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(frameBytes);
+        return frameBytes;
     }
 
     @Override

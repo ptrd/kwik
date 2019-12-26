@@ -79,6 +79,7 @@ public class InteractiveShell {
         commands.put("cid_new", this::newConnectionIds);
         commands.put("cid_next", this::nextDestinationConnectionId);
         commands.put("cid_list", this::printConnectionIds);
+        commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
@@ -221,6 +222,10 @@ public class InteractiveShell {
         else {
             System.out.println("Cannot switch to next destination connect id, because there is none available");
         }
+    }
+
+    private void retireConnectionId(String arg) {
+        quicConnection.retireDestinationConnectionId(toInt(arg));
     }
 
     private void changeUdpPort(String args) {
