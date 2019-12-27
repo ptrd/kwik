@@ -208,6 +208,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
         else if (parameterId == disable_active_migration.value) {
             log.debug("- disable migration");
+            params.setDisableMigration(true);
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
             long maxStreamDataBidiRemote = VariableLengthInteger.parseLong(buffer);

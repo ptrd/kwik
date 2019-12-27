@@ -160,11 +160,19 @@ public class TransportParameters {
         this.activeConnectionIdLimit = activeConnectionIdLimit;
     }
 
+    public void setDisableMigration(boolean disableMigration) {
+        this.disableMigration = disableMigration;
+    }
+
+    public boolean getDisableMigration() {
+        return disableMigration;
+    }
+
     @Override
     public String toString() {
         return "\n- idle timeout\t" + idleTimeoutInSeconds +
-                "\n- cids limit\t" + activeConnectionIdLimit;
-
+                "\n- cids limit\t" + activeConnectionIdLimit +
+                "\n- disable migration\t" + disableMigration;
     }
 
     public static class PreferredAddress {
