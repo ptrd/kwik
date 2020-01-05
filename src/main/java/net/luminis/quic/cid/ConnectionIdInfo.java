@@ -16,23 +16,24 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.cid;
 
-import static net.luminis.quic.ConnectionIdStatus.IN_USE;
-import static net.luminis.quic.ConnectionIdStatus.NEW;
 
 public class ConnectionIdInfo {
-    byte[] connectionId;
-    ConnectionIdStatus connectionIdStatus;
 
-    ConnectionIdInfo(byte[] connectionId) {
-        this.connectionId = connectionId;
-        connectionIdStatus = NEW;
-    }
+    final private int sequenceNumber;
+    final private byte[] connectionId;
+    private ConnectionIdStatus connectionIdStatus;
 
-    ConnectionIdInfo(byte[] connectionId, ConnectionIdStatus status) {
+
+    ConnectionIdInfo(int sequenceNumber, byte[] connectionId, ConnectionIdStatus status) {
+        this.sequenceNumber = sequenceNumber;
         this.connectionId = connectionId;
         connectionIdStatus = status;
+    }
+
+    public int getSequenceNumber() {
+        return sequenceNumber;
     }
 
     public byte[] getConnectionId() {

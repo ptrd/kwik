@@ -18,6 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.cid.ConnectionIdInfo;
+import net.luminis.quic.cid.DestinationConnectionIdRegistry;
+import net.luminis.quic.cid.SourceConnectionIdRegistry;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -61,7 +64,6 @@ public class QuicConnection implements PacketProcessor {
 
     private final Logger log;
     private final Version quicVersion;
-    private final Random random = new Random();
     private final String host;
     private final int port;
     private final NewSessionTicket sessionTicket;
@@ -72,9 +74,6 @@ public class QuicConnection implements PacketProcessor {
     private final Receiver receiver;
     private final ECPrivateKey privateKey;
     private final ECPublicKey publicKey;
-    private volatile byte[] sourceConnectionId;
-    private volatile byte[] destConnectionId;
-    private volatile byte[] originalDestinationConnectionId;
     private volatile byte[] token;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
@@ -86,8 +85,8 @@ public class QuicConnection implements PacketProcessor {
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
     private volatile FlowControl flowController;
-    private Map<Integer, ConnectionIdInfo> destConnectionIds;
-    private Map<Integer, ConnectionIdInfo> sourceConnectionIds;
+    private DestinationConnectionIdRegistry destConnectionIds;
+    private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
     private Consumer<QuicStream> serverStreamCallback;
     private String applicationProtocol;
@@ -128,8 +127,8 @@ public class QuicConnection implements PacketProcessor {
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
         connectionSecrets = new ConnectionSecrets(quicVersion, secretsFile, log);
         streams = new ConcurrentHashMap<>();
-        sourceConnectionIds = new ConcurrentHashMap<>();
-        destConnectionIds = new ConcurrentHashMap<>();
+        sourceConnectionIds = new SourceConnectionIdRegistry(log);
+        destConnectionIds = new DestinationConnectionIdRegistry(log);
         transportParams = new TransportParameters(60, 250_000, 3 , 3);
         flowControlMax = transportParams.getInitialMaxData();
         flowControlLastAdvertised = flowControlMax;
@@ -163,7 +162,8 @@ public class QuicConnection implements PacketProcessor {
         if (transportParameters != null) {
             this.transportParams = transportParameters;
         }
-        generateConnectionIds(8, 8);
+
+        log.info("Original destination connection id", destConnectionIds.getCurrent());
         generateInitialKeys();
 
         receiver.start();
@@ -236,27 +236,8 @@ public class QuicConnection implements PacketProcessor {
         }
     }
 
-    /**
-     * Generate the initial connection id's for this connection.
-     * Note that connection id's might change during the lifetime of a connection, and the dest connection id certainly will.
-     * @param srcConnIdLength
-     * @param dstConnIdLength
-     */
-    private void generateConnectionIds(int srcConnIdLength, int dstConnIdLength) {
-        sourceConnectionId = new byte[srcConnIdLength];
-        random.nextBytes(sourceConnectionId);
-        log.debug("Source connection id", sourceConnectionId);
-        sourceConnectionIds.put(0, new ConnectionIdInfo(sourceConnectionId, ConnectionIdStatus.IN_USE));
-
-        destConnectionId = new byte[dstConnIdLength];
-        random.nextBytes(destConnectionId);
-        log.info("Original destination connection id", destConnectionId);
-        originalDestinationConnectionId = destConnectionId;
-        destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId));   // TODO: waarom??
-    }
-
     private void generateInitialKeys() {
-        connectionSecrets.computeInitialKeys(destConnectionId);
+        connectionSecrets.computeInitialKeys(destConnectionIds.getCurrent());
     }
 
     private void startHandshake(String applicationProtocol) {
@@ -296,13 +277,13 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket packet;
         switch (level) {
             case Initial:
-                packet = new InitialPacket(quicVersion, sourceConnectionId, destConnectionId, token, frame);
+                packet = new InitialPacket(quicVersion, sourceConnectionIds.getCurrent(), destConnectionIds.getCurrent(), token, frame);
                 break;
             case Handshake:
-                packet = new HandshakePacket(quicVersion, sourceConnectionId, destConnectionId, frame);
+                packet = new HandshakePacket(quicVersion, sourceConnectionIds.getCurrent(), destConnectionIds.getCurrent(), frame);
                 break;
             case App:
-                packet = new ShortHeaderPacket(quicVersion, destConnectionId, frame);
+                packet = new ShortHeaderPacket(quicVersion, destConnectionIds.getCurrent(), frame);
                 break;
             default:
                 throw new RuntimeException();  // Cannot happen, just here to satisfy the compiler.
@@ -399,7 +380,7 @@ public class QuicConnection implements PacketProcessor {
                 //   endpoint before the final TLS handshake messages are received."
                 throw new MissingKeysException(packet.getEncryptionLevel());
             }
-            packet.parse(data, keys, largestPacketNumber, log, sourceConnectionId.length);
+            packet.parse(data, keys, largestPacketNumber, log, sourceConnectionIds.getConnectionIdlength());
         }
         else {
             packet.parse(data, null, largestPacketNumber, log, 0);
@@ -453,8 +434,7 @@ public class QuicConnection implements PacketProcessor {
 
     @Override
     public void process(InitialPacket packet, Instant time) {
-        destConnectionId = packet.getSourceConnectionId();
-        destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId, ConnectionIdStatus.IN_USE));
+        destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);
     }
 
@@ -470,18 +450,7 @@ public class QuicConnection implements PacketProcessor {
 
     @Override
     public void process(ShortHeaderPacket packet, Instant time) {
-        if (! Arrays.equals(sourceConnectionId, packet.getDestinationConnectionId())) {
-            // Register previous connection id as used
-            sourceConnectionIds.values().stream()
-                    .filter(cid -> Arrays.equals(cid.getConnectionId(), sourceConnectionId))
-                    .forEach(cid -> cid.setStatus(ConnectionIdStatus.USED));
-            sourceConnectionId = packet.getDestinationConnectionId();
-            // Register current connection id as current
-            sourceConnectionIds.values().stream()
-                    .filter(cid -> Arrays.equals(cid.getConnectionId(), sourceConnectionId))
-                    .forEach(cid -> cid.setStatus(ConnectionIdStatus.IN_USE));
-            log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(sourceConnectionId));
-        }
+        sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId());
         processFrames(packet, time);
     }
 
@@ -499,7 +468,7 @@ public class QuicConnection implements PacketProcessor {
         // "Clients MUST discard Retry packets that contain an Original
         //   Destination Connection ID field that does not match the Destination
         //   Connection ID from its Initial packet"
-        if (Arrays.equals(packet.getOriginalDestinationConnectionId(), destConnectionId)) {
+        if (Arrays.equals(packet.getOriginalDestinationConnectionId(), destConnectionIds.getCurrent())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
                 // "A client MUST accept and process at most one Retry packet for each
@@ -509,8 +478,8 @@ public class QuicConnection implements PacketProcessor {
                 processedRetryPacket = true;
 
                 token = packet.getRetryToken();
-                destConnectionId = packet.getSourceConnectionId();
-                destConnectionIds.put(0, new ConnectionIdInfo(destConnectionId));
+                byte[] destConnectionId = packet.getSourceConnectionId();
+                destConnectionIds.replaceInitialConnectionId(destConnectionId);
                 log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
                 generateInitialKeys();
 
@@ -750,7 +719,7 @@ public class QuicConnection implements PacketProcessor {
 
     int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
-                + destConnectionId.length
+                + destConnectionIds.getConnectionIdlength()
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16 // encryption overhead
         ;
@@ -776,7 +745,7 @@ public class QuicConnection implements PacketProcessor {
 
         if (processedRetryPacket) {
             if (transportParameters.getOriginalConnectionId() == null ||
-                    ! Arrays.equals(originalDestinationConnectionId, transportParameters.getOriginalConnectionId())) {
+                    ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalConnectionId())) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
@@ -817,7 +786,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     private void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
-        destConnectionIds.put(frame.getSequenceNr(), new ConnectionIdInfo(frame.getConnectionId()));
+        destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
         if (frame.getRetirePriorTo() > 0) {
             // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
             log.info("Peer sends retire connection id; not implemented yet.");
@@ -828,21 +797,9 @@ public class QuicConnection implements PacketProcessor {
     // "An endpoint can change the connection ID it uses for a peer to
     //   another available one at any time during the connection. "
     public byte[] nextDestinationConnectionId() {
-        int currentIndex = destConnectionIds.entrySet().stream()
-                .filter(entry -> entry.getValue().getConnectionId().equals(destConnectionId))
-                .mapToInt(entry -> entry.getKey())
-                .findFirst().orElseThrow();
-        if (destConnectionIds.containsKey(currentIndex + 1)) {
-            byte[] newConnectionId = destConnectionIds.get(currentIndex + 1).connectionId;
-            log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
-            destConnectionId = newConnectionId;
-            destConnectionIds.get(currentIndex).setStatus(ConnectionIdStatus.USED);
-            destConnectionIds.get(currentIndex+1).setStatus(ConnectionIdStatus.IN_USE);
-            return newConnectionId;
-        }
-        else {
-            return null;
-        }
+        byte[] newConnectionId = destConnectionIds.useNext();
+        log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        return newConnectionId;
     }
 
     public byte[][] newConnectionIds(int count, int retirePriorTo) {
@@ -850,13 +807,10 @@ public class QuicConnection implements PacketProcessor {
         byte[][] newConnectionIds = new byte[count][];
 
         for (int i = 0; i < count; i++) {
-            byte[] newSourceConnectionId = new byte[sourceConnectionId.length];
-            random.nextBytes(newSourceConnectionId);
-            newConnectionIds[i] = newSourceConnectionId;
-            int sequenceNr = sourceConnectionIds.keySet().stream().max(Integer::compareTo).get() + 1;
-            sourceConnectionIds.put(sequenceNr, new ConnectionIdInfo(newSourceConnectionId));
-            log.debug("New generated source connection id", newSourceConnectionId);
-            packet.addFrame(new NewConnectionIdFrame(quicVersion, sequenceNr, retirePriorTo, newSourceConnectionId));
+            ConnectionIdInfo cid = sourceConnectionIds.generateNew();
+            newConnectionIds[i] = cid.getConnectionId();
+            log.debug("New generated source connection id", cid.getConnectionId());
+            packet.addFrame(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()));
         }
 
         send(packet, "new connection id's");
@@ -867,13 +821,11 @@ public class QuicConnection implements PacketProcessor {
         QuicPacket packet = createPacket(App, new RetireConnectionIdFrame(quicVersion, sequenceNumber));
         packet.addFrame(new Padding(10));   // TODO: find out minimum packet size, and let packet take care of it.
         send(packet, "retire cid");
-        destConnectionIds.get(sequenceNumber).setStatus(ConnectionIdStatus.RETIRED);
+        destConnectionIds.retireConnectionId(sequenceNumber);
     }
 
     private void retireSourceConnectionId(int sequenceNr) {
-        if (sourceConnectionIds.containsKey(sequenceNr)) {
-            sourceConnectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);
-        }
+        sourceConnectionIds.retireConnectionId(sequenceNr);
         // TODO: check if enough unused cids, if not, generate new. "Sending a RETIRE_CONNECTION_ID frame also serves as a
         //   request to the peer to send additional connection IDs for future use"
     }
@@ -884,19 +836,19 @@ public class QuicConnection implements PacketProcessor {
 
 
     public byte[] getSourceConnectionId() {
-        return sourceConnectionId;
+        return sourceConnectionIds.getCurrent();
     }
 
     public Map<Integer, ConnectionIdInfo> getSourceConnectionIds() {
-        return sourceConnectionIds;
+        return sourceConnectionIds.getAll();
     }
 
     public byte[] getDestinationConnectionId() {
-        return destConnectionId;
+        return destConnectionIds.getCurrent();
     }
 
     public Map<Integer, ConnectionIdInfo> getDestinationConnectionIds() {
-        return destConnectionIds;
+        return destConnectionIds.getAll();
     }
 
     public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {

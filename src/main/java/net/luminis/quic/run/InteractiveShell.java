@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.ConnectionIdStatus;
+import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
