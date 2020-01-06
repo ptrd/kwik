@@ -26,6 +26,7 @@ import java.util.Arrays;
 
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
+    private int activeConnectionIdLimit;
 
     public SourceConnectionIdRegistry(Logger logger) {
         super(logger);
@@ -38,22 +39,43 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
         return newCid;
     }
 
-    public void registerUsedConnectionId(byte[] connectionId) {
+    /**
+     * Registers a connection id for being used.
+     * @param connectionId
+     * @return true is the connection id is new (newly used), false otherwise.
+     */
+    public boolean registerUsedConnectionId(byte[] connectionId) {
         if (! Arrays.equals(currentConnectionId, connectionId)) {
             // Register previous connection id as used
             connectionIds.values().stream()
                     .filter(cid -> Arrays.equals(cid.getConnectionId(), currentConnectionId))
                     .forEach(cid -> cid.setStatus(ConnectionIdStatus.USED));
             currentConnectionId = connectionId;
+            // Check if new connection id is newly used
+            boolean wasNew = connectionIds.values().stream()
+                    .filter(cid -> Arrays.equals(cid.getConnectionId(), currentConnectionId))
+                    .anyMatch(cid -> cid.getConnectionIdStatus().equals(ConnectionIdStatus.NEW));
             // Register current connection id as current
             connectionIds.values().stream()
                     .filter(cid -> Arrays.equals(cid.getConnectionId(), currentConnectionId))
                     .forEach(cid -> cid.setStatus(ConnectionIdStatus.IN_USE));
             log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(currentConnectionId));
+            return wasNew;
+        }
+        else {
+            return false;
         }
     }
 
+    public boolean limitReached() {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().active())
+                .count() >= activeConnectionIdLimit;
+    }
 
+    public void setActiveLimit(int activeConnectionIdLimit) {
+        this.activeConnectionIdLimit = activeConnectionIdLimit;
+    }
 }
 
 

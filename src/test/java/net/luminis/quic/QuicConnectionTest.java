@@ -18,9 +18,9 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.frame.ConnectionCloseFrame;
-import net.luminis.quic.frame.MaxDataFrame;
-import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.cid.ConnectionIdInfo;
+import net.luminis.quic.cid.ConnectionIdStatus;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
@@ -39,6 +39,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -379,5 +380,84 @@ class QuicConnectionTest {
         connection.close();
 
         verify(sender).send(argThat(new PacketMatcherByFrameClass(ConnectionCloseFrame.class)), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        assertThat(connection.getSourceConnectionIds()).hasSize(1);
+
+        TransportParameters params = new TransportParameters();
+        params.setActiveConnectionIdLimit(3);
+        connection.setPeerTransportParameters(params);
+
+        RetireConnectionIdFrame retireFrame = new RetireConnectionIdFrame(Version.getDefault(), 0);
+        connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame), Instant.now());
+
+        assertThat(connection.getSourceConnectionIds()).hasSize(2);
+        verify(sender).send(argThat(new PacketMatcherByFrameClass(NewConnectionIdFrame.class)), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        TransportParameters params = new TransportParameters();
+        params.setActiveConnectionIdLimit(7);
+        connection.setPeerTransportParameters(params);
+
+        byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
+        byte[] nextConnectionId = newConnectionIds[0];
+        assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
+
+        clearInvocations(sender);
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+
+        assertThat(connection.getSourceConnectionIds().get(0).getConnectionIdStatus()).isEqualTo(ConnectionIdStatus.USED);
+        verify(sender, times(1)).send(argThat(new PacketMatcherByFrameClass(NewConnectionIdFrame.class)), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void receivingPacketWitYetUnusedConnectionIdDoesNotLeadToNewSourceConnectionIdWhenActiveCidLimitReached() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        TransportParameters params = new TransportParameters();
+        params.setActiveConnectionIdLimit(1);
+        connection.setPeerTransportParameters(params);
+
+        byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
+        byte[] nextConnectionId = newConnectionIds[0];
+        assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
+
+        clearInvocations(sender);
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+
+        verify(sender, never()).send(any(), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void receivingPacketWitPrevouslyUsedConnectionIdDoesNotLeadToNewSourceConnectionId() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        TransportParameters params = new TransportParameters();
+        params.setActiveConnectionIdLimit(8);
+        connection.setPeerTransportParameters(params);
+
+        byte[] firstConnectionId = connection.getSourceConnectionId();
+        Map<Integer, ConnectionIdInfo> sourceConnectionIds = connection.getSourceConnectionIds();
+        byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
+        byte[] nextConnectionId = newConnectionIds[0];
+        assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+
+        clearInvocations(sender);
+        connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)), Instant.now());
+
+        verify(sender, never()).send(any(), anyString(), any(Consumer.class));
     }
 }

@@ -22,6 +22,10 @@ public enum ConnectionIdStatus {
     NEW,
     IN_USE,
     USED,
-    RETIRED
+    RETIRED;
+
+    public boolean active() {
+        return ! this.equals(RETIRED);
+    }
 }
 

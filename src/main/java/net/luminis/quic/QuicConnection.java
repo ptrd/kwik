@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
+import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.cid.SourceConnectionIdRegistry;
 import net.luminis.quic.frame.*;
@@ -450,7 +451,16 @@ public class QuicConnection implements PacketProcessor {
 
     @Override
     public void process(ShortHeaderPacket packet, Instant time) {
-        sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId());
+        if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
+            // New connection id, not used before.
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1.1
+            // "An endpoint SHOULD supply a new connection ID when it receives a
+            //   packet with a previously unused connection ID (...) unless
+            //   providing the new connection ID would exceed the peer's limit"
+            if (! sourceConnectionIds.limitReached()) {
+                newConnectionIds(1, 0);
+            }
+        }
         processFrames(packet, time);
     }
 
@@ -544,11 +554,7 @@ public class QuicConnection implements PacketProcessor {
                 registerNewDestinationConnectionId((NewConnectionIdFrame) frame);
             }
             else if (frame instanceof RetireConnectionIdFrame) {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
-                // "An endpoint sends a RETIRE_CONNECTION_ID frame (type=0x19) to
-                //   indicate that it will no longer use a connection ID that was issued
-                //   by its peer."
-                retireSourceConnectionId(((RetireConnectionIdFrame) frame).getSequenceNr());
+                retireSourceConnectionId((RetireConnectionIdFrame) frame);
             }
             else if (frame instanceof ConnectionCloseFrame) {
                 ConnectionCloseFrame close = (ConnectionCloseFrame) frame;
@@ -742,6 +748,7 @@ public class QuicConnection implements PacketProcessor {
                 log);
 
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
+        sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
         if (processedRetryPacket) {
             if (transportParameters.getOriginalConnectionId() == null ||
@@ -824,10 +831,23 @@ public class QuicConnection implements PacketProcessor {
         destConnectionIds.retireConnectionId(sequenceNumber);
     }
 
-    private void retireSourceConnectionId(int sequenceNr) {
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
+    // "An endpoint sends a RETIRE_CONNECTION_ID frame (type=0x19) to
+    //   indicate that it will no longer use a connection ID that was issued
+    //   by its peer."
+    private void retireSourceConnectionId(RetireConnectionIdFrame frame) {
+        int sequenceNr = frame.getSequenceNr();
         sourceConnectionIds.retireConnectionId(sequenceNr);
-        // TODO: check if enough unused cids, if not, generate new. "Sending a RETIRE_CONNECTION_ID frame also serves as a
-        //   request to the peer to send additional connection IDs for future use"
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1.1
+        // "An endpoint SHOULD supply a new connection ID when (...) the peer
+        //   retires one, unless providing the new connection ID would exceed the
+        //   peer's limit."
+        if (! sourceConnectionIds.limitReached()) {
+            newConnectionIds(1, 0);
+        }
+        else {
+            log.debug("active connection id limit reached for peer, not sending new");
+        }
     }
 
     public Statistics getStats() {
