@@ -6,3 +6,6 @@ scala_settings.xml
 build
 uiDesigner.xml
 sessionTickets
+/.classpath
+/.project
+/.settings/
