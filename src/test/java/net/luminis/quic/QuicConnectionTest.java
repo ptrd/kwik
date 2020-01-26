@@ -479,4 +479,30 @@ class QuicConnectionTest {
         assertThat(((ShortHeaderPacket) packetSent).getDestinationConnectionId()).isEqualTo(new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e });
         assertThat(packetSent.getFrames()).contains(new RetireConnectionIdFrame(Version.getDefault(), 0));
     }
+
+    @Test
+    void retireConnectionIdFrameShouldBeRetransmittedWhenLost() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+
+        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
+
+        connection.retireDestinationConnectionId(0);
+
+        ArgumentCaptor<QuicPacket> packetCaptor = ArgumentCaptor.forClass(QuicPacket.class);
+        ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
+        verify(sender, times(1)).send(packetCaptor.capture(), anyString(), captor.capture());
+
+        clearInvocations(sender);
+
+        Consumer lostPacketCallback = captor.getValue();
+        lostPacketCallback.accept(packetCaptor.getValue());
+
+        ArgumentCaptor<QuicPacket> secondPacketCaptor = ArgumentCaptor.forClass(QuicPacket.class);
+        verify(sender, times(1)).send(secondPacketCaptor.capture(), anyString(), any(Consumer.class));
+        QuicPacket retransmitPacket = secondPacketCaptor.getValue();
+        assertThat(retransmitPacket.getFrames()).contains(new RetireConnectionIdFrame(Version.getDefault(), 0));
+    }
 }

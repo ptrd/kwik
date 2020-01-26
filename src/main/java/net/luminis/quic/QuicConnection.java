@@ -792,7 +792,7 @@ public class QuicConnection implements PacketProcessor {
         streams.values().stream().forEach(s -> s.abort());
     }
 
-    private void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
+    protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
         destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
         if (frame.getRetirePriorTo() > 0) {
             // TODO:
@@ -832,9 +832,7 @@ public class QuicConnection implements PacketProcessor {
     }
 
     public void retireDestinationConnectionId(Integer sequenceNumber) {
-        QuicPacket packet = createPacket(App, new RetireConnectionIdFrame(quicVersion, sequenceNumber));
-        packet.addFrame(new Padding(10));   // TODO: find out minimum packet size, and let packet take care of it.
-        send(packet, "retire cid");  // TODO: specify lost-frame-callback
+        send(new RetireConnectionIdFrame(quicVersion, sequenceNumber), lostFrame -> retireDestinationConnectionId(sequenceNumber));
         destConnectionIds.retireConnectionId(sequenceNumber);
     }
 
