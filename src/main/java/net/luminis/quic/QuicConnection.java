@@ -795,8 +795,15 @@ public class QuicConnection implements PacketProcessor {
     private void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
         destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
         if (frame.getRetirePriorTo() > 0) {
-            // TODO: if retirePriorTo is set (larger than current sequence nr), change current destination id.
-            log.info("Peer sends retire connection id; not implemented yet.");
+            // TODO:
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.15
+            // "The Retire Prior To field MUST be less than or equal
+            //   to the Sequence Number field.  Receiving a value greater than the
+            //   Sequence Number MUST be treated as a connection error of type
+            //   FRAME_ENCODING_ERROR."
+            List<Integer> retired = destConnectionIds.retireAllBefore(frame.getRetirePriorTo());
+            retired.forEach(retiredCid -> retireDestinationConnectionId(retiredCid));
+            log.info("Peer requests to retire connection ids; switching to destination connection id ", destConnectionIds.getCurrent());
         }
     }
 
@@ -827,7 +834,7 @@ public class QuicConnection implements PacketProcessor {
     public void retireDestinationConnectionId(Integer sequenceNumber) {
         QuicPacket packet = createPacket(App, new RetireConnectionIdFrame(quicVersion, sequenceNumber));
         packet.addFrame(new Padding(10));   // TODO: find out minimum packet size, and let packet take care of it.
-        send(packet, "retire cid");
+        send(packet, "retire cid");  // TODO: specify lost-frame-callback
         destConnectionIds.retireConnectionId(sequenceNumber);
     }
 

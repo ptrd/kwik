@@ -59,6 +59,12 @@ public class RetireConnectionIdFrame extends QuicFrame {
         return "RetireConnectionIdFrame[" + sequenceNr + "]";
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        return (obj instanceof RetireConnectionIdFrame) &&
+                ((RetireConnectionIdFrame) obj).sequenceNr == this.sequenceNr;
+    }
+
     public int getSequenceNr() {
         return sequenceNr;
     }

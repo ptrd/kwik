@@ -20,6 +20,10 @@ package net.luminis.quic.cid;
 
 import net.luminis.quic.log.Logger;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
@@ -40,10 +44,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     public byte[] useNext() {
-        int currentIndex = connectionIds.entrySet().stream()
-                .filter(entry -> entry.getValue().getConnectionId().equals(currentConnectionId))
-                .mapToInt(entry -> entry.getKey())
-                .findFirst().orElseThrow();
+        int currentIndex = currentIndex();
         if (connectionIds.containsKey(currentIndex + 1)) {
             currentConnectionId = connectionIds.get(currentIndex + 1).getConnectionId();
             connectionIds.get(currentIndex).setStatus(ConnectionIdStatus.USED);
@@ -57,6 +58,30 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     public byte[] getOriginalConnectionId() {
         return originalConnectionId;
+    }
+
+    public List<Integer> retireAllBefore(int retirePriorTo) {
+        int currentIndex = currentIndex();
+
+        List<Integer> toRetire = connectionIds.entrySet().stream()
+                .filter(entry -> entry.getKey() < retirePriorTo)
+                .filter(entry -> !entry.getValue().getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED))
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toList());
+
+        toRetire.forEach(seqNr -> retireConnectionId(seqNr));
+
+        if (connectionIds.get(currentIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
+            // Find one that is not retired
+            ConnectionIdInfo nextCid = connectionIds.values().stream()
+                    .filter(cid -> !cid.getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Can't find connection id that is not retired"));
+            nextCid.setStatus(ConnectionIdStatus.IN_USE);
+            currentConnectionId = nextCid.getConnectionId();
+        }
+
+        return toRetire;
     }
 }
 

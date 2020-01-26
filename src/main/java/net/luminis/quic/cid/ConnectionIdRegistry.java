@@ -31,7 +31,7 @@ public abstract class ConnectionIdRegistry {
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
     private final Random random = new Random();
-    private int connectionIdLength = 8;
+    private final int connectionIdLength = 8;
 
     public ConnectionIdRegistry(Logger log) {
         this.log = log;
@@ -51,6 +51,13 @@ public abstract class ConnectionIdRegistry {
 
     public Map<Integer, ConnectionIdInfo> getAll() {
         return connectionIds;
+    }
+
+    protected int currentIndex() {
+        return connectionIds.entrySet().stream()
+                .filter(entry -> entry.getValue().getConnectionId().equals(currentConnectionId))
+                .mapToInt(entry -> entry.getKey())
+                .findFirst().orElseThrow();
     }
 
     protected byte[] generateConnectionId() {

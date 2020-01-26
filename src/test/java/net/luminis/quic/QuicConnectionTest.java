@@ -28,6 +28,7 @@ import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.FieldReader;
@@ -459,5 +460,23 @@ class QuicConnectionTest {
         connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)), Instant.now());
 
         verify(sender, never()).send(any(), anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void afterProcessingNewConnectionIdFrameWithRetireTheNewConnectionIdIsUsed() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+
+        NewConnectionIdFrame newConnectionIdFrame = new NewConnectionIdFrame(Version.getDefault(), 1, 1, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e });
+        connection.process(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), newConnectionIdFrame), Instant.now());
+
+        ArgumentCaptor<QuicPacket> captor = ArgumentCaptor.forClass(QuicPacket.class);
+        verify(sender, times(1)).send(captor.capture(), anyString(), any(Consumer.class));
+        QuicPacket packetSent = captor.getValue();
+
+        assertThat(((ShortHeaderPacket) packetSent).getDestinationConnectionId()).isEqualTo(new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e });
+        assertThat(packetSent.getFrames()).contains(new RetireConnectionIdFrame(Version.getDefault(), 0));
     }
 }
