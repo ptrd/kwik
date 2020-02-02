@@ -91,4 +91,13 @@ class VersionTest {
         Version version = Version.parse(rawVersion);
         assertThat(version).isEqualTo(Version.IETF_draft_22);
     }
+
+    @Test
+    void testParseDraft25Version() throws UnknownVersionException {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] { (byte) 0xff, 0x00, 0x00, 0x19 });
+        int rawVersion = buffer.getInt();
+        Version version = Version.parse(rawVersion);
+        assertThat(version).isEqualTo(Version.IETF_draft_25);
+    }
+
 }
