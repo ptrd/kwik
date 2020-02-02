@@ -390,6 +390,9 @@ abstract public class QuicPacket {
                 case 0x1d:
                     frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
                     break;
+                case 0x1e:
+                    frames.add(new HandshakeDoneFrame(quicVersion).parse(buffer, log));
+                    break;
                 default:
                     if ((frameType >= 0x08) && (frameType <= 0x0f)) {
                         frames.add(new StreamFrame().parse(buffer, log));

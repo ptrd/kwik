@@ -564,6 +564,11 @@ public class QuicConnection implements PacketProcessor {
                 PathResponseFrame response = new PathResponseFrame(quicVersion, ((PathChallengeFrame) frame).getData());
                 send(response, f -> {});
             }
+            else if (frame instanceof HandshakeDoneFrame) {
+                // TODO: discard handshake keys:
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
+                // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
+            }
             else {
                 log.debug("Ignoring " + frame);
             }
