@@ -478,7 +478,7 @@ public class QuicConnection implements PacketProcessor {
         // "Clients MUST discard Retry packets that contain an Original
         //   Destination Connection ID field that does not match the Destination
         //   Connection ID from its Initial packet"
-        if (Arrays.equals(packet.getOriginalDestinationConnectionId(), destConnectionIds.getCurrent())) {
+        if (packet.validateIntegrityTag(destConnectionIds.getCurrent())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
                 // "A client MUST accept and process at most one Retry packet for each
@@ -501,11 +501,11 @@ public class QuicConnection implements PacketProcessor {
 
                 startHandshake(applicationProtocol);
             } else {
-                log.debug("Ignoring RetryPacket, because already processed one.");
+                log.error("Ignoring RetryPacket, because already processed one.");
             }
         }
         else {
-            log.error("Discarding Retry packet, because destination connection id's do not match");
+            log.error("Discarding Retry packet, because integrity tag is invalid.");
         }
     }
 

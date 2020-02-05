@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;
+import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -34,6 +35,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
+import javax.swing.*;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -42,6 +44,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -74,6 +77,10 @@ class QuicConnectionTest {
         InOrder recorder = inOrder(sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
+        byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
+        setFixedOriginalDestinationConnectionId(originalConnectionId);
+
         new Thread(() -> {
             try {
                 connection.connect(3);
@@ -86,7 +93,7 @@ class QuicConnectionTest {
         recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString(), any(Consumer.class));
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
+        RetryPacket retryPacket = createRetryPacket(originalConnectionId, "5e5f918434a24d4b601745b4f0db7908");
         connection.process(retryPacket, null);
 
         // A second InitialPacket should be send, with token and source connection id from retry packet
@@ -97,11 +104,20 @@ class QuicConnectionTest {
         ), anyString(), any(Consumer.class));
     }
 
+    private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("destConnectionIds"),
+                new DestinationConnectionIdRegistry(originalConnectionId, mock(Logger.class)));
+    }
+
     @Test
     void testSecondRetryPacketShouldBeIgnored() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+
+        byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
+        setFixedOriginalDestinationConnectionId(originalConnectionId);
 
         new Thread(() -> {
             try {
@@ -110,25 +126,28 @@ class QuicConnectionTest {
             }
         }).start();
 
-        // Simulate a first RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
-        connection.process(retryPacket, null);
-
         Thread.sleep(1000);  // Give connection a chance to send packet(s).
+
+        // Simulate a first RetryPacket is received
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
+        connection.process(retryPacket, null);
 
         clearInvocations(sender);
 
         // Simulate a second RetryPacket is received
-        connection.process(retryPacket, null);
+        RetryPacket secondRetryPacket = createRetryPacket(connection.getDestinationConnectionId(), "00f4bbc72790b7c7947f86ec9fb0a68d");
+        connection.process(secondRetryPacket, null);
 
         verify(sender, never()).send(any(QuicPacket.class), anyString(), any(Consumer.class));
     }
 
-    private RetryPacket createRetryPacket(byte[] originalDestinationConnectionId) {
+    private RetryPacket createRetryPacket(byte[] originalDestinationConnectionId, String integrityTagValue) throws Exception {
         byte[] sourceConnectionId = { 0x0b, 0x0b, 0x0b, 0x0b };
         byte[] destinationConnectionId = { 0x0f, 0x0f, 0x0f, 0x0f };
         byte[] retryToken = { 0x01, 0x02, 0x03 };
-        return new RetryPacket(Version.getDefault(), sourceConnectionId, destinationConnectionId, originalDestinationConnectionId, retryToken);
+        RetryPacket retryPacket = new RetryPacket(Version.getDefault(), sourceConnectionId, destinationConnectionId, originalDestinationConnectionId, retryToken);
+        FieldSetter.setField(retryPacket, RetryPacket.class.getDeclaredField("retryIntegrityTag"), ByteUtils.hexToBytes(integrityTagValue));
+        return retryPacket;
     }
 
     @Test
@@ -149,7 +168,7 @@ class QuicConnectionTest {
         clearInvocations(sender);
 
         // Simulate a RetryPacket with arbitrary original destination id is received
-        RetryPacket retryPacket = createRetryPacket(new byte[] { 0x03, 0x0a, 0x0d, 0x09 });
+        RetryPacket retryPacket = createRetryPacket(new byte[] { 0x03, 0x0a, 0x0d, 0x09 }, "00112233445566778899aabbccddeeff");
         connection.process(retryPacket, null);
 
         verify(sender, never()).send(any(QuicPacket.class), anyString(), any(Consumer.class));
@@ -215,6 +234,11 @@ class QuicConnectionTest {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+
+        byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
+        setFixedOriginalDestinationConnectionId(originalConnectionId);
+
         connection = Mockito.spy(connection);
 
         new Thread(() -> {
@@ -229,7 +253,7 @@ class QuicConnectionTest {
         originalDestinationId = connection.getDestinationConnectionId();
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId());
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
         connection.process(retryPacket, null);
     }
 

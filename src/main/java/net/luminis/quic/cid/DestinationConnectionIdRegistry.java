@@ -34,6 +34,13 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         originalConnectionId = currentConnectionId;
     }
 
+    public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
+        super(log);
+        originalConnectionId = initialConnectionId;
+        currentConnectionId = initialConnectionId;
+        connectionIds.put(0, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
+    }
+
     public void replaceInitialConnectionId(byte[] connectionId) {
         connectionIds.put(0, new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE));
         currentConnectionId = connectionId;
