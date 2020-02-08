@@ -851,6 +851,11 @@ public class QuicConnection implements PacketProcessor {
     //   by its peer."
     private void retireSourceConnectionId(RetireConnectionIdFrame frame) {
         int sequenceNr = frame.getSequenceNr();
+        // TODO:
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.16
+        // "Receipt of a RETIRE_CONNECTION_ID frame containing a sequence number
+        //   greater than any previously sent to the peer MUST be treated as a
+        //   connection error of type PROTOCOL_VIOLATION."
         sourceConnectionIds.retireConnectionId(sequenceNr);
         // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1.1
         // "An endpoint SHOULD supply a new connection ID when (...) the peer
