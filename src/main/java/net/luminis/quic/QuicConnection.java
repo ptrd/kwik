@@ -453,10 +453,10 @@ public class QuicConnection implements PacketProcessor {
     public void process(ShortHeaderPacket packet, Instant time) {
         if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
             // New connection id, not used before.
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1.1
-            // "An endpoint SHOULD supply a new connection ID when it receives a
-            //   packet with a previously unused connection ID (...) unless
-            //   providing the new connection ID would exceed the peer's limit"
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
+            // "If an endpoint provided fewer connection IDs than the
+            //   peer's active_connection_id_limit, it MAY supply a new connection ID
+            //   when it receives a packet with a previously unused connection ID."
             if (! sourceConnectionIds.limitReached()) {
                 newConnectionIds(1, 0);
             }
@@ -857,10 +857,9 @@ public class QuicConnection implements PacketProcessor {
         //   greater than any previously sent to the peer MUST be treated as a
         //   connection error of type PROTOCOL_VIOLATION."
         sourceConnectionIds.retireConnectionId(sequenceNr);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1.1
-        // "An endpoint SHOULD supply a new connection ID when (...) the peer
-        //   retires one, unless providing the new connection ID would exceed the
-        //   peer's limit."
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
+        // "An endpoint SHOULD supply a new connection ID when the peer retires a
+        //   connection ID."
         if (! sourceConnectionIds.limitReached()) {
             newConnectionIds(1, 0);
         }
