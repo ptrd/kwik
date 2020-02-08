@@ -275,10 +275,10 @@ abstract public class QuicPacket {
         long pnMask = ~ (pnWindow - 1);
 
         long candidatePn = (expectedPacketNumber & pnMask) | truncatedPacketNumber;
-        if (candidatePn <= expectedPacketNumber - pnHalfWindow) {
+        if (candidatePn <= expectedPacketNumber - pnHalfWindow && candidatePn < (1 << 62) - pnWindow) {
             return candidatePn + pnWindow;
         }
-        if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn > pnWindow) {
+        if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn >= pnWindow) {
             return candidatePn - pnWindow;
         }
 
