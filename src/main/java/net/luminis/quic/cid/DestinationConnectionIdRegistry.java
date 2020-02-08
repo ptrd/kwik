@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     private final byte[] originalConnectionId;
+    private volatile int notRetiredThreshold;  // all sequence numbers below are retired
 
     public DestinationConnectionIdRegistry(Logger log) {
         super(log);
@@ -46,8 +47,20 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         currentConnectionId = connectionId;
     }
 
-    public void registerNewConnectionId(int sequenceNr, byte[] connectionId) {
-        connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.NEW));
+    /**
+     * @param sequenceNr
+     * @param connectionId
+     * @return  whether the connection id could be added as new; when its sequence number implies that it as retired already, false is returned.
+     */
+    public boolean registerNewConnectionId(int sequenceNr, byte[] connectionId) {
+        if (sequenceNr >= notRetiredThreshold) {
+            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.NEW));
+            return true;
+        }
+        else {
+            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.RETIRED));
+            return false;
+        }
     }
 
     public byte[] useNext() {
@@ -68,6 +81,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     public List<Integer> retireAllBefore(int retirePriorTo) {
+        notRetiredThreshold = retirePriorTo;
         int currentIndex = currentIndex();
 
         List<Integer> toRetire = connectionIds.entrySet().stream()

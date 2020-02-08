@@ -798,7 +798,11 @@ public class QuicConnection implements PacketProcessor {
     }
 
     protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
-        destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
+        boolean addedNew = destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
+        if (! addedNew) {
+            // Already retired, notify peer
+            retireDestinationConnectionId(frame.getSequenceNr());
+        }
         if (frame.getRetirePriorTo() > 0) {
             // TODO:
             // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.15

@@ -509,10 +509,11 @@ class QuicConnectionTest {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
+        // Given
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
-
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
 
+        // When
         connection.retireDestinationConnectionId(0);
 
         ArgumentCaptor<QuicPacket> packetCaptor = ArgumentCaptor.forClass(QuicPacket.class);
@@ -524,9 +525,29 @@ class QuicConnectionTest {
         Consumer lostPacketCallback = captor.getValue();
         lostPacketCallback.accept(packetCaptor.getValue());
 
+        // Then
         ArgumentCaptor<QuicPacket> secondPacketCaptor = ArgumentCaptor.forClass(QuicPacket.class);
         verify(sender, times(1)).send(secondPacketCaptor.capture(), anyString(), any(Consumer.class));
         QuicPacket retransmitPacket = secondPacketCaptor.getValue();
         assertThat(retransmitPacket.getFrames()).contains(new RetireConnectionIdFrame(Version.getDefault(), 0));
+    }
+
+    @Test
+    void receivingReorderedNewConnectionIdWithSequenceNumberThatIsAlreadyRetiredShouldImmediatelySendRetire() throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+
+        // Given
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }));
+        clearInvocations(sender);
+
+        // When
+        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }));
+
+        // Then
+        verify(sender).send(argThat(p ->
+                p.getFrames().contains(new RetireConnectionIdFrame(Version.getDefault(), 2))),
+                anyString(), any(Consumer.class));
     }
 }
