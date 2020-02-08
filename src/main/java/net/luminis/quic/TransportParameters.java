@@ -55,6 +55,9 @@ public class TransportParameters {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
         // "If this value is absent, a default of 25 milliseconds is assumed."
         maxAckDelay = 25;
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.2
+        // "If this transport parameter is absent, a default of 2 is assumed."
+        activeConnectionIdLimit = 2;
     }
 
     public byte[] getOriginalConnectionId() {
