@@ -528,6 +528,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             else if (frame instanceof MaxDataFrame) {
                 flowController.process(frame, packet.getPnSpace(), timeReceived);
             }
+            else if (frame instanceof MaxStreamsFrame) {
+                streamManager.process(frame, packet.getPnSpace(), timeReceived);
+            }
             else if (frame instanceof NewConnectionIdFrame) {
                 registerNewDestinationConnectionId((NewConnectionIdFrame) frame);
             }
@@ -715,6 +718,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 peerTransportParams.getInitialMaxStreamDataUni(),
                 log);
         streamManager.setFlowController(flowController);
+
+        streamManager.setInitialMaxStreamsBidi(peerTransportParams.getInitialMaxStreamsBidi());
+        streamManager.setInitialMaxStreamsUni(peerTransportParams.getInitialMaxStreamsUni());
 
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());

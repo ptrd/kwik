@@ -274,6 +274,7 @@ class QuicConnectionImplTest {
     @Test
     void testCreateStream() throws IOException {
         QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Mockito.mock(Logger.class));
+        connection.setPeerTransportParameters(new TransportParameters(10, 10, 10, 10));
 
         QuicStream stream = connection.createStream(true);
         int firstStreamId = stream.getStreamId();
@@ -333,7 +334,7 @@ class QuicConnectionImplTest {
 
     @Test
     void receivingMaxStreamDataFrameIncreasesFlowControlLimit() {
-        TransportParameters parameters = new TransportParameters();
+        TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialMaxData(100_000);
         parameters.setInitialMaxStreamDataBidiRemote(9000);
         connection.setPeerTransportParameters(parameters);
@@ -349,7 +350,7 @@ class QuicConnectionImplTest {
 
     @Test
     void receivingMaxDataFrameIncreasesFlowControlLimit() {
-        TransportParameters parameters = new TransportParameters();
+        TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialMaxData(1_000);
         parameters.setInitialMaxStreamDataBidiRemote(9000);
         connection.setPeerTransportParameters(parameters);

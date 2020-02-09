@@ -135,7 +135,7 @@ public class TransportParameters {
         return initialMaxStreamsBidi;
     }
 
-    public void setInitialMaxStreamsBidi(int initialMaxStreamsBidi) {
+    public void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
         this.initialMaxStreamsBidi = initialMaxStreamsBidi;
     }
 
@@ -143,7 +143,7 @@ public class TransportParameters {
         return initialMaxStreamsUni;
     }
 
-    public void setInitialMaxStreamsUni(int initialMaxStreamsUni) {
+    public void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
         this.initialMaxStreamsUni = initialMaxStreamsUni;
     }
 

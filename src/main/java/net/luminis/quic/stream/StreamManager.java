@@ -19,6 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.*;
+import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
@@ -27,6 +28,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+
 
 public class StreamManager implements FrameProcessor {
 
@@ -37,6 +39,11 @@ public class StreamManager implements FrameProcessor {
     private final Logger log;
     private int nextStreamId;
     private Consumer<QuicStream> serverStreamCallback;
+    private Long maxStreamsBidi;
+    private Long maxStreamsUni;
+    private long bidiStreams;
+    private long uniStreams;
+
 
     public StreamManager(QuicConnectionImpl quicConnection, Logger log) {
         this.connection = quicConnection;
@@ -46,6 +53,23 @@ public class StreamManager implements FrameProcessor {
     }
 
     public QuicStream createStream(boolean bidirectional) {
+        synchronized (this) {
+            if (bidirectional) {
+                if (bidiStreams < maxStreamsBidi) {
+                    bidiStreams++;
+                } else {
+                    return null;
+                }
+            }
+            else {
+                if (uniStreams < maxStreamsUni) {
+                    uniStreams++;
+                }
+                else {
+                    return null;
+                }
+            }
+        }
         int streamId = generateClientStreamId(bidirectional);
         QuicStream stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
@@ -71,10 +95,22 @@ public class StreamManager implements FrameProcessor {
 
     @Override
     public void process(QuicFrame frame, PnSpace pnSpace, Instant timeReceived) {
-        int streamId = ((StreamFrame) frame).getStreamId();
+        if (frame instanceof StreamFrame) {
+            process((StreamFrame) frame, pnSpace, timeReceived);
+        }
+        else if (frame instanceof MaxStreamsFrame) {
+            process((MaxStreamsFrame) frame, pnSpace, timeReceived);
+        }
+        else {
+            throw new IllegalArgumentException();  // Programming error
+        }
+    }
+
+    public void process(StreamFrame frame, PnSpace pnSpace, Instant timeReceived) {
+        int streamId = frame.getStreamId();
         QuicStream stream = streams.get(streamId);
         if (stream != null) {
-            stream.add((StreamFrame) frame);
+            stream.add(frame);
         }
         else {
             if (streamId % 2 == 1) {
@@ -94,6 +130,19 @@ public class StreamManager implements FrameProcessor {
         }
     }
 
+    public synchronized void process(MaxStreamsFrame frame, PnSpace pnSpace, Instant timeReceived) {
+        if (frame.isAppliesToBidirectional()) {
+            if (frame.getMaxStreams() > maxStreamsBidi) {
+                maxStreamsBidi = frame.getMaxStreams();
+            }
+        }
+        else {
+            if (frame.getMaxStreams() > maxStreamsUni) {
+                maxStreamsUni = frame.getMaxStreams();
+            }
+        }
+    }
+
     public void abortAll() {
         streams.values().stream().forEach(s -> s.abort());
     }
@@ -102,5 +151,30 @@ public class StreamManager implements FrameProcessor {
         serverStreamCallback = streamProcessor;
     }
 
+    public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
+        if (maxStreamsBidi == null) {
+            maxStreamsBidi = initialMaxStreamsBidi;
+        }
+        else {
+            throw new IllegalStateException("initial max already set");
+        }
+    }
+
+    public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
+        if (maxStreamsUni == null) {
+            maxStreamsUni = initialMaxStreamsUni;
+        }
+        else {
+            throw new IllegalStateException("initial max already set");
+        }
+    }
+
+    public long getMaxBidirectionalStreams() {
+        return maxStreamsBidi;
+    }
+
+    public long getMaxUnirectionalStreams() {
+        return maxStreamsUni;
+    }
 }
 

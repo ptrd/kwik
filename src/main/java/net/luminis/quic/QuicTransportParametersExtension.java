@@ -178,6 +178,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_max_streams_bidi.value) {
             long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max bidi streams: " + maxBidiStreams);
+            params.setInitialMaxStreamsBidi(maxBidiStreams);
         }
         else if (parameterId == idle_timeout.value) {
             long idleTimeout = VariableLengthInteger.parseLong(buffer);
@@ -204,6 +205,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_max_streams_uni.value) {
             long maxUniStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
+            params.setInitialMaxStreamsUni(maxUniStreams);
         }
         else if (parameterId == disable_active_migration.value) {
             log.debug("- disable migration");
