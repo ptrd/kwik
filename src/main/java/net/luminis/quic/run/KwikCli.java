@@ -45,9 +45,7 @@ public class KwikCli {
         cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
                 "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"ip\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
-        cmdLineOptions.addOption("23", "use Quic version IETF_draft_23");
-        cmdLineOptions.addOption("24", "use Quic version IETF_draft_24");
-        cmdLineOptions.addOption(null, "reservedVersion", false, "");
+        cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
@@ -180,13 +178,7 @@ public class KwikCli {
         }
 
         Version quicVersion = Version.getDefault();
-        if (cmd.hasOption("24")) {
-            quicVersion = Version.IETF_draft_24;
-        }
-        else if (cmd.hasOption("23")) {
-            quicVersion = Version.IETF_draft_23;
-        }
-        else if (cmd.hasOption("reservedVersion")) {
+        if (cmd.hasOption("reservedVersion")) {
             quicVersion = Version.reserved_1;
         }
 

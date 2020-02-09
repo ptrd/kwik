@@ -2,7 +2,7 @@
 
 ## A QUIC client Java library
 
-Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-24) protocol in Java.
+Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-25) protocol in Java.
 
 Kwik can be used to transport HTTP3, but it is not a HTTP3 client.
 If you're looking for a HTTP3 client, check out [Flupke](https://bitbucket.org/pjtr/flupke).
@@ -24,7 +24,7 @@ For the time being, this project is for educational purposes only.
 The status of the project is proof of concept: it is possible to set up a connection with a QUIC server and exchange
 data. See [Flupke](https://bitbucket.org/pjtr/flupke) for a sample HTTP3 client.
 
-Kwik supports IETF draft-23 and draft-24.
+Kwik supports IETF draft-25.
 
 Implemented QUIC features:
 
@@ -38,8 +38,7 @@ Build the client with gradle (`gradle build`)
 and run the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 
     usage: kwik <host>:<port> OR quic <host> <port> OR kwik http[s]://host:port
-     -23                            use Quic version IETF_draft_23
-     -24                            use Quic version IETF_draft_24
+     -A,--alpn <arg>                set alpn (default is hq-xx)
      -c,--connectionTimeout <arg>   connection timeout in seconds
      -h,--help                      show help
      -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
@@ -54,7 +53,9 @@ and run the `kwik.sh` script or `java -jar build/libs/kwik.jar`.
      -L,--logFile <arg>             file to write log message too
      -O,--output <arg>              write server response to file
      -R,--resumption key <arg>      session ticket file
+        --reservedVersion           use reserved version to trigger version
      -S,--storeTickets <arg>        basename of file to store new session tickets
+        --secrets <arg>             write secrets to file (Wireshark format)
      -T,--relativeTime              log with time (in seconds) since first packet                                    
        
 If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
