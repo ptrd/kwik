@@ -27,6 +27,9 @@ import net.luminis.quic.log.Logger;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 
@@ -41,35 +44,44 @@ public class StreamManager implements FrameProcessor {
     private Consumer<QuicStream> serverStreamCallback;
     private Long maxStreamsBidi;
     private Long maxStreamsUni;
-    private long bidiStreams;
-    private long uniStreams;
-
+    private final Semaphore openBidirectionalStreams;
+    private final Semaphore openUnidirectionalStreams;
 
     public StreamManager(QuicConnectionImpl quicConnection, Logger log) {
         this.connection = quicConnection;
         this.log = log;
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
+        openBidirectionalStreams = new Semaphore(0);
+        openUnidirectionalStreams = new Semaphore(0);
     }
 
     public QuicStream createStream(boolean bidirectional) {
-        synchronized (this) {
+        try {
+            return createStream(bidirectional, 10_000, TimeUnit.DAYS);
+        } catch (TimeoutException e) {
+            // Impossible; just to satisfy compiler
+            throw new RuntimeException();
+        }
+    }
+
+    public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit) throws TimeoutException {
+        try {
+            boolean acquired;
             if (bidirectional) {
-                if (bidiStreams < maxStreamsBidi) {
-                    bidiStreams++;
-                } else {
-                    return null;
-                }
+                acquired = openBidirectionalStreams.tryAcquire(timeout, unit);
             }
             else {
-                if (uniStreams < maxStreamsUni) {
-                    uniStreams++;
-                }
-                else {
-                    return null;
-                }
+                acquired = openUnidirectionalStreams.tryAcquire(timeout, unit);
             }
+            if (!acquired) {
+                throw new TimeoutException();
+            }
+        } catch (InterruptedException e) {
+            log.debug("blocked createStream operation is interrupted");
+            throw new TimeoutException("operation interrupted");
         }
+
         int streamId = generateClientStreamId(bidirectional);
         QuicStream stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
@@ -133,12 +145,18 @@ public class StreamManager implements FrameProcessor {
     public synchronized void process(MaxStreamsFrame frame, PnSpace pnSpace, Instant timeReceived) {
         if (frame.isAppliesToBidirectional()) {
             if (frame.getMaxStreams() > maxStreamsBidi) {
+                int increment = (int) (frame.getMaxStreams() - maxStreamsBidi);
+                log.debug("increased max bidirectional streams with " + increment + " to " + frame.getMaxStreams());
                 maxStreamsBidi = frame.getMaxStreams();
+                openBidirectionalStreams.release(increment);
             }
         }
         else {
             if (frame.getMaxStreams() > maxStreamsUni) {
+                int increment = (int) (frame.getMaxStreams() - maxStreamsUni);
+                log.debug("increased max unidirectional streams with " + increment + " to " + frame.getMaxStreams());
                 maxStreamsUni = frame.getMaxStreams();
+                openUnidirectionalStreams.release(increment);
             }
         }
     }
@@ -153,7 +171,9 @@ public class StreamManager implements FrameProcessor {
 
     public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
         if (maxStreamsBidi == null) {
+            log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
             maxStreamsBidi = initialMaxStreamsBidi;
+            openBidirectionalStreams.release((int) initialMaxStreamsBidi);
         }
         else {
             throw new IllegalStateException("initial max already set");
@@ -162,7 +182,9 @@ public class StreamManager implements FrameProcessor {
 
     public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
         if (maxStreamsUni == null) {
+            log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);
             maxStreamsUni = initialMaxStreamsUni;
+            openUnidirectionalStreams.release((int) initialMaxStreamsUni);
         }
         else {
             throw new IllegalStateException("initial max already set");

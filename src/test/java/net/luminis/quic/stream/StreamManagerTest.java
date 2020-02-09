@@ -26,6 +26,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,28 +81,30 @@ class StreamManagerTest {
     void cannotCreateBidirectionalStreamWhenMaxStreamsReached() {
         // Given
         streamManager.setInitialMaxStreamsBidi(1);
-
-        // When
         QuicStream stream1 = streamManager.createStream(true);
-        QuicStream stream2 = streamManager.createStream(true);
 
-        // Then
+        assertThatThrownBy(
+                // When
+                () -> streamManager.createStream(true, 1, TimeUnit.MILLISECONDS)
+                // Then
+        ).isInstanceOf(TimeoutException.class);
+
         assertThat(stream1).isNotNull();
-        assertThat(stream2).isNull();
     }
 
     @Test
     void cannotCreateUnirectionalStreamWhenMaxStreamsReached() {
         // Given
         streamManager.setInitialMaxStreamsUni(1);
-
-        // When
         QuicStream stream1 = streamManager.createStream(false);
-        QuicStream stream2 = streamManager.createStream(false);
 
-        // Then
+        assertThatThrownBy(
+                // When
+                () -> streamManager.createStream(false, 1, TimeUnit.MILLISECONDS)
+                // Then
+        ).isInstanceOf(TimeoutException.class);
+
         assertThat(stream1).isNotNull();
-        assertThat(stream2).isNull();
     }
 
     @Test
@@ -105,16 +112,14 @@ class StreamManagerTest {
         // Given
         streamManager.setInitialMaxStreamsBidi(1);
         QuicStream stream1 = streamManager.createStream(true);
-        QuicStream stream2a = streamManager.createStream(true);
 
         // When
         streamManager.process(new MaxStreamsFrame(8, true), PnSpace.App, Instant.now());
-        QuicStream stream2b = streamManager.createStream(true);
+        QuicStream stream2 = streamManager.createStream(true);
 
         // Then
         assertThat(stream1).isNotNull();
-        assertThat(stream2a).isNull();
-        assertThat(stream2b).isNotNull();
+        assertThat(stream2).isNotNull();
     }
 
     @Test
@@ -122,16 +127,14 @@ class StreamManagerTest {
         // Given
         streamManager.setInitialMaxStreamsUni(1);
         QuicStream stream1 = streamManager.createStream(false);
-        QuicStream stream2a = streamManager.createStream(false);
 
         // When
         streamManager.process(new MaxStreamsFrame(8, false), PnSpace.App, Instant.now());
-        QuicStream stream2b = streamManager.createStream(false);
+        QuicStream stream2 = streamManager.createStream(false);
 
         // Then
         assertThat(stream1).isNotNull();
-        assertThat(stream2a).isNull();
-        assertThat(stream2b).isNotNull();
+        assertThat(stream2).isNotNull();
     }
 
     @Test
@@ -188,6 +191,54 @@ class StreamManagerTest {
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(1);
+    }
+
+    @Test
+    void blockingCreateBidirectionalStreamContinuesWhenMaxStreamsIsIncreased() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        QuicStream firstStream = streamManager.createStream(true);
+        assertThat(firstStream).isNotNull();
+
+        AtomicReference<QuicStream> streamReference = new AtomicReference<>();
+        new Thread(() -> {
+            // Creating the stream should block, because there are not credits at the moment
+            QuicStream stream = streamManager.createStream(true);
+            streamReference.set(stream);
+        }).start();
+
+        Thread.sleep(50);  // Give parallel thread a little time to start, so it blocks before this thread continues
+        assertThat(streamReference.get()).isNull();  // This should more or less prove the thread is blocking
+
+        // When
+        streamManager.process(new MaxStreamsFrame(2, true), PnSpace.App, Instant.now());
+        Thread.sleep(50);  // Give parallel thread a little time to finish
+        // Then
+        assertThat(streamReference.get()).isNotNull();
+    }
+
+    @Test
+    void blockingCreateUnirectionalStreamContinuesWhenMaxStreamsIsIncreased() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsUni(1);
+        QuicStream firstStream = streamManager.createStream(false);
+        assertThat(firstStream).isNotNull();
+
+        AtomicReference<QuicStream> streamReference = new AtomicReference<>();
+        new Thread(() -> {
+            // Creating the stream should block, because there are not credits at the moment
+            QuicStream stream = streamManager.createStream(false);
+            streamReference.set(stream);
+        }).start();
+
+        Thread.sleep(50);  // Give parallel thread a little time to start, so it blocks before this thread continues
+        assertThat(streamReference.get()).isNull();  // This should more or less prove the thread is blocking
+
+        // When
+        streamManager.process(new MaxStreamsFrame(2, false), PnSpace.App, Instant.now());
+        Thread.sleep(50);  // Give parallel thread a little time to finish
+        // Then
+        assertThat(streamReference.get()).isNotNull();
     }
 
 }
