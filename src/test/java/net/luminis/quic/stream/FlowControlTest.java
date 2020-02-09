@@ -20,7 +20,6 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnectionImpl;
-import net.luminis.quic.QuicStream;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeEach;

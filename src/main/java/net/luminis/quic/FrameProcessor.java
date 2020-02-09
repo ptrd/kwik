@@ -24,6 +24,6 @@ import java.time.Instant;
 
 public interface FrameProcessor {
 
-    void process(QuicFrame ackFrame, PnSpace pnSpace, Instant timeReceived);
+    void process(QuicFrame frame, PnSpace pnSpace, Instant timeReceived);
 
 }

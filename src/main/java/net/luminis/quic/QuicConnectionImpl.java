@@ -25,6 +25,8 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.stream.FlowControl;
+import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.*;
 
 import java.io.IOException;
@@ -37,7 +39,6 @@ import java.security.interfaces.ECPublicKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -72,13 +73,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private final InetAddress serverAddress;
     private final Sender sender;
     private final Receiver receiver;
+    private final StreamManager streamManager;
     private final ECPrivateKey privateKey;
     private final ECPublicKey publicKey;
     private volatile byte[] token;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
-    private final Map<Integer, QuicStream> streams;
-    private int nextStreamId;
     private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private final CountDownLatch drainingSignal = new CountDownLatch(1);
@@ -88,7 +88,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
-    private Consumer<QuicStream> serverStreamCallback;
     private String applicationProtocol;
     private long flowControlMax;
     private long flowControlLastAdvertised;
@@ -124,9 +123,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port, this);
         receiver = new Receiver(this, socket, 1500, log);
+        streamManager = new StreamManager(this, log);
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
         connectionSecrets = new ConnectionSecrets(quicVersion, secretsFile, log);
-        streams = new ConcurrentHashMap<>();
         sourceConnectionIds = new SourceConnectionIdRegistry(log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
         transportParams = new TransportParameters(60, 250_000, 3 , 3);
@@ -521,27 +520,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 sender.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof StreamFrame) {
-                int streamId = ((StreamFrame) frame).getStreamId();
-                QuicStream stream = streams.get(streamId);
-                if (stream != null) {
-                    stream.add((StreamFrame) frame);
-                }
-                else {
-                    if (streamId % 2 == 1) {
-                        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-2.1
-                        // "servers initiate odd-numbered streams"
-                        log.info("Receiving data for server-initiated stream " + streamId);
-                        stream = new QuicStream(quicVersion, streamId, this, null, log);
-                        streams.put(streamId, stream);
-                        stream.add((StreamFrame) frame);
-                        if (serverStreamCallback != null) {
-                            serverStreamCallback.accept(stream);
-                        }
-                    }
-                    else {
-                        log.error("Receiving frame for non-existant stream " + streamId);
-                    }
-                }
+                streamManager.process(frame, packet.getPnSpace(), timeReceived);
             }
             else if (frame instanceof MaxStreamDataFrame) {
                 flowController.process(frame, packet.getPnSpace(), timeReceived);
@@ -580,10 +559,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public QuicStream createStream(boolean bidirectional) {
-        int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(quicVersion, streamId, this, flowController, log);
-        streams.put(streamId, stream);
-        return stream;
+        return streamManager.createStream(bidirectional);
     }
 
     public void close() {
@@ -596,7 +572,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
         sender.stop();
         connectionState = Status.Closing;
-        streams.values().stream().forEach(s -> s.abort());
+        streamManager.abortAll();
         send(new ConnectionCloseFrame(quicVersion), f -> {});
 
         int closingPeriod = 3 * sender.getPto();
@@ -668,19 +644,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         socket.close();
     }
 
-    private synchronized int generateClientStreamId(boolean bidirectional) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
-        // "0x0  | Client-Initiated, Bidirectional"
-        int id = (nextStreamId << 2) + 0x00;
-        if (! bidirectional) {
-            // "0x2  | Client-Initiated, Unidirectional |"
-            id += 0x02;
-        }
-        nextStreamId++;
-        return id;
-    }
-
-    void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+    public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
         QuicPacket packet = createPacket(App, frame);
         sender.send(packet, "application data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
     }
@@ -692,7 +656,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.send(packet, logMessage, p -> {});
     }
 
-    void slideFlowControlWindow(int size) {
+    public void slideFlowControlWindow(int size) {
         flowControlMax += size;
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
             send(new MaxDataFrame(flowControlMax), f -> {});
@@ -714,7 +678,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
 
 
-    int getMaxPacketSize() {
+    public int getMaxPacketSize() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:
         // "An endpoint SHOULD use Datagram Packetization Layer PMTU Discovery
         //   ([DPLPMTUD]) or implement Path MTU Discovery (PMTUD) [RFC1191]
@@ -727,7 +691,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         return 1232;
     }
 
-    int getMaxShortHeaderPacketOverhead() {
+    public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
                 + destConnectionIds.getConnectionIdlength()
                 + 4  // max packet number size, in practice this will be mostly 1
@@ -750,6 +714,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 peerTransportParams.getInitialMaxStreamDataBidiRemote(),
                 peerTransportParams.getInitialMaxStreamDataUni(),
                 log);
+        streamManager.setFlowController(flowController);
 
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
@@ -793,7 +758,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
         handshakeFinishedCondition.countDown();
         terminate();
-        streams.values().stream().forEach(s -> s.abort());
+        streamManager.abortAll();
     }
 
     protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
@@ -889,11 +854,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
-        this.serverStreamCallback = streamProcessor;
+        streamManager.setServerStreamCallback(streamProcessor);
     }
 
     // For internal use only.
-    long getInitialMaxStreamData() {
+    public long getInitialMaxStreamData() {
         return transportParams.getInitialMaxStreamDataBidiLocal();
     }
 

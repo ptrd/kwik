@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 
 import java.io.IOException;
