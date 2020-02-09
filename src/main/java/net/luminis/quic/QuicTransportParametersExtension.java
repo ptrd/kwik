@@ -238,7 +238,7 @@ public class QuicTransportParametersExtension extends Extension {
             params.setActiveConnectionIdLimit(activeConnectionIdLimit);
         }
         else {
-            log.error("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
+            log.debug("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
             buffer.get(new byte[size]);
         }
     }
