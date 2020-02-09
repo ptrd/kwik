@@ -19,7 +19,6 @@
 package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
-import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.cid.SourceConnectionIdRegistry;
 import net.luminis.quic.frame.*;
@@ -192,7 +191,7 @@ public class QuicConnection implements PacketProcessor {
             throw new IllegalStateException("keep alive can only be set when connected");
         }
 
-        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getIdleTimeout(), this);
+        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getMaxIdleTimeout(), this);
     }
 
     public void ping() {

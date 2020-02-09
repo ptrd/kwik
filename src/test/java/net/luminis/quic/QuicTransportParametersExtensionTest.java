@@ -147,6 +147,6 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
 
-        assertThat(transportParametersExtension.getTransportParameters().getIdleTimeout()).isEqualTo(10_000);
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
     }
 }

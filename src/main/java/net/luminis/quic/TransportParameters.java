@@ -23,7 +23,7 @@ import java.net.InetAddress;
 public class TransportParameters {
 
     private byte[] originalConnectionId;
-    private long idleTimeoutInSeconds;
+    private long maxIdleTimeoutInSeconds;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -41,9 +41,9 @@ public class TransportParameters {
         setDefaults();
     }
 
-    public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+    public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
         setDefaults();
-        this.idleTimeoutInSeconds = idleTimeoutInSeconds;
+        this.maxIdleTimeoutInSeconds = maxIdleTimeoutInSeconds;
         setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
@@ -84,12 +84,12 @@ public class TransportParameters {
         this.preferredAddress = preferredAddress;
     }
 
-    public long getIdleTimeout() {
-        return idleTimeoutInSeconds;
+    public long getMaxIdleTimeout() {
+        return maxIdleTimeoutInSeconds;
     }
 
-    public void setIdleTimeout(long idleTimeout) {
-        this.idleTimeoutInSeconds = idleTimeout;
+    public void setMaxIdleTimeout(long idleTimeout) {
+        this.maxIdleTimeoutInSeconds = idleTimeout;
     }
 
     public long getInitialMaxData() {
@@ -173,7 +173,7 @@ public class TransportParameters {
 
     @Override
     public String toString() {
-        return "\n- idle timeout\t" + idleTimeoutInSeconds +
+        return "\n- max idle timeout\t" + maxIdleTimeoutInSeconds +
                 "\n- cids limit\t" + activeConnectionIdLimit +
                 "\n- disable migration\t" + disableMigration;
     }

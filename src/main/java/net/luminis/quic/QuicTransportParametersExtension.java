@@ -70,11 +70,10 @@ public class QuicTransportParametersExtension extends Extension {
         //   length integer encoding (see Section 16) and have a default value of
         //   0 if the transport parameter is absent, unless otherwise stated."
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-18.1
-        // "The idle timeout is a value in milliseconds
-        //      that is encoded as an integer, see (Section 10.2).  If this
-        //      parameter is absent or zero then the idle timeout is disabled."
-        addTransportParameter(buffer, idle_timeout, params.getIdleTimeout() * 1000);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.1
+        // "The max idle timeout is a value in milliseconds
+        //      that is encoded as an integer, see (Section 10.2)."
+        addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout() * 1000);
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an
@@ -182,8 +181,8 @@ public class QuicTransportParametersExtension extends Extension {
         }
         else if (parameterId == idle_timeout.value) {
             long idleTimeout = VariableLengthInteger.parseLong(buffer);
-            log.debug("- idle timeout: " + idleTimeout);
-            params.setIdleTimeout(idleTimeout);
+            log.debug("- max idle timeout: " + idleTimeout);
+            params.setMaxIdleTimeout(idleTimeout);
         }
         else if (parameterId == preferred_address.value) {
             parsePreferredAddress(buffer, log);

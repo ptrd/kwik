@@ -272,7 +272,7 @@ public class InteractiveShell {
     private void setClientParameter(String name, String value) {
         switch (name) {
             case "idle":
-                params.setIdleTimeout(toInt(value));
+                params.setMaxIdleTimeout(toInt(value));
                 break;
             case "cids":
                 params.setActiveConnectionIdLimit(toInt(value));
