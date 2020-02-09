@@ -84,11 +84,12 @@ public class InteropRunner extends KwikCli {
         URL url1 = downloadUrls.get(0);
         SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
+        logger.logInfo(true);
 
         QuicConnection connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
         connection.connect(5_000);
 
-        ForkJoinPool myPool = new ForkJoinPool(downloadUrls.size());
+        ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
         try {
             myPool.submit(() ->
                     downloadUrls.parallelStream()
