@@ -19,6 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
 import net.luminis.tls.NewSessionTicket;
@@ -84,7 +85,7 @@ public class InteropRunner extends KwikCli {
         SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
 
-        QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
+        QuicConnection connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
         connection.connect(5_000);
 
         ForkJoinPool myPool = new ForkJoinPool(downloadUrls.size());
@@ -120,7 +121,7 @@ public class InteropRunner extends KwikCli {
         SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
 
-        QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
+        QuicConnectionImpl connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
@@ -137,7 +138,7 @@ public class InteropRunner extends KwikCli {
 
         NewSessionTicket sessionTicket = NewSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
-        QuicConnection connection2 = new QuicConnection(url2.getHost(), url2.getPort(), sessionTicket, Version.getDefault(), logger, null);
+        QuicConnectionImpl connection2 = new QuicConnectionImpl(url2.getHost(), url2.getPort(), sessionTicket, Version.getDefault(), logger, null);
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
         System.out.println("Downloaded " + url2);

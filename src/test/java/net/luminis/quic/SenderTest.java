@@ -48,7 +48,7 @@ class SenderTest {
     private static Logger logger;
     private Sender sender;
     private DatagramSocket socket;
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
 
     // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
     private Instant whenever = Instant.now();
@@ -65,7 +65,7 @@ class SenderTest {
         Logger logger = mock(Logger.class);
         sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("rttEstimater"), new RttEstimator(logger, 100));
-        connection = mock(QuicConnection.class);
+        connection = mock(QuicConnectionImpl.class);
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
     }
 

@@ -38,13 +38,13 @@ public class KeepAliveActor {
     private final Version quicVersion;
     private final int keepAliveTime;
     private final int peerIdleTimeout;
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private final Instant started;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final int pingInterval;
     private volatile ScheduledFuture<?> scheduledTask;
 
-    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnection connection) {
+    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnectionImpl connection) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
         this.peerIdleTimeout = peerIdleTimeout * 1000;

@@ -49,7 +49,7 @@ import static org.mockito.Mockito.*;
 class QuicStreamTest {
 
     private static long originalWaitForNextFrameTimeoutValue;
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
     private QuicStream quicStream;
     private Logger logger;
 
@@ -66,7 +66,7 @@ class QuicStreamTest {
 
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
-        connection = Mockito.mock(QuicConnection.class);
+        connection = Mockito.mock(QuicConnectionImpl.class);
         when(connection.getMaxPacketSize()).thenReturn(1232);
         logger = Mockito.mock(Logger.class);
 
@@ -413,22 +413,22 @@ class QuicStreamTest {
 
     @Test
     void isUnidirectional() {
-        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnection.class), null);
+        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), null);
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnection.class), null);
+        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), null);
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(0, mock(QuicConnection.class), null);
+        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), null);
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(1, mock(QuicConnection.class), null);
+        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), null);
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
 

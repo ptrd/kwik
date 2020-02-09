@@ -287,7 +287,7 @@ public class KwikCli {
                 new InteractiveShell(host, port, quicVersion, logger, secretsFile != null? Paths.get(secretsFile): null, alpn).start();
             }
             else {
-                QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger,
+                QuicConnection quicConnection = new QuicConnectionImpl(host, port, sessionTicket, quicVersion, logger,
                         secretsFile != null? Paths.get(secretsFile): null);
                 if (alpn == null) {
                     quicConnection.connect(connectionTimeout * 1000);

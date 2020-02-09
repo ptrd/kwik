@@ -35,7 +35,6 @@ import org.mockito.Mockito;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
-import javax.swing.*;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -44,19 +43,18 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-class QuicConnectionTest {
+class QuicConnectionImplTest {
 
     private static Logger logger;
     private final byte[] destinationConnectionId = { 0x00, 0x01, 0x02, 0x03 };
 
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
     private byte[] originalDestinationId;
 
     @BeforeAll
@@ -67,7 +65,7 @@ class QuicConnectionTest {
 
     @BeforeEach
     void initConnectionUnderTest() throws SocketException, UnknownHostException {
-        connection = new QuicConnection("localhost", 443, logger);
+        connection = new QuicConnectionImpl("localhost", 443, logger);
     }
 
     @Test
@@ -274,7 +272,7 @@ class QuicConnectionTest {
 
     @Test
     void testCreateStream() throws IOException {
-        QuicConnection connection = new QuicConnection("localhost", 443, Mockito.mock(Logger.class));
+        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Mockito.mock(Logger.class));
 
         QuicStream stream = connection.createStream(true);
         int firstStreamId = stream.getStreamId();
@@ -288,7 +286,7 @@ class QuicConnectionTest {
 
     @Test
     void testConnectionFlowControl() throws Exception {
-        QuicConnection connection = new QuicConnection("localhost", 443, Mockito.mock(Logger.class));
+        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Mockito.mock(Logger.class));
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
@@ -309,18 +307,18 @@ class QuicConnectionTest {
     @Test
     void testMinimumQuicVersionIs23() {
         assertThatThrownBy(
-                () -> new QuicConnection("localhost", 443, Version.IETF_draft_19, Mockito.mock(Logger.class)))
+                () -> new QuicConnectionImpl("localhost", 443, Version.IETF_draft_19, Mockito.mock(Logger.class)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void testQuicVersion23IsSupported() throws Exception {
-        assertThat(new QuicConnection("localhost", 443, Version.IETF_draft_23, Mockito.mock(Logger.class))).isNotNull();
+        assertThat(new QuicConnectionImpl("localhost", 443, Version.IETF_draft_23, Mockito.mock(Logger.class))).isNotNull();
     }
 
     @Test
     void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
-        QuicConnection connection = new QuicConnection("localhost", 443, Version.IETF_draft_23, mock(Logger.class));
+        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Version.IETF_draft_23, mock(Logger.class));
         QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
         assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);
     }
@@ -368,7 +366,7 @@ class QuicConnectionTest {
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionClose() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -381,7 +379,7 @@ class QuicConnectionTest {
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionCloseOnce() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -400,7 +398,7 @@ class QuicConnectionTest {
     void closingConnectedConnectionTriggersConnectionClose() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
 
         connection.close();
 
@@ -491,7 +489,7 @@ class QuicConnectionTest {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
 
         NewConnectionIdFrame newConnectionIdFrame = new NewConnectionIdFrame(Version.getDefault(), 1, 1, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e });
         connection.process(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), newConnectionIdFrame), Instant.now());
@@ -510,7 +508,7 @@ class QuicConnectionTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
 
         // When
@@ -538,7 +536,7 @@ class QuicConnectionTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnection.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }));
         clearInvocations(sender);
 

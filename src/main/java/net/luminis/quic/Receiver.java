@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Receiver {
 
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private volatile DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
@@ -44,7 +44,7 @@ public class Receiver {
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
-    public Receiver(QuicConnection connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
+    public Receiver(QuicConnectionImpl connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
         this.connection = connection;
         this.socket = socket;
         this.maxPacketSize = initialMaxPacketSize;

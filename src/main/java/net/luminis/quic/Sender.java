@@ -56,7 +56,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
     private final RttEstimator rttEstimater;
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
     private AckGenerator[] ackGenerators;
     private final long[] lastPacketNumber = new long[PnSpace.values().length];
@@ -66,7 +66,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private volatile long sent;
 
 
-    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
+    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection) {
         this.socket = socket;
         this.maxPacketSize = maxPacketSize;
         this.log = log;

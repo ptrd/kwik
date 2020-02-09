@@ -46,7 +46,7 @@ public class QuicStream {
     private Object addMonitor = new Object();
     private final Version quicVersion;
     private final int streamId;
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private final FlowControl flowController;
     private final Logger log;
     private final BlockingQueue<StreamFrame> queuedFrames;
@@ -63,15 +63,15 @@ public class QuicStream {
     private final long receiverMaxDataIncrement;
 
 
-    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController) {
+    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
 
-    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
+    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(Version.getDefault(), streamId, connection, flowController, log);
     }
 
-    public QuicStream(Version quicVersion, int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
+    public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;

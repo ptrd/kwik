@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
@@ -46,7 +47,7 @@ public class InteractiveShell {
     private final Logger logger;
     private final Path secretsFile;
     private final String alpn;
-    private QuicConnection quicConnection;
+    private QuicConnectionImpl quicConnection;
     private TransportParameters params;
 
     public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile, String alpn) {
@@ -146,7 +147,7 @@ public class InteractiveShell {
         }
 
         try {
-            quicConnection = new QuicConnection(host, port, null, quicVersion, logger, secretsFile);
+            quicConnection = new QuicConnectionImpl(host, port, null, quicVersion, logger, secretsFile);
             if (alpn == null) {
                 quicConnection.connect(connectionTimeout, params);
             }
