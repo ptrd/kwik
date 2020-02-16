@@ -85,6 +85,7 @@ public class InteropRunner extends KwikCli {
         SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
         logger.logInfo(true);
+        logger.logCongestionControl(true);
 
         QuicConnection connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
         connection.connect(5_000);
