@@ -153,7 +153,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
                     boolean hasBeenWaiting = false;
                     while (! congestionController.canSend(packetData.length)) {
-                        log.debug("Congestion controller will not allow sending queued packet " + packet);
+                        log.cc("Congestion controller will not allow sending queued packet " + packet);
                         log.debug("Non-acked packets: " + getNonAcknowlegded());
                         hasBeenWaiting = true;
                         try {
