@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
@@ -29,8 +30,10 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class RecoveryManager {
@@ -70,6 +73,9 @@ public class RecoveryManager {
         else if (ackElicitingInFlight()) {
             int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
             ptoTimeout *= (int) (Math.pow(2, ptoCount));
+            // TODO: dit klopt niet helemaal meer, sinds -25 moet je niet kijken naar App level als handshake niet compleet
+            // maw. de last-ack-eliciting moet bijgehouden worden per pn-space en de laagste is degene die "telt"
+            // in de test zie je dat ie nu de sent tijd gebruikt van het laatste A-packet, wat onnodig laat kan zijn.
             int timeout = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
             lossDetectionTimer.cancel(false);
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
@@ -113,8 +119,23 @@ public class RecoveryManager {
         else {
             List<QuicPacket> handshakes = lossDetectors[PnSpace.Handshake.ordinal()].unAcked();
 
+            // TODO: this is not exactly according to specification (and neither is the "initial is non-empty" case above):
+            //       if client has handshake keys, it should send a HandShake packet as probe (i guess: a Ping)
+            //       The current implementation will retransmit the Initial packet, which should work, but is sub-optimal.
             if (! handshakes.isEmpty()) {
-                // TODO
+                // Client role: find ack eliciting handshake packet that is not acked and retransmit its contents.
+                //
+                Optional<QuicPacket> ackElicitingHandshakePacket = handshakes.stream().filter(p -> p.isAckEliciting()).findFirst();
+                if (ackElicitingHandshakePacket.isPresent()) {
+                    List<QuicFrame> framesToRetransmit = ackElicitingHandshakePacket.get().getFrames().stream()
+                            .filter(frame -> !(frame instanceof AckFrame))
+                            .collect(Collectors.toList());
+                    sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake);
+                }
+                else {
+                    // This must be a race condition: while preparing the probe, the packets where acked.
+                    log.debug("Sending probe for HandShake level abandoned, because there are no un-acked ack-eliciting handshake packets anymore");
+                }
             }
             else {
                 sender.sendProbe();

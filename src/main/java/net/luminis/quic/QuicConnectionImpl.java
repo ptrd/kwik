@@ -546,6 +546,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 send(response, f -> {});
             }
             else if (frame instanceof HandshakeDoneFrame) {
+                sender.stopRecovery(PnSpace.Handshake);
                 // TODO: discard handshake keys:
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
                 // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"

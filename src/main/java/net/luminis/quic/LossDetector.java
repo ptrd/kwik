@@ -160,7 +160,7 @@ public class LossDetector {
     }
 
     public void reset() {
-        packetSentLog.clear();
+        packetSentLog.clear();  // TODO: inform congestion controller that these packets are not any longer in flight!
         lossTime = null;
     }
 
