@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -170,4 +172,10 @@ public class VariableLengthInteger {
         }
     }
 
+    public static void main(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            long value = parseLong(ByteBuffer.wrap(ByteUtils.hexToBytes(args[i])));
+            System.out.println(args[i] + " => " + value);
+        }
+    }
 }
