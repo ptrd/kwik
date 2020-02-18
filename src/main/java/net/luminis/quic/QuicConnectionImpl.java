@@ -419,7 +419,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         List<Extension> quicExtensions = new ArrayList<>();
         quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
-        quicExtensions.add(new ECPointFormatExtension());
         quicExtensions.add(new ApplicationLayerProtocolNegotiationExtension(alpnProtocol));
 
         if (sessionTicket != null) {
