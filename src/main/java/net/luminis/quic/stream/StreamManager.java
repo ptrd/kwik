@@ -173,6 +173,10 @@ public class StreamManager implements FrameProcessor {
         if (maxStreamsBidi == null) {
             log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
             maxStreamsBidi = initialMaxStreamsBidi;
+            if (initialMaxStreamsBidi > Integer.MAX_VALUE) {
+                log.error("Server initial max streams bidirectional is larger than supported; limiting to " + Integer.MAX_VALUE);
+                initialMaxStreamsBidi = Integer.MAX_VALUE;
+            }
             openBidirectionalStreams.release((int) initialMaxStreamsBidi);
         }
         else {
@@ -184,6 +188,10 @@ public class StreamManager implements FrameProcessor {
         if (maxStreamsUni == null) {
             log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);
             maxStreamsUni = initialMaxStreamsUni;
+            if (initialMaxStreamsUni > Integer.MAX_VALUE) {
+                log.error("Server initial max streams unirectional is larger than supported; limiting to " + Integer.MAX_VALUE);
+                initialMaxStreamsUni = Integer.MAX_VALUE;
+            }
             openUnidirectionalStreams.release((int) initialMaxStreamsUni);
         }
         else {
