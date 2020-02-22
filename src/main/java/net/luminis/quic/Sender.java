@@ -144,30 +144,33 @@ public class Sender implements ProbeSender, FrameProcessor {
                         packetLostCallback = queued.packetLostCallback;
                     }
 
+                    Keys keys = connectionSecrets.getClientSecrets(level);// Assuming client role
                     packetNumber = generatePacketNumber(level.relatedPnSpace());
+                    byte[] packetData;
                     if (packet == null) {
-                        packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
+                        // i.e. ack waiting
+                        packetData = new byte[0];
                     }
-
-                    Keys keys = connectionSecrets.getClientSecrets(packet.getEncryptionLevel());// Assuming client role
-                    byte[] packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
+                    else {
+                        packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
+                    }
 
                     boolean hasBeenWaiting = false;
-                    while (!mustSendProbe && !congestionController.canSend(packetData.length)) {
-                        log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + packetData.length +  ")");
-                        log.debug("Non-acked packets: " + getNonAcknowlegded());
-                        hasBeenWaiting = true;
-                        try {
-                            congestionController.waitForUpdate();
+                    if (packet != null) {   // Ack-only is not congestion controller, neither is probe.
+                        while (!mustSendProbe && !congestionController.canSend(packetData.length)) {  // mustSendProbe can change while in wait loop
+                            log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + packetData.length + ")");
+                            hasBeenWaiting = true;
+                            try {
+                                congestionController.waitForUpdate();
+                            } catch (InterruptedException interrupted) {
+                                log.debug("Wait for CC update is interrupted");
+                            }
+                            log.debug("re-evaluating CC");
                         }
-                        catch (InterruptedException interrupted) {
-                            log.debug("Wait for CC update is interrupted");
-                        }
-                        log.debug("re-evaluating");
-                    }
 
-                    if (hasBeenWaiting) {
-                        log.debug("But now it does.");
+                        if (hasBeenWaiting) {
+                            log.debug("Congestion controller nos does allow sending the packet.");
+                        }
                     }
 
                     if (mustSendProbe) {
@@ -183,7 +186,12 @@ public class Sender implements ProbeSender, FrameProcessor {
                     AckGenerator ackGenerator = ackGenerators[level.ordinal()];
                     if (ackGenerator.hasAckToSend()) {
                         AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
-                        packet.addFrame(ackToSend);
+                        if (packet == null) {
+                            packet = connection.createPacket(level, ackToSend);
+                        }
+                        else {
+                            packet.addFrame(ackToSend);
+                        }
                         packetData = packet.generatePacketBytes(packetNumber, keys);
                     }
 

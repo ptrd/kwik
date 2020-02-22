@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
+import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -258,6 +259,40 @@ class SenderTest {
         // Whether a special probe or waiting data is sent does not matter, as long as a packet is sent.
         verify(socket, times(1)).send(any(DatagramPacket.class));
     }
+
+    @Test
+    void ackOnlyShouldNotBeCongestionControlled() throws Exception {
+        setCongestionWindowSize(1212);
+        sender.start(mock(ConnectionSecrets.class));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-11, 12, EncryptionLevel.App, new Padding(10), "empty packet"));
+
+        // Send first packet to fill up cwnd
+        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new Padding(), "first packet");
+        sender.send(firstPacket, "first packet", p -> {});
+        waitForSender();
+        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
+        reset(socket);
+
+        sender.processPacketReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
+        sender.packetProcessed(EncryptionLevel.App);
+        waitForSender();
+
+        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));
+    }
+
+    @Test
+    void ackOnlyShouldNotBeCountedAsInFlight() throws Exception {
+        sender.start(mock(ConnectionSecrets.class));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-1, 12, EncryptionLevel.App, "empty packet"));
+
+        sender.processPacketReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
+        sender.packetProcessed(EncryptionLevel.App);
+        waitForSender();
+
+        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
+        assertThat(sender.getCongestionController().getBytesInFlight()).isEqualTo(0);
+    }
+
 
     private PacketMatcher matchesPacket(int packetNumber, EncryptionLevel encryptionLevel ) {
         return new PacketMatcher(packetNumber, encryptionLevel);
