@@ -18,12 +18,11 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.PacketInfo;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,6 +30,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.internal.util.reflection.FieldSetter;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -204,6 +205,59 @@ class SenderTest {
         verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));
     }
 
+    @Test
+    void whenCwndAlmostReachedProbeShouldNotBeBlocked() throws Exception {
+        // Disable Recovery Manager
+        RecoveryManager recoveryManager = mock(RecoveryManager.class);
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("recoveryManager"), recoveryManager);
+
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(1, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        setCongestionWindowSize(1212);
+        sender.start(mock(ConnectionSecrets.class));
+
+        // Send first packet to fill up cwnd
+        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new Padding(), "first packet");
+        sender.send(firstPacket, "first packet", p -> {});
+        waitForSender();
+        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
+        reset(socket);
+
+        sender.sendProbe();
+        waitForSender();
+
+        verify(socket, times(1)).send(argThat(matchesPacket(1, EncryptionLevel.App)));
+    }
+
+    @Test
+    void whenCongestionControllerIsBlockingProbeShouldNotBeBlocked() throws Exception {
+        // Disable Recovery Manager
+        RecoveryManager recoveryManager = mock(RecoveryManager.class);
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("recoveryManager"), recoveryManager);
+
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(2, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        setCongestionWindowSize(1212);
+        sender.start(mock(ConnectionSecrets.class));
+
+        // Send first packet to fill up cwnd
+        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new Padding(), "first packet");
+        sender.send(firstPacket, "first packet", p -> {});
+        waitForSender();
+        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
+        reset(socket);
+
+        // Send second packet to exceed cwnd (and make sender wait)
+        MockPacket secondPacket = new MockPacket(1, 1200, EncryptionLevel.App, new Padding(), "second packet");
+        sender.send(firstPacket, "second packet", p -> {});
+        waitForSender();
+        verify(socket, never()).send(any(DatagramPacket.class));
+        reset(socket);
+
+        sender.sendProbe();
+        waitForSender();
+
+        // Whether a special probe or waiting data is sent does not matter, as long as a packet is sent.
+        verify(socket, times(1)).send(any(DatagramPacket.class));
+    }
 
     private PacketMatcher matchesPacket(int packetNumber, EncryptionLevel encryptionLevel ) {
         return new PacketMatcher(packetNumber, encryptionLevel);

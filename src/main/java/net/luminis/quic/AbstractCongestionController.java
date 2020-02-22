@@ -46,6 +46,9 @@ public class AbstractCongestionController implements CongestionController {
         if (! sentPacket.isAckOnly()) {
             bytesInFlight += sentPacket.getSize();
             log.debug("Bytes in flight increased to " + bytesInFlight);
+            if (bytesInFlight > congestionWindow) {
+                log.cc("Bytes in flight exceeds congestion window: " + bytesInFlight + " > " + congestionWindow);
+            }
             synchronized (lock) {
                 lock.notifyAll();
             }
@@ -61,7 +64,7 @@ public class AbstractCongestionController implements CongestionController {
 
         if (bytesInFlightAcked > 0) {
             bytesInFlight -= bytesInFlightAcked;
-            log.debug("Bytes in flight decreased to " + bytesInFlight);
+            log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
             synchronized (lock) {
                 lock.notifyAll();
             }
@@ -77,7 +80,7 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight -= lostBytes;
 
         if (lostBytes > 0) {
-            log.debug("Bytes in flight decreased to " + bytesInFlight);
+            log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + lostPackets.size() + " packets lost)");
         }
     }
 

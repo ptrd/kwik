@@ -138,6 +138,7 @@ public class RecoveryManager {
                 }
             }
             else {
+                log.recovery("Sending 1RTT probe");
                 sender.sendProbe();
             }
         }

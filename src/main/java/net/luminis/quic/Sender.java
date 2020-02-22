@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
@@ -64,7 +65,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private RecoveryManager recoveryManager;
     private int receiverMaxAckDelay;
     private volatile long sent;
-
+    private volatile boolean mustSendProbe = false;
 
     public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection) {
         this.socket = socket;
@@ -152,8 +153,8 @@ public class Sender implements ProbeSender, FrameProcessor {
                     byte[] packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
 
                     boolean hasBeenWaiting = false;
-                    while (! congestionController.canSend(packetData.length)) {
-                        log.cc("Congestion controller will not allow sending queued packet " + packet);
+                    while (!mustSendProbe && !congestionController.canSend(packetData.length)) {
+                        log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + packetData.length +  ")");
                         log.debug("Non-acked packets: " + getNonAcknowlegded());
                         hasBeenWaiting = true;
                         try {
@@ -167,6 +168,13 @@ public class Sender implements ProbeSender, FrameProcessor {
 
                     if (hasBeenWaiting) {
                         log.debug("But now it does.");
+                    }
+
+                    if (mustSendProbe) {
+                        mustSendProbe = false;
+                        if (!congestionController.canSend(packetData.length)) {
+                            log.cc("Exceeding cc window because a probe must be sent.");
+                        }
                     }
 
                     // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
@@ -305,7 +313,11 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     @Override
     public void sendProbe() {
-        connection.ping();
+        QuicPacket packet = connection.createPacket(EncryptionLevel.App, new PingFrame());
+        packet.addFrame(new Padding(3));
+        mustSendProbe = true;
+        send(packet, "probe with ping", f -> {});
+        senderThread.interrupt();
     }
 
     public void stopRecovery(PnSpace level) {

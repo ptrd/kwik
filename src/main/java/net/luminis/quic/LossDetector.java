@@ -134,7 +134,7 @@ public class LossDetector {
     // For debugging
     List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
-                .filter(p -> p.packet().isAckEliciting())
+                .filter(p -> !p.packet().isAckOnly())
                 .filter(p -> !p.acked && !p.lost)
                 .collect(Collectors.toList());
     }
@@ -197,7 +197,9 @@ public class LossDetector {
             return "Packet "
                     + packet().getEncryptionLevel().name().charAt(0) + "|"
                     + (packet().getPacketNumber() >= 0 ? packet().getPacketNumber() : ".") + "|"
-                    + "L" + "|" + status();
+                    + " " + "|"
+                    + packet().getSize() + "|"
+                    + status();
         }
     }
 }

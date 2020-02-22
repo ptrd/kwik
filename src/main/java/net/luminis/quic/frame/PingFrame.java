@@ -26,6 +26,9 @@ import java.nio.ByteBuffer;
 
 public class PingFrame extends QuicFrame {
 
+    public PingFrame() {
+    }
+
     public PingFrame(Version quicVersion) {
     }
 
