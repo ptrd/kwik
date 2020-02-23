@@ -58,9 +58,15 @@ public class KwikCli {
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
+        cmdLineOptions.addOption("v", "version", false, "show Kwik version");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
+
+        if (cmd.hasOption("v")) {
+            System.out.println("Kwik build nr: " + getVersion());
+            System.exit(0);
+        }
 
         String host = null;
         int port = -1;
@@ -407,6 +413,18 @@ public class KwikCli {
                 System.out.println(line);
             }
         }
+    }
+
+    static String getVersion() {
+        InputStream in = QuicConnection.class.getResourceAsStream("version.properties");
+        if (in != null) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
+                return reader.readLine();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        else return "dev";
     }
 
     public static void usage() {
