@@ -19,6 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
@@ -119,6 +120,17 @@ public class ShortHeaderPacket extends QuicPacket {
 
         ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
         frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
+        int serializeFramesLength = frameBytes.position();
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
+        // "To ensure that sufficient data is available for sampling, packets are
+        //   padded so that the combined lengths of the encoded packet number and
+        //   protected payload is at least 4 bytes longer than the sample required
+        //   for header protection."
+        if (encodedPacketNumber.length + serializeFramesLength < 4) {
+            Padding padding = new Padding(4 - encodedPacketNumber.length - frameBytes.position());
+            frames.add(padding);
+            frameBytes.put(padding.getBytes());
+        }
         frameBytes.flip();
 
         protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, keys);

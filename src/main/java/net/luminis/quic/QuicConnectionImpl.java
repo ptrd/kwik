@@ -196,7 +196,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     public void ping() {
         if (connectionState == Status.Connected) {
             QuicPacket packet = createPacket(App, new PingFrame(quicVersion));
-            packet.getFrames().add(new Padding(20));  // TODO: find out minimum packet size, and let packet take care of it.
             send(packet, "ping");
         }
         else {

@@ -89,7 +89,7 @@ public class TransportParameters {
     }
 
     public void setMaxIdleTimeout(long idleTimeout) {
-        this.maxIdleTimeoutInSeconds = idleTimeout;
+        this.maxIdleTimeoutInSeconds = idleTimeout / 1000;
     }
 
     public long getInitialMaxData() {

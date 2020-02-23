@@ -60,10 +60,6 @@ public class QuicTransportParametersExtension extends Extension {
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
 
-        // Length of transport parameters vector: use placeholder.
-        int transportParametersLengthPosition = buffer.position();
-        buffer.putShort((short) 0);
-
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "Those
         //   transport parameters that are identified as integers use a variable-
@@ -130,9 +126,6 @@ public class QuicTransportParametersExtension extends Extension {
         int length = buffer.position();
         buffer.limit(length);
 
-        int transportParametersSize = length - transportParametersLengthPosition - 2;  // 2 bytes for the size itself
-        buffer.putShort(transportParametersLengthPosition, (short) transportParametersSize);
-
         int extensionsSize = length - 2 - 2;  // 2 bytes for the length itself and 2 for the type
         buffer.putShort(2, (short) extensionsSize);
 
@@ -153,17 +146,23 @@ public class QuicTransportParametersExtension extends Extension {
             throw new RuntimeException();  // Must be programming error
         }
         int extensionLength = buffer.getShort();
+        int startPosition = buffer.position();
 
-        int transportParametersSize = buffer.getShort();
         log.debug("Transport parameters: ");
         while (buffer.remaining() > 0) {
             parseTransportParameter(buffer, log);
         }
+
+        int realSize = buffer.position() - startPosition;
+        if (realSize != extensionLength) {
+            throw new ProtocolError("inconsistent size in transport parameter" + "  should be: " + realSize);
+        }
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
-        int parameterId = buffer.getShort() & 0xffff;
-        int size = buffer.getShort();
+        int parameterId = VariableLengthInteger.parse(buffer);
+        int size = VariableLengthInteger.parse(buffer);
+        int startPosition = buffer.position();
 
         if (parameterId == initial_max_stream_data_bidi_local.value) {
             int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
@@ -241,6 +240,11 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
             buffer.get(new byte[size]);
         }
+
+        int realSize = buffer.position() - startPosition;
+        if (realSize != size) {
+            throw new ProtocolError("inconsistent size in transport parameter" + "   moet zijn: " + realSize);
+        }
     }
 
     private void parsePreferredAddress(ByteBuffer buffer, Logger log) {
@@ -279,11 +283,12 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
-        buffer.putShort(id.value);
-        int position = buffer.position();
-        buffer.putShort((short) 0);  // placeholder
+        VariableLengthInteger.encode(id.value, buffer);
+        buffer.mark();
         int encodedValueLength = VariableLengthInteger.encode(value, buffer);
-        buffer.putShort(position, (short) encodedValueLength);
+        buffer.reset();
+        VariableLengthInteger.encode(encodedValueLength, buffer);
+        VariableLengthInteger.encode(value, buffer);
     }
 
     public TransportParameters getTransportParameters() {

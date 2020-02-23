@@ -2,35 +2,43 @@
 
 ## A QUIC client Java library
 
-Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-25) protocol in Java.
+Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-ietf-quic-transport-27) protocol in Java.
 
 Kwik can be used to transport HTTP3, but it is not a HTTP3 client.
 If you're looking for a HTTP3 client, check out [Flupke](https://bitbucket.org/pjtr/flupke).
- 
+
+Kwik is created an maintained by Peter Doornbosch. 
 
 ## Not for production
 
 Kwik is not yet suitable for production use. 
 Apart from the fact that the QUIC specification is still work in progress by the IETF, Kwik does not yet implement 
 the complete (draft) specification. 
-It lacks important features that are necessary for a stable and reliable connection and for efficient use of network
-resources. For example, congestion control is not yet implemented. 
-Also it is not secure, as server certificates are not yet validated. 
-For the time being, this project is for educational purposes only. 
-
+Important features like congestion control are implemented but not yet extensively tested. 
+Also, a secure connection is not guaranteed, as server certificates are not yet validated.
+Use at your own risk.
+And apart from that: have fun!
 
 ## Status
 
-The status of the project is proof of concept: it is possible to set up a connection with a QUIC server and exchange
-data. See [Flupke](https://bitbucket.org/pjtr/flupke) for a sample HTTP3 client.
+The status of the project is that most QUIC features are implemented. Interoperability is tested with a large
+number of server implementations, see the [automated interoperability tests](https://interop.seemann.io/) and 
+the [QUIC interop matrix](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit)
+for details.
 
-Kwik supports IETF draft-25.
+HTTP3 on top of Kwik is support by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
+
+Kwik supports IETF draft-27, the latest draft published by the IETF.
 
 Implemented QUIC features:
 
 * version negotation
+* handshake based on TLS 1.3
+* data exchange over bidirectional and unidirectional streams
 * stateless retry
 * session resumption (see -S and -R options)
+* connection migration
+
 
 ## Usage
 

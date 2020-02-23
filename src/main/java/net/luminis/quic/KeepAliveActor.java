@@ -57,7 +57,6 @@ public class KeepAliveActor {
 
     private void ping() {
         QuicPacket packet = connection.createPacket(App, new PingFrame(quicVersion));
-        packet.getFrames().add(new Padding(20));  // TODO: find out minimum packet size
         connection.send(packet, "ping");
 
         scheduleNextPing();
