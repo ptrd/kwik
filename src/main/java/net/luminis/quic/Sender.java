@@ -145,7 +145,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
                     packetNumber = generatePacketNumber(level.relatedPnSpace());
                     if (packet == null) {
-                        packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
+                        packet = connection.createPacket(level, new Padding(3));
                     }
 
                     Keys keys = connectionSecrets.getClientSecrets(packet.getEncryptionLevel());// Assuming client role
