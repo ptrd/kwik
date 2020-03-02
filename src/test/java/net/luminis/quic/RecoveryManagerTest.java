@@ -42,7 +42,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 40;
     private int defaultRttVar = defaultRtt / 4;
-    private int epsilon = defaultRtt / 4;  // A small value to check for events that should occur at a specified time; the epsilon is the variance allowed.
+    private int epsilon = defaultRtt / 2;  // A small value to check for events that should occur at a specified time; the epsilon is the variance allowed.
     private ProbeSender probeSender;
     private RttEstimator rttEstimator;
 
@@ -221,7 +221,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(detectors[1].getLossTime()).thenReturn(null);
         when(detectors[2].getLossTime()).thenReturn(someInstant.minusMillis(100));
 
-        assertThat(recoveryManager.getEarliestLossTime().pnSpace.ordinal()).isEqualTo(2);
+        assertThat(recoveryManager.getEarliestLossTime(LossDetector::getLossTime).pnSpace.ordinal()).isEqualTo(2);
     }
 
     @Test

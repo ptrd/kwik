@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,7 +47,6 @@ public class RecoveryManager {
     private int receiverMaxAckDelay;
     private volatile ScheduledFuture<?> lossDetectionTimer;
     private volatile int ptoCount;
-    private volatile Instant lastAckElicitingSent;
     private volatile Instant timerExpiration;
 
 
@@ -63,20 +63,25 @@ public class RecoveryManager {
     }
 
     void setLossDetectionTimer() {
-        PnSpaceLossTime earliestLossTime = getEarliestLossTime();
+        PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectionTimer.cancel(false);
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
-        else if (ackElicitingInFlight()) {
+        else if (ackElicitingInFlight()) {  // TODO: || !PeerNotAwaitingAddressValidation
             int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
             ptoTimeout *= (int) (Math.pow(2, ptoCount));
-            // TODO: dit klopt niet helemaal meer, sinds -25 moet je niet kijken naar App level als handshake niet compleet
-            // maw. de last-ack-eliciting moet bijgehouden worden per pn-space en de laagste is degene die "telt"
-            // in de test zie je dat ie nu de sent tijd gebruikt van het laatste A-packet, wat onnodig laat kan zijn.
-            int timeout = (int) Duration.between(Instant.now(), lastAckElicitingSent.plusMillis(ptoTimeout)).toMillis();
+
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
+            // "As with loss detection, the probe timeout is per packet number space."
+            PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+            if (earliestLastAckElicitingSentTime == null) {
+                throw new IllegalStateException("Missing last ack eliciting sent time");
+            }
+
+            int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
             lossDetectionTimer.cancel(false);
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
@@ -96,7 +101,7 @@ public class RecoveryManager {
             return;
         }
 
-        PnSpaceLossTime earliestLossTime = getEarliestLossTime();
+        PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
@@ -109,7 +114,8 @@ public class RecoveryManager {
     }
 
     private void sendProbe() {
-        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, lastAckElicitingSent.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
         List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
         if (! unAckedInitialPackets.isEmpty()) {
             // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
@@ -144,16 +150,16 @@ public class RecoveryManager {
         }
     }
 
-    PnSpaceLossTime getEarliestLossTime() {
-        PnSpaceLossTime earliestLossTime = null;
+    PnSpaceTime getEarliestLossTime(Function<LossDetector, Instant> pnSpaceTimeFunction) {
+        PnSpaceTime earliestLossTime = null;
         for (PnSpace pnSpace: PnSpace.values()) {
-            Instant pnSpaceLossTime = lossDetectors[pnSpace.ordinal()].getLossTime();
+            Instant pnSpaceLossTime = pnSpaceTimeFunction.apply(lossDetectors[pnSpace.ordinal()]);
             if (pnSpaceLossTime != null) {
                 if (earliestLossTime == null) {
-                    earliestLossTime = new PnSpaceLossTime(pnSpace, pnSpaceLossTime);
+                    earliestLossTime = new PnSpaceTime(pnSpace, pnSpaceLossTime);
                 } else {
                     if (! earliestLossTime.lossTime.isBefore(pnSpaceLossTime)) {
-                        earliestLossTime = new PnSpaceLossTime(pnSpace, pnSpaceLossTime);
+                        earliestLossTime = new PnSpaceTime(pnSpace, pnSpaceLossTime);
                     }
                 }
             }
@@ -184,10 +190,6 @@ public class RecoveryManager {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        if (packet.isAckEliciting()) {
-            lastAckElicitingSent = sent;
-        }
-
         lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
         setLossDetectionTimer();  // TODO: why call this for ack-only packets?
     }
@@ -262,13 +264,18 @@ public class RecoveryManager {
         return timeFormatter.format(localTimeNow);
     }
 
-    static class PnSpaceLossTime {
+    static class PnSpaceTime {
         public PnSpace pnSpace;
         public Instant lossTime;
 
-        public PnSpaceLossTime(PnSpace pnSpace, Instant pnSpaceLossTime) {
+        public PnSpaceTime(PnSpace pnSpace, Instant pnSpaceLossTime) {
             this.pnSpace = pnSpace;
             lossTime = pnSpaceLossTime;
+        }
+
+        @Override
+        public String toString() {
+            return lossTime.toString() + " (in " + pnSpace + ")";
         }
     }
 }
