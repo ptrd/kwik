@@ -122,6 +122,9 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void noProbeIsSentForAck() throws InterruptedException {
+        // Simulate peer has completed address validation
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.App);
+
         QuicPacket ackPacket = createPacket(8, new AckFrame(20));
         recoveryManager.packetSent(ackPacket, Instant.now(), p -> {});
 
@@ -240,6 +243,19 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(lostPacketHandler, times(0)).process(any(InitialPacket.class));
     }
 
+    @Test
+    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
+        Instant firstPacketTime = Instant.now();
+        recoveryManager.packetSent(createCryptoPacket(0), firstPacketTime, lostPacket -> {});
+
+        Thread.sleep((int) defaultRtt);
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial);
+
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(probeTimeout + epsilon);
+
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+    }
 
     private void mockSendingProbe(int... packetNumbers) {
         doAnswer(new Answer<Void>() {

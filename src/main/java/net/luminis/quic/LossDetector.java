@@ -39,7 +39,7 @@ public class LossDetector {
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
-    private volatile long largestAcked;
+    private volatile long largestAcked = -1;
     private volatile long lost;
     private volatile Instant lossTime;
     private volatile Instant lastAckElicitingSent;
@@ -181,6 +181,10 @@ public class LossDetector {
         return packets.stream()
                 .filter(packetInfo -> !packetInfo.packet().isAckOnly())
                 .collect(Collectors.toList());
+    }
+
+    public boolean noAckedReceived() {
+        return largestAcked < 0;
     }
 
     private static class PacketStatus extends PacketInfo {

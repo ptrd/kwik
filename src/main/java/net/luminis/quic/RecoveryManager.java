@@ -70,7 +70,7 @@ public class RecoveryManager {
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
-        else if (ackElicitingInFlight()) {  // TODO: || !PeerNotAwaitingAddressValidation
+        else if (ackElicitingInFlight() || peerAwaitingAddressValidation()) {
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
             // "As with loss detection, the probe timeout is per packet number space."
             PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
@@ -91,6 +91,13 @@ public class RecoveryManager {
         else {
             unschedule();
         }
+    }
+
+    private boolean peerAwaitingAddressValidation() {
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
+        // "That is, the client MUST set the probe timer if the client has not received an
+        //   acknowledgement for one of its Handshake or 1-RTT packets."
+        return lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived() && lossDetectors[PnSpace.App.ordinal()].noAckedReceived();
     }
 
     private void lossDetectionTimeout() {
