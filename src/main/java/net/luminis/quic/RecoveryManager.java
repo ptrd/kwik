@@ -71,15 +71,18 @@ public class RecoveryManager {
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
         else if (ackElicitingInFlight()) {  // TODO: || !PeerNotAwaitingAddressValidation
-            int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
-            ptoTimeout *= (int) (Math.pow(2, ptoCount));
-
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
             // "As with loss detection, the probe timeout is per packet number space."
             PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
             if (earliestLastAckElicitingSentTime == null) {
                 throw new IllegalStateException("Missing last ack eliciting sent time");
             }
+
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2.1
+            // "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay is 0"
+            int maxAckDelay = earliestLastAckElicitingSentTime.pnSpace == PnSpace.App? receiverMaxAckDelay: 0;
+            int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + maxAckDelay;
+            ptoTimeout *= (int) (Math.pow(2, ptoCount));
 
             int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
             lossDetectionTimer.cancel(false);
