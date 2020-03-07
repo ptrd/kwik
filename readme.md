@@ -7,7 +7,7 @@ Kwik is a client implementation of the [QUIC](https://tools.ietf.org/html/draft-
 Kwik can be used to transport HTTP3, but it is not a HTTP3 client.
 If you're looking for a HTTP3 client, check out [Flupke](https://bitbucket.org/pjtr/flupke).
 
-Kwik is created an maintained by Peter Doornbosch. 
+Kwik is created an maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik).
 
 ## Not for production
 
@@ -26,7 +26,7 @@ number of server implementations, see the [automated interoperability tests](htt
 the [QUIC interop matrix](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit)
 for details.
 
-HTTP3 on top of Kwik is support by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
+HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
 
 Kwik supports IETF draft-27, the latest draft published by the IETF.
 

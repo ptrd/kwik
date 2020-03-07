@@ -297,6 +297,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         QuicPacket packet;
         try {
             packet = parsePacket(data);
+            if (packet == null) {
+                // Packet is discarded, rest of datagram cannot be parsed (because of unknown length)
+                return;
+            }
             packetSize = data.position() - packetStart;
             if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
                 highestEncryptionLevelInPacket = packet.getEncryptionLevel();
@@ -364,8 +368,22 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         else if ((flags & 0xc0) == 0x40) {  // 0100 0000
             // ShortHeader
             packet = new ShortHeaderPacket(quicVersion);
+
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.3
+        // "Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
+        else if ((flags & 0xc0) == 0x80) {  // 10xx 0000
+            log.error("Discarding Long Header packet with fixed bit set to 0");
+            return null;
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.3
+        // "Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
+        else if ((flags & 0xc0) == 0x00) {  // 00xx 0000
+            log.error("Discarding Short Header packet with fixed bit set to 0");
+            return null;
         }
         else {
+            // Should not happen, all cases should be covered above, but just in case...
             throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
         }
 

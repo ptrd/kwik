@@ -169,7 +169,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                         }
 
                         if (hasBeenWaiting) {
-                            log.debug("Congestion controller nos does allow sending the packet.");
+                            log.debug("Congestion controller now does allow sending the packet.");
                         }
                     }
 
