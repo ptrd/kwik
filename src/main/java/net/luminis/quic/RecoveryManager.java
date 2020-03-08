@@ -20,6 +20,8 @@ package net.luminis.quic;
 
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.Padding;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
@@ -29,6 +31,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
@@ -37,7 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class RecoveryManager {
+public class RecoveryManager implements HandshakeStateListener {
 
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
@@ -48,6 +51,7 @@ public class RecoveryManager {
     private volatile ScheduledFuture<?> lossDetectionTimer;
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
+    private volatile HandshakeState handshakeState = HandshakeState.Initial;
 
 
     RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
@@ -70,26 +74,45 @@ public class RecoveryManager {
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
             lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
         }
-        else if (ackElicitingInFlight() || peerAwaitingAddressValidation()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
-            // "As with loss detection, the probe timeout is per packet number space."
-            PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-            if (earliestLastAckElicitingSentTime == null) {
-                throw new IllegalStateException("Missing last ack eliciting sent time");
-            }
-
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2.1
-            // "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay is 0"
-            int maxAckDelay = earliestLastAckElicitingSentTime.pnSpace == PnSpace.App? receiverMaxAckDelay: 0;
-            int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + maxAckDelay;
-            ptoTimeout *= (int) (Math.pow(2, ptoCount));
-
-            int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
-            lossDetectionTimer.cancel(false);
-            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
-        }
         else {
-            unschedule();
+            boolean ackElicitingInFlight = ackElicitingInFlight();
+            boolean peerAwaitingAddressValidation = peerAwaitingAddressValidation();
+            if (ackElicitingInFlight || peerAwaitingAddressValidation) {
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
+                // "As with loss detection, the probe timeout is per packet number space."
+                PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+                if (earliestLastAckElicitingSentTime == null) {
+                    if (!ackElicitingInFlight) {
+                        log.error("Missing last ack eliciting sent time, probably caused by peer awaiting address validation and initial recovery state being discarded");
+                        // This can happen when Initial pn space is already discarded, but no ack-eliciting handshake packet has been sent, and peer is still awaiting address validation
+                        // Hack: use "now" as start time; must ask experts what to do here
+                        earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
+                    }
+                    else {
+                        throw new IllegalStateException("Missing last ack eliciting sent time");
+                    }
+                }
+
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2.1
+                // "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay is 0"
+                int maxAckDelay = earliestLastAckElicitingSentTime.pnSpace == PnSpace.App? receiverMaxAckDelay: 0;
+                int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + maxAckDelay;
+                ptoTimeout *= (int) (Math.pow(2, ptoCount));
+
+                int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
+                log.recovery("reschedule loss detection timer over " + timeout + " millis, "
+                        + "based on " + earliestLastAckElicitingSentTime.lossTime + "/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
+                        + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation ": "")
+                        + (ackElicitingInFlight ? "ackElicitingInFlight ": "")
+                        + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar());
+
+                lossDetectionTimer.cancel(false);
+                lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
+            }
+            else {
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                unschedule();
+            }
         }
     }
 
@@ -125,38 +148,74 @@ public class RecoveryManager {
 
     private void sendProbe() {
         PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime.toString(), rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
-        List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
-        if (! unAckedInitialPackets.isEmpty()) {
-            // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
-            // All frames need to be resent, because Initial packet wil contain padding.
-            sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial);
-        }
-        else {
-            List<QuicPacket> handshakes = lossDetectors[PnSpace.Handshake.ordinal()].unAcked();
+        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
 
-            // TODO: this is not exactly according to specification (and neither is the "initial is non-empty" case above):
-            //       if client has handshake keys, it should send a HandShake packet as probe (i guess: a Ping)
-            //       The current implementation will retransmit the Initial packet, which should work, but is sub-optimal.
-            if (! handshakes.isEmpty()) {
-                // Client role: find ack eliciting handshake packet that is not acked and retransmit its contents.
-                //
-                Optional<QuicPacket> ackElicitingHandshakePacket = handshakes.stream().filter(p -> p.isAckEliciting()).findFirst();
-                if (ackElicitingHandshakePacket.isPresent()) {
-                    List<QuicFrame> framesToRetransmit = ackElicitingHandshakePacket.get().getFrames().stream()
-                            .filter(frame -> !(frame instanceof AckFrame))
-                            .collect(Collectors.toList());
-                    sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake);
-                }
-                else {
-                    // This must be a race condition: while preparing the probe, the packets where acked.
-                    log.debug("Sending probe for HandShake level abandoned, because there are no un-acked ack-eliciting handshake packets anymore");
-                }
+        if (handshakeState.hasNoHandshakeKeys()) {
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
+            // "SendOneAckElicitingPaddedInitialPacket"
+            List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
+            if (!unAckedInitialPackets.isEmpty()) {
+                // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
+                // All frames need to be resent, because Initial packet wil contain padding.
+                log.recovery("(Probe is an initial retransmit)");
+                sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial);
             }
             else {
-                log.recovery("Sending 1RTT probe");
-                sender.sendProbe();
+                // This can happen, when the probe is sent because of peer awaiting address validation
+                log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit");
+                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial);
             }
+        }
+        else if (handshakeState.hasOnlyHandshakeKeys()) {
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
+            // "If Handshake keys are available to the client, it MUST send a Handshake packet"
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
+            // "SendOneAckElicitingHandshakePacket"
+
+            // Client role: find ack eliciting handshake packet that is not acked and retransmit its contents.
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Handshake);
+            if (!framesToRetransmit.isEmpty()) {
+                log.recovery("(Probe is a handshake retransmit)");
+                sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake);
+            }
+            else {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-8.1
+                // "In particular, receipt of a packet protected with
+                //   Handshake keys confirms that the client received the Initial packet
+                //   from the server.  Once the server has successfully processed a
+                //   Handshake packet from the client, it can consider the client address
+                //   to have been validated."
+                // Hence, no padding needed.
+                log.recovery("(Probe is a handshake ping)");
+                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake);
+            }
+        }
+        else {
+            // SendOneOrTwoAckElicitingPackets(pn_space)
+            EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
+            if (!framesToRetransmit.isEmpty()) {
+                log.recovery(("(Probe is retransmit on level " + probeLevel + ")"));
+                sender.sendProbe(framesToRetransmit, probeLevel);
+            }
+            else {
+                log.recovery(("(Probe is ping on level " + probeLevel + ")"));
+                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel);
+            }
+        }
+    }
+
+    List<QuicFrame> getFramesToRetransmit(PnSpace pnSpace) {
+        List<QuicPacket> unAckedPackets = lossDetectors[pnSpace.ordinal()].unAcked();
+        Optional<QuicPacket> ackEliciting = unAckedPackets.stream().filter(p -> p.isAckEliciting()).findFirst();
+        if (ackEliciting.isPresent()) {
+            List<QuicFrame> framesToRetransmit = ackEliciting.get().getFrames().stream()
+                    .filter(frame -> !(frame instanceof AckFrame))
+                    .collect(Collectors.toList());
+            return framesToRetransmit;
+        }
+        else {
+            return Collections.emptyList();
         }
     }
 
@@ -229,6 +288,11 @@ public class RecoveryManager {
 
     public long getLost() {
         return Stream.of(lossDetectors).mapToLong(ld -> ld.getLost()).sum();
+    }
+
+    @Override
+    public void handshakeStateChangedEvent(HandshakeState newState) {
+        handshakeState = newState;
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {

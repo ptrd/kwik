@@ -61,10 +61,8 @@ class SenderTest {
     void initSenderUnderTest() throws Exception {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
-        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
-
         connection = mock(QuicConnectionImpl.class);
-        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
 
         // Set RttEstimator with short initial rtt, both on Sender and RecoveryManager
         RttEstimator rttEstimator = new RttEstimator(logger, 100);
@@ -148,7 +146,7 @@ class SenderTest {
 
     @Test
     void ackElicitingPacketsShouldBeRetransmitted() throws Exception {
-        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(1, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(11, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
         sender.start(mock(ConnectionSecrets.class));
 
         sender.send(new MockPacket(0, 1240, EncryptionLevel.App, new PingFrame(), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe will be send */ });
@@ -162,17 +160,18 @@ class SenderTest {
 
     @Test
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
-        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(1, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(11, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
         sender.start(mock(ConnectionSecrets.class));
 
         // Simulate a roundtrip first, to ensure loss detector has at least one ack-eliciting packet
-        sender.send(new MockPacket(0, 120, EncryptionLevel.Initial, new PingFrame(), "packet 0"), "packet 0", p -> {});
+        sender.send(new MockPacket(0, 120, EncryptionLevel.App, new PingFrame(), "packet 0"), "packet 0", p -> {});
         waitForSender();
+        sender.process(new AckFrame(0), PnSpace.App, Instant.now());
         clearInvocations(socket);
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.App, new AckFrame(0), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe would be send */ });
+        sender.send(new MockPacket(1, 1240, EncryptionLevel.App, new AckFrame(0), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe would be send */ });
         waitForSender();
-        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.App)));
+        verify(socket, times(1)).send(argThat(new PacketMatcher(1, EncryptionLevel.App)));
         clearInvocations(socket);
 
         Thread.sleep(500);

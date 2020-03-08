@@ -39,6 +39,7 @@ import java.security.interfaces.ECPublicKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -85,6 +86,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
     private volatile FlowControl flowController;
+    private HandshakeState handshakeState = HandshakeState.Initial;
+    private List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -250,6 +253,18 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.send(clientHelloPacket, "client hello", p -> {});
     }
 
+    public void hasHandshakeKeys() {
+        synchronized (handshakeState) {
+            if (handshakeState.transitionAllowed(HandshakeState.HasHandshakeKeys)) {
+                handshakeState = HandshakeState.HasHandshakeKeys;
+                handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+            }
+            else {
+                log.debug("Handshake state cannot be set to HasHandshakeKeys");
+            }
+        }
+    }
+
     void finishHandshake(TlsState tlsState) {
         if (tlsState.isServerFinished()) {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-4.9.1
@@ -265,6 +280,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             sender.send(finishedPacket, "client finished", p -> {});
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
+            synchronized (handshakeState) {
+                if (handshakeState.transitionAllowed(HandshakeState.HasAppKeys)) {
+                    handshakeState = HandshakeState.HasAppKeys;
+                    handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+                } else {
+                    log.debug("Handshake state cannot be set to HasAppKeys");
+                }
+            }
 
             connectionState = Status.Connected;
             handshakeFinishedCondition.countDown();
@@ -907,6 +930,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     public List<NewSessionTicket> getNewSessionTickets() {
         return newSessionTickets;
+    }
+
+    public void addHandshakeStateListener(RecoveryManager recoveryManager) {
+        handshakeStateListeners.add(recoveryManager);
     }
 
 }
