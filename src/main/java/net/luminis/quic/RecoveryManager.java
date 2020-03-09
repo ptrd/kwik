@@ -52,6 +52,7 @@ public class RecoveryManager implements HandshakeStateListener {
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
+    private volatile boolean firstHandshakeSent = false;
 
 
     RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
@@ -259,6 +260,15 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
+        if (packet.getEncryptionLevel() == EncryptionLevel.Handshake && ! firstHandshakeSent) {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.10.1
+            // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet"
+            // "This results in abandoning loss recovery state for the Initial
+            //   encryption level and ignoring any outstanding Initial packets."
+            log.recovery("Resetting Initial pn-space, because first Handshake message is sent");
+            lossDetectors[PnSpace.Initial.ordinal()].reset();
+            firstHandshakeSent = true;
+        }
         lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
         setLossDetectionTimer();  // TODO: why call this for ack-only packets?
     }
@@ -283,6 +293,7 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     public void stopRecovery(PnSpace pnSpace) {
+        log.recovery("Resetting loss detector " + pnSpace);
         lossDetectors[pnSpace.ordinal()].reset();
     }
 

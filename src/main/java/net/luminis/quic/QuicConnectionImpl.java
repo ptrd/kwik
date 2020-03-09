@@ -267,13 +267,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     void finishHandshake(TlsState tlsState) {
         if (tlsState.isServerFinished()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-4.9.1
-            // "a client MUST discard Initial keys when it first sends a Handshake packet"
-            // TODO tlsState.discardKeys(Initial);
-            // "Endpoints MUST NOT send Initial packets after this point. This results in abandoning loss recovery state
-            // for the Initial encryption level and ignoring any outstanding Initial packets."
-            sender.stopRecovery(PnSpace.Initial);
-
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
             QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
