@@ -126,13 +126,31 @@ public class RecoveryManager implements HandshakeStateListener {
 
     private void lossDetectionTimeout() {
         // Because cancelling the ScheduledExecutor task quite often fails, double check whether the timer should expire.
-        if (timerExpiration == null) {
+        Instant expiration = timerExpiration;
+        if (expiration == null) {
             // Timer was cancelled, but it still fired; ignore
+            System.out.println("Timer was cancelled.");
             return;
         }
-        else if (Instant.now().isBefore(timerExpiration)) {
+        else if (Instant.now().isBefore(expiration)) {
             // Old timer task was cancelled, but it still fired; just ignore.
-            return;
+            System.out.println("Scheduled task running early: " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
+            try {
+                Thread.sleep(Duration.between(Instant.now(), timerExpiration).toMillis() + 1);   // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary
+            } catch (InterruptedException e) {
+            }
+            expiration = timerExpiration;
+            if (expiration == null) {
+                System.out.println("Delayed task: timer expiration is now null, cancelled");
+                return;
+            }
+            else if (Instant.now().isBefore(expiration)) {
+                System.out.println("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
+                return;
+            }
+            else {
+                System.out.println("Delayed task running now");
+            }
         }
 
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
