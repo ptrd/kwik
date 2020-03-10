@@ -287,8 +287,11 @@ public class RecoveryManager implements HandshakeStateListener {
             lossDetectors[PnSpace.Initial.ordinal()].reset();
             firstHandshakeSent = true;
         }
-        lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
-        setLossDetectionTimer();  // TODO: why call this for ack-only packets?
+        if (packet.isInflightPacket()) {
+            // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
+            lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
+            setLossDetectionTimer();
+        }
     }
 
     private boolean ackElicitingInFlight() {
