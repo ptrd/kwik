@@ -270,7 +270,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
             QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
-            sender.send(finishedPacket, "client finished", p -> {});
+            sendClientFinished(finishedPacket);
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
             synchronized (handshakeState) {
@@ -285,6 +285,17 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             connectionState = Status.Connected;
             handshakeFinishedCondition.countDown();
         }
+    }
+
+    void sendClientFinished(QuicPacket packet) {
+        sender.send(packet, "client finished", p -> {
+            QuicFrame frameToRetransmit = packet.getFrames().stream()
+                    .filter(frame -> frame instanceof CryptoFrame)
+                    .findFirst().get();
+            QuicPacket clientFinishedPacket = createPacket(Handshake, frameToRetransmit);
+            log.recovery("Retransmitting client finished.");
+            sender.send(clientFinishedPacket, "client finished", this::sendClientFinished);
+        });
     }
 
     QuicPacket createPacket(EncryptionLevel level, QuicFrame frame) {
