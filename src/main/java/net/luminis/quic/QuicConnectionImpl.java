@@ -579,6 +579,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             }
             else if (frame instanceof HandshakeDoneFrame) {
                 sender.stopRecovery(PnSpace.Handshake);
+                synchronized (handshakeState) {
+                    if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
+                        handshakeState = HandshakeState.Confirmed;
+                        handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+                    } else {
+                        log.debug("Handshake state cannot be set to Confirmed");
+                    }
+                }
                 // TODO: discard handshake keys:
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
                 // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"

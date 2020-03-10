@@ -40,5 +40,9 @@ public enum HandshakeState {
     public boolean transitionAllowed(HandshakeState proposedState) {
         return this.ordinal() < proposedState.ordinal();
     }
+
+    public boolean isNotConfirmed() {
+        return this.ordinal() < Confirmed.ordinal();
+    }
 }
 

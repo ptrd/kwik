@@ -121,7 +121,8 @@ public class RecoveryManager implements HandshakeStateListener {
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
         // "That is, the client MUST set the probe timer if the client has not received an
         //   acknowledgement for one of its Handshake or 1-RTT packets."
-        return lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived() && lossDetectors[PnSpace.App.ordinal()].noAckedReceived();
+        // See also https://github.com/quicwg/base-drafts/issues/3502
+        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived() && lossDetectors[PnSpace.App.ordinal()].noAckedReceived();
     }
 
     private void lossDetectionTimeout() {
@@ -324,7 +325,11 @@ public class RecoveryManager implements HandshakeStateListener {
 
     @Override
     public void handshakeStateChangedEvent(HandshakeState newState) {
+        HandshakeState oldState = handshakeState;
         handshakeState = newState;
+        if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+            setLossDetectionTimer();
+        }
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {
