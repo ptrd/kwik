@@ -101,6 +101,9 @@ public class RecoveryManager implements HandshakeStateListener {
                 ptoTimeout *= (int) (Math.pow(2, ptoCount));
 
                 int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
+                if (timeout < 1) {
+                    timeout = 0;
+                }
                 log.recovery("reschedule loss detection timer over " + timeout + " millis, "
                         + "based on " + earliestLastAckElicitingSentTime.lossTime + "/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
                         + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation ": "")
