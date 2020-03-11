@@ -158,12 +158,14 @@ public class RecoveryManager implements HandshakeStateListener {
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
+            setLossDetectionTimer();
         }
         else {
             sendProbe();
             ptoCount++;
+            // Calling setLossDetectionTimer here not necessary, because the event of sending the probe will trigger it anyway.
+            // And if done here, time of last-ack-eliciting might not be set yet (because packets are sent async), leading to trouble.
         }
-        setLossDetectionTimer();
     }
 
     private void sendProbe() {
