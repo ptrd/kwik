@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
  */
 public class VersionNegotiationPacket extends QuicPacket {
 
+    // Minimal length for a valid packet:  type version dcid len dcid scid len scid version
+    private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  4;
+
     private int packetSize;
 
     public VersionNegotiationPacket() {
@@ -50,8 +53,12 @@ public class VersionNegotiationPacket extends QuicPacket {
     List<String> serverSupportedVersions = new ArrayList<>();
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing VersionNegotationPacket");
+        int packetLength = buffer.limit() - buffer.position();
+        if (packetLength < MIN_PACKET_LENGTH) {
+            throw new InvalidPacketException();
+        }
         buffer.get();     // Type
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
@@ -65,11 +72,17 @@ public class VersionNegotiationPacket extends QuicPacket {
 
         byte[] destinationConnectionId;
         byte[] sourceConnectionId;
-        int dstConnIdLength = buffer.get();
+        int dstConnIdLength = buffer.get() & 0xff;
+        if (packetLength < MIN_PACKET_LENGTH + dstConnIdLength) {
+            throw new InvalidPacketException();
+        }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
-        int srcConnIdLength = buffer.get();
+        int srcConnIdLength = buffer.get() & 0xff;
+        if (packetLength < MIN_PACKET_LENGTH + dstConnIdLength + srcConnIdLength) {
+            throw new InvalidPacketException();
+        }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
         log.debug("Destination connection id", destinationConnectionId);

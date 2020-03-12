@@ -316,6 +316,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
             log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
         }
+        catch (InvalidPacketException invalidPacket) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+            // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
+            log.debug("Dropping invalid packet");
+        }
 
         if (packetSize > 0 && data.position() < data.limit()) {  
             parsePackets(datagram, timeReceived, data.slice());
@@ -327,7 +332,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
     }
 
-    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException {
+    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         int flags = data.get();
         int version = data.getInt();
         data.rewind();
