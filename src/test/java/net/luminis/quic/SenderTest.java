@@ -61,10 +61,8 @@ class SenderTest {
     void initSenderUnderTest() throws Exception {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
-        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
-
         connection = mock(QuicConnectionImpl.class);
-        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connection"), connection);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
 
         // Set RttEstimator with short initial rtt, both on Sender and RecoveryManager
         RttEstimator rttEstimator = new RttEstimator(logger, 100);
@@ -148,7 +146,7 @@ class SenderTest {
 
     @Test
     void ackElicitingPacketsShouldBeRetransmitted() throws Exception {
-        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(1, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(11, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
         sender.start(mock(ConnectionSecrets.class));
 
         sender.send(new MockPacket(0, 1240, EncryptionLevel.App, new PingFrame(), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe will be send */ });
@@ -162,12 +160,18 @@ class SenderTest {
 
     @Test
     void ackOnlyPacketsShouldNotBeRetransmitted() throws Exception {
-        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(1, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(11, 12, EncryptionLevel.App, new PingFrame(), "ping packet"));
         sender.start(mock(ConnectionSecrets.class));
 
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.App, new AckFrame(0), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe would be send */ });
+        // Simulate a roundtrip first, to ensure loss detector has at least one ack-eliciting packet
+        sender.send(new MockPacket(0, 120, EncryptionLevel.App, new PingFrame(), "packet 0"), "packet 0", p -> {});
         waitForSender();
-        verify(socket, times(1)).send(argThat(new PacketMatcher(0, EncryptionLevel.App)));
+        sender.process(new AckFrame(0), PnSpace.App, Instant.now());
+        clearInvocations(socket);
+
+        sender.send(new MockPacket(1, 1240, EncryptionLevel.App, new AckFrame(0), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe would be send */ });
+        waitForSender();
+        verify(socket, times(1)).send(argThat(new PacketMatcher(1, EncryptionLevel.App)));
         clearInvocations(socket);
 
         Thread.sleep(500);
@@ -204,20 +208,21 @@ class SenderTest {
 
     @Test
     void whenWaitForCongestionControllerIsInteruptedBecauseOfProcessedPacketWaitingPacketShouldRemainWaiting() throws Exception {
+        disableRecoveryManager();
         setCongestionWindowSize(1212);
         sender.start(mock(ConnectionSecrets.class));
 
         // Send first packet to fill up cwnd
-        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new AckFrame(), "first packet");
+        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new PingFrame(), "first packet");
         sender.send(firstPacket, "first packet", p -> {});
         waitForSender();
         verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
         clearInvocations(socket);
 
         // Send second packet and third packet, which will both be queued because of cwnd
-        sender.send(new MockPacket(1, 1200, EncryptionLevel.App, new AckFrame(), "large packet"), "large packet", p -> {});
+        sender.send(new MockPacket(1, 1200, EncryptionLevel.App, new PingFrame(), "large packet"), "large packet", p -> {});
         waitForSender();
-        sender.send(new MockPacket(2, 120, EncryptionLevel.App, new AckFrame(), "third packet"), "third packet", p -> {});
+        sender.send(new MockPacket(2, 120, EncryptionLevel.App, new PingFrame(), "third packet"), "third packet", p -> {});
         waitForSender();
         clearInvocations(socket);
 
@@ -283,10 +288,10 @@ class SenderTest {
     void ackOnlyShouldNotBeCongestionControlled() throws Exception {
         setCongestionWindowSize(1212);
         sender.start(mock(ConnectionSecrets.class));
-        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-11, 12, EncryptionLevel.App, new Padding(10), "empty packet"));
+        when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-11, 12, EncryptionLevel.App, new PingFrame(), "empty packet"));
 
         // Send first packet to fill up cwnd
-        MockPacket firstPacket = new MockPacket(0, 1210, EncryptionLevel.App, new Padding(), "first packet");
+        MockPacket firstPacket = new MockPacket(0, 1210, EncryptionLevel.App, new PingFrame(), "first packet");
         sender.send(firstPacket, "first packet", p -> {});
         waitForSender();
         verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
@@ -301,6 +306,7 @@ class SenderTest {
 
     @Test
     void ackOnlyShouldNotBeCountedAsInFlight() throws Exception {
+        disableRecoveryManager();
         sender.start(mock(ConnectionSecrets.class));
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-1, 12, EncryptionLevel.App, "empty packet"));
 

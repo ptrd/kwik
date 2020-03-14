@@ -304,4 +304,19 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.reset();
         assertThat(lossDetector.ackElicitingInFlight()).isFalse();
     }
+
+    @Test
+    void testNoAckedReceivedWhenNoAckReceived() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        assertThat(lossDetector.noAckedReceived()).isTrue();
+    }
+
+    @Test
+    void testNoAckedReceivedWhenAckReceived() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(0));
+
+        assertThat(lossDetector.noAckedReceived()).isFalse();
+    }
 }

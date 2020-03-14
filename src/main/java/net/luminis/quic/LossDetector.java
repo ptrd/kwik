@@ -39,9 +39,10 @@ public class LossDetector {
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
-    private volatile long largestAcked;
+    private volatile long largestAcked = -1;
     private volatile long lost;
     private volatile Instant lossTime;
+    private volatile Instant lastAckElicitingSent;
 
 
     public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController) {
@@ -52,6 +53,9 @@ public class LossDetector {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
+        if (packet.isAckEliciting()) {
+            lastAckElicitingSent = sent;
+        }
         packetSentLog.put(packet.getPacketNumber(), new PacketStatus(sent, packet, lostPacketCallback));
     }
 
@@ -114,6 +118,10 @@ public class LossDetector {
         return lossTime;
     }
 
+    Instant getLastAckElicitingSent() {
+        return lastAckElicitingSent;
+    }
+
     boolean ackElicitingInFlight() {
         boolean inflight = packetSentLog.values().stream()
                     .filter(p -> p.packet().isAckEliciting())
@@ -162,6 +170,7 @@ public class LossDetector {
     public void reset() {
         packetSentLog.clear();  // TODO: inform congestion controller that these packets are not any longer in flight!
         lossTime = null;
+        lastAckElicitingSent = null;
     }
 
     public long getLost() {
@@ -172,6 +181,10 @@ public class LossDetector {
         return packets.stream()
                 .filter(packetInfo -> !packetInfo.packet().isAckOnly())
                 .collect(Collectors.toList());
+    }
+
+    public boolean noAckedReceived() {
+        return largestAcked < 0;
     }
 
     private static class PacketStatus extends PacketInfo {

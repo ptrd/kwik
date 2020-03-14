@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,18 +18,31 @@
  */
 package net.luminis.quic;
 
-public enum PnSpace {
+public enum HandshakeState {
 
     Initial,
-    Handshake,
-    App;
+    HasHandshakeKeys,
+    HasAppKeys,
+    Completed,
+    Confirmed;
 
-    public EncryptionLevel relatedEncryptionLevel() {
-        switch(this) {
-            case Initial: return EncryptionLevel.Initial;
-            case Handshake: return EncryptionLevel.Handshake;
-            case App: return EncryptionLevel.App;
-            default: return null;   // Never gets here
-        }
+    public boolean hasNoHandshakeKeys() {
+        return ordinal() < HasHandshakeKeys.ordinal();
+    }
+
+    /**
+     * @return  true when endpoint has handshake keys, but no 1-RTT keys
+     */
+    public boolean hasOnlyHandshakeKeys() {
+        return this == HasHandshakeKeys;
+    }
+
+    public boolean transitionAllowed(HandshakeState proposedState) {
+        return this.ordinal() < proposedState.ordinal();
+    }
+
+    public boolean isNotConfirmed() {
+        return this.ordinal() < Confirmed.ordinal();
     }
 }
+

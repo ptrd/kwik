@@ -83,6 +83,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         congestionController = new NewRenoCongestionController(log);
         rttEstimater = new RttEstimator(log);
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
+        connection.addHandshakeStateListener(recoveryManager);
 
         ackGenerators = new AckGenerator[3];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
@@ -91,14 +92,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     public void send(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
         log.debug("queing " + packet);
         incomingPacketQueue.add(new WaitingPacket(packet, logMessage, packetLostCallback));
-    }
-
-    public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
-        QuicPacket packet = connection.createPacket(level, frames.get(0));
-        for (int i = 1; i < frames.size(); i++) {
-            packet.addFrame(frames.get(i));
-        }
-        connection.send(packet, "probe with data");
     }
 
     public void stop() {
@@ -325,6 +318,17 @@ public class Sender implements ProbeSender, FrameProcessor {
         packet.addFrame(new Padding(3));
         mustSendProbe = true;
         send(packet, "probe with ping", f -> {});
+        senderThread.interrupt();
+    }
+
+    @Override
+    public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
+        QuicPacket packet = connection.createPacket(level, frames.get(0));
+        for (int i = 1; i < frames.size(); i++) {
+            packet.addFrame(frames.get(i));
+        }
+        mustSendProbe = true;
+        send(packet, "probe with data", f -> {});
         senderThread.interrupt();
     }
 

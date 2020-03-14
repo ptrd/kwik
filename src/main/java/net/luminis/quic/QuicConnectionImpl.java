@@ -39,6 +39,7 @@ import java.security.interfaces.ECPublicKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -85,6 +86,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private volatile TransportParameters peerTransportParams;
     private volatile TransportParameters transportParams;
     private volatile FlowControl flowController;
+    private HandshakeState handshakeState = HandshakeState.Initial;
+    private List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -250,25 +253,49 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.send(clientHelloPacket, "client hello", p -> {});
     }
 
+    public void hasHandshakeKeys() {
+        synchronized (handshakeState) {
+            if (handshakeState.transitionAllowed(HandshakeState.HasHandshakeKeys)) {
+                handshakeState = HandshakeState.HasHandshakeKeys;
+                handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+            }
+            else {
+                log.debug("Handshake state cannot be set to HasHandshakeKeys");
+            }
+        }
+    }
+
     void finishHandshake(TlsState tlsState) {
         if (tlsState.isServerFinished()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-4.9.1
-            // "a client MUST discard Initial keys when it first sends a Handshake packet"
-            // TODO tlsState.discardKeys(Initial);
-            // "Endpoints MUST NOT send Initial packets after this point. This results in abandoning loss recovery state
-            // for the Initial encryption level and ignoring any outstanding Initial packets."
-            sender.stopRecovery(PnSpace.Initial);
-
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
             QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
-            sender.send(finishedPacket, "client finished", p -> {});
+            sendClientFinished(finishedPacket);
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
+            synchronized (handshakeState) {
+                if (handshakeState.transitionAllowed(HandshakeState.HasAppKeys)) {
+                    handshakeState = HandshakeState.HasAppKeys;
+                    handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+                } else {
+                    log.debug("Handshake state cannot be set to HasAppKeys");
+                }
+            }
 
             connectionState = Status.Connected;
             handshakeFinishedCondition.countDown();
         }
+    }
+
+    void sendClientFinished(QuicPacket packet) {
+        sender.send(packet, "client finished", p -> {
+            QuicFrame frameToRetransmit = packet.getFrames().stream()
+                    .filter(frame -> frame instanceof CryptoFrame)
+                    .findFirst().get();
+            QuicPacket clientFinishedPacket = createPacket(Handshake, frameToRetransmit);
+            log.recovery("Retransmitting client finished.");
+            sender.send(clientFinishedPacket, "client finished", this::sendClientFinished);
+        });
     }
 
     QuicPacket createPacket(EncryptionLevel level, QuicFrame frame) {
@@ -568,6 +595,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             }
             else if (frame instanceof HandshakeDoneFrame) {
                 sender.stopRecovery(PnSpace.Handshake);
+                synchronized (handshakeState) {
+                    if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
+                        handshakeState = HandshakeState.Confirmed;
+                        handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+                    } else {
+                        log.debug("Handshake state cannot be set to Confirmed");
+                    }
+                }
                 // TODO: discard handshake keys:
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
                 // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
@@ -912,6 +947,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     public List<NewSessionTicket> getNewSessionTickets() {
         return newSessionTickets;
+    }
+
+    public void addHandshakeStateListener(RecoveryManager recoveryManager) {
+        handshakeStateListeners.add(recoveryManager);
     }
 
 }
