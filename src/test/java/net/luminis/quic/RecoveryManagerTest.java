@@ -114,13 +114,15 @@ class RecoveryManagerTest extends RecoveryTests {
         Thread.sleep(firstProbeTimeout + epsilon);
 
         verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+        Instant firstProbeSentTime = Instant.now();
 
         int secondProbeTimeout = firstProbeTimeout * 2;
         long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 2 * epsilon;
         Thread.sleep(sleepTime);
         verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));  // Not yet
 
-        Thread.sleep(2 * epsilon + 1 * epsilon);
+        sleepTime = Duration.between(firstProbeSentTime, Instant.now().plusMillis(secondProbeTimeout)).toMillis();
+        Thread.sleep(sleepTime);
         verify(probeSender, times(2)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should
     }
 

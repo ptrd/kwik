@@ -165,7 +165,6 @@ public class RecoveryManager implements HandshakeStateListener {
         }
         else {
             sendProbe();
-            ptoCount++;
             // Calling setLossDetectionTimer here not necessary, because the event of sending the probe will trigger it anyway.
             // And if done here, time of last-ack-eliciting might not be set yet (because packets are sent async), leading to trouble.
         }
@@ -174,6 +173,7 @@ public class RecoveryManager implements HandshakeStateListener {
     private void sendProbe() {
         PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
         log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        ptoCount++;
 
         if (handshakeState.hasNoHandshakeKeys()) {
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
@@ -187,7 +187,7 @@ public class RecoveryManager implements HandshakeStateListener {
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
-                log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit");
+                log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit)");
                 sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial);
             }
         }
