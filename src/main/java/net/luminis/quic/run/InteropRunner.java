@@ -28,6 +28,10 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -40,7 +44,8 @@ public class InteropRunner extends KwikCli {
 
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
-    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION);
+    public static final String TC_MULTI = "multiconnect";
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI);
 
     public static File outputDir;
 
@@ -61,20 +66,24 @@ public class InteropRunner extends KwikCli {
             System.out.println("Available test cases: " + TESTCASES);
         }
 
+        int i = -1;
         try {
             List<URL> downloadUrls = new ArrayList<>();
-            for (int i = 2; i < args.length; i++) {
+            for (i = 2; i < args.length; i++) {
                 downloadUrls.add(new URL(args[i]));
             }
 
-            if (testCase.equals("transfer")) {
+            if (testCase.equals(TC_TRANSFER)) {
                 testTransfer(downloadUrls);
             }
-            if (testCase.equals("resumption")) {
+            else if (testCase.equals(TC_RESUMPTION)) {
                 testResumption(downloadUrls);
             }
+            else if (testCase.equals(TC_MULTI)) {
+                testMultiConnect(downloadUrls);
+            }
         } catch (MalformedURLException e) {
-            System.out.println("Invalid (second) argument: cannot parse URL '" + args[1] + "'");
+            System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
         } catch (IOException e) {
             System.out.println("I/O Error: " + e);
         }
@@ -148,6 +157,36 @@ public class InteropRunner extends KwikCli {
         connection2.close();
     }
 
+    private static void testMultiConnect(List<URL> downloadUrls) {
+        SysOutLogger logger = new SysOutLogger();
+        logger.useRelativeTime(true);
+        logger.logRecovery(true);
+        // logger.logCongestionControl(true);
+        logger.logInfo(true);
+        logger.logPackets(true);
+
+        for (URL download : downloadUrls) {
+            try {
+                System.out.println("Starting download at " + timeNow());
+                QuicConnectionImpl connection = new QuicConnectionImpl(download.getHost(), download.getPort(), logger);
+                connection.connect(15_000);
+
+                doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
+                System.out.println("Downloaded " + download + " finished at " + timeNow());
+
+                connection.close();
+            }
+            catch (IOException ioError) {
+                System.out.println(timeNow() + " Error in client: " + ioError);
+            }
+        }
+    }
+
+    static String timeNow() {
+        LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+        return timeFormatter.format(localTimeNow);
+    }
 
 }
 
