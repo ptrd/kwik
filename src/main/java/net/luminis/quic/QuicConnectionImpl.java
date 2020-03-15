@@ -106,6 +106,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private long flowControlLastAdvertised;
     private long flowControlIncrement;
     private long largestPacketNumber;
+    private IdleTimer idleTimer;
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
@@ -140,6 +141,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         flowControlMax = transportParams.getInitialMaxData();
         flowControlLastAdvertised = flowControlMax;
         flowControlIncrement = flowControlMax / 10;
+
+        idleTimer = new IdleTimer(this, sender::getPto, log);
 
         try {
             ECKey[] keys = generateKeys("secp256r1");
@@ -197,13 +200,16 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
+                terminate();
                 throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
+                terminate();
                 throw new ConnectException("Handshake error");
             }
         }
         catch (InterruptedException e) {
+            terminate();
             throw new RuntimeException();  // Should not happen.
         }
 
@@ -515,6 +521,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         //   successfully removed and all frames contained in the packet have been
         //   processed."
         ackGenerator.packetReceived(packet);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
+        // "An endpoint restarts its idle timer when a packet from its peer is received and processed successfully."
+        idleTimer.packetProcessed();
     }
 
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
@@ -778,6 +787,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     private void terminate() {
+        idleTimer.shutdown();
         sender.shutdown();
         receiver.shutdown();
         socket.close();
@@ -874,7 +884,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             // If the client has sent 0-rtt, the flow controller will already have been initialized with "remembered" values
             log.debug("Updating flow controller with new transport parameters");
             // TODO: this should be postponed until all 0-rtt packets are sent
-            flowController.updateInitialValues(transportParameters);
+            flowController.updateInitialValues(peerTransportParams);
         }
 
         streamManager.setInitialMaxStreamsBidi(peerTransportParams.getInitialMaxStreamsBidi());
@@ -883,14 +893,33 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
+        // "If a max_idle_timeout is specified by either peer in its transport parameters (Section 18.2), the
+        //  connection is silently closed and its state is discarded when it remains idle for longer than the minimum
+        //  of both peers max_idle_timeout values."
+        long idleTimeout = Long.min(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
+        if (idleTimeout == 0) {
+            idleTimeout = Long.max(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
+        }
+        if (idleTimeout != 0) {
+            log.info("Effective idle timeout is " + idleTimeout);
+            // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
+            idleTimer.setIdleTimeout(idleTimeout);
+        }
+        else {
+            // Both or 0 or not set:
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
+            // "Idle timeout is disabled when both endpoints omit this transport parameter or specify a value of 0."
+        }
+
         if (processedRetryPacket) {
-            if (transportParameters.getRetrySourceConnectionId() == null ||
-                    ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), transportParameters.getRetrySourceConnectionId())) {
+            if (peerTransportParams.getRetrySourceConnectionId() == null ||
+                    ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), peerTransportParams.getRetrySourceConnectionId())) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
         else {
-            if (transportParameters.getRetrySourceConnectionId() != null) {
+            if (peerTransportParams.getRetrySourceConnectionId() != null) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
@@ -954,6 +983,16 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         handshakeFinishedCondition.countDown();
         terminate();
         streamManager.abortAll();
+    }
+
+    void silentlyCloseConnection(long idleTime) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-10.2
+        // "If the idle timeout is enabled by either peer, a connection is
+        //   silently closed and its state is discarded when it remains idle for
+        //   longer than the minimum of the max_idle_timeouts (see Section 18.2)
+        //   and three times the current Probe Timeout (PTO)."
+        log.info("Idle timeout: silently closing connection after " + idleTime + " ms of inactivity (" + bytesToHex(sourceConnectionIds.getCurrent()) + ")");
+        abortConnection(null);
     }
 
     protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
@@ -1241,4 +1280,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             return this;
         }
     }
+
+    public IdleTimer getIdleTimer() {
+        return idleTimer;
+    }
+
 }

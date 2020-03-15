@@ -87,6 +87,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int datagramsSent;
     private volatile long bytesSent;
     private volatile long packetsSent;
+    private final IdleTimer idleTimer;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -109,6 +110,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
+
+        idleTimer = connection.getIdleTimer();
 
         senderThread = new Thread(() -> sendLoop(), "sender-loop");
         senderThread.setDaemon(true);
@@ -298,7 +301,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         bytesSent += buffer.position();
 
         itemsToSend.stream()
-                .forEach(item -> recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback()));
+                .forEach(item -> {
+                    recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback());
+                    if (idleTimer != null) {
+                        idleTimer.packetSent(item.getPacket(), timeSent);
+                    }
+                });
 
         itemsToSend.stream()
                 .map(item -> item.getPacket())
