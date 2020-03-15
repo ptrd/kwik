@@ -393,7 +393,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         // "|  0x1 | 0-RTT Protected | Section 12.1 |"
         else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
             // 0-RTT Protected
-            throw new NotYetImplementedException();
+            // "It is used to carry "early"
+            //   data from the client to the server as part of the first flight, prior
+            //   to handshake completion."
+            // As this library is client-only, this cannot happen.
+            // When such a packet arrives, consider it to be caused by network corruption, so
+            throw new InvalidPacketException();
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
         // "|0|1|S|R|R|K|P P|"
