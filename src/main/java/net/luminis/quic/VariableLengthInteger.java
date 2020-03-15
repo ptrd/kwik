@@ -35,7 +35,8 @@ public class VariableLengthInteger {
             return (int) value;
         }
         else {
-            throw new RuntimeException("value to large for Java int");
+            // If value can be larger than int, parseLong should have called.
+            throw new IllegalArgumentException("value to large for Java int");
         }
     }
 

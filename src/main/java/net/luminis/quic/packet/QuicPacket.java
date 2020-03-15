@@ -89,7 +89,10 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+        if (buffer.remaining() < remainingLength) {
+            throw new InvalidPacketException();
+        }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
         // "When removing packet protection, an endpoint
@@ -106,6 +109,9 @@ abstract public class QuicPacket {
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
         // "This algorithm samples 16 bytes from the packet ciphertext."
         byte[] sample = new byte[16];
+        if (buffer.remaining() < 16) {
+            throw new InvalidPacketException();
+        }
         buffer.get(sample);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
         // "Header protection is applied after packet protection is applied (see
