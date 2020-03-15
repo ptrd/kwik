@@ -138,11 +138,15 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte flags = buffer.get();
         checkPacketType(flags);
 
+        boolean matchingVersion = false;
         try {
-            Version quicVersion = Version.parse(buffer.getInt());
-        } catch (UnknownVersionException e) {
-            // Protocol error: if it gets here, server should match the Quic version we sent
-            throw new ProtocolError("Server uses unsupported Quic version");
+            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
+        } catch (UnknownVersionException e) {}
+
+        if (! matchingVersion) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+            // "... packets are discarded if they indicate a different protocol version than that of the connection..."
+            throw new InvalidPacketException();
         }
 
         int dstConnIdLength = buffer.get();

@@ -116,6 +116,18 @@ class HandshakePacketTest {
         ).isInstanceOf(InvalidPacketException.class);
     }
 
+    @Test
+    void packetWithOtherVersionShouldBeIgnored() throws Exception {
+        String data = "e5 0000000f 040d0d0d0d0 40e0e0e0e fb4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195".replace(" ", "");
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
+
+        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+        assertThatThrownBy(
+                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+
     // Utility method to generate an encrypted and protected Handshake packet
     void generateHandshakePacket() {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
