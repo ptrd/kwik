@@ -274,7 +274,7 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     void unschedule() {
-        lossDetectionTimer.cancel(false);
+        lossDetectionTimer.cancel(true);
         timerExpiration = null;
     }
 
@@ -313,10 +313,10 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     public void stopRecovery() {
+        unschedule();
         for (PnSpace pnSpace: PnSpace.values()) {
             stopRecovery(pnSpace);
         }
-        lossDetectionTimer.cancel(true);
     }
 
     public void stopRecovery(PnSpace pnSpace) {
