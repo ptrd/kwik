@@ -215,7 +215,7 @@ public class RecoveryManager implements HandshakeStateListener {
                 sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake);
             }
         }
-        else {
+        else if (earliestLastAckElicitingSentTime != null) {
             // SendOneOrTwoAckElicitingPackets(pn_space)
             EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
@@ -227,6 +227,9 @@ public class RecoveryManager implements HandshakeStateListener {
                 log.recovery(("(Probe is ping on level " + probeLevel + ")"));
                 sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel);
             }
+        }
+        else {
+            log.recovery("(Sending probe withdrawn; no last ack eliciting packet)");
         }
     }
 
