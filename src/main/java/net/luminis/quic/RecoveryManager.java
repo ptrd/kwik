@@ -138,9 +138,9 @@ public class RecoveryManager implements HandshakeStateListener {
         }
         else if (Instant.now().isBefore(expiration)) {
             // Old timer task was cancelled, but it still fired; just ignore.
-            System.out.println("Scheduled task running early: " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
+            System.out.println("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
             try {
-                Thread.sleep(Duration.between(Instant.now(), timerExpiration).toMillis() + 1);   // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary
+                Thread.sleep(Duration.between(Instant.now(), expiration).toMillis() + 1);   // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary
             } catch (InterruptedException e) {
             }
             expiration = timerExpiration;
