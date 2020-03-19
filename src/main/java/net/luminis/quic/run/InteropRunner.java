@@ -21,12 +21,12 @@ package net.luminis.quic.run;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.Version;
 import net.luminis.tls.NewSessionTicket;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -47,7 +47,9 @@ public class InteropRunner extends KwikCli {
     public static final String TC_MULTI = "multiconnect";
     public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI);
 
-    public static File outputDir;
+    private static File outputDir;
+    private static SysOutLogger logger = new SysOutLogger();
+
 
     public static void main(String[] args) {
         if (args.length < 2) {
@@ -73,31 +75,34 @@ public class InteropRunner extends KwikCli {
                 downloadUrls.add(new URL(args[i]));
             }
 
+            QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+            builder.uri(downloadUrls.get(0).toURI());
+            builder.logger(logger);
+
             if (testCase.equals(TC_TRANSFER)) {
-                testTransfer(downloadUrls);
+                testTransfer(downloadUrls, builder);
             }
             else if (testCase.equals(TC_RESUMPTION)) {
-                testResumption(downloadUrls);
+                testResumption(downloadUrls, builder);
             }
             else if (testCase.equals(TC_MULTI)) {
-                testMultiConnect(downloadUrls);
+                testMultiConnect(downloadUrls, builder);
             }
-        } catch (MalformedURLException e) {
+        } catch (MalformedURLException | URISyntaxException e) {
             System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
         } catch (IOException e) {
             System.out.println("I/O Error: " + e);
         }
     }
 
-    private static void testTransfer(List<URL> downloadUrls) throws IOException {
+    private static void testTransfer(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         URL url1 = downloadUrls.get(0);
-        SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
         logger.logInfo(true);
         logger.logCongestionControl(true);
         logger.logRecovery(true);
 
-        QuicConnection connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
+        QuicConnection connection = builder.build();
         connection.connect(5_000);
 
         ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
@@ -124,16 +129,15 @@ public class InteropRunner extends KwikCli {
         connection.close();
     }
 
-    private static void testResumption(List<URL> downloadUrls) throws IOException {
+    private static void testResumption(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         if (downloadUrls.size() != 2) {
             throw new IllegalArgumentException("expected 2 download URLs");
         }
         URL url1 = downloadUrls.get(0);
         URL url2 = downloadUrls.get(1);
-        SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
 
-        QuicConnectionImpl connection = new QuicConnectionImpl(url1.getHost(), url1.getPort(), logger);
+        QuicConnection connection = builder.build();
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
@@ -150,15 +154,18 @@ public class InteropRunner extends KwikCli {
 
         NewSessionTicket sessionTicket = NewSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
-        QuicConnectionImpl connection2 = new QuicConnectionImpl(url2.getHost(), url2.getPort(), sessionTicket, Version.getDefault(), logger, null);
+        builder = QuicConnectionImpl.newBuilder();
+        builder.uri(url2.toURI());
+        builder.logger(logger);
+        builder.sessionTicket(sessionTicket);
+        QuicConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
         System.out.println("Downloaded " + url2);
         connection2.close();
     }
 
-    private static void testMultiConnect(List<URL> downloadUrls) {
-        SysOutLogger logger = new SysOutLogger();
+    private static void testMultiConnect(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws URISyntaxException {
         logger.useRelativeTime(true);
         logger.logRecovery(true);
         // logger.logCongestionControl(true);
@@ -168,7 +175,8 @@ public class InteropRunner extends KwikCli {
         for (URL download : downloadUrls) {
             try {
                 System.out.println("Starting download at " + timeNow());
-                QuicConnectionImpl connection = new QuicConnectionImpl(download.getHost(), download.getPort(), logger);
+
+                QuicConnection connection = builder.build();
                 connection.connect(15_000);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());

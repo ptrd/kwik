@@ -41,21 +41,13 @@ public class InteractiveShell {
     private final Map<String, Consumer<String>> commands;
     private boolean running;
     private Map<String, String> history;
-    private final String host;
-    private final int port;
-    private final Version quicVersion;
-    private final Logger logger;
-    private final Path secretsFile;
+    private final QuicConnectionImpl.Builder builder;
     private final String alpn;
     private QuicConnectionImpl quicConnection;
     private TransportParameters params;
 
-    public InteractiveShell(String host, int port, Version quicVersion, Logger logger, Path secretsFile, String alpn) {
-        this.host = host;
-        this.port = port;
-        this.quicVersion = quicVersion;
-        this.logger = logger;
-        this.secretsFile = secretsFile;
+    public InteractiveShell(QuicConnectionImpl.Builder builder, String alpn) {
+        this.builder = builder;
         this.alpn = alpn;
 
         commands = new LinkedHashMap<>();
@@ -147,14 +139,14 @@ public class InteractiveShell {
         }
 
         try {
-            quicConnection = new QuicConnectionImpl(host, port, null, quicVersion, logger, secretsFile);
+            quicConnection = builder.build();
             if (alpn == null) {
                 quicConnection.connect(connectionTimeout, params);
             }
             else {
                 quicConnection.connect(connectionTimeout, alpn, params);
             }
-            System.out.println("Ok, connected to " + host + "\n");
+            System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);
         }

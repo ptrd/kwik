@@ -97,30 +97,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private long flowControlIncrement;
     private long largestPacketNumber;
     private final List<NewSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
-    private boolean ignoreVersionNegotation;
+    private boolean ignoreVersionNegotiation;
 
 
-
-    public QuicConnectionImpl(String host, int port, Logger log) throws UnknownHostException, SocketException {
-        this(host, port, Version.getDefault(), log);
-    }
-
-    public QuicConnectionImpl(String host, int port, Version quicVersion, Logger log) throws UnknownHostException, SocketException {
-        this(host, port, null, quicVersion, log, null);
-    }
-
-    public QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, Path secretsFile) throws UnknownHostException, SocketException {
-        this(host, port, sessionTicket, quicVersion, log, host, secretsFile);
-        if (! quicVersion.atLeast(Version.IETF_draft_23)) {
-            throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
-        }
-    }
-
-    public QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile) throws UnknownHostException, SocketException {
+    private QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
-        serverAddress = InetAddress.getByName(proxyHost);
+        serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
         this.sessionTicket = sessionTicket;
         this.quicVersion = quicVersion;
         this.log = log;
@@ -490,7 +474,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     public void process(InitialPacket packet, Instant time) {
         destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);
-        ignoreVersionNegotation = true;
+        ignoreVersionNegotiation = true;
     }
 
     @Override
@@ -520,7 +504,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     @Override
     public void process(VersionNegotiationPacket vnPacket, Instant time) {
-        if (!ignoreVersionNegotation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
+        if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
         }
@@ -967,4 +951,97 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         handshakeStateListeners.add(recoveryManager);
     }
 
+    public URI getUri() {
+        try {
+            return new URI("//" + host + ":" + port);
+        } catch (URISyntaxException e) {
+            // Impossible
+            throw new IllegalStateException();
+        }
+    }
+
+    public static Builder newBuilder() {
+        return new BuilderImpl();
+    }
+
+    public interface Builder {
+        QuicConnectionImpl build() throws SocketException, UnknownHostException;
+
+        Builder connectTimeout​(Duration duration);
+
+        Builder version​(Version version);
+
+        Builder logger(Logger log);
+
+        Builder sessionTicket(NewSessionTicket ticket);
+
+        Builder proxy(String host);
+
+        Builder secrets(Path secretsFile);
+
+        Builder uri(URI uri);
+    }
+
+    private static class BuilderImpl implements Builder {
+        private String host;
+        private int port;
+        private NewSessionTicket sessionTicket;
+        private Version quicVersion = Version.getDefault();
+        private Logger log;
+        private String proxyHost;
+        private Path secretsFile;
+
+        @Override
+        public QuicConnectionImpl build() throws SocketException, UnknownHostException {
+            if (! quicVersion.atLeast(Version.IETF_draft_23)) {
+                throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
+            }
+            if (host == null) {
+                throw new IllegalStateException("Cannot create connection when URI is not set");
+            }
+            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile);
+        }
+
+        @Override
+        public Builder connectTimeout​(Duration duration) {
+            return this;
+        }
+
+        @Override
+        public Builder version​(Version version) {
+            quicVersion = version;
+            return this;
+        }
+
+        @Override
+        public Builder logger(Logger log) {
+            this.log = log;
+            return this;
+        }
+
+        @Override
+        public Builder sessionTicket(NewSessionTicket ticket) {
+            sessionTicket = ticket;
+            return this;
+        }
+
+        @Override
+        public Builder proxy(String host) {
+            proxyHost = host;
+            return this;
+        }
+
+        @Override
+        public Builder secrets(Path secretsFile) {
+            this.secretsFile = secretsFile;
+            return this;
+        }
+
+        @Override
+        public Builder uri(URI uri) {
+            host = uri.getHost();
+            port = uri.getPort();
+            return this;
+        }
+    }
 }

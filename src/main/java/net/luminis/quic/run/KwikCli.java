@@ -28,11 +28,14 @@ import org.apache.commons.cli.*;
 
 import java.io.*;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Command line interface for Kwik
@@ -68,62 +71,52 @@ public class KwikCli {
             System.exit(0);
         }
 
-        String host = null;
-        int port = -1;
-        String http09Request = null;
-
         List<String> args = cmd.getArgList();
         if (args.size() == 0) {
             usage();
             return;
         }
+
+        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        String http09Request = null;
         if (args.size() == 1) {
             String arg = args.get(0);
-            if (arg.startsWith("http://") || arg.startsWith("https://")) {
-                try {
-                    URL url = new URL(arg);
-                    host = url.getHost();
-                    port = url.getPort();
-                    if (! url.getPath().isEmpty()) {
-                        http09Request = url.getPath();
-                    }
-                } catch (MalformedURLException e) {
-                    System.out.println("Cannot parse URL '" + arg + "'");
-                    return;
-                }
-            }
-            else if (arg.contains(":")) {
-                host = arg.split(":")[0];
-                try {
-                    port = Integer.parseInt(arg.split(":")[1]);
-                }
-                catch (NumberFormatException e) {
-                    usage();
-                    return;
-                }
-            }
-            else {
-                if (arg.matches("\\d+")) {
-                    System.out.println("Error: invalid hostname (did you forget to specify an option argument?).");
-                    usage();
-                    return;
-                }
-                host = arg;
-                port = 443;
-            }
-        }
-        if (args.size() == 2) {
-            host = args.get(0);
             try {
-                port = Integer.parseInt(args.get(1));
-            }
-            catch (NumberFormatException e) {
-                System.out.println("Error: invalid port number argument.");
-                usage();
+                if (arg.startsWith("http://") || arg.startsWith("https://")) {
+                    try {
+                        URL url = new URL(arg);
+                        builder.uri(url.toURI());
+                        if (!url.getPath().isEmpty()) {
+                            http09Request = url.getPath();
+                        }
+                    } catch (MalformedURLException e) {
+                        System.out.println("Cannot parse URL '" + arg + "'");
+                        return;
+                    }
+                } else if (arg.contains(":")) {
+                    builder.uri(new URI("//" + arg));
+                } else {
+                    if (arg.matches("\\d+")) {
+                        System.out.println("Error: invalid hostname (did you forget to specify an option argument?).");
+                        usage();
+                        return;
+                    }
+                    builder.uri(new URI("//" + arg + ":" + 443));
+                }
+            } catch (URISyntaxException invalidUri) {
+                System.out.println("Cannot parse URI '" + arg + "'");
                 return;
             }
         }
-        if (args.size() > 2) {
+        else if (args.size() == 2) {
+            try {
+                builder.uri(new URI("//" + args.get(0) + ":" + args.get(1)));
+            } catch (URISyntaxException invalidUri) {
+                System.out.println("Cannot parse URI '" + args.stream().collect(Collectors.joining(":")) + "'");
+                return;
+            }
+        }
+        else if (args.size() > 2) {
             usage();
             return;
         }
@@ -142,6 +135,7 @@ public class KwikCli {
         }
         logger.logPackets(true);
         logger.logInfo(true);
+        builder.logger(logger);
 
         if (cmd.hasOption('l')) {
             String logArg = cmd.getOptionValue('l', "ip");
@@ -188,6 +182,7 @@ public class KwikCli {
         if (cmd.hasOption("reservedVersion")) {
             quicVersion = Version.reserved_1;
         }
+        builder.version​(quicVersion);
 
         String alpn = null;
         if (cmd.hasOption("A")) {
@@ -240,9 +235,8 @@ public class KwikCli {
             }
         }
 
-        String secretsFile = null;
         if (cmd.hasOption("secrets")) {
-            secretsFile = cmd.getOptionValue("secrets");
+            String secretsFile = cmd.getOptionValue("secrets");
             if (secretsFile == null) {
                 usage();
                 System.exit(1);
@@ -251,6 +245,7 @@ public class KwikCli {
                 System.err.println("Secrets file '" + secretsFile + "' is not writable.");
                 System.exit(1);
             }
+            builder.secrets(Paths.get(secretsFile));
         }
 
         String newSessionTicketsFilename = null;
@@ -262,7 +257,6 @@ public class KwikCli {
             }
         }
 
-        NewSessionTicket sessionTicket = null;
         if (cmd.hasOption("R")) {
             String sessionTicketFile = null;
             sessionTicketFile = cmd.getOptionValue("R");
@@ -277,7 +271,8 @@ public class KwikCli {
             byte[] ticketData = new byte[0];
             try {
                 ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
-                sessionTicket = NewSessionTicket.deserialize(ticketData);
+                NewSessionTicket sessionTicket = NewSessionTicket.deserialize(ticketData);
+                builder.sessionTicket(sessionTicket);
             } catch (IOException e) {
                 System.err.println("Error while reading session ticket file.");
             }
@@ -291,11 +286,10 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(host, port, quicVersion, logger, secretsFile != null? Paths.get(secretsFile): null, alpn).start();
+                new InteractiveShell(builder, alpn).start();
             }
             else {
-                QuicConnection quicConnection = new QuicConnectionImpl(host, port, sessionTicket, quicVersion, logger,
-                        secretsFile != null? Paths.get(secretsFile): null);
+                QuicConnection quicConnection = builder.build();
                 if (alpn == null) {
                     quicConnection.connect(connectionTimeout * 1000);
                 }

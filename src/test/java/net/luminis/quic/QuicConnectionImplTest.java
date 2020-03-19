@@ -39,6 +39,7 @@ import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
 import java.net.SocketException;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -68,8 +69,8 @@ class QuicConnectionImplTest {
     }
 
     @BeforeEach
-    void initConnectionUnderTest() throws SocketException, UnknownHostException {
-        connection = new QuicConnectionImpl("localhost", 443, logger);
+    void initConnectionUnderTest() throws Exception {
+        connection = QuicConnectionImpl.newBuilder().uri(new URI("//localhost:443")).logger(logger).build();
     }
 
     @Test
@@ -275,8 +276,7 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void testCreateStream() throws IOException {
-        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Mockito.mock(Logger.class));
+    void testCreateStream() throws Exception {
         connection.setPeerTransportParameters(new TransportParameters(10, 10, 10, 10));
 
         QuicStream stream = connection.createStream(true);
@@ -291,7 +291,6 @@ class QuicConnectionImplTest {
 
     @Test
     void testConnectionFlowControl() throws Exception {
-        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Mockito.mock(Logger.class));
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
@@ -312,18 +311,24 @@ class QuicConnectionImplTest {
     @Test
     void testMinimumQuicVersionIs23() {
         assertThatThrownBy(
-                () -> new QuicConnectionImpl("localhost", 443, Version.IETF_draft_19, Mockito.mock(Logger.class)))
+                () -> QuicConnectionImpl.newBuilder()
+                        .version​(Version.IETF_draft_19)
+                        .uri(new URI("//localhost:443"))
+                        .logger(logger).build())
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void testQuicVersion23IsSupported() throws Exception {
-        assertThat(new QuicConnectionImpl("localhost", 443, Version.IETF_draft_23, Mockito.mock(Logger.class))).isNotNull();
+        assertThat(QuicConnectionImpl.newBuilder()
+                .version​(Version.IETF_draft_23)
+                .uri(new URI("//localhost:443"))
+                .logger(logger).build())
+                .isNotNull();
     }
 
     @Test
     void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
-        QuicConnectionImpl connection = new QuicConnectionImpl("localhost", 443, Version.IETF_draft_23, mock(Logger.class));
         QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
         assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);
     }
@@ -563,6 +568,7 @@ class QuicConnectionImplTest {
             connection.process(vnWithClientVersion, Instant.now());
         }
         catch (Throwable exception) {
+            exception.printStackTrace();
             fail();
         }
     }
