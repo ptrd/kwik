@@ -566,4 +566,18 @@ class QuicConnectionImplTest {
             fail();
         }
     }
+
+    @Test
+    void versionNegotationAfterClientHasReceivedOthePacketShouldBeIgnored() {
+        VersionNegotiationPacket vn = new VersionNegotiationPacket();
+        connection.process(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new PingFrame()), Instant.now());
+
+        try {
+            connection.process(vn, Instant.now());
+        }
+        catch (Throwable exception) {
+            fail();
+        }
+    }
+
 }

@@ -97,6 +97,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private long flowControlIncrement;
     private long largestPacketNumber;
     private final List<NewSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
+    private boolean ignoreVersionNegotation;
+
 
 
     public QuicConnectionImpl(String host, int port, Logger log) throws UnknownHostException, SocketException {
@@ -488,6 +490,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     public void process(InitialPacket packet, Instant time) {
         destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);
+        ignoreVersionNegotation = true;
     }
 
     @Override
@@ -517,13 +520,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     @Override
     public void process(VersionNegotiationPacket vnPacket, Instant time) {
-        if (vnPacket.getServerSupportedVersions().contains(quicVersion)) {
-            // Must be a corrupted packet, so ignore.
-            log.debug("Ignoring Version Negotiation packet that contains this quic version " + quicVersion);
-        }
-        else {
+        if (!ignoreVersionNegotation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
+        }
+        else {
+            // Must be a corrupted packet or sent because of a corrupted packet, so ignore.
+            log.debug("Ignoring Version Negotiation packet");
         }
     }
 
