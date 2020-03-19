@@ -27,6 +27,7 @@ import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,11 +43,13 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -549,5 +552,18 @@ class QuicConnectionImplTest {
         verify(sender).send(argThat(p ->
                 p.getFrames().contains(new RetireConnectionIdFrame(Version.getDefault(), 2))),
                 anyString(), any(Consumer.class));
+    }
+
+    @Test
+    void processingVersionNegotationWithClientVersionShouldBeIgnored() {
+        VersionNegotiationPacket vnWithClientVersion = mock(VersionNegotiationPacket.class);
+        when(vnWithClientVersion.getServerSupportedVersions()).thenReturn(List.of(Version.getDefault()));
+
+        try {
+            connection.process(vnWithClientVersion, Instant.now());
+        }
+        catch (Throwable exception) {
+            fail();
+        }
     }
 }

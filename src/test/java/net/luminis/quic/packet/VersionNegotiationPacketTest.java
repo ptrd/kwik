@@ -43,13 +43,13 @@ class VersionNegotiationPacketTest {
 
     @Test
     void parseFutureVersionPacketWithLongConnectionIds() throws Exception {
-        String data = "ff 00 00 00 00 c8 " + generateHexBytes(200) + " c8 " + generateHexBytes(200) + " 00 00 00 00 " + " 00 00 00 01";
+        String data = "ff 00 00 00 00 c8 " + generateHexBytes(200) + " c8 " + generateHexBytes(200) + " 00 00 00 01";
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data.replace(" ", "")));
 
         VersionNegotiationPacket vn = new VersionNegotiationPacket();
         vn.parse(buffer, null, 0, log, 0);
 
-        assertThat(vn.getServerSupportedVersions()).hasSize(2);
+        assertThat(vn.getServerSupportedVersions()).hasSize(1);
     }
 
     @Test

@@ -43,7 +43,8 @@ public enum Version {
     IETF_draft_24(0xff000018),
     IETF_draft_25(0xff000019),
     IETF_draft_26(0xff00001a),
-    IETF_draft_27(0xff00001b);
+    IETF_draft_27(0xff00001b),
+    QUIC_version_1(0x00000001);
 
     private int versionId;
 

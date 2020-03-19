@@ -37,6 +37,8 @@ public class VersionNegotiationPacket extends QuicPacket {
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  4;
 
     private int packetSize;
+    private List<Version> serverSupportedVersions = new ArrayList<>();
+
 
     public VersionNegotiationPacket() {
         this(Version.getDefault());
@@ -46,11 +48,9 @@ public class VersionNegotiationPacket extends QuicPacket {
         this.quicVersion = quicVersion;
     }
 
-    public List<String> getServerSupportedVersions() {
+    public List<Version> getServerSupportedVersions() {
         return serverSupportedVersions;
     }
-
-    List<String> serverSupportedVersions = new ArrayList<>();
 
     @Override
     public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
@@ -90,13 +90,12 @@ public class VersionNegotiationPacket extends QuicPacket {
 
         while (buffer.remaining() >= 4) {
             int versionData = buffer.getInt();
-            String supportedVersion = parseVersion(versionData);
+            Version supportedVersion = parseVersion(versionData);
             if (supportedVersion != null) {
                 serverSupportedVersions.add(supportedVersion);
                 log.debug("Server supports version " + supportedVersion);
             }
             else {
-                serverSupportedVersions.add(String.format("Unknown version %x", versionData));
                 log.debug(String.format("Server supports unknown version %x", versionData));
             }
         }
@@ -104,9 +103,9 @@ public class VersionNegotiationPacket extends QuicPacket {
         packetSize = buffer.limit();
     }
 
-    private String parseVersion(int versionData) {
+    private Version parseVersion(int versionData) {
         try {
-            return Version.parse(versionData).toString();
+            return Version.parse(versionData);
         } catch (UnknownVersionException e) {
             return null;
         }
@@ -154,7 +153,7 @@ public class VersionNegotiationPacket extends QuicPacket {
                 + "V" + "|"
                 + (packetSize >= 0? packetSize: ".") + "|"
                 + "0" + "  "
-                + serverSupportedVersions.stream().collect(Collectors.joining(", "));
+                + serverSupportedVersions.stream().map(v -> v.toString()).collect(Collectors.joining(", "));
     }
 
 }

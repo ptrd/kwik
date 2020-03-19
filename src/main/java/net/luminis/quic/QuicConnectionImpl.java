@@ -516,9 +516,15 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     @Override
-    public void process(VersionNegotiationPacket packet, Instant time) {
-        log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) packet).getServerSupportedVersions().stream().collect(Collectors.joining(", ")));
-        throw new VersionNegotiationFailure();
+    public void process(VersionNegotiationPacket vnPacket, Instant time) {
+        if (vnPacket.getServerSupportedVersions().contains(quicVersion)) {
+            // Must be a corrupted packet, so ignore.
+            log.debug("Ignoring Version Negotiation packet that contains this quic version " + quicVersion);
+        }
+        else {
+            log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
+            throw new VersionNegotiationFailure();
+        }
     }
 
     private volatile boolean processedRetryPacket = false;
