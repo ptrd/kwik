@@ -78,6 +78,7 @@ public class InteropRunner extends KwikCli {
             QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
+            builder.initialRtt(100);
 
             if (testCase.equals(TC_TRANSFER)) {
                 testTransfer(downloadUrls, builder);
