@@ -100,7 +100,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private boolean ignoreVersionNegotiation;
 
 
-    private QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile) throws UnknownHostException, SocketException {
+    private QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -110,7 +110,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         this.log = log;
 
         socket = new DatagramSocket();
-        sender = new Sender(socket, 1500, log, serverAddress, port, this);
+        sender = new Sender(socket, 1500, log, serverAddress, port, this, initialRtt);
         receiver = new Receiver(this, socket, 1500, log);
         streamManager = new StreamManager(this, log);
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
@@ -980,6 +980,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         Builder secrets(Path secretsFile);
 
         Builder uri(URI uri);
+
+        Builder initialRtt(int initialRtt);
     }
 
     private static class BuilderImpl implements Builder {
@@ -990,6 +992,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         private Logger log;
         private String proxyHost;
         private Path secretsFile;
+        private Integer initialRtt;
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -999,7 +1002,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             if (host == null) {
                 throw new IllegalStateException("Cannot create connection when URI is not set");
             }
-            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile);
+            if (initialRtt != null && initialRtt < 1) {
+                throw new IllegalArgumentException("Initial RTT must be larger than 0.");
+            }
+            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt);
         }
 
         @Override
@@ -1041,6 +1047,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         public Builder uri(URI uri) {
             host = uri.getHost();
             port = uri.getPort();
+            return this;
+        }
+
+        @Override
+        public Builder initialRtt(int initialRtt) {
+            this.initialRtt = initialRtt;
             return this;
         }
     }

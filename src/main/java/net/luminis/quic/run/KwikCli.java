@@ -62,6 +62,7 @@ public class KwikCli {
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
+        cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
@@ -283,6 +284,14 @@ public class KwikCli {
         }
 
         boolean interactiveMode = cmd.hasOption("i");
+        if (cmd.hasOption("initialRtt")) {
+            try {
+                builder.initialRtt(Integer.parseInt(cmd.getOptionValue("initialRtt")));
+            } catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
+        }
 
         try {
             if (interactiveMode) {

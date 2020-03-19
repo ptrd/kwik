@@ -67,7 +67,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private volatile long sent;
     private volatile boolean mustSendProbe = false;
 
-    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection) {
+    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection, Integer initialRtt) {
         this.socket = socket;
         this.maxPacketSize = maxPacketSize;
         this.log = log;
@@ -81,7 +81,12 @@ public class Sender implements ProbeSender, FrameProcessor {
         incomingPacketQueue = new LinkedBlockingQueue<>();
         packetSentLog = new ConcurrentHashMap<>();
         congestionController = new NewRenoCongestionController(log);
-        rttEstimater = new RttEstimator(log);
+        if (initialRtt == null) {
+            rttEstimater = new RttEstimator(log);
+        }
+        else {
+            rttEstimater = new RttEstimator(log, initialRtt);
+        }
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
 

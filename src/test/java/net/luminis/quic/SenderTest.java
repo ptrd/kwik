@@ -62,7 +62,7 @@ class SenderTest {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
         connection = mock(QuicConnectionImpl.class);
-        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection);
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection, null);
 
         // Set RttEstimator with short initial rtt, both on Sender and RecoveryManager
         RttEstimator rttEstimator = new RttEstimator(logger, 100);
