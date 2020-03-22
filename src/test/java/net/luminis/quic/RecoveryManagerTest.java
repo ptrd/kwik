@@ -123,7 +123,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         sleepTime = Duration.between(firstProbeSentTime, Instant.now().plusMillis(secondProbeTimeout)).toMillis();
         Thread.sleep(sleepTime);
-        verify(probeSender, times(2)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should
+        verify(probeSender, times(3)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should, and 2 probes are sent simultaneously
     }
 
     @Test
@@ -208,7 +208,7 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));  // Not yet
 
         Thread.sleep(2 * epsilon + 1 * epsilon);
-        verify(probeSender, times(2)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should
+        verify(probeSender, times(3)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should, and 2 probes simultaneously
 
         // Receive Ack, should reset PTO count
         recoveryManager.onAckReceived(new AckFrame(3), PnSpace.App);
@@ -217,7 +217,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         Thread.sleep(firstProbeTimeout + epsilon);
 
-        verify(probeSender, times(3)).sendProbe(anyList(), any(EncryptionLevel.class));
+        verify(probeSender, times(4)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
     @Test

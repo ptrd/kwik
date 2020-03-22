@@ -175,6 +175,8 @@ public class RecoveryManager implements HandshakeStateListener {
         log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
         ptoCount++;
 
+        int nrOfProbes = ptoCount > 1? 2: 1;
+
         if (handshakeState.hasNoHandshakeKeys()) {
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
             // "SendOneAckElicitingPaddedInitialPacket"
@@ -183,12 +185,14 @@ public class RecoveryManager implements HandshakeStateListener {
                 // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
                 // All frames need to be resent, because Initial packet wil contain padding.
                 log.recovery("(Probe is an initial retransmit)");
-                sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
                 log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit)");
-                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial));
             }
         }
         else if (handshakeState.hasOnlyHandshakeKeys()) {
@@ -201,7 +205,8 @@ public class RecoveryManager implements HandshakeStateListener {
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Handshake);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is a handshake retransmit)");
-                sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake));
             }
             else {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-8.1
@@ -212,7 +217,8 @@ public class RecoveryManager implements HandshakeStateListener {
                 //   to have been validated."
                 // Hence, no padding needed.
                 log.recovery("(Probe is a handshake ping)");
-                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake));
             }
         }
         else if (earliestLastAckElicitingSentTime != null) {
@@ -221,11 +227,13 @@ public class RecoveryManager implements HandshakeStateListener {
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery(("(Probe is retransmit on level " + probeLevel + ")"));
-                sender.sendProbe(framesToRetransmit, probeLevel);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(framesToRetransmit, probeLevel));
             }
             else {
                 log.recovery(("(Probe is ping on level " + probeLevel + ")"));
-                sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel);
+                repeat(nrOfProbes, () ->
+                        sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel));
             }
         }
         else {
@@ -374,6 +382,12 @@ public class RecoveryManager implements HandshakeStateListener {
         @Override
         public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             return null;
+        }
+    }
+
+    static void repeat(int count, Runnable task) {
+        for (int i = 0; i < count; i++) {
+            task.run();
         }
     }
 
