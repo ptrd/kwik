@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.InitialPacket;
@@ -32,6 +32,7 @@ import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -267,6 +268,34 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
+    @Test
+    void framesToRetransmitShouldNotBePing() throws Exception {
+        QuicPacket pingPacket = createHandshakePacket(0, new PingFrame());
+        recoveryManager.packetSent(pingPacket, Instant.now(), p -> {});
+        QuicPacket handshakePacket = createHandshakePacket(1, new CryptoFrame(Version.getDefault(), new byte[100]));
+        recoveryManager.packetSent(handshakePacket, Instant.now(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.Handshake);
+
+        assertThat(framesToRetransmit).isNotEmpty();
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
+        assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
+    @Test
+    void framesToRetransmitShouldNotBePingAndPaddingAndAck() throws Exception {
+        QuicPacket pingPacket = createHandshakePacket(0, new PingFrame(), new Padding(2), new AckFrame(0));
+        recoveryManager.packetSent(pingPacket, Instant.now(), p -> {});
+        QuicPacket handshakePacket = createHandshakePacket(1, new CryptoFrame(Version.getDefault(), new byte[100]));
+        recoveryManager.packetSent(handshakePacket, Instant.now(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.Handshake);
+
+        assertThat(framesToRetransmit).isNotEmpty();
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
+        assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
     private void mockSendingProbe(int... packetNumbers) {
         doAnswer(new Answer<Void>() {
             private int count;
@@ -279,6 +308,5 @@ class RecoveryManagerTest extends RecoveryTests {
                 return null;
             }
         }).when(probeSender).sendProbe(anyList(), any(EncryptionLevel.class));
-
     }
 }

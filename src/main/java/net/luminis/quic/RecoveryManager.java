@@ -243,7 +243,11 @@ public class RecoveryManager implements HandshakeStateListener {
 
     List<QuicFrame> getFramesToRetransmit(PnSpace pnSpace) {
         List<QuicPacket> unAckedPackets = lossDetectors[pnSpace.ordinal()].unAcked();
-        Optional<QuicPacket> ackEliciting = unAckedPackets.stream().filter(p -> p.isAckEliciting()).findFirst();
+        Optional<QuicPacket> ackEliciting = unAckedPackets.stream()
+                .filter(p -> p.isAckEliciting())
+                // Filter out Ping packets, ie. packets consisting of PingFrame's, padding and AckFrame's only.
+                .filter(p -> ! p.getFrames().stream().allMatch(frame -> frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame))
+                .findFirst();
         if (ackEliciting.isPresent()) {
             List<QuicFrame> framesToRetransmit = ackEliciting.get().getFrames().stream()
                     .filter(frame -> !(frame instanceof AckFrame))

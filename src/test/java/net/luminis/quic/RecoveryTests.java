@@ -21,10 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.LongHeaderPacket;
-import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.*;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.time.Instant;
@@ -57,6 +54,15 @@ public abstract class RecoveryTests {
             packets.add(packet);
         }
         return packets;
+    }
+
+    QuicPacket createHandshakePacket(int packetNumber, QuicFrame... frames) {
+        LongHeaderPacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, frames[0]);
+        for (int i = 1; i < frames.length; i++) {
+            packet.addFrame(frames[i]);
+        }
+        setPacketNumber(packet, packetNumber);
+        return packet;
     }
 
     QuicPacket createCryptoPacket(int packetNumber) {
