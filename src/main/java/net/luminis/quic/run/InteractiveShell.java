@@ -258,8 +258,15 @@ public class InteractiveShell {
             String value = args[1];
             setClientParameter(name, value);
         } else {
-            System.out.println("Incorrect parameters; should be <transport parameter name> <value>; just try to see supported params");
+            System.out.println("Incorrect parameters; should be <transport parameter name> <value>.");
+            System.out.println("Supported parameters: ");
+            printSupportedParameters();
         }
+    }
+
+    private void printSupportedParameters() {
+        System.out.println("- idle (idle timeout)");
+        System.out.println("- cids (active connection id limit)");
     }
 
     private void setClientParameter(String name, String value) {
@@ -272,8 +279,7 @@ public class InteractiveShell {
                 break;
             default:
                 System.out.println("Parameter must be one of:");
-                System.out.println("- idle (idle timeout)");
-                System.out.println("- cids (active connection id limit)");
+                printSupportedParameters();
         }
     }
 
