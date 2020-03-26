@@ -169,7 +169,7 @@ public class InteropRunner extends KwikCli {
     private static void testMultiConnect(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws URISyntaxException {
         logger.useRelativeTime(true);
         logger.logRecovery(true);
-        // logger.logCongestionControl(true);
+        logger.logCongestionControl(true);
         logger.logInfo(true);
         logger.logPackets(true);
 
