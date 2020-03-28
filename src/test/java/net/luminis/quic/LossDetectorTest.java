@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -318,5 +320,40 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.onAckReceived(new AckFrame(0));
 
         assertThat(lossDetector.noAckedReceived()).isFalse();
+    }
+
+    @Test
+    void whenCongestionControllerIsResetAllNonAckedPacketsShouldBeDiscarded() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(0));
+
+        lossDetector.reset();
+        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 1, 2)));
+    }
+
+    @Test
+    void whenCongestionControllerIsResetAllNotLostPacketsShouldBeDiscarded() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(8), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(9), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(9));
+
+        lossDetector.reset();
+        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 8)));
+    }
+
+    private boolean containsPackets(List<? extends PacketInfo> packets, long... packetNumbers) {
+        List<Long> listPacketNumbers = packets.stream().map(p -> p.packet().getPacketNumber()).collect(Collectors.toList());
+        for (long pn: packetNumbers) {
+            if (! listPacketNumbers.contains(pn)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

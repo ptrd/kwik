@@ -72,7 +72,7 @@ public class AbstractCongestionController implements CongestionController {
     }
 
     @Override
-    public void registerLost(List<? extends PacketInfo> lostPackets) {
+    public synchronized void registerLost(List<? extends PacketInfo> lostPackets) {
         long lostBytes = lostPackets.stream()
                 .map(packetStatus -> packetStatus.packet())
                 .mapToInt(packet -> packet.getSize())
@@ -81,6 +81,19 @@ public class AbstractCongestionController implements CongestionController {
 
         if (lostBytes > 0) {
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + lostPackets.size() + " packets lost)");
+        }
+    }
+
+    @Override
+    public synchronized void discard(List<? extends PacketInfo> discardedPackets) {
+        long discardedBytes = discardedPackets.stream()
+                .map(packetStatus -> packetStatus.packet())
+                .mapToInt(packet -> packet.getSize())
+                .sum();
+        bytesInFlight -= discardedBytes;
+
+        if (discardedBytes > 0) {
+            log.debug("Bytes in flight decreased with " + discardedBytes + " to " + bytesInFlight + " (" + discardedPackets.size() + " packets RESET)");
         }
     }
 

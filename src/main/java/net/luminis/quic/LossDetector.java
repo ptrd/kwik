@@ -168,7 +168,11 @@ public class LossDetector {
     }
 
     public void reset() {
-        packetSentLog.clear();  // TODO: inform congestion controller that these packets are not any longer in flight!
+        List<PacketStatus> inflightPackets = packetSentLog.values().stream()
+                .filter(packet -> !packet.lost && !packet.acked)
+                .collect(Collectors.toList());
+        congestionController.discard(inflightPackets);
+        packetSentLog.clear();
         lossTime = null;
         lastAckElicitingSent = null;
     }
