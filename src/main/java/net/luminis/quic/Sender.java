@@ -332,7 +332,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         for (int i = 1; i < frames.size(); i++) {
             packet.addFrame(frames.get(i));
         }
-        mustSendProbe = true;
+        mustSendProbe = true;  // TODO: when two probes are sent in quick succession, the first might reset this flag, so the second might be stopped by the congestion controller
         send(packet, "probe with data", f -> {});
         senderThread.interrupt();
     }

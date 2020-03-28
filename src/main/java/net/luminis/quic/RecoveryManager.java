@@ -185,13 +185,13 @@ public class RecoveryManager implements HandshakeStateListener {
                 // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
                 // All frames need to be resent, because Initial packet wil contain padding.
                 log.recovery("(Probe is an initial retransmit)");
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
                 log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit)");
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial));
             }
         }
@@ -205,7 +205,7 @@ public class RecoveryManager implements HandshakeStateListener {
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Handshake);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is a handshake retransmit)");
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake));
             }
             else {
@@ -217,7 +217,7 @@ public class RecoveryManager implements HandshakeStateListener {
                 //   to have been validated."
                 // Hence, no padding needed.
                 log.recovery("(Probe is a handshake ping)");
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake));
             }
         }
@@ -227,12 +227,12 @@ public class RecoveryManager implements HandshakeStateListener {
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery(("(Probe is retransmit on level " + probeLevel + ")"));
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(framesToRetransmit, probeLevel));
             }
             else {
                 log.recovery(("(Probe is ping on level " + probeLevel + ")"));
-                repeat(nrOfProbes, () ->
+                repeatSend(nrOfProbes, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel));
             }
         }
@@ -389,9 +389,13 @@ public class RecoveryManager implements HandshakeStateListener {
         }
     }
 
-    static void repeat(int count, Runnable task) {
+    static void repeatSend(int count, Runnable task) {
         for (int i = 0; i < count; i++) {
             task.run();
+            try {
+                Thread.sleep(1);  // Use a small delay when sending multiple packets
+            } catch (InterruptedException e) {
+            }
         }
     }
 
