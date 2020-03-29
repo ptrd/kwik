@@ -26,20 +26,49 @@ import java.util.function.Consumer;
 
 
 class PacketStatus extends PacketInfo {
-    boolean lost;
-    boolean acked;
+
+    private boolean lost;
+    private boolean acked;
 
     public PacketStatus(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
         super(sent, packet, lostPacketCallback);
+    }
+
+    public synchronized boolean acked() {
+        return acked;
+    }
+
+    public synchronized boolean setAcked() {
+        if (!acked && !lost) {
+            acked = true;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    public synchronized boolean inFlight() {
+        return !acked && !lost;
+    }
+
+    public synchronized boolean setLost() {
+        if (!acked && !lost) {
+            lost = true;
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     public String status() {
         if (acked) {
             return "Acked";
         } else if (lost) {
-            return "Resent";
+            return "Lost";
         } else {
-            return "-";
+            return "Inflight";
         }
     }
 
