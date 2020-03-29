@@ -310,10 +310,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         QuicPacket packet;
         try {
             packet = parsePacket(data);
-            if (packet == null) {
-                // Packet is discarded, rest of datagram cannot be parsed (because of unknown length)
-                return;
-            }
             packetSize = data.position() - packetStart;
             if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
                 highestEncryptionLevelInPacket = packet.getEncryptionLevel();
@@ -347,68 +343,26 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         int flags = data.get();
-        int version = data.getInt();
-        data.rewind();
 
-        QuicPacket packet;
-
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
-        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
-        //  will be identified as a Version Negotiation packet based on the
-        //  Version field having a value of 0."
-        if (version == 0) {
-            packet = new VersionNegotiationPacket(quicVersion);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
-        // "An Initial packet uses long headers with a type value of 0x0."
-        else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
-            packet = new InitialPacket(quicVersion);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
-        // "A Retry packet uses a long packet header with a type value of 0x3"
-        else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
-            // Retry packet....
-            packet = new RetryPacket(quicVersion);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
-        // "A Handshake packet uses long headers with a type value of 0x2."
-        else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
-            packet = new HandshakePacket(quicVersion);
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "|  0x1 | 0-RTT Protected | Section 12.1 |"
-        else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
-            // 0-RTT Protected
-            // "It is used to carry "early"
-            //   data from the client to the server as part of the first flight, prior
-            //   to handshake completion."
-            // As this library is client-only, this cannot happen.
-            // When such a packet arrives, consider it to be caused by network corruption, so
+        if ((flags & 0x40) != 0x40) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.2
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.3
+            // "Fixed Bit:  The next bit (0x40) of byte 0 is set to 1.  Packets
+            //      containing a zero value for this bit are not valid packets in this
+            //      version and MUST be discarded."
             throw new InvalidPacketException();
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
-        // "|0|1|S|R|R|K|P P|"
-        else if ((flags & 0xc0) == 0x40) {  // 0100 0000
-            // ShortHeader
-            packet = new ShortHeaderPacket(quicVersion);
 
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.3
-        // "Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
-        else if ((flags & 0xc0) == 0x80) {  // 10xx 0000
-            log.error("Discarding Long Header packet with fixed bit set to 0");
-            return null;
-        }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.3
-        // "Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
-        else if ((flags & 0xc0) == 0x00) {  // 00xx 0000
-            log.error("Discarding Short Header packet with fixed bit set to 0");
-            return null;
+        QuicPacket packet;
+        if ((flags & 0x80) == 0x80) {
+            // Long header packet
+            packet = createLongHeaderPacket(flags, data);
         }
         else {
-            // Should not happen, all cases should be covered above, but just in case...
-            throw new ProtocolError(String.format("Unknown Packet type; flags=%x", flags));
+            // Short header packet
+            packet = new ShortHeaderPacket(quicVersion);
         }
+        data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
             Keys keys = connectionSecrets.getServerSecrets(packet.getEncryptionLevel());
@@ -429,6 +383,56 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             largestPacketNumber = packet.getPacketNumber();
         }
         return packet;
+    }
+
+    /**
+     * Constructs a (yet empty) long header packet based on the packet flags (first byte).
+     * @param flags   first byte of data to parse
+     * @param data    data to parse, first byte is already read!
+     * @return
+     * @throws InvalidPacketException
+     */
+    private QuicPacket createLongHeaderPacket(int flags, ByteBuffer data) throws InvalidPacketException {
+        int version = data.getInt();
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
+        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
+        //  will be identified as a Version Negotiation packet based on the
+        //  Version field having a value of 0."
+        if (version == 0) {
+            return new VersionNegotiationPacket(quicVersion);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
+        // "An Initial packet uses long headers with a type value of 0x0."
+        else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
+            return new InitialPacket(quicVersion);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
+        // "A Retry packet uses a long packet header with a type value of 0x3"
+        else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
+            // Retry packet....
+            return new RetryPacket(quicVersion);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
+        // "A Handshake packet uses long headers with a type value of 0x2."
+        else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
+            return new HandshakePacket(quicVersion);
+        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
+        // "|  0x1 | 0-RTT Protected | Section 12.1 |"
+        else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
+            // 0-RTT Protected
+            // "It is used to carry "early"
+            //   data from the client to the server as part of the first flight, prior
+            //   to handshake completion."
+            // As this library is client-only, this cannot happen.
+            // When such a packet arrives, consider it to be caused by network corruption, so
+            throw new InvalidPacketException();
+        }
+        else {
+            // Should not happen, all cases should be covered above, but just in case...
+            throw new RuntimeException();
+        }
     }
 
     private void processPacket(Instant timeReceived, QuicPacket packet) {
