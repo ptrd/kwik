@@ -586,4 +586,32 @@ class QuicConnectionImplTest {
         }
     }
 
+    @Test
+    void parseEmptyPacket() throws Exception {
+        assertThatThrownBy(
+                () -> connection.parsePacket(ByteBuffer.wrap(new byte[0]))
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void parseLongHeaderPacketWithInvalidHeader1() throws Exception {
+        assertThatThrownBy(
+                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0xc0, 0x00}))
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void parseLongHeaderPacketWithInvalidHeader2() throws Exception {
+        assertThatThrownBy(
+                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0xc0, 0x00, 0x00, 0x00 }))
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void parseShortHeaderPacketWithInvalidHeader() throws Exception {
+        assertThatThrownBy(
+                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0x40 }))
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
 }

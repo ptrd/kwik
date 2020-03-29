@@ -218,7 +218,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             log.debug("Terminating receiver loop because of interrupt");
         }
         catch (Exception error) {
-            log.debug("Terminating receiver loop because of error");
+            log.error("Terminating receiver loop because of error", error);
             abortConnection(error);
         }
     }
@@ -342,6 +342,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+        if (data.remaining() < 2) {
+            throw new InvalidPacketException("packet too short to be valid QUIC packet");
+        }
         int flags = data.get();
 
         if ((flags & 0x40) != 0x40) {
@@ -393,6 +396,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
      * @throws InvalidPacketException
      */
     private QuicPacket createLongHeaderPacket(int flags, ByteBuffer data) throws InvalidPacketException {
+        final int MIN_LONGHEADERPACKET_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
+        if (1 + data.remaining() < MIN_LONGHEADERPACKET_LENGTH) {
+            throw new InvalidPacketException("packet too short to be valid QUIC long header packet");
+        }
         int version = data.getInt();
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:

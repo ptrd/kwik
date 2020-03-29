@@ -22,5 +22,13 @@ package net.luminis.quic;
  * Indicates an invalid packet.
  */
 public class InvalidPacketException extends Exception {
+
+    public InvalidPacketException() {
+        super();
+    }
+
+    public InvalidPacketException(String message) {
+        super(message);
+    }
 }
 
