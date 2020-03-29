@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.*;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
@@ -25,6 +26,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.recovery.LossDetector;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -55,7 +57,7 @@ public class RecoveryManager implements HandshakeStateListener {
     private volatile boolean firstHandshakeSent = false;
 
 
-    RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
+    public RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);

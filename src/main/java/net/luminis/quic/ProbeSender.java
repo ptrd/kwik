@@ -22,7 +22,7 @@ import net.luminis.quic.frame.QuicFrame;
 
 import java.util.List;
 
-interface ProbeSender {
+public interface ProbeSender {
     
     void sendProbe();
 

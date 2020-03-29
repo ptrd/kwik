@@ -16,13 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.recovery.LossDetector;
+import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.recovery.RecoveryTests;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

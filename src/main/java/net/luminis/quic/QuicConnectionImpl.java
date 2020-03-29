@@ -24,6 +24,7 @@ import net.luminis.quic.cid.SourceConnectionIdRegistry;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;

@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
