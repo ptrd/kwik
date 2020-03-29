@@ -67,9 +67,8 @@ public class LossDetector {
         List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
+                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
                 .collect(Collectors.toList());
-
-        newlyAcked.forEach(packet -> packet.setAcked());
 
         congestionController.registerAcked(filterInFlight(newlyAcked));
 
@@ -159,12 +158,15 @@ public class LossDetector {
     }
 
     private void declareLost(List<PacketStatus> lostPacketsInfo) {
-        lostPacketsInfo.stream().forEach(packetAckStatus -> {
-            packetAckStatus.lostPacketCallback().accept(packetAckStatus.packet());
-            packetAckStatus.setLost();
-        });
+        lostPacketsInfo = lostPacketsInfo.stream()
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
+                .collect(Collectors.toList());
 
-        lost += lostPacketsInfo.size();
+        lostPacketsInfo.stream()
+                .forEach(packetStatus -> {
+                    packetStatus.lostPacketCallback().accept(packetStatus.packet());
+                    lost++;
+                });
 
         congestionController.registerLost(lostPacketsInfo);
     }
@@ -172,6 +174,7 @@ public class LossDetector {
     public void reset() {
         List<PacketStatus> inflightPackets = packetSentLog.values().stream()
                 .filter(packet -> packet.inFlight())
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
                 .collect(Collectors.toList());
         congestionController.discard(inflightPackets);
         packetSentLog.clear();
