@@ -103,4 +103,8 @@ public enum Version {
     private boolean isIetfDraft(Version version) {
         return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_27.versionId;
     }
+
+    public int getId() {
+        return versionId;
+    }
 }

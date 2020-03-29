@@ -50,6 +50,9 @@ public class RetryPacket extends QuicPacket {
     public static final byte[] NONCE = new byte[] { 0x4d, 0x16, 0x11, (byte) 0xd0, 0x55, 0x13, (byte) 0xa5, 0x52,
             (byte) 0xc5, (byte) 0x87, (byte) 0xd5, 0x75 };
 
+    // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
+    private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
+
     private int packetSize;
     private byte[] sourceConnectionId;
     private byte[] destinationConnectionId;
@@ -73,9 +76,13 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
-        packetSize = buffer.limit() - buffer.position();
+        if (buffer.remaining() < MIN_PACKET_LENGTH) {
+            throw new InvalidPacketException();
+        }
+
+        packetSize = buffer.remaining();
         rawPacketData = new byte[packetSize];
         buffer.mark();
         buffer.get(rawPacketData);
@@ -83,24 +90,37 @@ public class RetryPacket extends QuicPacket {
 
         byte flags = buffer.get();
 
+        boolean matchingVersion = false;
         try {
-            Version quicVersion = Version.parse(buffer.getInt());
-        } catch (UnknownVersionException e) {
-            // Protocol error: if it gets here, server should match the Quic version we sent
-            throw new ProtocolError("Server uses unsupported Quic version");
+            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
+        } catch (UnknownVersionException e) {}
+
+        if (! matchingVersion) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+            // "... packets are discarded if they indicate a different protocol version than that of the connection..."
+            throw new InvalidPacketException();
         }
 
         int dstConnIdLength = buffer.get();
+        if (buffer.remaining() < dstConnIdLength + 1 + RETRY_INTEGRITY_TAG_LENGTH) {
+            throw new InvalidPacketException();
+        }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
         int srcConnIdLength = buffer.get();
+        if (buffer.remaining() < srcConnIdLength) {
+            throw new InvalidPacketException();
+        }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
 
         log.debug("Destination connection id", destinationConnectionId);
         log.debug("Source connection id", sourceConnectionId);
 
+        if (buffer.remaining() < RETRY_INTEGRITY_TAG_LENGTH) {
+            throw new InvalidPacketException();
+        }
         int retryTokenLength = buffer.remaining() - RETRY_INTEGRITY_TAG_LENGTH;
         retryToken = new byte[retryTokenLength];
         buffer.get(retryToken);
