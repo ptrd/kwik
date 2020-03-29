@@ -193,32 +193,4 @@ public class LossDetector {
         return largestAcked < 0;
     }
 
-    private static class PacketStatus extends PacketInfo {
-        boolean lost;
-        boolean acked;
-
-        public PacketStatus(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
-            super(sent, packet, lostPacketCallback);
-        }
-
-        public String status() {
-            if (acked) {
-                return "Acked";
-            } else if (lost) {
-                return "Resent";
-            } else {
-                return "-";
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "Packet "
-                    + packet().getEncryptionLevel().name().charAt(0) + "|"
-                    + (packet().getPacketNumber() >= 0 ? packet().getPacketNumber() : ".") + "|"
-                    + " " + "|"
-                    + packet().getSize() + "|"
-                    + status();
-        }
-    }
 }
