@@ -105,13 +105,16 @@ abstract public class QuicPacket {
         //   the length of the Packet Number field.  In sampling the packet
         //   ciphertext, the Packet Number field is assumed to be 4 bytes long
         //   (its maximum possible encoded length)."
+        if (buffer.remaining() < 4) {
+            throw new InvalidPacketException();
+        }
         buffer.position(currentPosition + 4);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
         // "This algorithm samples 16 bytes from the packet ciphertext."
-        byte[] sample = new byte[16];
         if (buffer.remaining() < 16) {
             throw new InvalidPacketException();
         }
+        byte[] sample = new byte[16];
         buffer.get(sample);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
         // "Header protection is applied after packet protection is applied (see
