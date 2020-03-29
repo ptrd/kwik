@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,9 @@ class CongestionControllerTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        congestionController = new FixedWindowCongestionController(mock(Logger.class));
+        Logger logger = mock(Logger.class);
+        // logger = new SysOutLogger();
+        congestionController = new FixedWindowCongestionController(logger);
     }
 
     @Test
@@ -94,6 +97,14 @@ class CongestionControllerTest {
         congestionController.registerLost(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
 
         assertThat(congestionController.getBytesInFlight()).isEqualTo(initiallyInFlight);
+    }
+
+    @Test
+    void bytesInFlightCannotBecomeNegative() {
+        MockPacket packet = new MockPacket(new Padding(100), new AckFrame(0));
+        congestionController.registerAcked(List.of(new PacketInfo(Instant.now(), packet, this::noOp)));
+
+        assertThat(congestionController.getBytesInFlight()).isGreaterThanOrEqualTo(0);
     }
 
     void noOp(QuicPacket packet) {}

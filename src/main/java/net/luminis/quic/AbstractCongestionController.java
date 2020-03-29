@@ -64,6 +64,7 @@ public class AbstractCongestionController implements CongestionController {
 
         if (bytesInFlightAcked > 0) {
             bytesInFlight -= bytesInFlightAcked;
+            checkBytesInFlight();
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
             synchronized (lock) {
                 lock.notifyAll();
@@ -80,6 +81,7 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight -= lostBytes;
 
         if (lostBytes > 0) {
+            checkBytesInFlight();
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + lostPackets.size() + " packets lost)");
         }
     }
@@ -93,6 +95,7 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight -= discardedBytes;
 
         if (discardedBytes > 0) {
+            checkBytesInFlight();
             log.debug("Bytes in flight decreased with " + discardedBytes + " to " + bytesInFlight + " (" + discardedPackets.size() + " packets RESET)");
         }
     }
@@ -120,5 +123,11 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight = 0;
     }
 
+    private void checkBytesInFlight() {
+        if (bytesInFlight < 0) {
+            log.error("Inconsistency error in congestion controller; attempt to set bytes in-flight below 0");
+            bytesInFlight = 0;
+        }
+    }
 }
 
