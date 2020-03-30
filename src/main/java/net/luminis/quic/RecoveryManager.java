@@ -105,10 +105,10 @@ public class RecoveryManager implements HandshakeStateListener {
                     timeout = 0;
                 }
                 log.recovery("reschedule loss detection timer over " + timeout + " millis, "
-                        + "based on " + earliestLastAckElicitingSentTime.lossTime + "/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
+                        + "based on %s/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
                         + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation ": "")
                         + (ackElicitingInFlight ? "ackElicitingInFlight ": "")
-                        + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar());
+                        + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), earliestLastAckElicitingSentTime.lossTime);
 
                 lossDetectionTimer.cancel(false);
                 lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
@@ -172,7 +172,13 @@ public class RecoveryManager implements HandshakeStateListener {
 
     private void sendProbe() {
         PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-        log.recovery(String.format("Sending probe %d, because no ack since %s. Current RTT: %d/%d.", ptoCount, earliestLastAckElicitingSentTime, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+
+        if (earliestLastAckElicitingSentTime != null) {
+            log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
+        }
+        else {
+            log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        }
         ptoCount++;
 
         int nrOfProbes = ptoCount > 1? 2: 1;

@@ -91,10 +91,13 @@ public interface Logger {
 
     void recovery(String message);
 
+    void recovery(String format, Instant lossTime);
+
     void cc(String message);
 
     void fc(String message);
 
     void receivedPacketInfo(String toString);
+
 
 }

@@ -161,6 +161,10 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void recovery(String format, Instant lossTime) {
+    }
+
+    @Override
     public void cc(String message) {
     }
 
