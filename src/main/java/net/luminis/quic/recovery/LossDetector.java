@@ -55,6 +55,8 @@ public class LossDetector {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
+        congestionController.registerInFlight(packet);
+
         if (packet.isAckEliciting()) {
             lastAckElicitingSent = sent;
         }
