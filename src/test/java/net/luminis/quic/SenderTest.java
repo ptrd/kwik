@@ -76,6 +76,7 @@ class SenderTest {
     void stopRecovery() {
         sender.stop();
     }
+
     @Test
     void testSingleSend() throws Exception {
         setCongestionWindowSize(1250);
@@ -103,46 +104,6 @@ class SenderTest {
         waitForSender();
         // Because congestion window is decreased, second packet should now have been sent too.
         verify(socket, times(2)).send(any(DatagramPacket.class));
-    }
-
-    @Test
-    void testSenderCongestionControlWithUnrelatedAck() throws Exception {
-        setCongestionWindowSize(1250);
-        sender.start(mock(ConnectionSecrets.class));
-
-        sender.send(new MockPacket(0, 12, EncryptionLevel.Initial, new PingFrame(), "initial"), "packet 1", p -> {});
-        sender.send(new MockPacket(0, 1230, "packet 1"), "packet 1", p -> {});
-        sender.send(new MockPacket(1, 1230, "packet 2"), "packet 2", p -> {});
-
-        waitForSender();
-        // Because of congestion control, only first 2 packets should have been sent.
-        verify(socket, times(2)).send(any(DatagramPacket.class));
-
-        // An ack on first packet should not decrease the congestion window too much (i.e. only with 12), so CC will still block sending the third packet
-        sender.process(new AckFrame(0), PnSpace.Initial, Instant.now());
-
-        waitForSender();
-        verify(socket, times(2)).send(any(DatagramPacket.class));
-    }
-
-    @Test
-    void testSenderCongestionControlWithIncorrectAck() throws Exception {
-        disableRecoveryManager();
-        setCongestionWindowSize(1250);
-        sender.start(mock(ConnectionSecrets.class));
-
-        sender.send(new MockPacket(0, 1240, EncryptionLevel.App, new PingFrame(), "packet 1"), "packet 1", p -> {});
-        sender.send(new MockPacket(1, 1240, EncryptionLevel.App, new PingFrame(), "packet 2"), "packet 2", p -> {});
-
-        waitForSender();
-        // Because of congestion control, only first packet should have been sent.
-        verify(socket, times(1)).send(any(DatagramPacket.class));
-
-        // An ack on a non-existent packet, shouldn't change anything.
-        sender.process(new AckFrame(0), PnSpace.Handshake, null);
-
-        waitForSender();
-        verify(socket, times(1)).send(any(DatagramPacket.class));
     }
 
     @Test
@@ -264,16 +225,12 @@ class SenderTest {
         setCongestionWindowSize(1212);
         sender.start(mock(ConnectionSecrets.class));
 
-        // Send first packet to fill up cwnd
-        MockPacket firstPacket = new MockPacket(0, 1200, EncryptionLevel.App, new Padding(), "first packet");
-        sender.send(firstPacket, "first packet", p -> {});
-        waitForSender();
-        verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
-        reset(socket);
+        // Fill up cwnd
+        sender.getCongestionController().registerInFlight(new MockPacket(0, 1212, EncryptionLevel.App, new Padding(), "first packet"));
 
-        // Send second packet to exceed cwnd (and make sender wait)
+        // Send second packet that would exceed cwnd (and make sender wait)
         MockPacket secondPacket = new MockPacket(1, 1200, EncryptionLevel.App, new Padding(), "second packet");
-        sender.send(firstPacket, "second packet", p -> {});
+        sender.send(secondPacket, "second packet", p -> {});
         waitForSender();
         verify(socket, never()).send(any(DatagramPacket.class));
         reset(socket);

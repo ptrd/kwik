@@ -55,7 +55,9 @@ public class LossDetector {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
-        congestionController.registerInFlight(packet);
+        if (packet.isInflightPacket()) {
+            congestionController.registerInFlight(packet);
+        }
 
         if (packet.isAckEliciting()) {
             lastAckElicitingSent = sent;
@@ -170,7 +172,7 @@ public class LossDetector {
                     lost++;
                 });
 
-        congestionController.registerLost(lostPacketsInfo);
+        congestionController.registerLost(filterInFlight(lostPacketsInfo));
     }
 
     public void reset() {
@@ -190,7 +192,7 @@ public class LossDetector {
 
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
         return packets.stream()
-                .filter(packetInfo -> !packetInfo.packet().isAckOnly())
+                .filter(packetInfo -> packetInfo.packet().isInflightPacket())
                 .collect(Collectors.toList());
     }
 

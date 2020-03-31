@@ -20,10 +20,15 @@ package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.ConnectionCloseFrame;
+import net.luminis.quic.frame.Padding;
+import net.luminis.quic.frame.PingFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -346,6 +351,87 @@ class LossDetectorTest extends RecoveryTests {
 
         lossDetector.reset();
         verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 8)));
+    }
+
+    @Test
+    void packetWithConnectionCloseOnlyDoesNotIncreaseBytesInFlight() {
+        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        verify(congestionController, never()).registerInFlight(any(QuicPacket.class));
+    }
+
+    @Test
+    void ackPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
+        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(0));
+
+        verify(congestionController, never()).registerAcked(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
+    }
+
+    @Test
+    void lostPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
+        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(2, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(9, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(9));
+
+        verify(congestionController, never()).registerLost(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
+    }
+
+    @Test
+    void packetWithPaddingOnlyDoesIncreaseBytesInFlight() {
+        lossDetector.packetSent(createPacket(0, new Padding(99)), Instant.now(), p -> {});
+        verify(congestionController, times(1)).registerInFlight(any(QuicPacket.class));
+    }
+
+    @Test
+    void lostPacketWithPaddingOnlyDoesNotDecreaseBytesInFlight() {
+        lossDetector.packetSent(createPacket(0, new Padding(99)), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1, new Padding(99)), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(2, new Padding(99)), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(9, new Padding(99)), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(9));
+
+        verify(congestionController, atLeast(1)).registerLost(any(List.class));
+    }
+
+    @Test
+    void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
+        congestionController = new NewRenoCongestionController(mock(Logger.class));
+        setCongestionWindowSize(congestionController, 1240);
+        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
+
+        lossDetector.packetSent(new MockPacket(0, 12, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(1, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(2, 40, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+
+        assertThat(congestionController.canSend(1)).isFalse();
+
+        // An ack on a non-existent packet, shouldn't change anything.
+        lossDetector.onAckReceived(new AckFrame(0));
+
+        assertThat(congestionController.canSend(12 + 1)).isFalse();   // Because the 12 is acked, the cwnd is increased by 12 too.
+    }
+
+    @Test
+    void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
+        congestionController = new NewRenoCongestionController(mock(Logger.class));
+        setCongestionWindowSize(congestionController, 1240);
+        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
+
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        assertThat(congestionController.canSend(1)).isFalse();
+
+        // An ack on a non-existent packet, shouldn't change anything.
+        lossDetector.onAckReceived(new AckFrame(3));
+
+        assertThat(congestionController.canSend(1)).isFalse();
+    }
+
+    private void setCongestionWindowSize(CongestionController congestionController, int cwnd) throws Exception {
+        FieldSetter.setField(congestionController, congestionController.getClass().getSuperclass().getDeclaredField("congestionWindow"), cwnd);
     }
 
     private boolean containsPackets(List<? extends PacketInfo> packets, long... packetNumbers) {
