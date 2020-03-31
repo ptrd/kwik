@@ -260,6 +260,13 @@ public abstract class BaseLogger implements Logger {
     }
 
     @Override
+    public void recovery(String message, Instant time) {
+        if (logRecovery) {
+            log(String.format(message, formatTime(time)));
+        }
+    }
+
+    @Override
     public void cc(String message) {
         if (logCongestionControl) {
             log(formatTime(Instant.now()) + " " + message);

@@ -197,11 +197,10 @@ public class Sender implements ProbeSender, FrameProcessor {
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();
                     socket.send(datagram);
+                    congestionController.registerInFlight(packet);
+                    logSent(packet, sent, packetLostCallback);
                     log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
                     log.sent(sent, packet);
-
-                    logSent(packet, sent, packetLostCallback);
-                    congestionController.registerInFlight(packet);
                 }
                 catch (InterruptedException interrupted) {
                     // Someone interrupted, maybe because an Ack has to be sent.
@@ -290,9 +289,9 @@ public class Sender implements ProbeSender, FrameProcessor {
     }
 
     private void logSent(QuicPacket packet, Instant sendTime, Consumer<QuicPacket> packetLostCallback) {
-        sent++;
-        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
         recoveryManager.packetSent(packet, sendTime, packetLostCallback);
+        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
+        sent++;
     }
 
     void logStatistics() {
