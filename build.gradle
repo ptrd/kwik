@@ -1,5 +1,6 @@
 apply plugin: 'java'
 apply plugin: 'idea'
+apply plugin: 'eclipse'
 
 sourceCompatibility = 11
 targetCompatibility = 11
@@ -26,6 +27,14 @@ dependencies {
     testRuntime('org.junit.jupiter:junit-jupiter-engine:5.3.2')
     testCompile("org.mockito:mockito-core:2.28.2")
     testCompile("org.assertj:assertj-core:3.11.1")
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir "${buildDir}/generated"
+        }
+    }
 }
 
 test {
@@ -59,3 +68,23 @@ jar {
         exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
     }
 }
+
+task determineVersion {
+    doLast {
+        def proc = "git describe --always --dirty".execute()
+        proc.waitFor()
+        if (proc.exitValue()) {
+            logger.quiet("Building development version.")
+        } else {
+            def versionTag = proc.in.readLines()[0]
+            logger.quiet("Building version ${versionTag}.")
+
+            ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
+            versionDir.mkdirs()
+
+            new File(versionDir, "version.properties").text = versionTag
+        }
+    }
+}
+
+compileJava.dependsOn determineVersion

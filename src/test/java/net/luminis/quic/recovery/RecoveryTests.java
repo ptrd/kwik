@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,15 +16,13 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.LongHeaderPacket;
-import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.*;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.time.Instant;
@@ -57,6 +55,15 @@ public abstract class RecoveryTests {
             packets.add(packet);
         }
         return packets;
+    }
+
+    QuicPacket createHandshakePacket(int packetNumber, QuicFrame... frames) {
+        LongHeaderPacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, frames[0]);
+        for (int i = 1; i < frames.length; i++) {
+            packet.addFrame(frames[i]);
+        }
+        setPacketNumber(packet, packetNumber);
+        return packet;
     }
 
     QuicPacket createCryptoPacket(int packetNumber) {

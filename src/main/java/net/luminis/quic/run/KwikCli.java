@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -22,16 +22,20 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 import org.apache.commons.cli.*;
 
 import java.io.*;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Command line interface for Kwik
@@ -45,79 +49,76 @@ public class KwikCli {
         cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
                 "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"ip\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
-        cmdLineOptions.addOption("23", "use Quic version IETF_draft_23");
-        cmdLineOptions.addOption("24", "use Quic version IETF_draft_24");
-        cmdLineOptions.addOption(null, "reservedVersion", false, "");
+        cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
+        cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
         cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
-        cmdLineOptions.addOption("L", "logFile", true, "file to write log message too");
+        cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
         cmdLineOptions.addOption("O", "output", true, "write server response to file");
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
         cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
+        cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
+        cmdLineOptions.addOption("v", "version", false, "show Kwik version");
+        cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
 
-        String host = null;
-        int port = -1;
-        String http09Request = null;
+        if (cmd.hasOption("v")) {
+            System.out.println("Kwik build nr: " + getVersion());
+            System.exit(0);
+        }
 
         List<String> args = cmd.getArgList();
         if (args.size() == 0) {
             usage();
             return;
         }
+
+        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        String http09Request = null;
         if (args.size() == 1) {
             String arg = args.get(0);
-            if (arg.startsWith("http://") || arg.startsWith("https://")) {
-                try {
-                    URL url = new URL(arg);
-                    host = url.getHost();
-                    port = url.getPort();
-                    if (! url.getPath().isEmpty()) {
-                        http09Request = url.getPath();
-                    }
-                } catch (MalformedURLException e) {
-                    System.out.println("Cannot parse URL '" + arg + "'");
-                    return;
-                }
-            }
-            else if (arg.contains(":")) {
-                host = arg.split(":")[0];
-                try {
-                    port = Integer.parseInt(arg.split(":")[1]);
-                }
-                catch (NumberFormatException e) {
-                    usage();
-                    return;
-                }
-            }
-            else {
-                if (arg.matches("\\d+")) {
-                    System.out.println("Error: invalid hostname (did you forget to specify an option argument?).");
-                    usage();
-                    return;
-                }
-                host = arg;
-                port = 443;
-            }
-        }
-        if (args.size() == 2) {
-            host = args.get(0);
             try {
-                port = Integer.parseInt(args.get(1));
-            }
-            catch (NumberFormatException e) {
-                System.out.println("Error: invalid port number argument.");
-                usage();
+                if (arg.startsWith("http://") || arg.startsWith("https://")) {
+                    try {
+                        URL url = new URL(arg);
+                        builder.uri(url.toURI());
+                        if (!url.getPath().isEmpty()) {
+                            http09Request = url.getPath();
+                        }
+                    } catch (MalformedURLException e) {
+                        System.out.println("Cannot parse URL '" + arg + "'");
+                        return;
+                    }
+                } else if (arg.contains(":")) {
+                    builder.uri(new URI("//" + arg));
+                } else {
+                    if (arg.matches("\\d+")) {
+                        System.out.println("Error: invalid hostname (did you forget to specify an option argument?).");
+                        usage();
+                        return;
+                    }
+                    builder.uri(new URI("//" + arg + ":" + 443));
+                }
+            } catch (URISyntaxException invalidUri) {
+                System.out.println("Cannot parse URI '" + arg + "'");
                 return;
             }
         }
-        if (args.size() > 2) {
+        else if (args.size() == 2) {
+            try {
+                builder.uri(new URI("//" + args.get(0) + ":" + args.get(1)));
+            } catch (URISyntaxException invalidUri) {
+                System.out.println("Cannot parse URI '" + args.stream().collect(Collectors.joining(":")) + "'");
+                return;
+            }
+        }
+        else if (args.size() > 2) {
             usage();
             return;
         }
@@ -136,6 +137,7 @@ public class KwikCli {
         }
         logger.logPackets(true);
         logger.logInfo(true);
+        builder.logger(logger);
 
         if (cmd.hasOption('l')) {
             String logArg = cmd.getOptionValue('l', "ip");
@@ -179,14 +181,18 @@ public class KwikCli {
         }
 
         Version quicVersion = Version.getDefault();
-        if (cmd.hasOption("24")) {
-            quicVersion = Version.IETF_draft_24;
-        }
-        else if (cmd.hasOption("23")) {
-            quicVersion = Version.IETF_draft_23;
-        }
-        else if (cmd.hasOption("reservedVersion")) {
+        if (cmd.hasOption("reservedVersion")) {
             quicVersion = Version.reserved_1;
+        }
+        builder.version​(quicVersion);
+
+        String alpn = null;
+        if (cmd.hasOption("A")) {
+            alpn = cmd.getOptionValue("A", null);
+            if (alpn == null) {
+                usage();
+                System.exit(1);
+            }
         }
 
         int connectionTimeout = 5;
@@ -246,6 +252,19 @@ public class KwikCli {
             }
         }
 
+        if (cmd.hasOption("secrets")) {
+            String secretsFile = cmd.getOptionValue("secrets");
+            if (secretsFile == null) {
+                usage();
+                System.exit(1);
+            }
+            if (Files.exists(Paths.get(secretsFile)) && !Files.isWritable(Paths.get(secretsFile))) {
+                System.err.println("Secrets file '" + secretsFile + "' is not writable.");
+                System.exit(1);
+            }
+            builder.secrets(Paths.get(secretsFile));
+        }
+
         String newSessionTicketsFilename = null;
         if (cmd.hasOption("S")) {
             newSessionTicketsFilename = cmd.getOptionValue("S");
@@ -271,6 +290,7 @@ public class KwikCli {
             try {
                 ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
                 sessionTicket = QuicSessionTicket.deserialize(ticketData);
+                builder.sessionTicket(sessionTicket);
             } catch (IOException e) {
                 System.err.println("Error while reading session ticket file.");
             }
@@ -285,19 +305,31 @@ public class KwikCli {
         }
 
         boolean interactiveMode = cmd.hasOption("i");
+        if (cmd.hasOption("initialRtt")) {
+            try {
+                builder.initialRtt(Integer.parseInt(cmd.getOptionValue("initialRtt")));
+            } catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
+        }
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(host, port, quicVersion, logger).start();
+                new InteractiveShell(builder, alpn).start();
             }
             else {
-                QuicConnection quicConnection = new QuicConnection(host, port, sessionTicket, quicVersion, logger);
                 QuicStream httpStream = null;
+                QuicConnection quicConnection = builder.build();
                 if (useZeroRtt && http09Request != null) {
-                    httpStream = quicConnection.connect(connectionTimeout * 1000, http09Request.getBytes());
+                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, http09Request.getBytes());
                 }
                 else {
-                    quicConnection.connect(connectionTimeout * 1000);
+                    if (alpn == null) {
+                        quicConnection.connect(connectionTimeout * 1000);
+                    } else {
+                        quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
+                    }
                 }
 
                 if (keepAliveTime > 0) {
@@ -330,7 +362,7 @@ public class KwikCli {
         catch (IOException e) {
             System.out.println("Got IO error: " + e);
         }
-        catch (VersionNegationFailure e) {
+        catch (VersionNegotiationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
 
@@ -413,6 +445,18 @@ public class KwikCli {
                 System.out.println(line);
             }
         }
+    }
+
+    static String getVersion() {
+        InputStream in = QuicConnection.class.getResourceAsStream("version.properties");
+        if (in != null) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
+                return reader.readLine();
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        else return "dev";
     }
 
     public static void usage() {

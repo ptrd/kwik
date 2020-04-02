@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -40,4 +40,6 @@ public interface CongestionController {
     void reset();
 
     void waitForUpdate() throws InterruptedException;
+
+    void discard(List<? extends PacketInfo> packetStatusStream);
 }

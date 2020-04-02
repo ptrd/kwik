@@ -1,7 +1,5 @@
-package net.luminis.quic.frame;
-
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,7 +16,9 @@ package net.luminis.quic.frame;
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import net.luminis.quic.frame.MaxDataFrame;
+package net.luminis.quic.frame;
+
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

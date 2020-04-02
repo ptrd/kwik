@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -32,6 +32,8 @@ import java.util.stream.Collectors;
 public abstract class LongHeaderPacket extends QuicPacket {
 
     private static final int MAX_PACKET_SIZE = 1500;
+    // Minimal length for a valid packet:  type version dcid len dcid scid len scid length packet number payload
+    private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  1 +    1 +    1;
 
     protected byte[] sourceConnectionId;
     protected byte[] destinationConnectionId;
@@ -127,24 +129,46 @@ public abstract class LongHeaderPacket extends QuicPacket {
         VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
-        int startPosition = buffer.position();
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
+        int startPosition = buffer.position();
+        if (buffer.remaining() < MIN_PACKET_LENGTH) {
+            throw new InvalidPacketException();
+        }
         byte flags = buffer.get();
         checkPacketType(flags);
 
+        boolean matchingVersion = false;
         try {
-            Version quicVersion = Version.parse(buffer.getInt());
-        } catch (UnknownVersionException e) {
-            // Protocol error: if it gets here, server should match the Quic version we sent
-            throw new ProtocolError("Server uses unsupported Quic version");
+            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
+        } catch (UnknownVersionException e) {}
+
+        if (! matchingVersion) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+            // "... packets are discarded if they indicate a different protocol version than that of the connection..."
+            throw new InvalidPacketException();
         }
 
         int dstConnIdLength = buffer.get();
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.2
+        // "In QUIC version 1, this value MUST NOT exceed 20.  Endpoints that receive a version 1 long header with a
+        // value larger than 20 MUST drop the packet."
+        if (dstConnIdLength < 0 || dstConnIdLength > 20) {
+            throw new InvalidPacketException();
+        }
+        if (buffer.remaining() < dstConnIdLength) {
+            throw new InvalidPacketException();
+        }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
         int srcConnIdLength = buffer.get();
+        if (srcConnIdLength < 0 || srcConnIdLength > 20) {
+            throw new InvalidPacketException();
+        }
+        if (buffer.remaining() < srcConnIdLength) {
+            throw new InvalidPacketException();
+        }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
         log.debug("Destination connection id", destinationConnectionId);
@@ -152,7 +176,14 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         parseAdditionalFields(buffer);
 
-        int length = VariableLengthInteger.parse(buffer);
+        int length;
+        try {
+            // "The length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes"
+            length = VariableLengthInteger.parse(buffer);
+        }
+        catch (IllegalArgumentException largerThanInt) {
+            throw new InvalidPacketException();
+        }
         log.debug("Length (PN + payload): " + length);
 
         try {

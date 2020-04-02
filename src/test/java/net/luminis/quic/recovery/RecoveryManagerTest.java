@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,12 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
-import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.*;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.recovery.LossDetector;
+import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.recovery.RecoveryTests;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +35,7 @@ import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -40,7 +45,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     private RecoveryManager recoveryManager;
     private LostPacketHandler lostPacketHandler;
-    private int defaultRtt = 40;
+    private int defaultRtt = 80;
     private int defaultRttVar = defaultRtt / 4;
     private int epsilon = defaultRtt / 4;  // A small value to check for events that should occur at a specified time; the epsilon is the variance allowed.
     private ProbeSender probeSender;
@@ -53,7 +58,10 @@ class RecoveryManagerTest extends RecoveryTests {
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
         probeSender = mock(ProbeSender.class);
-        recoveryManager = new RecoveryManager(rttEstimator, mock(CongestionController.class), probeSender, mock(Logger.class));
+        Logger logger = mock(Logger.class);
+        // logger = new SysOutLogger();
+        // logger.logRecovery(true);
+        recoveryManager = new RecoveryManager(rttEstimator, mock(CongestionController.class), probeSender, logger);
     }
 
     @BeforeEach
@@ -96,7 +104,7 @@ class RecoveryManagerTest extends RecoveryTests {
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
         Thread.sleep(probeTimeout + epsilon);
 
-        verify(probeSender, times(1)).sendProbe();
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
     @Test
@@ -109,19 +117,24 @@ class RecoveryManagerTest extends RecoveryTests {
         int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
         Thread.sleep(firstProbeTimeout + epsilon);
 
-        verify(probeSender, times(1)).sendProbe();
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+        Instant firstProbeSentTime = Instant.now();
 
         int secondProbeTimeout = firstProbeTimeout * 2;
         long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 2 * epsilon;
         Thread.sleep(sleepTime);
-        verify(probeSender, times(1)).sendProbe();  // Not yet
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));  // Not yet
 
-        Thread.sleep(2 * epsilon + 1 * epsilon);
-        verify(probeSender, times(2)).sendProbe();  // Yet it should
+        sleepTime = Duration.between(firstProbeSentTime, Instant.now().plusMillis(secondProbeTimeout)).toMillis();
+        Thread.sleep(sleepTime);
+        verify(probeSender, times(3)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should, and 2 probes are sent simultaneously
     }
 
     @Test
     void noProbeIsSentForAck() throws InterruptedException {
+        // Simulate peer has completed address validation
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.App);
+
         QuicPacket ackPacket = createPacket(8, new AckFrame(20));
         recoveryManager.packetSent(ackPacket, Instant.now(), p -> {});
 
@@ -150,7 +163,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         verify(probeSender, never()).sendProbe();
         Thread.sleep(probeTimeout + delta);
-        verify(probeSender, times(1)).sendProbe();
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
     @Test
@@ -174,12 +187,16 @@ class RecoveryManagerTest extends RecoveryTests {
 
         Thread.sleep(probeTimeout / 2);
         // Now, second packet was sent more than probe-timeout ago, so now we should have a probe timeout
-        verify(probeSender, times(1)).sendProbe();
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
     @Test
     void whenProbesAreAckedProbeTimeoutIsResetToNormal() throws InterruptedException {
         mockSendingProbe(3, 4, 5);
+        // Simulate a round trip to get rid of peer awaiting address validation
+        recoveryManager.packetSent(createPacket(1), Instant.now(), p -> {});
+        recoveryManager.onAckReceived(new AckFrame(1), PnSpace.App);
+        clearInvocations(probeSender);
 
         Instant firstPacketTime = Instant.now();
         recoveryManager.packetSent(createPacket(2), firstPacketTime, p -> {});
@@ -187,15 +204,15 @@ class RecoveryManagerTest extends RecoveryTests {
         int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
         Thread.sleep(firstProbeTimeout + epsilon);
 
-        verify(probeSender, times(1)).sendProbe();
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
 
         int secondProbeTimeout = firstProbeTimeout * 2;
         long sleepTime = Duration.between(Instant.now(), firstPacketTime.plusMillis(firstProbeTimeout + secondProbeTimeout)).toMillis() - 2 * epsilon;
         Thread.sleep(sleepTime);
-        verify(probeSender, times(1)).sendProbe();  // Not yet
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));  // Not yet
 
         Thread.sleep(2 * epsilon + 1 * epsilon);
-        verify(probeSender, times(2)).sendProbe();  // Yet it should
+        verify(probeSender, times(3)).sendProbe(anyList(), any(EncryptionLevel.class));  // Yet it should, and 2 probes simultaneously
 
         // Receive Ack, should reset PTO count
         recoveryManager.onAckReceived(new AckFrame(3), PnSpace.App);
@@ -204,7 +221,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         Thread.sleep(firstProbeTimeout + epsilon);
 
-        verify(probeSender, times(3)).sendProbe();
+        verify(probeSender, times(4)).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 
     @Test
@@ -221,7 +238,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(detectors[1].getLossTime()).thenReturn(null);
         when(detectors[2].getLossTime()).thenReturn(someInstant.minusMillis(100));
 
-        assertThat(recoveryManager.getEarliestLossTime().pnSpace.ordinal()).isEqualTo(2);
+        assertThat(recoveryManager.getEarliestLossTime(LossDetector::getLossTime).pnSpace.ordinal()).isEqualTo(2);
     }
 
     @Test
@@ -240,6 +257,47 @@ class RecoveryManagerTest extends RecoveryTests {
         verify(lostPacketHandler, times(0)).process(any(InitialPacket.class));
     }
 
+    @Test
+    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
+        Instant firstPacketTime = Instant.now();
+        recoveryManager.packetSent(createCryptoPacket(0), firstPacketTime, lostPacket -> {});
+
+        Thread.sleep((int) defaultRtt);
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial);
+
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        Thread.sleep(probeTimeout + epsilon);
+
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+    }
+
+    @Test
+    void framesToRetransmitShouldNotBePing() throws Exception {
+        QuicPacket pingPacket = createHandshakePacket(0, new PingFrame());
+        recoveryManager.packetSent(pingPacket, Instant.now(), p -> {});
+        QuicPacket handshakePacket = createHandshakePacket(1, new CryptoFrame(Version.getDefault(), new byte[100]));
+        recoveryManager.packetSent(handshakePacket, Instant.now(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.Handshake);
+
+        assertThat(framesToRetransmit).isNotEmpty();
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
+        assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
+    @Test
+    void framesToRetransmitShouldNotBePingAndPaddingAndAck() throws Exception {
+        QuicPacket pingPacket = createHandshakePacket(0, new PingFrame(), new Padding(2), new AckFrame(0));
+        recoveryManager.packetSent(pingPacket, Instant.now(), p -> {});
+        QuicPacket handshakePacket = createHandshakePacket(1, new CryptoFrame(Version.getDefault(), new byte[100]));
+        recoveryManager.packetSent(handshakePacket, Instant.now(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.Handshake);
+
+        assertThat(framesToRetransmit).isNotEmpty();
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
+        assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
 
     private void mockSendingProbe(int... packetNumbers) {
         doAnswer(new Answer<Void>() {
@@ -252,7 +310,6 @@ class RecoveryManagerTest extends RecoveryTests {
                 recoveryManager.packetSent(createPacket(packetNumber), Instant.now(), p -> {});
                 return null;
             }
-        }).when(probeSender).sendProbe();
-
+        }).when(probeSender).sendProbe(anyList(), any(EncryptionLevel.class));
     }
 }

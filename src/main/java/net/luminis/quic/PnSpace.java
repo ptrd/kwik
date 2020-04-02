@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -23,4 +23,13 @@ public enum PnSpace {
     Initial,
     Handshake,
     App;
+
+    public EncryptionLevel relatedEncryptionLevel() {
+        switch(this) {
+            case Initial: return EncryptionLevel.Initial;
+            case Handshake: return EncryptionLevel.Handshake;
+            case App: return EncryptionLevel.App;
+            default: return null;   // Never gets here
+        }
+    }
 }

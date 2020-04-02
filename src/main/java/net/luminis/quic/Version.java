@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -40,7 +40,11 @@ public enum Version {
     IETF_draft_21(0xff000015),
     IETF_draft_22(0xff000016),
     IETF_draft_23(0xff000017),
-    IETF_draft_24(0xff000018);
+    IETF_draft_24(0xff000018),
+    IETF_draft_25(0xff000019),
+    IETF_draft_26(0xff00001a),
+    IETF_draft_27(0xff00001b),
+    QUIC_version_1(0x00000001);
 
     private int versionId;
 
@@ -60,7 +64,7 @@ public enum Version {
     }
 
     public static Version getDefault() {
-        return IETF_draft_24;
+        return IETF_draft_27;
     }
 
     public boolean atLeast(Version other) {
@@ -97,6 +101,10 @@ public enum Version {
     }
 
     private boolean isIetfDraft(Version version) {
-        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_24.versionId;
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_27.versionId;
+    }
+
+    public int getId() {
+        return versionId;
     }
 }

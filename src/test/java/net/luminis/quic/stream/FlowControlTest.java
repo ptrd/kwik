@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,10 +18,8 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.PnSpace;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,12 +36,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class FlowControlTest {
 
-    private QuicConnection conn;
+    private QuicConnectionImpl conn;
     private ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     @BeforeEach
     void initMockConnection() {
-        conn = Mockito.mock(QuicConnection.class);
+        conn = Mockito.mock(QuicConnectionImpl.class);
     }
 
     @Test

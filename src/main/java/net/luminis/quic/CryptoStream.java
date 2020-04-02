@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -31,7 +31,7 @@ public class CryptoStream {
 
     private SortedSet<CryptoFrame> frames = new TreeSet<>();
     private final Version quicVersion;
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
     private TlsState tlsState;
@@ -41,7 +41,7 @@ public class CryptoStream {
     private int parsedToOffset = 0;
 
 
-    public CryptoStream(Version quicVersion, QuicConnection connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
         this.quicVersion = quicVersion;
         this.connection = connection;
         this.encryptionLevel = encryptionLevel;
@@ -165,6 +165,7 @@ public class CryptoStream {
         if (msg instanceof ServerHello) {
             // Server Hello provides a new secret, so
             connectionSecrets.computeHandshakeSecrets(tlsState);
+            connection.hasHandshakeKeys();
         } else if (msg instanceof EncryptedExtensions) {
             for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {
                 if (ex instanceof EarlyDataExtension) {

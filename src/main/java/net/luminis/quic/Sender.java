@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -21,9 +21,11 @@ package net.luminis.quic;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.recovery.RecoveryManager;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -44,7 +46,7 @@ import java.util.stream.Collectors;
 
 public class Sender implements ProbeSender, FrameProcessor {
 
-    private final DatagramSocket socket;
+    private DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
     private final Thread senderThread;
@@ -56,7 +58,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
     private final RttEstimator rttEstimater;
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
     private AckGenerator[] ackGenerators;
     private final long[] lastPacketNumber = new long[PnSpace.values().length];
@@ -64,9 +66,9 @@ public class Sender implements ProbeSender, FrameProcessor {
     private RecoveryManager recoveryManager;
     private int receiverMaxAckDelay;
     private volatile long sent;
+    private volatile boolean mustSendProbe = false;
 
-
-    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnection connection) {
+    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection, Integer initialRtt) {
         this.socket = socket;
         this.maxPacketSize = maxPacketSize;
         this.log = log;
@@ -80,8 +82,14 @@ public class Sender implements ProbeSender, FrameProcessor {
         incomingPacketQueue = new LinkedBlockingQueue<>();
         packetSentLog = new ConcurrentHashMap<>();
         congestionController = new NewRenoCongestionController(log);
-        rttEstimater = new RttEstimator(log);
+        if (initialRtt == null) {
+            rttEstimater = new RttEstimator(log);
+        }
+        else {
+            rttEstimater = new RttEstimator(log, initialRtt);
+        }
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
+        connection.addHandshakeStateListener(recoveryManager);
 
         ackGenerators = new AckGenerator[PnSpace.values().length];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
@@ -90,14 +98,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     public void send(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
         log.debug("queing " + packet);
         incomingPacketQueue.add(new WaitingPacket(packet, logMessage, packetLostCallback));
-    }
-
-    public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
-        QuicPacket packet = connection.createPacket(level, frames.get(0));
-        for (int i = 1; i < frames.size(); i++) {
-            packet.addFrame(frames.get(i));
-        }
-        connection.send(packet, "probe with data");
     }
 
     public void stop() {
@@ -143,30 +143,40 @@ public class Sender implements ProbeSender, FrameProcessor {
                         packetLostCallback = queued.packetLostCallback;
                     }
 
+                    Keys keys = connectionSecrets.getClientSecrets(level);// Assuming client role
                     packetNumber = generatePacketNumber(level.relatedPnSpace());
+                    byte[] packetData;
                     if (packet == null) {
-                        packet = connection.createPacket(level, new Padding(10));  // TODO: necessary for min packet length, fix elsewhere
+                        // i.e. ack waiting
+                        packetData = new byte[0];
                     }
-
-                    Keys keys = connectionSecrets.getClientSecrets(packet.getEncryptionLevel());// Assuming client role
-                    byte[] packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
+                    else {
+                        packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
+                    }
 
                     boolean hasBeenWaiting = false;
-                    while (! congestionController.canSend(packetData.length)) {
-                        log.debug("Congestion controller will not allow sending queued packet " + packet);
-                        log.debug("Non-acked packets: " + getNonAcknowlegded());
-                        hasBeenWaiting = true;
-                        try {
-                            congestionController.waitForUpdate();
+                    if (packet != null) {   // Ack-only is not congestion controller, neither is probe.
+                        while (!mustSendProbe && !congestionController.canSend(packetData.length)) {  // mustSendProbe can change while in wait loop
+                            log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + packetData.length + ")");
+                            hasBeenWaiting = true;
+                            try {
+                                congestionController.waitForUpdate();
+                            } catch (InterruptedException interrupted) {
+                                log.debug("Wait for CC update is interrupted");
+                            }
+                            log.debug("re-evaluating CC");
                         }
-                        catch (InterruptedException interrupted) {
-                            log.debug("Wait for CC update is interrupted");
+
+                        if (hasBeenWaiting) {
+                            log.debug("Congestion controller now does allow sending the packet.");
                         }
-                        log.debug("re-evaluating");
                     }
 
-                    if (hasBeenWaiting) {
-                        log.debug("But now it does.");
+                    if (mustSendProbe) {
+                        mustSendProbe = false;
+                        if (!congestionController.canSend(packetData.length)) {
+                            log.cc("Exceeding cc window because a probe must be sent.");
+                        }
                     }
 
                     // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
@@ -175,18 +185,21 @@ public class Sender implements ProbeSender, FrameProcessor {
                     AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
                     if (ackGenerator.hasAckToSend()) {
                         AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
-                        packet.addFrame(ackToSend);
+                        if (packet == null) {
+                            packet = connection.createPacket(level, ackToSend);
+                        }
+                        else {
+                            packet.addFrame(ackToSend);
+                        }
                         packetData = packet.generatePacketBytes(packetNumber, keys);
                     }
 
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();
                     socket.send(datagram);
+                    logSent(packet, sent, packetLostCallback);
                     log.raw("packet sent (" + logMessage + "), pn: " + packet.getPacketNumber(), packetData);
                     log.sent(sent, packet);
-
-                    logSent(packet, sent, packetLostCallback);
-                    congestionController.registerInFlight(packet);
                 }
                 catch (InterruptedException interrupted) {
                     // Someone interrupted, maybe because an Ack has to be sent.
@@ -275,9 +288,9 @@ public class Sender implements ProbeSender, FrameProcessor {
     }
 
     private void logSent(QuicPacket packet, Instant sendTime, Consumer<QuicPacket> packetLostCallback) {
-        sent++;
-        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
         recoveryManager.packetSent(packet, sendTime, packetLostCallback);
+        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
+        sent++;
     }
 
     void logStatistics() {
@@ -305,11 +318,30 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     @Override
     public void sendProbe() {
-        connection.ping();
+        QuicPacket packet = connection.createPacket(EncryptionLevel.App, new PingFrame());
+        packet.addFrame(new Padding(3));
+        mustSendProbe = true;
+        send(packet, "probe with ping", f -> {});
+        senderThread.interrupt();
+    }
+
+    @Override
+    public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
+        QuicPacket packet = connection.createPacket(level, frames.get(0));
+        for (int i = 1; i < frames.size(); i++) {
+            packet.addFrame(frames.get(i));
+        }
+        mustSendProbe = true;  // TODO: when two probes are sent in quick succession, the first might reset this flag, so the second might be stopped by the congestion controller
+        send(packet, "probe with data", f -> {});
+        senderThread.interrupt();
     }
 
     public void stopRecovery(PnSpace level) {
         recoveryManager.stopRecovery(level);
+    }
+
+    public void changeAddress(DatagramSocket newSocket) {
+        this.socket = newSocket;
     }
 
 

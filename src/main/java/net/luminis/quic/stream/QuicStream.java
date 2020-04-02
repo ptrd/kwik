@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,14 +16,15 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.stream;
 
+import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.stream.FlowControl;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,7 +47,7 @@ public class QuicStream {
     private Object addMonitor = new Object();
     private final Version quicVersion;
     private final int streamId;
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private final FlowControl flowController;
     private final Logger log;
     private final BlockingQueue<StreamFrame> queuedFrames;
@@ -63,15 +64,15 @@ public class QuicStream {
     private final long receiverMaxDataIncrement;
 
 
-    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController) {
+    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
 
-    public QuicStream(int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
+    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(Version.getDefault(), streamId, connection, flowController, log);
     }
 
-    public QuicStream(Version quicVersion, int streamId, QuicConnection connection, FlowControl flowController, Logger log) {
+    public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
@@ -144,6 +145,7 @@ public class QuicStream {
         // - update output stream offset
         // - update (and respect) flow control
         // - accept more data (up to server initial max data)
+        log.info("sending early data now");
         connection.sendEarlyData(new StreamFrame(quicVersion, streamId, currentOffset, earlyData, 0, earlyData.length, fin), f -> {});
     }
 

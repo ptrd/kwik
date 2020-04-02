@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -31,27 +31,34 @@ import java.util.stream.Collectors;
  * Represents a Version Negotiation Packet as specified by
  * https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4
  */
-public class VersionNegotationPacket extends QuicPacket {
+public class VersionNegotiationPacket extends QuicPacket {
+
+    // Minimal length for a valid packet:  type version dcid len dcid scid len scid version
+    private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  4;
 
     private int packetSize;
+    private List<Version> serverSupportedVersions = new ArrayList<>();
 
-    public VersionNegotationPacket() {
+
+    public VersionNegotiationPacket() {
         this(Version.getDefault());
     }
 
-    public VersionNegotationPacket(Version quicVersion) {
+    public VersionNegotiationPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
     }
 
-    public List<String> getServerSupportedVersions() {
+    public List<Version> getServerSupportedVersions() {
         return serverSupportedVersions;
     }
 
-    List<String> serverSupportedVersions = new ArrayList<>();
-
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing VersionNegotationPacket");
+        int packetLength = buffer.limit() - buffer.position();
+        if (packetLength < MIN_PACKET_LENGTH) {
+            throw new InvalidPacketException();
+        }
         buffer.get();     // Type
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
@@ -65,11 +72,17 @@ public class VersionNegotationPacket extends QuicPacket {
 
         byte[] destinationConnectionId;
         byte[] sourceConnectionId;
-        int dstConnIdLength = buffer.get();
+        int dstConnIdLength = buffer.get() & 0xff;
+        if (packetLength < MIN_PACKET_LENGTH + dstConnIdLength) {
+            throw new InvalidPacketException();
+        }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
-        int srcConnIdLength = buffer.get();
+        int srcConnIdLength = buffer.get() & 0xff;
+        if (packetLength < MIN_PACKET_LENGTH + dstConnIdLength + srcConnIdLength) {
+            throw new InvalidPacketException();
+        }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
         log.debug("Destination connection id", destinationConnectionId);
@@ -77,13 +90,12 @@ public class VersionNegotationPacket extends QuicPacket {
 
         while (buffer.remaining() >= 4) {
             int versionData = buffer.getInt();
-            String supportedVersion = parseVersion(versionData);
+            Version supportedVersion = parseVersion(versionData);
             if (supportedVersion != null) {
                 serverSupportedVersions.add(supportedVersion);
                 log.debug("Server supports version " + supportedVersion);
             }
             else {
-                serverSupportedVersions.add(String.format("Unknown version %x", versionData));
                 log.debug(String.format("Server supports unknown version %x", versionData));
             }
         }
@@ -91,9 +103,9 @@ public class VersionNegotationPacket extends QuicPacket {
         packetSize = buffer.limit();
     }
 
-    private String parseVersion(int versionData) {
+    private Version parseVersion(int versionData) {
         try {
-            return Version.parse(versionData).toString();
+            return Version.parse(versionData);
         } catch (UnknownVersionException e) {
             return null;
         }
@@ -141,7 +153,7 @@ public class VersionNegotationPacket extends QuicPacket {
                 + "V" + "|"
                 + (packetSize >= 0? packetSize: ".") + "|"
                 + "0" + "  "
-                + serverSupportedVersions.stream().collect(Collectors.joining(", "));
+                + serverSupportedVersions.stream().map(v -> v.toString()).collect(Collectors.joining(", "));
     }
 
 }

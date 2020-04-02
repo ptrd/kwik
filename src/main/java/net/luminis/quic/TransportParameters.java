@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -23,7 +23,7 @@ import java.net.InetAddress;
 public class TransportParameters {
 
     private byte[] originalConnectionId;
-    private long idleTimeoutInSeconds;
+    private long maxIdleTimeoutInSeconds;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -34,15 +34,16 @@ public class TransportParameters {
     private boolean disableMigration;
     private PreferredAddress preferredAddress;
     private int maxAckDelay;
+    private int activeConnectionIdLimit;
 
 
     public TransportParameters() {
         setDefaults();
     }
 
-    public TransportParameters(int idleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+    public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
         setDefaults();
-        this.idleTimeoutInSeconds = idleTimeoutInSeconds;
+        this.maxIdleTimeoutInSeconds = maxIdleTimeoutInSeconds;
         setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
@@ -54,6 +55,9 @@ public class TransportParameters {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
         // "If this value is absent, a default of 25 milliseconds is assumed."
         maxAckDelay = 25;
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.2
+        // "If this transport parameter is absent, a default of 2 is assumed."
+        activeConnectionIdLimit = 2;
     }
 
     public byte[] getOriginalConnectionId() {
@@ -80,12 +84,12 @@ public class TransportParameters {
         this.preferredAddress = preferredAddress;
     }
 
-    public long getIdleTimeout() {
-        return idleTimeoutInSeconds;
+    public long getMaxIdleTimeout() {
+        return maxIdleTimeoutInSeconds;
     }
 
-    public void setIdleTimeout(long idleTimeout) {
-        this.idleTimeoutInSeconds = idleTimeout;
+    public void setMaxIdleTimeout(long idleTimeout) {
+        this.maxIdleTimeoutInSeconds = idleTimeout / 1000;
     }
 
     public long getInitialMaxData() {
@@ -131,7 +135,7 @@ public class TransportParameters {
         return initialMaxStreamsBidi;
     }
 
-    public void setInitialMaxStreamsBidi(int initialMaxStreamsBidi) {
+    public void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
         this.initialMaxStreamsBidi = initialMaxStreamsBidi;
     }
 
@@ -139,7 +143,7 @@ public class TransportParameters {
         return initialMaxStreamsUni;
     }
 
-    public void setInitialMaxStreamsUni(int initialMaxStreamsUni) {
+    public void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
         this.initialMaxStreamsUni = initialMaxStreamsUni;
     }
 
@@ -149,6 +153,29 @@ public class TransportParameters {
 
     public int getMaxAckDelay() {
         return maxAckDelay;
+    }
+
+    public int getActiveConnectionIdLimit() {
+        return activeConnectionIdLimit;
+    }
+
+    public void setActiveConnectionIdLimit(int activeConnectionIdLimit) {
+        this.activeConnectionIdLimit = activeConnectionIdLimit;
+    }
+
+    public void setDisableMigration(boolean disableMigration) {
+        this.disableMigration = disableMigration;
+    }
+
+    public boolean getDisableMigration() {
+        return disableMigration;
+    }
+
+    @Override
+    public String toString() {
+        return "\n- max idle timeout\t" + maxIdleTimeoutInSeconds +
+                "\n- cids limit\t" + activeConnectionIdLimit +
+                "\n- disable migration\t" + disableMigration;
     }
 
     public static class PreferredAddress {

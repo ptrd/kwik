@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -91,4 +91,13 @@ class VersionTest {
         Version version = Version.parse(rawVersion);
         assertThat(version).isEqualTo(Version.IETF_draft_22);
     }
+
+    @Test
+    void testParseDraft27Version() throws UnknownVersionException {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] { (byte) 0xff, 0x00, 0x00, 0x1b });
+        int rawVersion = buffer.getInt();
+        Version version = Version.parse(rawVersion);
+        assertThat(version).isEqualTo(Version.IETF_draft_27);
+    }
+
 }

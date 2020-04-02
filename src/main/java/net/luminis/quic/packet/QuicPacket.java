@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -89,7 +89,10 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+        if (buffer.remaining() < remainingLength) {
+            throw new InvalidPacketException();
+        }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
         // "When removing packet protection, an endpoint
@@ -102,9 +105,15 @@ abstract public class QuicPacket {
         //   the length of the Packet Number field.  In sampling the packet
         //   ciphertext, the Packet Number field is assumed to be 4 bytes long
         //   (its maximum possible encoded length)."
+        if (buffer.remaining() < 4) {
+            throw new InvalidPacketException();
+        }
         buffer.position(currentPosition + 4);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
         // "This algorithm samples 16 bytes from the packet ciphertext."
+        if (buffer.remaining() < 16) {
+            throw new InvalidPacketException();
+        }
         byte[] sample = new byte[16];
         buffer.get(sample);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
@@ -275,10 +284,10 @@ abstract public class QuicPacket {
         long pnMask = ~ (pnWindow - 1);
 
         long candidatePn = (expectedPacketNumber & pnMask) | truncatedPacketNumber;
-        if (candidatePn <= expectedPacketNumber - pnHalfWindow) {
+        if (candidatePn <= expectedPacketNumber - pnHalfWindow && candidatePn < (1 << 62) - pnWindow) {
             return candidatePn + pnWindow;
         }
-        if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn > pnWindow) {
+        if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn >= pnWindow) {
             return candidatePn - pnWindow;
         }
 
@@ -380,17 +389,27 @@ abstract public class QuicPacket {
                 case 0x19:
                     frames.add(new RetireConnectionIdFrame(quicVersion).parse(buffer, log));
                     break;
+                case 0x1a:
+                    frames.add(new PathChallengeFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x1b:
+                    frames.add(new PathResponseFrame(quicVersion).parse(buffer, log));
+                    break;
                 case 0x1c:
                 case 0x1d:
                     frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
+                    break;
+                case 0x1e:
+                    frames.add(new HandshakeDoneFrame(quicVersion).parse(buffer, log));
                     break;
                 default:
                     if ((frameType >= 0x08) && (frameType <= 0x0f)) {
                         frames.add(new StreamFrame().parse(buffer, log));
                     }
                     else {
-                        System.out.println("NYI frame type: " + frameType);
-                        throw new NotYetImplementedException();
+                        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
+                        // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
+                        throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
                     }
             }
         }
@@ -477,7 +496,7 @@ abstract public class QuicPacket {
 
     public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
 
-    public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException;
+    public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
 
     public List<QuicFrame> getFrames() {
         return frames;
@@ -515,5 +534,15 @@ abstract public class QuicPacket {
     // "ACK-only:  Any packet containing only one or more ACK frame(s)."
     public boolean isAckOnly() {
         return frames.stream().allMatch(frame -> frame instanceof AckFrame);
+    }
+
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-2
+    // "In-flight:  Packets are considered in-flight when they are ack-
+    //      eliciting or contain a PADDING frame, and they have been sent but
+    //      are not acknowledged, declared lost, or abandoned along with old
+    //      keys."
+    // This method covers only the first part, which can be derived from the packet.
+    public boolean isInflightPacket() {
+        return frames.stream().anyMatch(frame -> frame.isAckEliciting() || frame instanceof Padding);
     }
 }

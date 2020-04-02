@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -22,17 +22,44 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Arrays;
 
+/**
+ * See https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-17.2.5
+ */
 public class RetryPacket extends QuicPacket {
+
+    public static final int RETRY_INTEGRITY_TAG_LENGTH = 16;    // The Retry Integrity Tag is 128 bits.
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8:
+    // "The secret key, K, is 128 bits equal to 0x4d32ecdb2a2133c841e4043df27d4430."
+    public static final byte[] SECRET_KEY = new byte[] { 0x4d, 0x32, (byte) 0xec, (byte) 0xdb, 0x2a, 0x21, 0x33, (byte) 0xc8,
+            0x41, (byte) 0xe4, 0x04, 0x3d, (byte) 0xf2, 0x7d, 0x44, 0x30 };
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8:
+    // "The nonce, N, is 96 bits equal to 0x4d1611d05513a552c587d575."
+    public static final byte[] NONCE = new byte[] { 0x4d, 0x16, 0x11, (byte) 0xd0, 0x55, 0x13, (byte) 0xa5, 0x52,
+            (byte) 0xc5, (byte) 0x87, (byte) 0xd5, 0x75 };
+
+    // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
+    private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
 
     private int packetSize;
     private byte[] sourceConnectionId;
     private byte[] destinationConnectionId;
     private byte[] originalDestinationConnectionId;
     private byte[] retryToken;
-
+    private byte[] rawPacketData;
+    private byte[] retryIntegrityTag;
 
     public RetryPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -44,41 +71,99 @@ public class RetryPacket extends QuicPacket {
         this.destinationConnectionId = destinationConnectionId;
         this.originalDestinationConnectionId = originalDestinationConnectionId;
         this.retryToken = retryToken;
+        this.rawPacketData = new byte[1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length +
+                retryToken.length + RETRY_INTEGRITY_TAG_LENGTH];
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
-        packetSize = buffer.limit();
+        if (buffer.remaining() < MIN_PACKET_LENGTH) {
+            throw new InvalidPacketException();
+        }
+
+        packetSize = buffer.remaining();
+        rawPacketData = new byte[packetSize];
+        buffer.mark();
+        buffer.get(rawPacketData);
+        buffer.reset();
 
         byte flags = buffer.get();
-        int odcil = 0;
 
+        boolean matchingVersion = false;
         try {
-            Version quicVersion = Version.parse(buffer.getInt());
-        } catch (UnknownVersionException e) {
-            // Protocol error: if it gets here, server should match the Quic version we sent
-            throw new ProtocolError("Server uses unsupported Quic version");
+            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
+        } catch (UnknownVersionException e) {}
+
+        if (! matchingVersion) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+            // "... packets are discarded if they indicate a different protocol version than that of the connection..."
+            throw new InvalidPacketException();
         }
 
         int dstConnIdLength = buffer.get();
+        if (buffer.remaining() < dstConnIdLength + 1 + RETRY_INTEGRITY_TAG_LENGTH) {
+            throw new InvalidPacketException();
+        }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
         int srcConnIdLength = buffer.get();
+        if (buffer.remaining() < srcConnIdLength) {
+            throw new InvalidPacketException();
+        }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
 
-        odcil = buffer.get();
         log.debug("Destination connection id", destinationConnectionId);
         log.debug("Source connection id", sourceConnectionId);
 
-        originalDestinationConnectionId = new byte[odcil];
-        buffer.get(originalDestinationConnectionId);
-
-        int retryTokenLength = buffer.remaining();
+        if (buffer.remaining() < RETRY_INTEGRITY_TAG_LENGTH) {
+            throw new InvalidPacketException();
+        }
+        int retryTokenLength = buffer.remaining() - RETRY_INTEGRITY_TAG_LENGTH;
         retryToken = new byte[retryTokenLength];
         buffer.get(retryToken);
+
+        retryIntegrityTag = new byte[RETRY_INTEGRITY_TAG_LENGTH];
+        buffer.get(retryIntegrityTag);
+    }
+
+    /**
+     * Validates the Retry Integrity Tag that is carried by this packet.
+     * @param originalDestinationConnectionId
+     * @return
+     */
+    public boolean validateIntegrityTag(byte[] originalDestinationConnectionId) {
+        ByteBuffer pseudoPacket = ByteBuffer.allocate(1 + originalDestinationConnectionId.length + 1 + 4 +
+                1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length);
+        pseudoPacket.put((byte) originalDestinationConnectionId.length);
+        pseudoPacket.put(originalDestinationConnectionId);
+        pseudoPacket.put(rawPacketData, 0, rawPacketData.length - RETRY_INTEGRITY_TAG_LENGTH);
+
+        try {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
+            SecretKeySpec secretKey = new SecretKeySpec(SECRET_KEY, "AES");
+            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, NONCE);
+            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The associated data, A, is the contents of the Retry Pseudo-Packet"
+            aeadCipher.updateAAD(pseudoPacket.array());
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The plaintext, P, is empty."
+            byte[] cipherText = aeadCipher.doFinal(new byte[0]);
+            return Arrays.equals(cipherText, retryIntegrityTag);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            // Inappropriate runtime environment
+            throw new QuicRuntimeException(e);
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+
     }
 
     @Override

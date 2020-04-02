@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -20,13 +20,20 @@ package net.luminis.quic.run;
 
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
+import net.luminis.tls.NewSessionTicket;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -39,9 +46,12 @@ public class InteropRunner extends KwikCli {
 
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
-    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION);
+    public static final String TC_MULTI = "multiconnect";
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI);
 
-    public static File outputDir;
+    private static File outputDir;
+    private static SysOutLogger logger = new SysOutLogger();
+
 
     public static void main(String[] args) {
         if (args.length < 2) {
@@ -60,34 +70,45 @@ public class InteropRunner extends KwikCli {
             System.out.println("Available test cases: " + TESTCASES);
         }
 
+        int i = -1;
         try {
             List<URL> downloadUrls = new ArrayList<>();
-            for (int i = 2; i < args.length; i++) {
+            for (i = 2; i < args.length; i++) {
                 downloadUrls.add(new URL(args[i]));
             }
 
-            if (testCase.equals("transfer")) {
-                testTransfer(downloadUrls);
+            QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+            builder.uri(downloadUrls.get(0).toURI());
+            builder.logger(logger);
+            builder.initialRtt(100);
+
+            if (testCase.equals(TC_TRANSFER)) {
+                testTransfer(downloadUrls, builder);
             }
-            if (testCase.equals("resumption")) {
-                testResumption(downloadUrls);
+            else if (testCase.equals(TC_RESUMPTION)) {
+                testResumption(downloadUrls, builder);
             }
-        } catch (MalformedURLException e) {
-            System.out.println("Invalid (second) argument: cannot parse URL '" + args[1] + "'");
+            else if (testCase.equals(TC_MULTI)) {
+                testMultiConnect(downloadUrls, builder);
+            }
+        } catch (MalformedURLException | URISyntaxException e) {
+            System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
         } catch (IOException e) {
             System.out.println("I/O Error: " + e);
         }
     }
 
-    private static void testTransfer(List<URL> downloadUrls) throws IOException {
+    private static void testTransfer(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         URL url1 = downloadUrls.get(0);
-        SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
+        logger.logInfo(true);
+        logger.logCongestionControl(true);
+        logger.logRecovery(true);
 
-        QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
+        QuicConnection connection = builder.build();
         connection.connect(5_000);
 
-        ForkJoinPool myPool = new ForkJoinPool(downloadUrls.size());
+        ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
         try {
             myPool.submit(() ->
                     downloadUrls.parallelStream()
@@ -111,16 +132,15 @@ public class InteropRunner extends KwikCli {
         connection.close();
     }
 
-    private static void testResumption(List<URL> downloadUrls) throws IOException {
+    private static void testResumption(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         if (downloadUrls.size() != 2) {
             throw new IllegalArgumentException("expected 2 download URLs");
         }
         URL url1 = downloadUrls.get(0);
         URL url2 = downloadUrls.get(1);
-        SysOutLogger logger = new SysOutLogger();
         // logger.logPackets(true);
 
-        QuicConnection connection = new QuicConnection(url1.getHost(), url1.getPort(), logger);
+        QuicConnection connection = builder.build();
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
@@ -137,13 +157,47 @@ public class InteropRunner extends KwikCli {
 
         QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
-        QuicConnection connection2 = new QuicConnection(url2.getHost(), url2.getPort(), sessionTicket, Version.getDefault(), logger);
+        builder = QuicConnectionImpl.newBuilder();
+        builder.uri(url2.toURI());
+        builder.logger(logger);
+        builder.sessionTicket(sessionTicket);
+        QuicConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
         System.out.println("Downloaded " + url2);
         connection2.close();
     }
 
+    private static void testMultiConnect(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws URISyntaxException {
+        logger.useRelativeTime(true);
+        logger.logRecovery(true);
+        logger.logCongestionControl(true);
+        logger.logInfo(true);
+        logger.logPackets(true);
+
+        for (URL download : downloadUrls) {
+            try {
+                System.out.println("Starting download at " + timeNow());
+
+                QuicConnection connection = builder.build();
+                connection.connect(15_000);
+
+                doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
+                System.out.println("Downloaded " + download + " finished at " + timeNow());
+
+                connection.close();
+            }
+            catch (IOException ioError) {
+                System.out.println(timeNow() + " Error in client: " + ioError);
+            }
+        }
+    }
+
+    static String timeNow() {
+        LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+        return timeFormatter.format(localTimeNow);
+    }
 
 }
 

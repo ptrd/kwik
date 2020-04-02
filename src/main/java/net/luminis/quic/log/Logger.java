@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -91,10 +91,13 @@ public interface Logger {
 
     void recovery(String message);
 
+    void recovery(String format, Instant lossTime);
+
     void cc(String message);
 
     void fc(String message);
 
     void receivedPacketInfo(String toString);
+
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -25,7 +25,16 @@ import java.nio.ByteBuffer;
 
 public class MaxStreamsFrame extends QuicFrame {
 
-    private int maxStreams;
+    private long maxStreams;
+    private boolean appliesToBidirectional;
+
+    public MaxStreamsFrame(long maxStreams, boolean appliesToBidirectional) {
+        this.maxStreams = maxStreams;
+        this.appliesToBidirectional = appliesToBidirectional;
+    }
+
+    public MaxStreamsFrame() {
+    }
 
     public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
@@ -33,6 +42,7 @@ public class MaxStreamsFrame extends QuicFrame {
             throw new RuntimeException();  // Would be a programming error.
         }
 
+        appliesToBidirectional = frameType == 0x12;
         maxStreams = VariableLengthInteger.parse(buffer);
 
         return this;
@@ -40,7 +50,9 @@ public class MaxStreamsFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "MaxStreamsFrame[" + maxStreams + "]";
+        return "MaxStreamsFrame["
+                + (appliesToBidirectional? "B": "U") + ","
+                + maxStreams + "]";
     }
 
     @Override
@@ -48,4 +60,11 @@ public class MaxStreamsFrame extends QuicFrame {
         return new byte[0];
     }
 
+    public long getMaxStreams() {
+        return maxStreams;
+    }
+
+    public boolean isAppliesToBidirectional() {
+        return appliesToBidirectional;
+    }
 }

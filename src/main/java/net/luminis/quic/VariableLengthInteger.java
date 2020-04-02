@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,7 +35,8 @@ public class VariableLengthInteger {
             return (int) value;
         }
         else {
-            throw new RuntimeException("value to large for Java int");
+            // If value can be larger than int, parseLong should have called.
+            throw new IllegalArgumentException("value to large for Java int");
         }
     }
 
@@ -170,4 +173,10 @@ public class VariableLengthInteger {
         }
     }
 
+    public static void main(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            long value = parseLong(ByteBuffer.wrap(ByteUtils.hexToBytes(args[i])));
+            System.out.println(args[i] + " => " + value);
+        }
+    }
 }

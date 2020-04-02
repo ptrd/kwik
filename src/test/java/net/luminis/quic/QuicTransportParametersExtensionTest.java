@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -35,8 +35,8 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parsePreferredAddressTransportParameter() throws Exception {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
-                //      id     size     ip4..................     port
-                0x00, 0x0d, 0x00, 0x00, 4, 31, (byte) 198, 62, 0x11, 0x51,
+                // id size  ip4..................  port
+                0x0d, 0x39, 4, 31, (byte) 198, 62, 0x11, 0x51,
                 // ip6   2001:1890:126c:0:0:0:1:2a
                 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a,
                 // port     length      // connection id
@@ -44,8 +44,6 @@ class QuicTransportParametersExtensionTest {
                 // stateless reset token
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
         });
-        int size = buffer.position() - 4;
-        buffer.putShort(2, (short) size);
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
         params.parseTransportParameter(buffer, mock(Logger.class));
@@ -64,8 +62,8 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parsePreferredAddressTransportParameterDetectsZeroIP4() throws Exception {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
-                //      id     size     ip4.......  port
-                0x00, 0x0d, 0x00, 0x00, 0, 0, 0, 0, 0, 0,
+                // id size  ip4.......  port
+                0x0d, 0x39, 0, 0, 0, 0, 0, 0,
                 // ip6   2001:1890:126c:0:0:0:1:2a
                 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a,
                 // port     length      // connection id
@@ -73,8 +71,6 @@ class QuicTransportParametersExtensionTest {
                 // stateless reset token
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
         });
-        int size = buffer.position() - 4;
-        buffer.putShort(2, (short) size);
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
         params.parseTransportParameter(buffer, mock(Logger.class));
@@ -86,8 +82,8 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parsePreferredAddressTransportParameterDetectsZeroIP6() throws Exception {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
-                //      id     size     ip4..................     port
-                0x00, 0x0d, 0x00, 0x00, 4, 31, (byte) 198, 62, 0x11, 0x51,
+                // id size     ip4..................     port
+                0x0d, 0x39, 4, 31, (byte) 198, 62, 0x11, 0x51,
                 // ip6   0:0:0:0:0:0:0:0
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 // port   length      // connection id
@@ -95,8 +91,6 @@ class QuicTransportParametersExtensionTest {
                 // stateless reset token
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
         });
-        int size = buffer.position() - 4;
-        buffer.putShort(2, (short) size);
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
         params.parseTransportParameter(buffer, mock(Logger.class));
@@ -108,8 +102,8 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parsePreferredAddressTransportParameterChecksForIP4OrIP6() throws Exception {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[]{
-                //      id     size     ip4.......  port
-                0x00, 0x0d, 0x00, 0x00, 0, 0, 0, 0, 0, 0,
+                // id size  ip4.......  port
+                0x0d, 0x39, 0, 0, 0, 0, 0, 0,
                 // ip6   0:0:0:0:0:0:0:0
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 // port     length      // connection id
@@ -117,8 +111,6 @@ class QuicTransportParametersExtensionTest {
                 // stateless reset token
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
         });
-        int size = buffer.position() - 4;
-        buffer.putShort(2, (short) size);
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
 
@@ -129,8 +121,8 @@ class QuicTransportParametersExtensionTest {
 
     @Test
     void testAckDelayTransportParameter() throws Exception {
-        //                                                 params_size_ id___ size_    id___ size_
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 00 00 00        00 0a 00 01 07 00 0b 00 01 29".replaceAll(" ", ""));
+        //                                                 id sz id sz
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06 0a 01 07 0b 01 29".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
@@ -141,12 +133,37 @@ class QuicTransportParametersExtensionTest {
 
     @Test
     void unknownTransportParameterShouldBeIgnored() throws Exception {
-        //                                           ext size  params size unknonw id size  dummy value    idle id size  0x40 | 27 10 (10000)
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 00     00 00       ff f9      00 05 01 02 03 04 05 00 01   00 00 67 10".replaceAll(" ", ""));
+        //                                           ext size  unknown id     size dummy value       idle id sz value (0x40 | 27 10) (10000)
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0e     80 00 ff f9      05 01 02 03 04 05    01      02 67 10".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
 
-        assertThat(transportParametersExtension.getTransportParameters().getIdleTimeout()).isEqualTo(10_000);
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10);
+    }
+
+    @Test
+    void testParseMaxIdleTimeoutTransportParameter() throws Exception {
+        //                                           ext size  id sz value 30.000 params size unknonw id size  dummy value    idle id size  0x40 | 27 10 (10000)
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06     01 04 80 00 75 30".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(30);
+    }
+
+    @Test
+    void testSerializeTransportParameters() throws Exception {
+        TransportParameters tp = new TransportParameters(10, 1_048_576, 1024, 256);
+        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp).getBytes();
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
+        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), mock(Logger.class));
+
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10);
+        assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamDataBidiLocal()).isEqualTo(1_048_576);
+        assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamsBidi()).isEqualTo(1024);
+        assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamsUni()).isEqualTo(256);
     }
 }

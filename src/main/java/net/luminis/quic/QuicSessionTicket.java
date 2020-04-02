@@ -45,7 +45,7 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
         wrappedTicket = tlsTicket;
-        idleTimeoutInSeconds = serverParameters.getIdleTimeout();
+        idleTimeoutInSeconds = serverParameters.getMaxIdleTimeout();
         initialMaxData = serverParameters.getInitialMaxData();
         initialMaxStreamDataBidiLocal = serverParameters.getInitialMaxStreamDataBidiLocal();
         initialMaxStreamDataBidiRemote = serverParameters.getInitialMaxStreamDataBidiRemote();

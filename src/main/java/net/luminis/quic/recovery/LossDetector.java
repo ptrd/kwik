@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,8 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.CongestionController;
+import net.luminis.quic.RttEstimator;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
@@ -39,9 +41,10 @@ public class LossDetector {
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
-    private volatile long largestAcked;
+    private volatile long largestAcked = -1;
     private volatile long lost;
     private volatile Instant lossTime;
+    private volatile Instant lastAckElicitingSent;
 
 
     public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController) {
@@ -52,6 +55,13 @@ public class LossDetector {
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
+        if (packet.isInflightPacket()) {
+            congestionController.registerInFlight(packet);
+        }
+
+        if (packet.isAckEliciting()) {
+            lastAckElicitingSent = sent;
+        }
         packetSentLog.put(packet.getPacketNumber(), new PacketStatus(sent, packet, lostPacketCallback));
     }
 
@@ -59,11 +69,10 @@ public class LossDetector {
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
         List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
-                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked)
+                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
+                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
                 .collect(Collectors.toList());
-
-        newlyAcked.forEach(packet -> packet.acked = true);
 
         congestionController.registerAcked(filterInFlight(newlyAcked));
 
@@ -90,7 +99,7 @@ public class LossDetector {
         //      and neither acknowledged nor declared lost, and they are not ACK-
         //      only."
         List<PacketStatus> lostPackets = packetSentLog.values().stream()
-                .filter(p -> !p.acked && !p.lost)
+                .filter(p -> p.inFlight())
                 .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
                 .filter(p -> !p.packet().isAckOnly())
                 .collect(Collectors.toList());
@@ -99,7 +108,7 @@ public class LossDetector {
         }
 
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
-                .filter(p -> !p.acked && !p.lost)
+                .filter(p -> p.inFlight())
                 .filter(p -> p.packet().getPacketNumber() <= largestAcked)
                 .filter(p -> !p.packet().isAckOnly())
                 .map(p -> p.timeSent())
@@ -114,10 +123,14 @@ public class LossDetector {
         return lossTime;
     }
 
+    Instant getLastAckElicitingSent() {
+        return lastAckElicitingSent;
+    }
+
     boolean ackElicitingInFlight() {
         boolean inflight = packetSentLog.values().stream()
                     .filter(p -> p.packet().isAckEliciting())
-                    .filter(p -> !p.acked && !p.lost)
+                    .filter(p -> p.inFlight())
                     .findFirst()
                     .isPresent();
         return inflight;
@@ -125,7 +138,7 @@ public class LossDetector {
 
     List<QuicPacket> unAcked() {
         return packetSentLog.values().stream()
-                .filter(p -> !p.acked && !p.lost)
+                .filter(p -> p.inFlight())
                 .filter(p -> !p.packet().isAckOnly())
                 .map(p -> p.packet())
                 .collect(Collectors.toList());
@@ -134,8 +147,8 @@ public class LossDetector {
     // For debugging
     List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
-                .filter(p -> p.packet().isAckEliciting())
-                .filter(p -> !p.acked && !p.lost)
+                .filter(p -> !p.packet().isAckOnly())
+                .filter(p -> p.inFlight())
                 .collect(Collectors.toList());
     }
 
@@ -149,19 +162,28 @@ public class LossDetector {
     }
 
     private void declareLost(List<PacketStatus> lostPacketsInfo) {
-        lostPacketsInfo.stream().forEach(packetAckStatus -> {
-            packetAckStatus.lostPacketCallback().accept(packetAckStatus.packet());
-            packetAckStatus.lost = true;
-        });
+        lostPacketsInfo = lostPacketsInfo.stream()
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
+                .collect(Collectors.toList());
 
-        lost += lostPacketsInfo.size();
+        lostPacketsInfo.stream()
+                .forEach(packetStatus -> {
+                    packetStatus.lostPacketCallback().accept(packetStatus.packet());
+                    lost++;
+                });
 
-        congestionController.registerLost(lostPacketsInfo);
+        congestionController.registerLost(filterInFlight(lostPacketsInfo));
     }
 
     public void reset() {
+        List<PacketStatus> inflightPackets = packetSentLog.values().stream()
+                .filter(packet -> packet.inFlight())
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
+                .collect(Collectors.toList());
+        congestionController.discard(inflightPackets);
         packetSentLog.clear();
         lossTime = null;
+        lastAckElicitingSent = null;
     }
 
     public long getLost() {
@@ -170,34 +192,12 @@ public class LossDetector {
 
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
         return packets.stream()
-                .filter(packetInfo -> !packetInfo.packet().isAckOnly())
+                .filter(packetInfo -> packetInfo.packet().isInflightPacket())
                 .collect(Collectors.toList());
     }
 
-    private static class PacketStatus extends PacketInfo {
-        boolean lost;
-        boolean acked;
-
-        public PacketStatus(Instant sent, QuicPacket packet, Consumer<QuicPacket> lostPacketCallback) {
-            super(sent, packet, lostPacketCallback);
-        }
-
-        public String status() {
-            if (acked) {
-                return "Acked";
-            } else if (lost) {
-                return "Resent";
-            } else {
-                return "-";
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "Packet "
-                    + packet().getEncryptionLevel().name().charAt(0) + "|"
-                    + (packet().getPacketNumber() >= 0 ? packet().getPacketNumber() : ".") + "|"
-                    + "L" + "|" + status();
-        }
+    public boolean noAckedReceived() {
+        return largestAcked < 0;
     }
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -46,6 +46,9 @@ public class AbstractCongestionController implements CongestionController {
         if (! sentPacket.isAckOnly()) {
             bytesInFlight += sentPacket.getSize();
             log.debug("Bytes in flight increased to " + bytesInFlight);
+            if (bytesInFlight > congestionWindow) {
+                log.cc("Bytes in flight exceeds congestion window: " + bytesInFlight + " > " + congestionWindow);
+            }
             synchronized (lock) {
                 lock.notifyAll();
             }
@@ -61,7 +64,8 @@ public class AbstractCongestionController implements CongestionController {
 
         if (bytesInFlightAcked > 0) {
             bytesInFlight -= bytesInFlightAcked;
-            log.debug("Bytes in flight decreased to " + bytesInFlight);
+            checkBytesInFlight();
+            log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
             synchronized (lock) {
                 lock.notifyAll();
             }
@@ -69,7 +73,7 @@ public class AbstractCongestionController implements CongestionController {
     }
 
     @Override
-    public void registerLost(List<? extends PacketInfo> lostPackets) {
+    public synchronized void registerLost(List<? extends PacketInfo> lostPackets) {
         long lostBytes = lostPackets.stream()
                 .map(packetStatus -> packetStatus.packet())
                 .mapToInt(packet -> packet.getSize())
@@ -77,7 +81,22 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight -= lostBytes;
 
         if (lostBytes > 0) {
-            log.debug("Bytes in flight decreased to " + bytesInFlight);
+            checkBytesInFlight();
+            log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + lostPackets.size() + " packets lost)");
+        }
+    }
+
+    @Override
+    public synchronized void discard(List<? extends PacketInfo> discardedPackets) {
+        long discardedBytes = discardedPackets.stream()
+                .map(packetStatus -> packetStatus.packet())
+                .mapToInt(packet -> packet.getSize())
+                .sum();
+        bytesInFlight -= discardedBytes;
+
+        if (discardedBytes > 0) {
+            checkBytesInFlight();
+            log.debug("Bytes in flight decreased with " + discardedBytes + " to " + bytesInFlight + " (" + discardedPackets.size() + " packets RESET)");
         }
     }
 
@@ -104,5 +123,11 @@ public class AbstractCongestionController implements CongestionController {
         bytesInFlight = 0;
     }
 
+    private void checkBytesInFlight() {
+        if (bytesInFlight < 0) {
+            log.error("Inconsistency error in congestion controller; attempt to set bytes in-flight below 0");
+            bytesInFlight = 0;
+        }
+    }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,13 +16,15 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.stream;
 
+import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.stream.FlowControl;
+import net.luminis.quic.stream.QuicStream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +51,7 @@ import static org.mockito.Mockito.*;
 class QuicStreamTest {
 
     private static long originalWaitForNextFrameTimeoutValue;
-    private QuicConnection connection;
+    private QuicConnectionImpl connection;
     private QuicStream quicStream;
     private Logger logger;
 
@@ -66,7 +68,7 @@ class QuicStreamTest {
 
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
-        connection = Mockito.mock(QuicConnection.class);
+        connection = Mockito.mock(QuicConnectionImpl.class);
         when(connection.getMaxPacketSize()).thenReturn(1232);
         logger = Mockito.mock(Logger.class);
 
@@ -413,22 +415,22 @@ class QuicStreamTest {
 
     @Test
     void isUnidirectional() {
-        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnection.class), null);
+        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), null);
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnection.class), null);
+        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), null);
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(0, mock(QuicConnection.class), null);
+        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), null);
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(1, mock(QuicConnection.class), null);
+        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), null);
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
 

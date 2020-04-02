@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -60,21 +60,16 @@ public class QuicTransportParametersExtension extends Extension {
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
 
-        // Length of transport parameters vector: use placeholder.
-        int transportParametersLengthPosition = buffer.position();
-        buffer.putShort((short) 0);
-
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "Those
         //   transport parameters that are identified as integers use a variable-
         //   length integer encoding (see Section 16) and have a default value of
         //   0 if the transport parameter is absent, unless otherwise stated."
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-18.1
-        // "The idle timeout is a value in milliseconds
-        //      that is encoded as an integer, see (Section 10.2).  If this
-        //      parameter is absent or zero then the idle timeout is disabled."
-        addTransportParameter(buffer, idle_timeout, params.getIdleTimeout() * 1000);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.1
+        // "The max idle timeout is a value in milliseconds
+        //      that is encoded as an integer, see (Section 10.2)."
+        addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout() * 1000);
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an
@@ -124,11 +119,12 @@ public class QuicTransportParametersExtension extends Extension {
         //      unidirectional streams until a MAX_STREAMS frame is sent."
         addTransportParameter(buffer, initial_max_streams_uni, params.getInitialMaxStreamsUni());
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-18.2
+        // "The maximum number of connection IDs from the peer that an endpoint is willing to store."
+        addTransportParameter(buffer, active_connection_id_limit, params.getActiveConnectionIdLimit());
+
         int length = buffer.position();
         buffer.limit(length);
-
-        int transportParametersSize = length - transportParametersLengthPosition - 2;  // 2 bytes for the size itself
-        buffer.putShort(transportParametersLengthPosition, (short) transportParametersSize);
 
         int extensionsSize = length - 2 - 2;  // 2 bytes for the length itself and 2 for the type
         buffer.putShort(2, (short) extensionsSize);
@@ -150,17 +146,23 @@ public class QuicTransportParametersExtension extends Extension {
             throw new RuntimeException();  // Must be programming error
         }
         int extensionLength = buffer.getShort();
+        int startPosition = buffer.position();
 
-        int transportParametersSize = buffer.getShort();
         log.debug("Transport parameters: ");
         while (buffer.remaining() > 0) {
             parseTransportParameter(buffer, log);
         }
+
+        int realSize = buffer.position() - startPosition;
+        if (realSize != extensionLength) {
+            throw new ProtocolError("inconsistent size in transport parameter" + "  should be: " + realSize);
+        }
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) {
-        int parameterId = buffer.getShort() & 0xffff;
-        int size = buffer.getShort();
+        int parameterId = VariableLengthInteger.parse(buffer);
+        int size = VariableLengthInteger.parse(buffer);
+        int startPosition = buffer.position();
 
         if (parameterId == initial_max_stream_data_bidi_local.value) {
             int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
@@ -175,11 +177,12 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_max_streams_bidi.value) {
             long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max bidi streams: " + maxBidiStreams);
+            params.setInitialMaxStreamsBidi(maxBidiStreams);
         }
         else if (parameterId == idle_timeout.value) {
             long idleTimeout = VariableLengthInteger.parseLong(buffer);
-            log.debug("- idle timeout: " + idleTimeout);
-            params.setIdleTimeout(idleTimeout);
+            log.debug("- max idle timeout: " + idleTimeout);
+            params.setMaxIdleTimeout(idleTimeout);
         }
         else if (parameterId == preferred_address.value) {
             parsePreferredAddress(buffer, log);
@@ -201,9 +204,11 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_max_streams_uni.value) {
             long maxUniStreams = VariableLengthInteger.parseLong(buffer);
             log.debug("- max uni streams: " + maxUniStreams);
+            params.setInitialMaxStreamsUni(maxUniStreams);
         }
         else if (parameterId == disable_active_migration.value) {
             log.debug("- disable migration");
+            params.setDisableMigration(true);
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
             long maxStreamDataBidiRemote = VariableLengthInteger.parseLong(buffer);
@@ -229,10 +234,16 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == active_connection_id_limit.value) {
             int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
             log.debug("- active connection id limit: " + activeConnectionIdLimit);
+            params.setActiveConnectionIdLimit(activeConnectionIdLimit);
         }
         else {
-            log.error("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
+            log.debug("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
             buffer.get(new byte[size]);
+        }
+
+        int realSize = buffer.position() - startPosition;
+        if (realSize != size) {
+            throw new ProtocolError("inconsistent size in transport parameter" + "   moet zijn: " + realSize);
         }
     }
 
@@ -272,11 +283,12 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
-        buffer.putShort(id.value);
-        int position = buffer.position();
-        buffer.putShort((short) 0);  // placeholder
+        VariableLengthInteger.encode(id.value, buffer);
+        buffer.mark();
         int encodedValueLength = VariableLengthInteger.encode(value, buffer);
-        buffer.putShort(position, (short) encodedValueLength);
+        buffer.reset();
+        VariableLengthInteger.encode(encodedValueLength, buffer);
+        VariableLengthInteger.encode(value, buffer);
     }
 
     public TransportParameters getTransportParameters() {

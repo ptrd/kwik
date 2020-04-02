@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -99,6 +99,7 @@ public class MockPacket extends QuicPacket {
 
     @Override
     public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+        this.packetNumber = packetNumber;
         ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);
         buffer.putInt(encryptionLevel.ordinal());

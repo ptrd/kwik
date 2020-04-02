@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -158,6 +158,10 @@ public class NullLogger implements Logger {
 
     @Override
     public void recovery(String message) {
+    }
+
+    @Override
+    public void recovery(String format, Instant lossTime) {
     }
 
     @Override

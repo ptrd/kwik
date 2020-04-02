@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -38,13 +38,13 @@ public class KeepAliveActor {
     private final Version quicVersion;
     private final int keepAliveTime;
     private final int peerIdleTimeout;
-    private final QuicConnection connection;
+    private final QuicConnectionImpl connection;
     private final Instant started;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final int pingInterval;
     private volatile ScheduledFuture<?> scheduledTask;
 
-    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnection connection) {
+    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnectionImpl connection) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
         this.peerIdleTimeout = peerIdleTimeout * 1000;
@@ -57,7 +57,6 @@ public class KeepAliveActor {
 
     private void ping() {
         QuicPacket packet = connection.createPacket(App, new PingFrame(quicVersion));
-        packet.getFrames().add(new Padding(20));  // TODO: find out minimum packet size
         connection.send(packet, "ping");
 
         scheduleNextPing();

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -35,15 +35,16 @@ import java.util.concurrent.TimeUnit;
  */
 public class Receiver {
 
-    private final QuicConnection connection;
-    private final DatagramSocket socket;
+    private final QuicConnectionImpl connection;
+    private volatile DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
     private volatile boolean isClosing = false;
+    private volatile boolean changing = false;
 
-    public Receiver(QuicConnection connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
+    public Receiver(QuicConnectionImpl connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
         this.connection = connection;
         this.socket = socket;
         this.maxPacketSize = initialMaxPacketSize;
@@ -84,22 +85,32 @@ public class Receiver {
     }
 
     private void run() {
-        Thread receiverThread = Thread.currentThread();
         int counter = 0;
 
         try {
-            while (! receiverThread.isInterrupted()) {
+            while (! isClosing) {
                 byte[] receiveBuffer = new byte[maxPacketSize + 1];
                 DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
                 try {
                     socket.receive(receivedPacket);
+
+                    Instant timeReceived = Instant.now();
+                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
+                    receivedPacketsQueue.add(rawPacket);
                 }
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set
                 }
-                Instant timeReceived = Instant.now();
-                RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                receivedPacketsQueue.add(rawPacket);
+                catch (SocketException socketError) {
+                    if (changing) {
+                        // Expected
+                        log.debug("Ignoring socket closed exception, because changing socket", socketError);
+                        changing = false;  // Don't do it again.
+                    }
+                    else {
+                        throw socketError;
+                    }
+                }
             }
 
             log.debug("Terminating receive loop");
@@ -120,4 +131,10 @@ public class Receiver {
         }
     }
 
+    public void changeAddress(DatagramSocket newSocket) {
+        DatagramSocket oldSocket = socket;
+        socket = newSocket;
+        changing = true;
+        oldSocket.close();
+    }
 }

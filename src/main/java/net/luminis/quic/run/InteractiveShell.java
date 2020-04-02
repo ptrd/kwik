@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
@@ -27,6 +29,7 @@ import net.luminis.tls.ByteUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -38,34 +41,41 @@ public class InteractiveShell {
     private final Map<String, Consumer<String>> commands;
     private boolean running;
     private Map<String, String> history;
-    private final String host;
-    private final int port;
-    private final Version quicVersion;
-    private final Logger logger;
-    private QuicConnection quicConnection;
+    private final QuicConnectionImpl.Builder builder;
+    private final String alpn;
+    private QuicConnectionImpl quicConnection;
+    private TransportParameters params;
 
-    public InteractiveShell(String host, int port, Version quicVersion, Logger logger) {
-        this.host = host;
-        this.port = port;
-        this.quicVersion = quicVersion;
-        this.logger = logger;
+    public InteractiveShell(QuicConnectionImpl.Builder builder, String alpn) {
+        this.builder = builder;
+        this.alpn = alpn;
 
-        commands = new HashMap<>();
+        commands = new LinkedHashMap<>();
         history = new LinkedHashMap<>();
         setupCommands();
+
+        initParams();
+    }
+
+    private void initParams() {
+        params = new TransportParameters(60, 250_000, 3 , 3);
     }
 
     private void setupCommands() {
         commands.put("help", this::help);
+        commands.put("set", this::setClientParameter);
         commands.put("connect", this::connect);
         commands.put("close", this::close);
-        commands.put("quit", this::quit);
         commands.put("ping", this::sendPing);
-        commands.put("params", this::printParams);
-        commands.put("cids_new", this::newConnectionIds);
-        commands.put("cids_next", this::nextDestinationConnectionId);
-        commands.put("cids_show", this::printConnectionIds);
+        commands.put("params", this::printClientParams);
+        commands.put("server_params", this::printServerParams);
+        commands.put("cid_new", this::newConnectionIds);
+        commands.put("cid_next", this::nextDestinationConnectionId);
+        commands.put("cid_list", this::printConnectionIds);
+        commands.put("cid_retire", this::retireConnectionId);
+        commands.put("udp_rebind", this::changeUdpPort);
         commands.put("!!", this::repeatLastCommand);
+        commands.put("quit", this::quit);
     }
 
     private void repeatLastCommand(String arg) {
@@ -129,9 +139,14 @@ public class InteractiveShell {
         }
 
         try {
-            quicConnection = new QuicConnection(host, port, quicVersion, logger);
-            quicConnection.connect(connectionTimeout);
-            System.out.println("Ok, connected to " + host + "\n");
+            quicConnection = builder.build();
+            if (alpn == null) {
+                quicConnection.connect(connectionTimeout, params);
+            }
+            else {
+                quicConnection.connect(connectionTimeout, alpn, params, null);
+            }
+            System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);
         }
@@ -168,16 +183,28 @@ public class InteractiveShell {
     }
 
     private void printConnectionIds(String arg) {
-        System.out.println("Current source connection id: " + ByteUtils.bytesToHex(quicConnection.getSourceConnectionId()));
-        System.out.println("Generated source connection id's:");
+        System.out.println("Source (client) connection id's:");
         quicConnection.getSourceConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
-        System.out.println("Current destination connection id: " + ByteUtils.bytesToHex(quicConnection.getDestinationConnectionId()));
-        System.out.println("Available destination connection id's:");
+                .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
+                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+        System.out.println("Destination (server) connection id's:");
         quicConnection.getDestinationConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> System.out.println(entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue())));
+                .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
+                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+    }
+
+    private String toString(ConnectionIdStatus connectionIdStatus) {
+        switch (connectionIdStatus) {
+            case NEW: return " ";
+            case IN_USE: return "*";
+            case USED: return ".";
+            case RETIRED: return "x";
+            default:
+                // Impossible
+                throw new RuntimeException("");
+        }
     }
 
     private void nextDestinationConnectionId(String arg) {
@@ -190,8 +217,16 @@ public class InteractiveShell {
         }
     }
 
+    private void retireConnectionId(String arg) {
+        quicConnection.retireDestinationConnectionId(toInt(arg));
+    }
+
+    private void changeUdpPort(String args) {
+        quicConnection.changeAddress();
+    }
+
     private void help(String arg) {
-        System.out.println("available commands: " + commands.keySet().stream().sorted().collect(Collectors.joining(", ")));
+        System.out.println("available commands: " + commands.keySet().stream().collect(Collectors.joining(", ")));
     }
 
     private void quit(String arg) {
@@ -208,8 +243,60 @@ public class InteractiveShell {
 
     private void printParams(String arg) {
         TransportParameters parameters = quicConnection.getPeerTransportParameters();
-        System.out.println("Server idle time: " + parameters.getIdleTimeout());
+        System.out.println("Server idle time: " + parameters.getMaxIdleTimeout());
         System.out.println("Server initial max data: " + parameters.getInitialMaxData());
+    }
+
+    private void printClientParams(String arg) {
+        System.out.print("Client transport parameters: ");
+        if (quicConnection != null) {
+            System.out.println(quicConnection.getTransportParameters());
+        }
+        else {
+            System.out.println(params);
+        }
+    }
+
+    private void setClientParameter(String argLine) {
+        String[] args = argLine.split("\\s+");
+        if (args.length == 2) {
+            String name = args[0];
+            String value = args[1];
+            setClientParameter(name, value);
+        } else {
+            System.out.println("Incorrect parameters; should be <transport parameter name> <value>.");
+            System.out.println("Supported parameters: ");
+            printSupportedParameters();
+        }
+    }
+
+    private void printSupportedParameters() {
+        System.out.println("- idle (idle timeout)");
+        System.out.println("- cids (active connection id limit)");
+    }
+
+    private void setClientParameter(String name, String value) {
+        switch (name) {
+            case "idle":
+                params.setMaxIdleTimeout(toInt(value));
+                break;
+            case "cids":
+                params.setActiveConnectionIdLimit(toInt(value));
+                break;
+            default:
+                System.out.println("Parameter must be one of:");
+                printSupportedParameters();
+        }
+    }
+
+    private void printServerParams(String arg) {
+        if (quicConnection != null) {
+            TransportParameters parameters = quicConnection.getPeerTransportParameters();
+            System.out.println("Server transport parameters: " + parameters);
+        }
+        else {
+            System.out.println("Server transport parameters still unknown (no connection)");
+        }
     }
 
     private void error(Exception error) {
@@ -219,5 +306,14 @@ public class InteractiveShell {
     private void prompt() {
         System.out.print("> ");
         System.out.flush();
+    }
+
+    private Integer toInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: value not an integer; using 0");
+            return 0;
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,14 +18,17 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.Extension;
+/**
+ * Indicates an invalid packet.
+ */
+public class InvalidPacketException extends Exception {
 
-public class ECPointFormatExtension extends Extension {
+    public InvalidPacketException() {
+        super();
+    }
 
-    @Override
-    public byte[] getBytes() {
-        return new byte[] {
-                (byte) 0x00, (byte) 0x0b, (byte) 0x00, (byte) 0x04, (byte) 0x03, (byte) 0x00, (byte) 0x01, (byte) 0x02
-        };
+    public InvalidPacketException(String message) {
+        super(message);
     }
 }
+

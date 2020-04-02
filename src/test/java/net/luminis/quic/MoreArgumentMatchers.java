@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Peter Doornbosch
+ * Copyright © 2019, 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -24,7 +24,7 @@ import java.util.List;
 
 public class MoreArgumentMatchers {
 
-    static ArgumentMatcher<List> emptyList() {
+    public static ArgumentMatcher<List> emptyList() {
         return new ArgumentMatcher<List>() {
             public boolean matches(List list) {
                 return list.isEmpty();
