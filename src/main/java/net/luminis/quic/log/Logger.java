@@ -37,6 +37,8 @@ public interface Logger {
 
     void logInfo(boolean enabled);
 
+    void logWarning(boolean enabled);
+
     void logStats(boolean enabled);
 
     void logRecovery(boolean enabled);
@@ -58,6 +60,8 @@ public interface Logger {
     void debugWithHexBlock(String message, byte[] data, int length);
 
     void debug(String message, byte[] data);
+
+    void warn(String message);
 
     void info(String message);
 

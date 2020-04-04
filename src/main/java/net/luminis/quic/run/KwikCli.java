@@ -43,11 +43,14 @@ import java.util.stream.Collectors;
 public class KwikCli {
 
     private static Options cmdLineOptions;
+    private static String DEFAULT_LOG_ARGS = "wip";
+
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
         cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
-                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (R)aw bytes, (S)ecrets, (D)ebug; default is \"ip\", use (n)one to disable");
+                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (w)arning, (R)aw bytes, (S)ecrets, (D)ebug; "
+                + " default is \"" + DEFAULT_LOG_ARGS + "\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
         cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
@@ -134,22 +137,14 @@ public class KwikCli {
         if (logger == null) {
             logger = new SysOutLogger();
         }
-        logger.logPackets(true);
-        logger.logInfo(true);
         builder.logger(logger);
 
+        String logArg = DEFAULT_LOG_ARGS;
         if (cmd.hasOption('l')) {
-            String logArg = cmd.getOptionValue('l', "ip");
+            logArg = cmd.getOptionValue('l', logArg);
+        }
 
-            if (logArg.contains("n")) {
-                logger.logRaw(false);
-                logger.logDecrypted(false);
-                logger.logSecrets(false);
-                logger.logPackets(false);
-                logger.logInfo(false);
-                logger.logDebug(false);
-                logger.logStats(false);
-            }
+        if (!logArg.contains("n")) {
             if (logArg.contains("R")) {
                 logger.logRaw(true);
             }
@@ -170,6 +165,9 @@ public class KwikCli {
             }
             if (logArg.contains("i")) {
                 logger.logInfo(true);
+            }
+            if (logArg.contains("w")) {
+                logger.logWarning(true);
             }
             if (logArg.contains("s")) {
                 logger.logStats(true);

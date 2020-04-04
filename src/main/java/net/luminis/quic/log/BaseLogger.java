@@ -37,6 +37,7 @@ public abstract class BaseLogger implements Logger {
     private volatile boolean logSecrets = false;
     private volatile boolean logPackets = false;
     private volatile boolean logInfo = false;
+    private volatile boolean logWarning = false;
     private volatile boolean logStats = false;
     private volatile boolean logRecovery = false;
     private volatile boolean logCongestionControl = false;
@@ -78,6 +79,11 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void logInfo(boolean enabled) {
         logInfo = enabled;
+    }
+
+    @Override
+    public void logWarning(boolean enabled) {
+        logWarning = enabled;
     }
 
     @Override
@@ -142,6 +148,13 @@ public abstract class BaseLogger implements Logger {
     public void debug(String message, byte[] data) {
         if (logDebug) {
             log(message + " (" + data.length + "): " + byteToHex(data));
+        }
+    }
+
+    @Override
+    public void warn(String message) {
+        if (logWarning) {
+            log(message);
         }
     }
 
