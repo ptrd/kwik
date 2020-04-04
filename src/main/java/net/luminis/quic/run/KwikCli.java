@@ -68,7 +68,15 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
 
         CommandLineParser parser = new DefaultParser();
-        CommandLine cmd = parser.parse(cmdLineOptions, rawArgs);
+        CommandLine cmd = null;
+        try {
+            cmd = parser.parse(cmdLineOptions, rawArgs);
+        }
+        catch (ParseException argError) {
+            System.out.println("Invalid argument: " + argError.getMessage());
+            usage();
+            System.exit(1);
+        }
 
         if (cmd.hasOption("v")) {
             System.out.println("Kwik build nr: " + getVersion());
