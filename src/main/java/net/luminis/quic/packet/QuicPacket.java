@@ -42,6 +42,7 @@ abstract public class QuicPacket {
     protected long packetNumber = -1;
     protected List<QuicFrame> frames = new ArrayList<>();
     protected int packetSize = -1;
+    protected byte[] destinationConnectionId;
 
     public QuicPacket() {
         frames = new ArrayList<>();
@@ -544,5 +545,9 @@ abstract public class QuicPacket {
     // This method covers only the first part, which can be derived from the packet.
     public boolean isInflightPacket() {
         return frames.stream().anyMatch(frame -> frame.isAckEliciting() || frame instanceof Padding);
+    }
+
+    public byte[] getDestinationConnectionId() {
+        return destinationConnectionId;
     }
 }

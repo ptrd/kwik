@@ -36,7 +36,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  1 +    1 +    1;
 
     protected byte[] sourceConnectionId;
-    protected byte[] destinationConnectionId;
 
     /**
      * Constructs an empty packet for parsing a received one
@@ -207,10 +206,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
-    }
-
-    public byte[] getDestinationConnectionId() {
-        return destinationConnectionId;
     }
 
     protected abstract void checkPacketType(byte b);

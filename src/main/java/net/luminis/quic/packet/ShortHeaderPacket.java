@@ -31,7 +31,6 @@ import java.util.stream.Collectors;
 
 public class ShortHeaderPacket extends QuicPacket {
 
-    private byte[] destinationConnectionId;
     private byte[] packetBytes;
     private short keyPhaseBit;
 
