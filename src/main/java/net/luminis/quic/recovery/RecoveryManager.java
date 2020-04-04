@@ -55,7 +55,7 @@ public class RecoveryManager implements HandshakeStateListener {
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
     private volatile boolean firstHandshakeSent = false;
-
+    private volatile boolean hasBeenReset = false;
 
     public RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
@@ -304,24 +304,28 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace) {
-        ptoCount = 0;
-        lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame);
+        if (! hasBeenReset) {
+            ptoCount = 0;
+            lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame);
+        }
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        if (packet.getEncryptionLevel() == EncryptionLevel.Handshake && ! firstHandshakeSent) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.10.1
-            // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet"
-            // "This results in abandoning loss recovery state for the Initial
-            //   encryption level and ignoring any outstanding Initial packets."
-            log.recovery("Resetting Initial pn-space, because first Handshake message is sent");
-            lossDetectors[PnSpace.Initial.ordinal()].reset();
-            firstHandshakeSent = true;
-        }
-        if (packet.isInflightPacket()) {
-            // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
-            lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
-            setLossDetectionTimer();
+        if (! hasBeenReset) {
+            if (packet.getEncryptionLevel() == EncryptionLevel.Handshake && !firstHandshakeSent) {
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.10.1
+                // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet"
+                // "This results in abandoning loss recovery state for the Initial
+                //   encryption level and ignoring any outstanding Initial packets."
+                log.recovery("Resetting Initial pn-space, because first Handshake message is sent");
+                lossDetectors[PnSpace.Initial.ordinal()].reset();
+                firstHandshakeSent = true;
+            }
+            if (packet.isInflightPacket()) {
+                // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
+                lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
+                setLossDetectionTimer();
+            }
         }
     }
 
@@ -329,15 +333,12 @@ public class RecoveryManager implements HandshakeStateListener {
         return Stream.of(lossDetectors).anyMatch(detector -> detector.ackElicitingInFlight());
     }
 
-    void shutdown() {
-        lossDetectionTimer.cancel(true);
-    }
-
     public synchronized void setReceiverMaxAckDelay(int receiverMaxAckDelay) {
         this.receiverMaxAckDelay = receiverMaxAckDelay;
     }
 
     public void stopRecovery() {
+        hasBeenReset = true;
         unschedule();
         for (PnSpace pnSpace: PnSpace.values()) {
             stopRecovery(pnSpace);
@@ -355,10 +356,12 @@ public class RecoveryManager implements HandshakeStateListener {
 
     @Override
     public void handshakeStateChangedEvent(HandshakeState newState) {
-        HandshakeState oldState = handshakeState;
-        handshakeState = newState;
-        if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
-            setLossDetectionTimer();
+        if (! hasBeenReset) {
+            HandshakeState oldState = handshakeState;
+            handshakeState = newState;
+            if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+                setLossDetectionTimer();
+            }
         }
     }
 
@@ -399,7 +402,7 @@ public class RecoveryManager implements HandshakeStateListener {
         }
     }
 
-    static void repeatSend(int count, Runnable task) {
+    private void repeatSend(int count, Runnable task) {
         for (int i = 0; i < count; i++) {
             task.run();
             try {

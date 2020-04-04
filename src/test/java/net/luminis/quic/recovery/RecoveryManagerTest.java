@@ -71,7 +71,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @AfterEach
     void shutdownRecoveryManager() {
-        recoveryManager.shutdown();
+        recoveryManager.stopRecovery();
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1.2
