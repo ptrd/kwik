@@ -430,6 +430,44 @@ class LossDetectorTest extends RecoveryTests {
         assertThat(congestionController.canSend(1)).isFalse();
     }
 
+    // This test was used to reproduce a race condition in the LossDetector. It is of no use to run it in each build.
+    // To check the test is actually testing the race condition, insert system.out.print's in reset and onAckReceived methods.
+    // @Test
+    void maybeReproduceRaceConditionInOnAckdReceived() throws InterruptedException {
+        int numberOfTestRuns = 500;
+        for (int tc = 1; tc <= numberOfTestRuns; tc++) {
+            System.out.print("\n" + tc + ": ");
+            final int testRun = tc;
+            for (int i = 0; i < 10000; i++) {
+                lossDetector.packetSent(new MockPacket(i, 100, "packet " + i), Instant.now(), p -> {});
+            }
+            Thread lossDetectorResetThread = new Thread(() -> {
+                for (int i = 0; i < 1; i++) {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {}
+                    lossDetector.reset();
+                }
+            });
+            Thread onAckReceivedThread = new Thread(() -> {
+                for (int i = 0; i < 100; i++) {
+                    try {
+                        lossDetector.onAckReceived(new AckFrame(i));
+                    }
+                    catch (Exception e) {
+                        System.out.println("ERROR in test run " + testRun + ": " + e);
+                        e.printStackTrace();
+                        System.exit(1);
+                    }
+                }
+            });
+            onAckReceivedThread.start();
+            lossDetectorResetThread.start();
+            lossDetectorResetThread.join();
+            onAckReceivedThread.join();
+        }
+    }
+
     private void setCongestionWindowSize(CongestionController congestionController, int cwnd) throws Exception {
         FieldSetter.setField(congestionController, congestionController.getClass().getSuperclass().getDeclaredField("congestionWindow"), cwnd);
     }

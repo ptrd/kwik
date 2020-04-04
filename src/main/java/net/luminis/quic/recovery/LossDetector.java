@@ -71,6 +71,7 @@ public class LossDetector {
         List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
+                .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
                 .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
                 .collect(Collectors.toList());
 
