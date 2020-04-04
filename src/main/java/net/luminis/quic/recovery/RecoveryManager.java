@@ -135,27 +135,27 @@ public class RecoveryManager implements HandshakeStateListener {
         Instant expiration = timerExpiration;
         if (expiration == null) {
             // Timer was cancelled, but it still fired; ignore
-            System.out.println("Timer was cancelled.");
+            log.warn("Loss detection timeout: Timer was cancelled.");
             return;
         }
         else if (Instant.now().isBefore(expiration)) {
             // Old timer task was cancelled, but it still fired; just ignore.
-            System.out.println("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
+            log.warn("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
             try {
                 Thread.sleep(Duration.between(Instant.now(), expiration).toMillis() + 1);   // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary
             } catch (InterruptedException e) {
             }
             expiration = timerExpiration;
             if (expiration == null) {
-                System.out.println("Delayed task: timer expiration is now null, cancelled");
+                log.warn("Delayed task: timer expiration is now null, cancelled");
                 return;
             }
             else if (Instant.now().isBefore(expiration)) {
-                System.out.println("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
+                log.warn("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
                 return;
             }
             else {
-                System.out.println("Delayed task running now");
+                log.warn("Delayed task running now");
             }
         }
 
@@ -285,7 +285,9 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
-        lossDetectionTimer.cancel(false);
+        if (! lossDetectionTimer.cancel(false)) {
+            log.warn("Cancelling loss detection timer failed");
+        }
         timerExpiration = Instant.now().plusMillis(timeout);
         return scheduler.schedule(() -> {
             try {
