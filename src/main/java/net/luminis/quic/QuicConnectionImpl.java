@@ -47,6 +47,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.EncryptionLevel.*;
+import static net.luminis.tls.ByteUtils.bytesToHex;
 import static net.luminis.tls.Tls13.generateKeys;
 
 
@@ -152,7 +153,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             this.transportParams = transportParameters;
         }
 
-        log.info("Original destination connection id", destConnectionIds.getCurrent());
+        log.info(String.format("Original destination connection id: %s (scid: %s)", bytesToHex(destConnectionIds.getCurrent()), bytesToHex(sourceConnectionIds.getCurrent())));
         generateInitialKeys();
 
         receiver.start();
@@ -546,7 +547,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 token = packet.getRetryToken();
                 byte[] destConnectionId = packet.getSourceConnectionId();
                 destConnectionIds.replaceInitialConnectionId(destConnectionId);
-                log.debug("Changing destination connection id into: " + ByteUtils.bytesToHex(destConnectionId));
+                log.debug("Changing destination connection id into: " + bytesToHex(destConnectionId));
                 generateInitialKeys();
 
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
@@ -858,7 +859,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     //   another available one at any time during the connection. "
     public byte[] nextDestinationConnectionId() {
         byte[] newConnectionId = destConnectionIds.useNext();
-        log.debug("Switching to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+        log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
         return newConnectionId;
     }
 
