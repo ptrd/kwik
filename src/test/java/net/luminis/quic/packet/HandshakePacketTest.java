@@ -73,6 +73,18 @@ class HandshakePacketTest {
     }
 
     @Test
+    void parseCorruptedPacketWithTooSmallLength() throws Exception {
+        String data = "e5ff00001b 040d0d0d0d0 40e0e0e0e 004e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195".replace(" ", "");
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
+
+        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+
+        assertThatThrownBy(
+                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
     void parseCorruptedPacketWithInvalidDestinationConnectionIdLength() throws Exception {
         String data = "e5ff00001b f70d0d0d0d0 40e0e0e0e 1b4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195".replace(" ", "");
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));

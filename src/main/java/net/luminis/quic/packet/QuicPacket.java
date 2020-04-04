@@ -176,6 +176,9 @@ abstract public class QuicPacket {
         //   packet, as described in [QUIC-TRANSPORT]."
         // "The output ciphertext, C, of the AEAD is transmitted in place of P."
         int encryptedPayloadLength = remainingLength - protectedPackageNumberLength;
+        if (encryptedPayloadLength < 1) {
+            throw new InvalidPacketException();
+        }
         byte[] payload = new byte[encryptedPayloadLength];
         buffer.get(payload, 0, encryptedPayloadLength);
         log.encrypted("Encrypted payload", payload);
