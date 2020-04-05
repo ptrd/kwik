@@ -173,9 +173,17 @@ public class TransportParameters {
 
     @Override
     public String toString() {
-        return "\n- max idle timeout\t" + maxIdleTimeoutInSeconds +
-                "\n- cids limit\t" + activeConnectionIdLimit +
-                "\n- disable migration\t" + disableMigration;
+        return "\n- max idle timeout\t\t\t" + maxIdleTimeoutInSeconds +
+                // "\n- max packet size\t" +
+                "\n- initial max data\t\t\t" + initialMaxData +
+                "\n- initial max stream data bidi local\t" + initialMaxStreamDataBidiLocal +
+                "\n- initial max stream data bidi remote\t" + initialMaxStreamDataBidiRemote +
+                "\n- initial max stream data unit\t\t" + initialMaxStreamDataUni +
+                "\n- initial max streams bidi\t\t" + initialMaxStreamsBidi +
+                "\n- initial max streams uni\t\t" + initialMaxStreamsUni +
+                "\n- max ack delay\t\t\t\t" + maxAckDelay +
+                "\n- disable migration\t\t\t" + disableMigration +
+                "\n- active connection id limit\t\t" + activeConnectionIdLimit;
     }
 
     public static class PreferredAddress {
