@@ -170,7 +170,7 @@ public class StreamManager implements FrameProcessor {
     }
 
     public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
-        if (maxStreamsBidi == null) {
+        if (maxStreamsBidi == null || initialMaxStreamsBidi >= maxStreamsBidi) {
             log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
             maxStreamsBidi = initialMaxStreamsBidi;
             if (initialMaxStreamsBidi > Integer.MAX_VALUE) {
@@ -180,12 +180,12 @@ public class StreamManager implements FrameProcessor {
             openBidirectionalStreams.release((int) initialMaxStreamsBidi);
         }
         else {
-            throw new IllegalStateException("initial max already set");
+            log.error("Attempt to reduce value of initial_max_streams_bidi from " + maxStreamsBidi + " to " + initialMaxStreamsBidi + "; ignoring.");
         }
     }
 
     public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
-        if (maxStreamsUni == null) {
+        if (maxStreamsUni == null || initialMaxStreamsUni >= maxStreamsUni) {
             log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);
             maxStreamsUni = initialMaxStreamsUni;
             if (initialMaxStreamsUni > Integer.MAX_VALUE) {
@@ -195,7 +195,7 @@ public class StreamManager implements FrameProcessor {
             openUnidirectionalStreams.release((int) initialMaxStreamsUni);
         }
         else {
-            throw new IllegalStateException("initial max already set");
+            log.error("Attempt to reduce value of initial_max_streams_uni from " + maxStreamsUni + " to " + initialMaxStreamsUni + "; ignoring.");
         }
     }
 
