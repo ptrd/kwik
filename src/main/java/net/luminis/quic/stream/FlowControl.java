@@ -140,11 +140,17 @@ public class FlowControl implements FrameProcessor {
             return initialMaxStreamDataUni;
         }
         else if (stream.isClientInitiatedBidirectional()) {
-            // Assuming client role, so flow control is done by server and thus is remote
+            // Assuming client role, so for the receiver (imposing the limit) the stream is peer-initiated (remote).
+            // "This limit applies to newly created bidirectional streams opened by the endpoint that receives
+            // the transport parameter."
+            // The client has received this transport parameter, so it applies to stream opened by the client.
             return initialMaxStreamDataBidiRemote;
         }
         else if (stream.isServerInitiatedBidirectional()) {
-            // Assuming client role, so flow control is done by server and this is local
+            // Assuming client role, so for the receiver (imposing the limit), the stream is locally-initiated
+            // "This limit applies to newly created bidirectional streams opened by the endpoint that sends the
+            // transport parameter."
+            // The server has send this transport parameter, so it applies to streams opened by the server.
             return initialMaxStreamDataBidiLocal;
         }
         else {
