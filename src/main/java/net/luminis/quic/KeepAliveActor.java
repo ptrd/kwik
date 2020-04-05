@@ -47,7 +47,7 @@ public class KeepAliveActor {
     public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnectionImpl connection) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
-        this.peerIdleTimeout = peerIdleTimeout * 1000;
+        this.peerIdleTimeout = peerIdleTimeout;
         this.connection = connection;
         started = Instant.now();
         pingInterval = peerIdleTimeout / 2;

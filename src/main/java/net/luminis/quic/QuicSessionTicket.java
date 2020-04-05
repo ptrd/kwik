@@ -33,7 +33,7 @@ import java.nio.ByteBuffer;
 public class QuicSessionTicket extends NewSessionTicket {
 
     private NewSessionTicket wrappedTicket;
-    private long idleTimeoutInSeconds;
+    private long idleTimeout;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -45,7 +45,7 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
         wrappedTicket = tlsTicket;
-        idleTimeoutInSeconds = serverParameters.getMaxIdleTimeout();
+        idleTimeout = serverParameters.getMaxIdleTimeout();
         initialMaxData = serverParameters.getInitialMaxData();
         initialMaxStreamDataBidiLocal = serverParameters.getInitialMaxStreamDataBidiLocal();
         initialMaxStreamDataBidiRemote = serverParameters.getInitialMaxStreamDataBidiRemote();
@@ -59,7 +59,7 @@ public class QuicSessionTicket extends NewSessionTicket {
         super(data);
         ByteBuffer buffer = ByteBuffer.wrap(data, data.length - 8 * 8, 8 * 8);
         wrappedTicket = this;
-        idleTimeoutInSeconds = buffer.getLong();
+        idleTimeout = buffer.getLong();
         initialMaxData = buffer.getLong();
         initialMaxStreamDataBidiLocal = buffer.getLong();
         initialMaxStreamDataBidiRemote = buffer.getLong();
@@ -73,7 +73,7 @@ public class QuicSessionTicket extends NewSessionTicket {
         byte[] serializedTicket = wrappedTicket.serialize();
         ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + 8 * 8);
         buffer.put(serializedTicket);
-        buffer.putLong(idleTimeoutInSeconds);
+        buffer.putLong(idleTimeout);
         buffer.putLong(initialMaxData);
         buffer.putLong(initialMaxStreamDataBidiLocal);
         buffer.putLong(initialMaxStreamDataBidiRemote);
@@ -88,8 +88,8 @@ public class QuicSessionTicket extends NewSessionTicket {
         return new QuicSessionTicket(data);
     }
 
-    public long getIdleTimeoutInSeconds() {
-        return idleTimeoutInSeconds;
+    public long getIdleTimeout() {
+        return idleTimeout;
     }
 
     public long getInitialMaxData() {
