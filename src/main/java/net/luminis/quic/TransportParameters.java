@@ -24,6 +24,7 @@ public class TransportParameters {
 
     private byte[] originalConnectionId;
     private long maxIdleTimeout;
+    private int maxPacketSize;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -176,6 +177,14 @@ public class TransportParameters {
         return "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
                 "\n- cids limit\t" + activeConnectionIdLimit +
                 "\n- disable migration\t" + disableMigration;
+    }
+
+    public int getMaxPacketSize() {
+        return maxPacketSize;
+    }
+
+    public void setMaxPacketSize(int maxPacketSize) {
+        this.maxPacketSize = maxPacketSize;
     }
 
     public static class PreferredAddress {

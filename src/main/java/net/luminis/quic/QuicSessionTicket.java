@@ -26,14 +26,22 @@ import java.nio.ByteBuffer;
  * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to being able to
  * send 0-RTT packets.
  *
- * https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-7.3.1
- * "A client that attempts to send 0-RTT data MUST remember all other
- *    transport parameters used by the server."
+ * https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-7.3.1
+ * "Both endpoints store the value of the server transport parameters
+ *    from a connection and apply them to any 0-RTT packets that are sent
+ *    in subsequent connections to that peer, except for transport
+ *    parameters that are explicitly excluded."
+ * "A client MUST NOT use remembered values for the following parameters:
+ *    original_connection_id, preferred_address, stateless_reset_token,
+ *    ack_delay_exponent and active_connection_id_limit."
  */
 public class QuicSessionTicket extends NewSessionTicket {
 
+    private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1;
+
     private NewSessionTicket wrappedTicket;
-    private long idleTimeout;
+    private long maxIdleTimeout;
+    private int maxPacketSize;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -41,11 +49,13 @@ public class QuicSessionTicket extends NewSessionTicket {
     private long initialMaxStreamsBidi;
     private long initialMaxStreamsUni;
     private int maxAckDelay;
-    // TODO: this list is not complete (as is the TransportParameters class)
+    private boolean disableActiveMigration;
+
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
         wrappedTicket = tlsTicket;
-        idleTimeout = serverParameters.getMaxIdleTimeout();
+        maxIdleTimeout = serverParameters.getMaxIdleTimeout();
+        maxPacketSize = serverParameters.getMaxPacketSize();
         initialMaxData = serverParameters.getInitialMaxData();
         initialMaxStreamDataBidiLocal = serverParameters.getInitialMaxStreamDataBidiLocal();
         initialMaxStreamDataBidiRemote = serverParameters.getInitialMaxStreamDataBidiRemote();
@@ -53,43 +63,65 @@ public class QuicSessionTicket extends NewSessionTicket {
         initialMaxStreamsBidi = serverParameters.getInitialMaxStreamsBidi();
         initialMaxStreamsUni = serverParameters.getInitialMaxStreamsUni();
         maxAckDelay = serverParameters.getMaxAckDelay();
+        disableActiveMigration = serverParameters.getDisableMigration();
     }
 
     public QuicSessionTicket(byte[] data) {
         super(data);
-        ByteBuffer buffer = ByteBuffer.wrap(data, data.length - 8 * 8, 8 * 8);
+        ByteBuffer buffer = ByteBuffer.wrap(data, data.length - SERIALIZED_SIZE, SERIALIZED_SIZE);
         wrappedTicket = this;
-        idleTimeout = buffer.getLong();
+        maxIdleTimeout = buffer.getLong();
+        maxPacketSize = buffer.getInt();
         initialMaxData = buffer.getLong();
         initialMaxStreamDataBidiLocal = buffer.getLong();
         initialMaxStreamDataBidiRemote = buffer.getLong();
         initialMaxStreamDataUni = buffer.getLong();
         initialMaxStreamsBidi = buffer.getLong();
         initialMaxStreamsUni = buffer.getLong();
-        maxAckDelay = (int) buffer.getLong();
+        maxAckDelay = buffer.getInt();
+        disableActiveMigration = buffer.get() == 1;
     }
 
     public byte[] serialize() {
         byte[] serializedTicket = wrappedTicket.serialize();
-        ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + 8 * 8);
+        ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + SERIALIZED_SIZE);
         buffer.put(serializedTicket);
-        buffer.putLong(idleTimeout);
+        buffer.putLong(maxIdleTimeout);
+        buffer.putInt(maxPacketSize);
         buffer.putLong(initialMaxData);
         buffer.putLong(initialMaxStreamDataBidiLocal);
         buffer.putLong(initialMaxStreamDataBidiRemote);
         buffer.putLong(initialMaxStreamDataUni);
         buffer.putLong(initialMaxStreamsBidi);
         buffer.putLong(initialMaxStreamsUni);
-        buffer.putLong(maxAckDelay);
+        buffer.putInt(maxAckDelay);
+        buffer.put((byte) (disableActiveMigration? 1: 0));
         return buffer.array();
+    }
+
+    public void copyTo(TransportParameters tp) {
+        tp.setMaxIdleTimeout(maxIdleTimeout);
+        tp.setMaxPacketSize(maxPacketSize);
+        tp.setInitialMaxData(initialMaxData);
+        tp.setInitialMaxStreamDataBidiLocal(initialMaxStreamDataBidiLocal);
+        tp.setInitialMaxStreamDataBidiRemote(initialMaxStreamDataBidiRemote);
+        tp.setInitialMaxStreamDataUni(initialMaxStreamDataUni);
+        tp.setInitialMaxStreamsBidi(initialMaxStreamsBidi);
+        tp.setInitialMaxStreamsUni(initialMaxStreamsUni);
+        tp.setMaxAckDelay(maxAckDelay);
+        tp.setDisableMigration(disableActiveMigration);
     }
 
     public static QuicSessionTicket deserialize(byte[] data) {
         return new QuicSessionTicket(data);
     }
 
-    public long getIdleTimeout() {
-        return idleTimeout;
+    public long getMaxIdleTimeout() {
+        return maxIdleTimeout;
+    }
+
+    public int getMaxPacketSize() {
+        return maxPacketSize;
     }
 
     public long getInitialMaxData() {
@@ -118,6 +150,10 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     public int getMaxAckDelay() {
         return maxAckDelay;
+    }
+
+    public boolean getDisableActiveMigration() {
+        return disableActiveMigration;
     }
 }
 

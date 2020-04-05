@@ -275,6 +275,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         if (earlyData != null) {
             // TODO: and update flowcontroller when TP's are received!
+            TransportParameters rememberedTransportParameters = new TransportParameters();
+            sessionTicket.copyTo(rememberedTransportParameters);
+            setPeerTransportParameters(rememberedTransportParameters);
             flowController = new FlowControl(sessionTicket.getInitialMaxData(),
                     sessionTicket.getInitialMaxStreamDataBidiLocal(),
                     sessionTicket.getInitialMaxStreamDataBidiRemote(),
