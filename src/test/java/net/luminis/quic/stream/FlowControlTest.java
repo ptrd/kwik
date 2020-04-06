@@ -20,8 +20,10 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.frame.MaxStreamsFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -58,7 +60,7 @@ class FlowControlTest {
         int initialServerMaxStreamData = 500;
         int streamId = 4;  // Client-initiated bidi: least significant two bits = 00
 
-        // A client initiated stream is limited by the server's initial remote
+        // A client initiated stream is limited by the server's initial remote (initiated) limit
         FlowControl fc = new FlowControl(initialMaxData, 9999, initialServerMaxStreamData, 9999);
 
         assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
@@ -70,7 +72,7 @@ class FlowControlTest {
         int initialServerMaxStreamData = 500;
         int streamId = 5;  // Server-initiated bidi: least significant two bits = 01
 
-        // A server initiated stream is limited by the server's initial local
+        // A server initiated stream is limited by the server's initial local (-ly initiated) limit
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, 9999, 9999);
 
         assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
@@ -219,6 +221,156 @@ class FlowControlTest {
 
         fc.waitForFlowControlCredits(stream);
         assertThat(fc.increaseFlowControlLimit(stream, 200)).isEqualTo(200);
+    }
+
+    @Test
+    void whenOutOfOrderMaxDataIsReceivedCurrentMaxDataIsNotReduced() {
+        int initialMaxData = 500;
+        int initialServerMaxStreamData = 2000;
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        fc.process(new MaxDataFrame(1500), PnSpace.App, null);
+        fc.process(new MaxDataFrame(1000), PnSpace.App, null);
+
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
+    }
+
+    @Test
+    void whenOutOfOrderMaxStreamDataIsReceivedCurrentMaxDataIsNotReduced() {
+        int initialMaxData = 5000;
+        int initialServerMaxStreamData = 500;
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        fc.process(new MaxStreamDataFrame(1, 1500), PnSpace.App, null);
+        fc.process(new MaxStreamDataFrame(1, 1000), PnSpace.App, null);
+
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
+    }
+
+    @Test
+    void updateInitialMaxData() {
+        int initialMaxData = 1000;
+        int initialServerMaxStreamData = 1500;
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1000);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(1400);   // This is the update
+        updateTransportParameters.setInitialMaxStreamDataUni(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(initialServerMaxStreamData);
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1400);
+    }
+
+    @Test
+    void whenInitialMaxDataIsUpdatedCurrentMaxDataIsNotReduced() {
+        int initialMaxData = 500;
+        int initialServerMaxStreamData = 2000;
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        fc.process(new MaxDataFrame(1500), PnSpace.App, null);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(1000);   // This is the update
+        updateTransportParameters.setInitialMaxStreamDataUni(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(initialServerMaxStreamData);
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 2000)).isEqualTo(1500);
+    }
+
+    @Test
+    void updateInitialMaxStreamDataClientInitiatedBidirectionalStream() {
+        int initialMaxData = 5000;
+        int initialServerMaxStreamData = 500;
+        int streamId = 0;  // Client initiated bi-di
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(initialMaxData);
+        updateTransportParameters.setInitialMaxStreamDataUni(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(1000);   // This is the update
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1000);
+    }
+
+    @Test
+    void updateInitialMaxStreamDataServerInitiatedBidirectionalStream() {
+        int initialMaxData = 5000;
+        int initialServerMaxStreamData = 500;
+        int streamId = 1;  // Server initiated bi-di
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(initialMaxData);
+        updateTransportParameters.setInitialMaxStreamDataUni(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(1000);   // This is the update
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(initialServerMaxStreamData);
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1000);
+    }
+
+    @Test
+    void updateInitialMaxStreamDataServerInitiatedBidirectionalStreamWithSmallerValueThanActual() {
+        int initialMaxData = 5000;
+        int initialServerMaxStreamData = 500;
+        int streamId = 1;  // Server initiated bi-di
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        fc.process(new MaxStreamDataFrame(1, 1500), PnSpace.App, null);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(initialMaxData);
+        updateTransportParameters.setInitialMaxStreamDataUni(initialServerMaxStreamData);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(1000);   // This is the update
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(initialServerMaxStreamData);
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
+    }
+
+    @Test
+    void updateInitialMaxStreamDataUnidirectionalStream() {
+        int initialMaxData = 5000;
+        int initialServerMaxStreamData = 500;
+        int streamId = 2;  // Client initiated uni
+        QuicStream stream = new QuicStream(streamId, conn, null);
+
+        FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
+
+        TransportParameters updateTransportParameters = new TransportParameters();
+        updateTransportParameters.setInitialMaxData(initialMaxData);
+        updateTransportParameters.setInitialMaxStreamDataUni(1000);
+        updateTransportParameters.setInitialMaxStreamDataBidiLocal(initialServerMaxStreamData);   // This is the update
+        updateTransportParameters.setInitialMaxStreamDataBidiRemote(initialServerMaxStreamData);
+        fc.updateInitialValues(updateTransportParameters);
+        assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1000);
     }
 
     private void executeAsyncWithDelay(Runnable task, int delay) {

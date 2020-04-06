@@ -274,14 +274,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.send(clientHelloPacket, "client hello", p -> {});
 
         if (earlyData != null) {
-            // TODO: and update flowcontroller when TP's are received!
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
             setPeerTransportParameters(rememberedTransportParameters);
-            flowController = new FlowControl(sessionTicket.getInitialMaxData(),
-                    sessionTicket.getInitialMaxStreamDataBidiLocal(),
-                    sessionTicket.getInitialMaxStreamDataBidiRemote(),
-                    sessionTicket.getInitialMaxStreamDataUni());
             QuicStream earlyDataStream = createStream(true);
             earlyDataStream.writeEarlyData(earlyData, complete);
             earlyDataStatus = Requested;
@@ -842,12 +837,20 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
         peerTransportParams = transportParameters;
-        flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
-                peerTransportParams.getInitialMaxStreamDataBidiLocal(),
-                peerTransportParams.getInitialMaxStreamDataBidiRemote(),
-                peerTransportParams.getInitialMaxStreamDataUni(),
-                log);
-        streamManager.setFlowController(flowController);
+        if (flowController == null) {
+            flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
+                    peerTransportParams.getInitialMaxStreamDataBidiLocal(),
+                    peerTransportParams.getInitialMaxStreamDataBidiRemote(),
+                    peerTransportParams.getInitialMaxStreamDataUni(),
+                    log);
+            streamManager.setFlowController(flowController);
+        }
+        else {
+            // If the client has sent 0-rtt, the flow controller will already have been initialized with "remembered" values
+            log.debug("Updating flow controller with new transport parameters");
+            // TODO: this should be postponed until all 0-rtt packets are sent
+            flowController.updateInitialValues(transportParameters);
+        }
 
         streamManager.setInitialMaxStreamsBidi(peerTransportParams.getInitialMaxStreamsBidi());
         streamManager.setInitialMaxStreamsUni(peerTransportParams.getInitialMaxStreamsUni());
