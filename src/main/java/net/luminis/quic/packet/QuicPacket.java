@@ -294,25 +294,6 @@ abstract public class QuicPacket {
         return candidatePn;
     }
 
-    byte[] encryptAesCtr(byte[] key, byte[] initVector, byte[] value) {
-        try {
-            IvParameterSpec iv = new IvParameterSpec(initVector);
-            SecretKeySpec skeySpec = new SecretKeySpec(key, "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, skeySpec, iv);
-
-            byte[] encrypted = cipher.doFinal(value);
-            return encrypted;
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            // Inappropriate runtime environment
-            throw new QuicRuntimeException(e);
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-    }
-
     protected void parseFrames(byte[] frameBytes, Logger log) {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
