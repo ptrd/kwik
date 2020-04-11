@@ -91,6 +91,17 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
+    public int estimateLength() {
+        return 1
+                + destinationConnectionId.length
+                + 1  // packet number length: will usually be just 1, actual value cannot be computed until packet number is known
+                + getFrames().stream().mapToInt(f -> f.getBytes().length).sum()   // TODO: f.getBytes
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
+                // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
+                + 16;
+    }
+
+    @Override
     public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.App;
     }

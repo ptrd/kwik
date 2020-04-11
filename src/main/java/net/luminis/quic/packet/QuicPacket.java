@@ -483,6 +483,8 @@ abstract public class QuicPacket {
         }
     }
 
+    public abstract int estimateLength();
+
     public abstract EncryptionLevel getEncryptionLevel();
 
     public abstract PnSpace getPnSpace();

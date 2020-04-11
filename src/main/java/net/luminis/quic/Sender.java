@@ -145,19 +145,19 @@ public class Sender implements ProbeSender, FrameProcessor {
 
                     Keys keys = connectionSecrets.getClientSecrets(level);// Assuming client role
                     packetNumber = generatePacketNumber(level.relatedPnSpace());
-                    byte[] packetData;
+                    int estimatedPacketLength;
                     if (packet == null) {
                         // i.e. ack waiting
-                        packetData = new byte[0];
+                        estimatedPacketLength = 0;
                     }
                     else {
-                        packetData = packet.generatePacketBytes(packetNumber, keys);  // TODO: more efficient would be to estimate packet size
+                        estimatedPacketLength = packet.estimateLength();
                     }
 
                     boolean hasBeenWaiting = false;
                     if (packet != null) {   // Ack-only is not congestion controller, neither is probe.
-                        while (!mustSendProbe && !congestionController.canSend(packetData.length)) {  // mustSendProbe can change while in wait loop
-                            log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + packetData.length + ")");
+                        while (!mustSendProbe && !congestionController.canSend(estimatedPacketLength)) {  // mustSendProbe can change while in wait loop
+                            log.cc("Congestion controller will not allow sending queued packet " + packet + " (in-flight: " + congestionController.getBytesInFlight() + ", packet length: " + estimatedPacketLength + ")");
                             hasBeenWaiting = true;
                             try {
                                 congestionController.waitForUpdate();
@@ -174,7 +174,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
                     if (mustSendProbe) {
                         mustSendProbe = false;
-                        if (!congestionController.canSend(packetData.length)) {
+                        if (!congestionController.canSend(estimatedPacketLength)) {
                             log.cc("Exceeding cc window because a probe must be sent.");
                         }
                     }
@@ -191,8 +191,8 @@ public class Sender implements ProbeSender, FrameProcessor {
                         else {
                             packet.addFrame(ackToSend);
                         }
-                        packetData = packet.generatePacketBytes(packetNumber, keys);
                     }
+                    byte[] packetData = packet.generatePacketBytes(packetNumber, keys);
 
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
                     Instant sent = Instant.now();

@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.InvalidPacketException;
-import net.luminis.quic.Keys;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.Logger;
@@ -29,7 +26,9 @@ import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.mockito.internal.util.reflection.FieldSetter;
 
+import javax.crypto.Cipher;
 import java.nio.ByteBuffer;
 import java.security.interfaces.ECPublicKey;
 import java.util.Random;
@@ -44,11 +43,15 @@ class HandshakePacketTest {
     private Keys keys;
 
     @BeforeEach
-    void initDummyKeys() {
+    void initDummyKeys() throws Exception {
         keys = mock(Keys.class);
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
         when(keys.getWriteKey()).thenReturn(new byte[16]);
+        Keys dummyKeys = new Keys(Version.getDefault(), new byte[16], null, mock(Logger.class));
+        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("hp"), new byte[16]);
+        Cipher cipher = dummyKeys.getHeaderProtectionCipher();
+        when(keys.getHeaderProtectionCipher()).thenReturn(cipher);
     }
 
     @Test

@@ -82,6 +82,11 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
+    public int estimateLength() {
+        return packetSize;
+    }
+
+    @Override
     public EncryptionLevel getEncryptionLevel() {
         return encryptionLevel;
     }

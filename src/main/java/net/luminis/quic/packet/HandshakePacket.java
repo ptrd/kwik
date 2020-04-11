@@ -59,6 +59,11 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     @Override
+    protected int estimateAdditionalFieldsLength() {
+        return 0;
+    }
+
+    @Override
     public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.Handshake;
     }

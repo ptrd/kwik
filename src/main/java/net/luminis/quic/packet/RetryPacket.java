@@ -183,6 +183,11 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
+    public int estimateLength() {
+        throw new NotYetImplementedException();
+    }
+
+    @Override
     public void accept(PacketProcessor processor, Instant time) {
         processor.process(this, time);
     }

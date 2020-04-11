@@ -74,6 +74,10 @@ public class InitialPacket extends LongHeaderPacket {
         }
     }
 
+    protected int estimateAdditionalFieldsLength() {
+        return token == null? 1: 1 + token.length;
+    }
+
     @Override
     public EncryptionLevel getEncryptionLevel() {
         return EncryptionLevel.Initial;

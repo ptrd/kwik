@@ -103,6 +103,23 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return packetBytes;
     }
 
+    @Override
+    public int estimateLength() {
+        int payloadLength = getFrames().stream().mapToInt(f -> f.getBytes().length).sum();   // TODO: f.getBytes
+        return 1
+                + 4
+                + 1 + destinationConnectionId.length
+                + 1 + sourceConnectionId.length
+                + estimateAdditionalFieldsLength()
+                + (payloadLength + 1 > 63? 2: 1)
+                + 1  // packet number length: will usually be just 1, actual value cannot be computed until packet number is known
+                + payloadLength
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
+                // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
+                + 16;
+    }
+
+
     protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
         // Packet type
         byte packetType = getPacketType();
@@ -115,13 +132,15 @@ public abstract class LongHeaderPacket extends QuicPacket {
         packetBuffer.put(destinationConnectionId);
         // SCID Len
         packetBuffer.put((byte) sourceConnectionId.length);
-        // Source connection id, 8 bytes
+        // Source connection id
         packetBuffer.put(sourceConnectionId);
     }
 
     protected abstract byte getPacketType();
 
     protected abstract void generateAdditionalFields(ByteBuffer packetBuffer);
+
+    protected abstract int estimateAdditionalFieldsLength();
 
     private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int payloadSize) {
         int packetLength = payloadSize + 16 + packetNumberLength;   // 16 is what encryption adds, note that final length is larger due to adding packet length

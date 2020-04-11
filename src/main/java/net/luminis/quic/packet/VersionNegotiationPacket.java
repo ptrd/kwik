@@ -127,6 +127,11 @@ public class VersionNegotiationPacket extends QuicPacket {
         return null;
     }
 
+    @Override
+    public int estimateLength() {
+        throw new NotYetImplementedException();
+    }
+
 
     @Override
     public byte[] generatePacketBytes(long packetNumber, Keys keys) {
