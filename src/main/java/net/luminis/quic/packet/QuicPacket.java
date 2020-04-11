@@ -237,20 +237,14 @@ abstract public class QuicPacket {
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
+        Cipher aeadCipher = secrets.getWriteCipher();
+        SecretKeySpec secretKey = secrets.getWriteKeySpec();
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(secrets.getWriteKey(), "AES");
-            // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
-            // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
-            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116  5.3
-            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             aeadCipher.updateAAD(associatedData);
             byte[] cipherText = aeadCipher.doFinal(message);
             return cipherText;
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            // Inappropriate runtime environment
-            throw new QuicRuntimeException(e);
         } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
@@ -268,24 +262,19 @@ abstract public class QuicPacket {
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
+        SecretKeySpec secretKey = secrets.getWriteKeySpec();
+        Cipher aeadCipher = secrets.getWriteCipher();
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(secrets.getWriteKey(), "AES");
-            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116  5.3
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
             aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
             aeadCipher.updateAAD(associatedData);
             return aeadCipher.doFinal(message);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            // Inappropriate runtime environment
-            throw new QuicRuntimeException(e);
         } catch (AEADBadTagException decryptError) {
             throw new DecryptionException();
         } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
         }
-
     }
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {

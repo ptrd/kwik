@@ -27,9 +27,11 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
@@ -50,6 +52,8 @@ public class Keys {
     private byte[] pn;
     private byte[] hp;
     private Cipher hpCipher;
+    private SecretKeySpec writeKeySpec;
+    private Cipher writeCipher;
 
 
     public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
@@ -176,5 +180,27 @@ public class Keys {
             }
         }
         return hpCipher;
+    }
+
+    public SecretKeySpec getWriteKeySpec() {
+        if (writeKeySpec == null) {
+            writeKeySpec = new SecretKeySpec(writeKey, "AES");
+        }
+        return writeKeySpec;
+    }
+
+    public Cipher getWriteCipher() {
+        if (writeCipher == null) {
+            try {
+                // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
+                // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
+                String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
+                writeCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+                // Inappropriate runtime environment
+                throw new QuicRuntimeException(e);
+            }
+        }
+        return writeCipher;
     }
 }

@@ -50,8 +50,12 @@ class HandshakePacketTest {
         when(keys.getWriteKey()).thenReturn(new byte[16]);
         Keys dummyKeys = new Keys(Version.getDefault(), new byte[16], null, mock(Logger.class));
         FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("hp"), new byte[16]);
-        Cipher cipher = dummyKeys.getHeaderProtectionCipher();
-        when(keys.getHeaderProtectionCipher()).thenReturn(cipher);
+        Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
+        when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
+        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("writeKey"), new byte[16]);
+        Cipher wCipher = dummyKeys.getWriteCipher();
+        when(keys.getWriteCipher()).thenReturn(wCipher);
+        when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
     }
 
     @Test
