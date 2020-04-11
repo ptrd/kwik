@@ -206,10 +206,17 @@ abstract public class QuicPacket {
         int sampleOffset = 4 - encodedPacketNumberLength;
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample, 0, 16);
-        byte[] mask = encryptAesEcb(secrets.getHp(), sample);
+
+        Cipher hpCipher = secrets.getHeaderProtectionCipher();
+        byte[] mask;
+        try {
+            mask = hpCipher.doFinal(sample);
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
         return mask;
     }
-
 
     byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) {
 
@@ -312,24 +319,6 @@ abstract public class QuicPacket {
             // Inappropriate runtime environment
             throw new QuicRuntimeException(e);
         } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-    }
-
-    byte[] encryptAesEcb(byte[] key, byte[] value) {
-        try {
-            SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, keySpec);
-
-            byte[] encrypted = cipher.doFinal(value);
-            return encrypted;
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            // Inappropriate runtime environment
-            throw new QuicRuntimeException(e);
-        } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
         }

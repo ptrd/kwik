@@ -23,8 +23,15 @@ import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsState;
 
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Client;
 import static net.luminis.quic.ConnectionSecrets.NodeRole.Server;
@@ -42,6 +49,8 @@ public class Keys {
     private byte[] writeIV;
     private byte[] pn;
     private byte[] hp;
+    private Cipher hpCipher;
+
 
     public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
         this.nodeRole = nodeRole;
@@ -148,5 +157,24 @@ public class Keys {
 
     public byte[] getHp() {
         return hp;
+    }
+
+    public Cipher getHeaderProtectionCipher() {
+        if (hpCipher == null) {
+            try {
+                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.3
+                // "AEAD_AES_128_GCM and AEAD_AES_128_CCM use 128-bit AES [AES] in electronic code-book (ECB) mode."
+                hpCipher = Cipher.getInstance("AES/ECB/NoPadding");
+                SecretKeySpec keySpec = new SecretKeySpec(getHp(), "AES");
+                hpCipher.init(Cipher.ENCRYPT_MODE, keySpec);
+            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+                // Inappropriate runtime environment
+                throw new QuicRuntimeException(e);
+            } catch (InvalidKeyException e) {
+                // Programming error
+                throw new RuntimeException();
+            }
+        }
+        return hpCipher;
     }
 }
