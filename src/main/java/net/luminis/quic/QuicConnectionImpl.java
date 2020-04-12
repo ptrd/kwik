@@ -183,7 +183,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             }
         }
 
-        QuicStream earlyDataStream = startHandshake(applicationProtocol, earlyData, lateData.length == 0);
+        startHandshake(applicationProtocol, earlyData != null);
+
+        QuicStream earlyDataStream = sendEarlyData(earlyData, lateData.length == 0);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -207,6 +209,27 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             }
         }
         return earlyDataStream;
+    }
+
+    private QuicStream sendEarlyData(byte[] earlyData, boolean complete) {
+        if (earlyData != null) {
+            TransportParameters rememberedTransportParameters = new TransportParameters();
+            sessionTicket.copyTo(rememberedTransportParameters);
+            setPeerTransportParameters(rememberedTransportParameters);
+            EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
+            if (earlyDataStream != null) {
+                try {
+                    earlyDataStream.writeEarlyData(earlyData, complete);
+                } catch (IOException e) {
+                    e.printStackTrace();  // TODO
+                }
+                earlyDataStatus = Requested;
+            }
+            return earlyDataStream;
+        }
+        else {
+            return null;
+        }
     }
 
     public void keepAlive(int seconds) {
@@ -262,8 +285,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         connectionSecrets.computeInitialKeys(destConnectionIds.getCurrent());
     }
 
-    private QuicStream startHandshake(String applicationProtocol, byte[] earlyData, boolean complete) {
-        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, earlyData != null);
+    private void startHandshake(String applicationProtocol, boolean withEarlyData) {
+        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, withEarlyData);
         tlsState.clientHelloSend(privateKey, clientHello);
         connectionSecrets.computeEarlySecrets(tlsState);
 
@@ -273,25 +296,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         connectionState = Status.Handshaking;
         sender.send(clientHelloPacket, "client hello", p -> {});
-
-        if (earlyData != null) {
-            TransportParameters rememberedTransportParameters = new TransportParameters();
-            sessionTicket.copyTo(rememberedTransportParameters);
-            setPeerTransportParameters(rememberedTransportParameters);
-            EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
-            if (earlyDataStream != null) {
-                try {
-                    earlyDataStream.writeEarlyData(earlyData, complete);
-                } catch (IOException e) {
-                    e.printStackTrace();  // TODO
-                }
-                earlyDataStatus = Requested;
-            }
-            return earlyDataStream;
-        }
-        else {
-            return null;
-        }
     }
 
     public void hasHandshakeKeys() {
@@ -615,7 +619,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                startHandshake(applicationProtocol, null, false);
+                startHandshake(applicationProtocol, false);
             } else {
                 log.error("Ignoring RetryPacket, because already processed one.");
             }
