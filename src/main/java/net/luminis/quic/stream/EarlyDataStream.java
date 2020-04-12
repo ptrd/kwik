@@ -42,10 +42,11 @@ public class EarlyDataStream extends QuicStream {
     /**
      * Write early data, assuming the provided data is complete and fits into one StreamFrame.
      * @param earlyData
+     * @param earlyDataSizeLeft
      */
-    public void writeEarlyData(byte[] earlyData, boolean fin) throws IOException {
+    public void writeEarlyData(byte[] earlyData, boolean fin, long earlyDataSizeLeft) throws IOException {
         long flowControlLimit = flowController.getFlowControlLimit(this);
-        int earlyDataLength = (int) Long.min(earlyData.length, flowControlLimit);
+        int earlyDataLength = (int) Long.min(earlyData.length, Long.min(earlyDataSizeLeft, flowControlLimit));
         log.info(String.format("Sending %d bytes of early data on %s", earlyDataLength, this));
         getOutputStream().write(earlyData, 0, earlyDataLength);
         if (fin) {

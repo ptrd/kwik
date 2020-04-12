@@ -55,7 +55,7 @@ class EarlyDataStreamTest {
     @Test
     void sendingEarlyDataResultsInZeroRttPacket() throws IOException {
         // When
-        stream.writeEarlyData(new byte[10], false);
+        stream.writeEarlyData(new byte[10], false, 10_000);
 
         // Then
         verify(connection).sendZeroRtt(any(StreamFrame.class), any(Consumer.class));
@@ -64,7 +64,7 @@ class EarlyDataStreamTest {
     @Test
     void sendingFinalEarlyDataResultsInClosingStream() throws IOException {
         // When
-        stream.writeEarlyData(new byte[10], true);
+        stream.writeEarlyData(new byte[10], true, 10_000);
 
         // Then
         ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
@@ -77,7 +77,7 @@ class EarlyDataStreamTest {
     @Test
     void sendingLargeEarlyDataResultsInMultiplePackets() throws IOException {
         // When
-        stream.writeEarlyData(new byte[1500], false);
+        stream.writeEarlyData(new byte[1500], false, 10_000);
 
         // Then
         ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
@@ -93,14 +93,23 @@ class EarlyDataStreamTest {
         // Given
         int maxData = 1000;
         FlowControl flowController = new FlowControl(maxData, maxData, maxData, maxData);
-        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("flowController"), flowController);
         stream = new EarlyDataStream(Version.getDefault(), 0, connection, flowController, logger);
 
         // When
-        stream.writeEarlyData(new byte[1500], false);
+        stream.writeEarlyData(new byte[1500], false, 10_000);
 
         // Then
-        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length <= 1000), any(Consumer.class));
+        verify(connection, times(1)).sendZeroRtt(any(QuicFrame.class), any(Consumer.class));
+        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length == 1000), any(Consumer.class));
     }
 
+    @Test
+    void earlyDataShouldBeLimitedToInitalMaxData() throws Exception {
+        // When
+        stream.writeEarlyData(new byte[1500], false, 500);
+
+        // Then
+        verify(connection, times(1)).sendZeroRtt(any(QuicFrame.class), any(Consumer.class));
+        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length <= 500), any(Consumer.class));
+    }
 }

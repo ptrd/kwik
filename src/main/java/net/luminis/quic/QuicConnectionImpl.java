@@ -173,12 +173,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         byte[] lateData = new byte[0];
         if (earlyData != null) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-24#section-4.5
-            // "the amount of data which
-            //   the client can send in 0-RTT is controlled by the "initial_max_data"
-            //   transport parameter supplied by the server"
             if (earlyData.length > sessionTicket.getInitialMaxData()) {
-                earlyData = Arrays.copyOfRange(earlyData, 0, (int) sessionTicket.getInitialMaxData());
                 lateData = Arrays.copyOfRange(earlyData, (int) sessionTicket.getInitialMaxData(), earlyData.length);
             }
         }
@@ -216,10 +211,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
             setPeerTransportParameters(rememberedTransportParameters);
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.5
+            // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
+            //   transport parameter supplied by the server"
+            long earlyDataSizeLeft = sessionTicket.getEarlyDataMaxSize();
             EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
             if (earlyDataStream != null) {
                 try {
-                    earlyDataStream.writeEarlyData(earlyData, complete);
+                    earlyDataStream.writeEarlyData(earlyData, complete, earlyDataSizeLeft);
                 } catch (IOException e) {
                     e.printStackTrace();  // TODO
                 }
