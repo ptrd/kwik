@@ -20,14 +20,20 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+
+import java.io.IOException;
+import java.util.function.Consumer;
 
 /**
  * A quic stream that is capable of sending early data. When early data is offered but cannot be send as early data,
  * the data will be cached until it can be send.
  */
 public class EarlyDataStream extends QuicStream {
+
+    private volatile boolean sendingEarlyData = true;
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         super(quicVersion, streamId, connection, flowController, log);
@@ -37,20 +43,25 @@ public class EarlyDataStream extends QuicStream {
      * Write early data, assuming the provided data is complete and fits into one StreamFrame.
      * @param earlyData
      */
-    public void writeEarlyData(byte[] earlyData, boolean fin) {
-        if (earlyData.length > 1000) {
-            log.error("0-RTT data is limited to 1000 bytes.");
-            return;
+    public void writeEarlyData(byte[] earlyData, boolean fin) throws IOException {
+        long flowControlLimit = flowController.getFlowControlLimit(this);
+        int earlyDataLength = (int) Long.min(earlyData.length, flowControlLimit);
+        log.info(String.format("Sending %d bytes of early data on %s", earlyDataLength, this));
+        getOutputStream().write(earlyData, 0, earlyDataLength);
+        if (fin) {
+            getOutputStream().close();
         }
-        // TODO: to make this more generally applicable (not just for http (09) requests:
-        // - do not assume stream is complete, i.e. make explicit whether output must be closed or not
-        // - update output stream offset
-        // - update (and respect) flow control
-        // - accept more data (up to server initial max data)
-        log.info("sending early data now");
-        connection.sendEarlyData(new StreamFrame(quicVersion, streamId, 0, earlyData, 0, earlyData.length, fin), f -> {});
     }
 
+    @Override
+    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+        if (sendingEarlyData) {
+            connection.sendZeroRtt(frame, f -> {});
+        }
+        else {
+            connection.send(frame, lostFrameCallback);
+        }
+    }
 
 }
 

@@ -280,7 +280,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             setPeerTransportParameters(rememberedTransportParameters);
             EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
             if (earlyDataStream != null) {
-                earlyDataStream.writeEarlyData(earlyData, complete);
+                try {
+                    earlyDataStream.writeEarlyData(earlyData, complete);
+                } catch (IOException e) {
+                    e.printStackTrace();  // TODO
+                }
                 earlyDataStatus = Requested;
             }
             return earlyDataStream;
@@ -782,7 +786,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.send(packet, logMessage, p -> {});
     }
 
-    public void sendEarlyData(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+    public void sendZeroRtt(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
         QuicPacket packet = createPacket(ZeroRTT, frame);
         sender.send(packet, "0-RTT data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
     }

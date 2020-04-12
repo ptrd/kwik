@@ -103,6 +103,12 @@ public class FlowControl implements FrameProcessor {
         }
     }
 
+    public long getFlowControlLimit(QuicStream stream) {
+        synchronized (this) {
+            return currentStreamCredits(stream);
+        }
+    }
+
     /**
      * Waits for flow control credits. Returns immediately when credits are available for the given
      * stream, blocks until credits become available otherwise.
