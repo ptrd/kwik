@@ -31,6 +31,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 
 public class StreamManager implements FrameProcessor {
@@ -65,7 +66,12 @@ public class StreamManager implements FrameProcessor {
         }
     }
 
-    public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit) throws TimeoutException {
+    public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
+        return createStream(bidirectional, timeout, timeoutUnit,
+                (quicVersion, streamId, connection, flowController, logger) -> new QuicStream(quicVersion, streamId, connection, flowController, logger));
+    }
+
+    private  QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
         try {
             boolean acquired;
             if (bidirectional) {
@@ -83,7 +89,7 @@ public class StreamManager implements FrameProcessor {
         }
 
         int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
+        QuicStream stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
         return stream;
     }
@@ -94,9 +100,10 @@ public class StreamManager implements FrameProcessor {
      * @param bidirectional
      * @return
      */
-    public QuicStream createEarlyDataStream(boolean bidirectional) {
+    public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
         try {
-            return createStream(bidirectional, 0, TimeUnit.MILLISECONDS);
+            return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS,
+                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, connection, flowController, logger));
         } catch (TimeoutException e) {
             return null;
         }
@@ -219,6 +226,10 @@ public class StreamManager implements FrameProcessor {
 
     public long getMaxUnirectionalStreams() {
         return maxStreamsUni;
+    }
+
+    interface QuicStreamSupplier {
+        QuicStream apply(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log);
     }
 }
 

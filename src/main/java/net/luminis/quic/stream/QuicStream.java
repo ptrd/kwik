@@ -45,11 +45,11 @@ public class QuicStream {
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
     private Object addMonitor = new Object();
-    private final Version quicVersion;
-    private final int streamId;
-    private final QuicConnectionImpl connection;
-    private final FlowControl flowController;
-    private final Logger log;
+    protected final Version quicVersion;
+    protected final int streamId;
+    protected final QuicConnectionImpl connection;
+    protected final FlowControl flowController;
+    protected final Logger log;
     private final BlockingQueue<StreamFrame> queuedFrames;
     private StreamFrame currentFrame;
     private int currentOffset;
@@ -129,24 +129,6 @@ public class QuicStream {
         if (logMessage != null) {
             log.debug(logMessage);
         }
-    }
-
-    /**
-     * Write early data, assuming the provided data is complete and fits into one StreamFrame.
-     * @param earlyData
-     */
-    public void writeEarlyData(byte[] earlyData, boolean fin) {
-        if (earlyData.length > 1000) {
-            log.error("0-RTT data is limited to 1000 bytes.");
-            return;
-        }
-        // TODO: to make this more generally applicable (not just for http (09) requests:
-        // - do not assume stream is complete, i.e. make explicit whether output must be closed or not
-        // - update output stream offset
-        // - update (and respect) flow control
-        // - accept more data (up to server initial max data)
-        log.info("sending early data now");
-        connection.sendEarlyData(new StreamFrame(quicVersion, streamId, currentOffset, earlyData, 0, earlyData.length, fin), f -> {});
     }
 
     public int getStreamId() {

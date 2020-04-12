@@ -25,6 +25,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
@@ -277,7 +278,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
             setPeerTransportParameters(rememberedTransportParameters);
-            QuicStream earlyDataStream = streamManager.createEarlyDataStream(true);
+            EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
             if (earlyDataStream != null) {
                 earlyDataStream.writeEarlyData(earlyData, complete);
                 earlyDataStatus = Requested;
