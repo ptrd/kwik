@@ -277,9 +277,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
             setPeerTransportParameters(rememberedTransportParameters);
-            QuicStream earlyDataStream = createStream(true);
-            earlyDataStream.writeEarlyData(earlyData, complete);
-            earlyDataStatus = Requested;
+            QuicStream earlyDataStream = streamManager.createEarlyDataStream(true);
+            if (earlyDataStream != null) {
+                earlyDataStream.writeEarlyData(earlyData, complete);
+                earlyDataStatus = Requested;
+            }
             return earlyDataStream;
         }
         else {

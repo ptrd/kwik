@@ -88,6 +88,20 @@ public class StreamManager implements FrameProcessor {
         return stream;
     }
 
+    /**
+     * Creates a quic stream that is able to send early data.
+     * Note that this method will not block; if the stream cannot be created due to no stream credit, null is returned.
+     * @param bidirectional
+     * @return
+     */
+    public QuicStream createEarlyDataStream(boolean bidirectional) {
+        try {
+            return createStream(bidirectional, 0, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            return null;
+        }
+    }
+
     private synchronized int generateClientStreamId(boolean bidirectional) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
         // "0x0  | Client-Initiated, Bidirectional"

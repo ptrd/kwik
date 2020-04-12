@@ -233,4 +233,17 @@ class StreamManagerTest {
         assertThat(streamReference.get()).isNotNull();
     }
 
+    @Test
+    void creatingEarlyDataStreamShouldNotBlockWhenMaxStreamsReached() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsUni(1);
+        QuicStream firstStream = streamManager.createStream(false);
+        assertThat(firstStream).isNotNull();
+
+        // When
+        QuicStream earlyDataStream = streamManager.createEarlyDataStream(true);
+
+        // Then
+        assertThat(earlyDataStream).isNull();
+    }
 }
