@@ -292,6 +292,10 @@ public class QuicStream {
         }
     }
 
+    protected void resetOutputStream() {
+        outputStream.currentOffset = 0;
+    }
+
     protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
         connection.send(frame, lostFrameCallback);
     }

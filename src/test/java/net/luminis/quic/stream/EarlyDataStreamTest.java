@@ -27,12 +27,13 @@ import net.luminis.quic.log.NullLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class EarlyDataStreamTest {
@@ -106,10 +107,87 @@ class EarlyDataStreamTest {
     @Test
     void earlyDataShouldBeLimitedToInitalMaxData() throws Exception {
         // When
-        stream.writeEarlyData(new byte[1500], false, 500);
+        stream.writeEarlyData(new byte[1500], true, 500);
 
         // Then
         verify(connection, times(1)).sendZeroRtt(any(QuicFrame.class), any(Consumer.class));
         verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length <= 500), any(Consumer.class));
     }
+
+    @Test
+    void whenEarlyDataIsLimitedStreamIsNotClosed() throws Exception {
+        // When
+        stream.writeEarlyData(new byte[1500], true, 500);
+
+        // Then
+        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).isFinal() == false), any(Consumer.class));
+    }
+
+    @Test
+    void whenWritingRemainingAllDataShouldHaveBeenSent() throws Exception {
+        // Given
+        byte[] data = new byte[1500];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) i;
+        }
+
+        // When
+        stream.writeEarlyData(data, true, 500);
+        stream.writeRemaining(true);
+
+        // Then
+        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection, atLeast(1)).sendZeroRtt(argumentCaptor.capture(), any(Consumer.class));
+        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class));
+        byte[] transmittedData = transmittedByteStream(argumentCaptor);
+        assertThat(transmittedData).isEqualTo(data);
+        StreamFrame lastFrame = ((StreamFrame) argumentCaptor.getAllValues().get(argumentCaptor.getAllValues().size() - 1));
+        assertThat(lastFrame.isFinal()).isTrue();
+    }
+
+    @Test
+    void whenEarlyDataWasNotAcceptedWritingRemainingShouldSendAll() throws Exception {
+        // Given
+        byte[] data = new byte[1500];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) i;
+        }
+
+        // When
+        stream.writeEarlyData(data, true, 500);
+        stream.writeRemaining(false);
+
+        // Then
+        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class));
+        byte[] transmittedData = transmittedByteStream(argumentCaptor);
+        assertThat(transmittedData).isEqualTo(data);
+        StreamFrame firstFrame = (StreamFrame) argumentCaptor.getAllValues().get(0);
+        assertThat(firstFrame.getOffset()).isEqualTo(0);
+        StreamFrame lastFrame = (StreamFrame) argumentCaptor.getAllValues().get(argumentCaptor.getAllValues().size() - 1);
+        assertThat(lastFrame.isFinal()).isTrue();
+    }
+
+    @Test
+    void whenAllEarlyDataWasSentNoRemainingShouldBeSend() throws Exception {
+        // Given
+        stream.writeEarlyData(new byte[100], true, 10_000);
+
+        // When
+        clearInvocations(connection);
+        stream.writeRemaining(true);
+
+        // Then
+        verify(connection, never()).send(any(QuicFrame.class), any(Consumer.class));
+    }
+
+    byte[] transmittedByteStream(ArgumentCaptor<QuicFrame> argumentCaptor) {
+        int totalSize = argumentCaptor.getAllValues().stream().mapToInt(f -> ((StreamFrame) f).getStreamData().length).sum();
+        ByteBuffer buffer = ByteBuffer.allocate(totalSize);
+        argumentCaptor.getAllValues().stream()
+                .map(frame -> ((StreamFrame) frame).getStreamData())
+                .forEach(byteArray -> buffer.put(byteArray));
+        return buffer.array();
+    }
+
 }

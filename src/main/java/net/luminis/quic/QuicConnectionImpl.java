@@ -171,16 +171,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        byte[] lateData = new byte[0];
-        if (earlyData != null) {
-            if (earlyData.length > sessionTicket.getInitialMaxData()) {
-                lateData = Arrays.copyOfRange(earlyData, (int) sessionTicket.getInitialMaxData(), earlyData.length);
-            }
-        }
-
         startHandshake(applicationProtocol, earlyData != null);
 
-        QuicStream earlyDataStream = sendEarlyData(earlyData, lateData.length == 0);
+        EarlyDataStream earlyDataStream = sendEarlyData(earlyData, true);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -194,19 +187,17 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         catch (InterruptedException e) {
             throw new RuntimeException();  // Should not happen.
         }
+
         if (earlyData != null) {
             if (earlyDataStatus != Accepted) {
-                log.info("Server did not accept early data; retransmitting request");
-                earlyDataStream.getOutputStream().write(earlyData);
+                log.info("Server did not accept early data; retransmitting all data.");
             }
-            if (lateData.length > 0) {
-                earlyDataStream.getOutputStream().write(lateData);
-            }
+            earlyDataStream.writeRemaining(earlyDataStatus == Accepted);
         }
         return earlyDataStream;
     }
 
-    private QuicStream sendEarlyData(byte[] earlyData, boolean complete) {
+    private EarlyDataStream sendEarlyData(byte[] earlyData, boolean complete) throws IOException {
         if (earlyData != null) {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
@@ -217,11 +208,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             long earlyDataSizeLeft = sessionTicket.getEarlyDataMaxSize();
             EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
             if (earlyDataStream != null) {
-                try {
-                    earlyDataStream.writeEarlyData(earlyData, complete, earlyDataSizeLeft);
-                } catch (IOException e) {
-                    e.printStackTrace();  // TODO
-                }
+                earlyDataStream.writeEarlyData(earlyData, complete, earlyDataSizeLeft);
                 earlyDataStatus = Requested;
             }
             return earlyDataStream;

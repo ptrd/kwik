@@ -25,6 +25,7 @@ import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 /**
@@ -34,6 +35,9 @@ import java.util.function.Consumer;
 public class EarlyDataStream extends QuicStream {
 
     private volatile boolean sendingEarlyData = true;
+    private boolean earlyDataIsFinalInStream;
+    private byte[] earlyData = new byte[0];
+    private byte[] remainingData = new byte[0];
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         super(quicVersion, streamId, connection, flowController, log);
@@ -45,12 +49,32 @@ public class EarlyDataStream extends QuicStream {
      * @param earlyDataSizeLeft
      */
     public void writeEarlyData(byte[] earlyData, boolean fin, long earlyDataSizeLeft) throws IOException {
+        this.earlyData = earlyData;
+        earlyDataIsFinalInStream = fin;
         long flowControlLimit = flowController.getFlowControlLimit(this);
         int earlyDataLength = (int) Long.min(earlyData.length, Long.min(earlyDataSizeLeft, flowControlLimit));
         log.info(String.format("Sending %d bytes of early data on %s", earlyDataLength, this));
         getOutputStream().write(earlyData, 0, earlyDataLength);
-        if (fin) {
+        if (earlyDataLength == earlyData.length && earlyDataIsFinalInStream) {
             getOutputStream().close();
+        }
+        sendingEarlyData = false;
+        remainingData = Arrays.copyOfRange(earlyData, earlyDataLength, earlyData.length);
+    }
+
+    public void writeRemaining(boolean earlyDataWasAccepted) throws IOException {
+        if (earlyDataWasAccepted) {
+            if (remainingData.length > 0) {
+                getOutputStream().write(remainingData);
+                getOutputStream().close();
+            }
+        }
+        else {
+            resetOutputStream();
+            getOutputStream().write(earlyData);
+            if (earlyDataIsFinalInStream) {
+                getOutputStream().close();
+            }
         }
     }
 
