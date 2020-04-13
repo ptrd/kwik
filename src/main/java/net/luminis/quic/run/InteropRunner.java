@@ -23,6 +23,7 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 
 import java.io.File;
@@ -47,7 +48,8 @@ public class InteropRunner extends KwikCli {
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
     public static final String TC_MULTI = "multiconnect";
-    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI);
+    public static final String TC_0RTT = "zerortt";
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI, TC_0RTT);
 
     private static File outputDir;
     private static SysOutLogger logger = new SysOutLogger();
@@ -90,6 +92,9 @@ public class InteropRunner extends KwikCli {
             }
             else if (testCase.equals(TC_MULTI)) {
                 testMultiConnect(downloadUrls, builder);
+            }
+            else if (testCase.equals(TC_0RTT)) {
+                testZeroRtt(downloadUrls, builder);
             }
         } catch (MalformedURLException | URISyntaxException e) {
             System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
@@ -192,6 +197,47 @@ public class InteropRunner extends KwikCli {
             }
         }
     }
+
+    private static void testZeroRtt(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+        logger.logPackets(true);
+        logger.logRecovery(true);
+        System.out.println("Starting first download at " + timeNow());
+
+        QuicConnection connection = builder.build();
+        connection.connect(15_000);
+
+        doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
+        System.out.println("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
+        List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
+        if (newSessionTickets.isEmpty()) {
+            System.out.println("Error: did not get any new session tickets; aborting test.");
+            return;
+        }
+        else {
+            System.out.println("Got " + newSessionTickets.size() + " new session tickets");
+        }
+        connection.close();
+        System.out.println("Connection closed; starting second connection with 0-rtt");
+
+        QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
+
+        builder.sessionTicket(sessionTicket);
+        QuicConnection connection2 = builder.build();
+
+        List<QuicConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();
+        for (int i = 1; i < downloadUrls.size(); i++) {
+            String httpRequest = "GET " + downloadUrls.get(i).getPath() + "\r\n";
+            earlyDataRequests.add(new QuicConnection.StreamEarlyData(httpRequest.getBytes(), true));
+        }
+        List<QuicStream> earlyDataStreams = connection2.connect(15_000, "hq-27", null, earlyDataRequests);
+        for (int i = 0; i < earlyDataRequests.size(); i++) {
+            doHttp09Request( connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
+        }
+
+        System.out.println("Download finished at " + timeNow());
+        connection.close();
+    }
+
 
     static String timeNow() {
         LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));

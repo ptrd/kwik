@@ -170,6 +170,7 @@ public class CryptoStream {
             for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {
                 if (ex instanceof EarlyDataExtension) {
                     connection.setEarlyDataStatus(EarlyDataStatus.Accepted);
+                    log.info("Server has accepted early data.");
                 }
                 else if (ex instanceof UnknownExtension) {
                     parseExtension((UnknownExtension) ex);
