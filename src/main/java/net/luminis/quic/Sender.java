@@ -25,6 +25,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 import net.luminis.quic.recovery.RecoveryManager;
 
 import java.io.IOException;
@@ -182,16 +183,17 @@ public class Sender implements ProbeSender, FrameProcessor {
                     // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
                     // an ack frame that should be coalesced with it.
 
-                    AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
-                    if (ackGenerator.hasAckToSend()) {
-                        AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
-                        if (packet == null) {
-                            packet = connection.createPacket(level, ackToSend);
+                    if (packet == null || ! (packet instanceof ZeroRttPacket)) {
+                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
+                        if (ackGenerator.hasAckToSend()) {
+                            AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
+                            if (packet == null) {
+                                packet = connection.createPacket(level, ackToSend);
+                            } else {
+                                packet.addFrame(ackToSend);
+                            }
+                            packetData = packet.generatePacketBytes(packetNumber, keys);
                         }
-                        else {
-                            packet.addFrame(ackToSend);
-                        }
-                        packetData = packet.generatePacketBytes(packetNumber, keys);
                     }
 
                     DatagramPacket datagram = new DatagramPacket(packetData, packetData.length, serverAddress, port);
