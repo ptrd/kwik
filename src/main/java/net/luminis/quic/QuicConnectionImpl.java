@@ -158,10 +158,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
      * @return
      * @throws IOException
      */
-    public synchronized QuicStream connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, byte[] earlyData) throws IOException {
+    public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
             this.transportParams = transportParameters;
+        }
+        if (earlyData == null) {
+            earlyData = Collections.emptyList();
         }
 
         log.info("Original destination connection id", destConnectionIds.getCurrent());
@@ -171,9 +174,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        startHandshake(applicationProtocol, earlyData != null);
+        startHandshake(applicationProtocol, !earlyData.isEmpty());
 
-        EarlyDataStream earlyDataStream = sendEarlyData(earlyData, true);
+        List<QuicStream> earlyDataStreams = sendEarlyData(earlyData);
 
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
@@ -188,17 +191,19 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             throw new RuntimeException();  // Should not happen.
         }
 
-        if (earlyData != null) {
+        if (!earlyData.isEmpty()) {
             if (earlyDataStatus != Accepted) {
                 log.info("Server did not accept early data; retransmitting all data.");
             }
-            earlyDataStream.writeRemaining(earlyDataStatus == Accepted);
+            for (QuicStream stream: earlyDataStreams) {
+                ((EarlyDataStream) stream).writeRemaining(earlyDataStatus == Accepted);
+            }
         }
-        return earlyDataStream;
+        return earlyDataStreams;
     }
 
-    private EarlyDataStream sendEarlyData(byte[] earlyData, boolean complete) throws IOException {
-        if (earlyData != null) {
+    private List<QuicStream> sendEarlyData(List<StreamEarlyData> streamEarlyDataList) throws IOException {
+        if (!streamEarlyDataList.isEmpty()) {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
             setPeerTransportParameters(rememberedTransportParameters);
@@ -206,15 +211,22 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
             //   transport parameter supplied by the server"
             long earlyDataSizeLeft = sessionTicket.getEarlyDataMaxSize();
-            EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
-            if (earlyDataStream != null) {
-                earlyDataStream.writeEarlyData(earlyData, complete, earlyDataSizeLeft);
-                earlyDataStatus = Requested;
+
+            List<QuicStream> earlyDataStreams = new ArrayList<>();
+            for (StreamEarlyData streamEarlyData: streamEarlyDataList) {
+                EarlyDataStream earlyDataStream = streamManager.createEarlyDataStream(true);
+                if (earlyDataStream != null) {
+                    earlyDataStream.writeEarlyData(streamEarlyData.data, streamEarlyData.closeOutput, earlyDataSizeLeft);
+                    earlyDataSizeLeft = Long.max(0, earlyDataSizeLeft - streamEarlyData.data.length);
+                }
+                earlyDataStreams.add(earlyDataStream);
             }
-            return earlyDataStream;
+
+            earlyDataStatus = Requested;
+            return earlyDataStreams;
         }
         else {
-            return null;
+            return Collections.emptyList();
         }
     }
 

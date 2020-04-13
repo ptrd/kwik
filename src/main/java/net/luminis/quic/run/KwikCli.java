@@ -322,7 +322,8 @@ public class KwikCli {
                 QuicConnection quicConnection = builder.build();
                 if (useZeroRtt && httpRequestPath != null) {
                     String http09Request = "GET " + httpRequestPath + "\r\n";
-                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, http09Request.getBytes());
+                    QuicConnection.StreamEarlyData earlyData = new QuicConnection.StreamEarlyData(http09Request.getBytes(), true);
+                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, List.of(earlyData)).get(0);
                 }
                 else {
                     if (alpn == null) {

@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.CongestionController;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
@@ -27,7 +26,6 @@ import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;

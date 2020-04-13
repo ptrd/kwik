@@ -39,7 +39,7 @@ public interface QuicConnection {
 
     void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException;
 
-    QuicStream connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, byte[] earlyData) throws IOException;
+    List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 
@@ -50,5 +50,15 @@ public interface QuicConnection {
     void close();
 
     Statistics getStats();
+
+    class StreamEarlyData {
+        byte[] data;
+        boolean closeOutput;
+
+        public StreamEarlyData(byte[] data, boolean closeImmediately) {
+            this.data = data;
+            closeOutput = closeImmediately;
+        }
+    }
 }
 
