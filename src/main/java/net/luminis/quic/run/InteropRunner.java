@@ -21,6 +21,8 @@ package net.luminis.quic.run;
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.log.FileLogger;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
 import net.luminis.quic.stream.QuicStream;
@@ -52,10 +54,18 @@ public class InteropRunner extends KwikCli {
     public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI, TC_0RTT);
 
     private static File outputDir;
-    private static SysOutLogger logger = new SysOutLogger();
+    private static Logger logger;
 
 
     public static void main(String[] args) {
+        String logFile = "/logs/kwik_client.log";
+        try {
+            logger = new FileLogger(new File(logFile));
+        } catch (IOException e) {
+            System.out.println("Cannot open log file " + logFile);
+            System.exit(1);
+        }
+
         if (args.length < 2) {
             System.out.println("Expected at least 3 arguments: <downloadDir> <testcase> <URL>");
             System.exit(1);
@@ -125,7 +135,7 @@ public class InteropRunner extends KwikCli {
                                 }
                             }))
                     .get(5, TimeUnit.MINUTES);
-            System.out.println("Downloaded " + downloadUrls);
+            logger.info("Downloaded " + downloadUrls);
         } catch (InterruptedException e) {
             logger.error("download tasks interrupted", e);
         } catch (ExecutionException e) {
@@ -149,14 +159,14 @@ public class InteropRunner extends KwikCli {
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
-        System.out.println("Downloaded " + url1);
+        logger.info("Downloaded " + url1);
 
         List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
 
         connection.close();
 
         if (newSessionTickets.isEmpty()) {
-            System.out.println("Server did not provide any new session tickets.");
+            logger.info("Server did not provide any new session tickets.");
             System.exit(1);
         }
 
@@ -169,7 +179,7 @@ public class InteropRunner extends KwikCli {
         QuicConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
-        System.out.println("Downloaded " + url2);
+        logger.info("Downloaded " + url2);
         connection2.close();
     }
 
@@ -182,42 +192,43 @@ public class InteropRunner extends KwikCli {
 
         for (URL download : downloadUrls) {
             try {
-                System.out.println("Starting download at " + timeNow());
+                logger.info("Starting download at " + timeNow());
 
                 QuicConnection connection = builder.build();
                 connection.connect(15_000);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
-                System.out.println("Downloaded " + download + " finished at " + timeNow());
+                logger.info("Downloaded " + download + " finished at " + timeNow());
 
                 connection.close();
             }
             catch (IOException ioError) {
-                System.out.println(timeNow() + " Error in client: " + ioError);
+                logger.error(timeNow() + " Error in client: " + ioError);
             }
         }
     }
 
     private static void testZeroRtt(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+        logger.logInfo(true);
         logger.logPackets(true);
         logger.logRecovery(true);
-        System.out.println("Starting first download at " + timeNow());
+        logger.info("Starting first download at " + timeNow());
 
         QuicConnection connection = builder.build();
         connection.connect(15_000);
 
         doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
-        System.out.println("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
+        logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
         List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
         if (newSessionTickets.isEmpty()) {
-            System.out.println("Error: did not get any new session tickets; aborting test.");
+            logger.error("Error: did not get any new session tickets; aborting test.");
             return;
         }
         else {
-            System.out.println("Got " + newSessionTickets.size() + " new session tickets");
+            logger.info("Got " + newSessionTickets.size() + " new session tickets");
         }
         connection.close();
-        System.out.println("Connection closed; starting second connection with 0-rtt");
+        logger.info("Connection closed; starting second connection with 0-rtt");
 
         QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
@@ -231,10 +242,16 @@ public class InteropRunner extends KwikCli {
         }
         List<QuicStream> earlyDataStreams = connection2.connect(15_000, "hq-27", null, earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
-            doHttp09Request( connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
+            if (earlyDataStreams.get(i) == null) {
+                logger.info("Attempting to create new stream after connect, because it failed on 0-rtt");
+            }
+            else {
+                logger.info("Processing response for stream " + earlyDataStreams.get(i));
+            }
+            doHttp09Request(connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
         }
 
-        System.out.println("Download finished at " + timeNow());
+        logger.info("Download finished at " + timeNow());
         connection.close();
     }
 
