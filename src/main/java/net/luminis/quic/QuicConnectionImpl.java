@@ -102,6 +102,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
+    private List<QuicFrame> queuedZeroRttFrames = new ArrayList<>();
 
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt) throws UnknownHostException, SocketException {
@@ -196,7 +197,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 log.info("Server did not accept early data; retransmitting all data.");
             }
             for (QuicStream stream: earlyDataStreams) {
-                ((EarlyDataStream) stream).writeRemaining(earlyDataStatus == Accepted);
+                if (stream != null) {
+                    ((EarlyDataStream) stream).writeRemaining(earlyDataStatus == Accepted);
+                }
             }
         }
         return earlyDataStreams;
@@ -219,9 +222,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                     earlyDataStream.writeEarlyData(streamEarlyData.data, streamEarlyData.closeOutput, earlyDataSizeLeft);
                     earlyDataSizeLeft = Long.max(0, earlyDataSizeLeft - streamEarlyData.data.length);
                 }
+                else {
+                    log.info("Creating early data stream failed, max bidi streams = " + rememberedTransportParameters.getInitialMaxStreamsBidi());
+                }
                 earlyDataStreams.add(earlyDataStream);
             }
-
+            sendQueuedZeroRttFrames();
             earlyDataStatus = Requested;
             return earlyDataStreams;
         }
@@ -789,8 +795,35 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public void sendZeroRtt(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
-        QuicPacket packet = createPacket(ZeroRTT, frame);
-        sender.send(packet, "0-RTT data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
+        queuedZeroRttFrames.add(frame);
+    }
+
+    private void sendQueuedZeroRttFrames() {
+        QuicPacket packet = createPacket(ZeroRTT, null);
+        int currentSize = 0;
+        for (QuicFrame frame: queuedZeroRttFrames) {
+            if (currentSize + frame.getBytes().length < 1100) {
+                packet.addFrame(frame);
+                currentSize += frame.getBytes().length;
+            }
+            else {
+                sender.send(packet, "0-RTT data", this::retransmitZeroRttData);
+                packet = createPacket(ZeroRTT, frame);
+                currentSize = frame.getBytes().length;
+            }
+        }
+        if (!packet.getFrames().isEmpty()) {
+                sender.send(packet, "0-RTT data", this::retransmitZeroRttData);
+        }
+        queuedZeroRttFrames.clear();
+    }
+
+    public void retransmitZeroRttData(QuicPacket zeroRttPacket) {
+        QuicPacket oneRtt = createPacket(EncryptionLevel.App, null);
+        for (QuicFrame frame: zeroRttPacket.getFrames()) {
+            oneRtt.addFrame(frame);
+        }
+        sender.send(oneRtt, "1-rtt", this::retransmitZeroRttData);
     }
 
     public void slideFlowControlWindow(int size) {
