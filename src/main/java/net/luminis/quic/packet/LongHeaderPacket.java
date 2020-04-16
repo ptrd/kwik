@@ -229,6 +229,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected abstract void checkPacketType(byte b);
 
-    protected abstract void parseAdditionalFields(ByteBuffer buffer);
+    protected abstract void parseAdditionalFields(ByteBuffer buffer) throws InvalidPacketException;
 }
 
