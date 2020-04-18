@@ -58,7 +58,8 @@ public class InteropRunner extends KwikCli {
 
 
     public static void main(String[] args) {
-        String logFile = "/logs/kwik_client.log";
+        File logDir = new File("/logs");   // Interop runner runs in docker container and is expected to write logs to /logs
+        String logFile = (logDir.exists()? "/logs/": "./") + "kwik_client.log";
         try {
             logger = new FileLogger(new File(logFile));
         } catch (IOException e) {
