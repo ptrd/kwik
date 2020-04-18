@@ -171,12 +171,10 @@ public class InteropRunner extends KwikCli {
             System.exit(1);
         }
 
-        QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
-
         builder = QuicConnectionImpl.newBuilder();
         builder.uri(url2.toURI());
         builder.logger(logger);
-        builder.sessionTicket(sessionTicket);
+        builder.sessionTicket(newSessionTickets.get(0));
         QuicConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
@@ -231,9 +229,7 @@ public class InteropRunner extends KwikCli {
         connection.close();
         logger.info("Connection closed; starting second connection with 0-rtt");
 
-        QuicSessionTicket sessionTicket = QuicSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
-
-        builder.sessionTicket(sessionTicket);
+        builder.sessionTicket(newSessionTickets.get(0));
         QuicConnection connection2 = builder.build();
 
         List<QuicConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();

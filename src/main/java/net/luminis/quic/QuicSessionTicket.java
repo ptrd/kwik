@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.tls.NewSessionTicket;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
 
 /**
  * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to being able to
@@ -97,6 +98,26 @@ public class QuicSessionTicket extends NewSessionTicket {
         buffer.putInt(maxAckDelay);
         buffer.put((byte) (disableActiveMigration? 1: 0));
         return buffer.array();
+    }
+
+    @Override
+    public byte[] getPSK() {
+        return wrappedTicket.getPSK();
+    }
+
+    @Override
+    public Date getTicketCreationDate() {
+        return wrappedTicket.getTicketCreationDate();
+    }
+
+    @Override
+    public long getTicketAgeAdd() {
+        return wrappedTicket.getTicketAgeAdd();
+    }
+
+    @Override
+    public byte[] getSessionTicketIdentity() {
+        return wrappedTicket.getSessionTicketIdentity();
     }
 
     public void copyTo(TransportParameters tp) {
