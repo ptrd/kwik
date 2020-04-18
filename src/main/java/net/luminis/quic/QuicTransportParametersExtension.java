@@ -140,7 +140,7 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     // Assuming Handshake message type encrypted_extensions
-    public void parse(ByteBuffer buffer, Logger log) {
+    public void parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         int extensionType = buffer.getShort() & 0xffff;
         if (extensionType != 0xffa5) {
             throw new RuntimeException();  // Must be programming error
@@ -159,7 +159,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
     }
 
-    void parseTransportParameter(ByteBuffer buffer, Logger log) {
+    void parseTransportParameter(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         int parameterId = VariableLengthInteger.parse(buffer);
         int size = VariableLengthInteger.parse(buffer);
         int startPosition = buffer.position();

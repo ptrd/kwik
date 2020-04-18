@@ -19,9 +19,10 @@
 package net.luminis.quic.frame;
 
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 
@@ -54,7 +55,7 @@ public class CryptoFrame extends QuicFrame implements Comparable<CryptoFrame> {
         this(quicVersion, 0, payload);
     }
 
-    public CryptoFrame parse(ByteBuffer buffer, Logger log) {
+    public CryptoFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         log.debug("Parsing Crypto frame");
         buffer.get();
 

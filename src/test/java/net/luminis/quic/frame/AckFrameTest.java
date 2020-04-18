@@ -30,7 +30,7 @@ import static org.mockito.Mockito.mock;
 class AckFrameTest {
 
     @Test
-    void testParse() {
+    void testParse() throws Exception {
         byte[] data = new byte[] { 0x0d, 0x00, 0x00, 0x00, 0x00 };
 
         AckFrame ack = new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class));
@@ -41,7 +41,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testParseAckRangeWithSingleGap() {
+    void testParseAckRangeWithSingleGap() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below
         byte[] data = new byte[] { 0x0d,      0x02,    0x00, 0x01,           0x00,                0x00,      0x00 };
 
@@ -54,7 +54,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testParseAckRangeWithLargerGap() {
+    void testParseAckRangeWithLargerGap() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below
         byte[] data = new byte[] { 0x0d,      0x08,    0x00, 0x01,           0x01,                0x03,      0x01 };
 
@@ -67,7 +67,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testParseAckRangeWithTwoAckBlocks() {
+    void testParseAckRangeWithTwoAckBlocks() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below gap (size) #acked-below
         byte[] data = new byte[] { 0x0d,      0x0a,    0x00, 0x02,           0x02,                0x01,      0x01,        0x00,      0x02 };
 
@@ -80,7 +80,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testGenerateAckWithSinglePacketNumber() {
+    void testGenerateAckWithSinglePacketNumber() throws Exception {
         AckFrame ackFrame = new AckFrame(3);
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(3L);
 
@@ -92,7 +92,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testGenerateAckWithSinglePacketNumberAsList() {
+    void testGenerateAckWithSinglePacketNumberAsList() throws Exception {
         AckFrame ackFrame = new AckFrame(List.of(3L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(3L);
 
@@ -104,7 +104,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testGenerateAckWithListOfConsecutivePacketNumbers() {
+    void testGenerateAckWithListOfConsecutivePacketNumbers() throws Exception {
         AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 2L, 3L, 4L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(4L, 3L, 2L, 1L, 0L);
 
@@ -116,7 +116,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testGenerateAckWithListWithOneGap() {
+    void testGenerateAckWithListWithOneGap() throws Exception {
         AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 4L, 5L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(5L, 4L, 1L, 0L);
 
@@ -128,7 +128,7 @@ class AckFrameTest {
     }
 
     @Test
-    void testGenerateAckWithListWithSmallGap() {
+    void testGenerateAckWithListWithSmallGap() throws Exception {
         AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 2L, 4L, 5L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(5L, 4L, 2L, 1L, 0L);
 

@@ -18,8 +18,9 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 
@@ -36,7 +37,7 @@ public class MaxStreamsFrame extends QuicFrame {
     public MaxStreamsFrame() {
     }
 
-    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) {
+    public MaxStreamsFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
         if (frameType != 0x12 && frameType != 0x13) {
             throw new RuntimeException();  // Would be a programming error.

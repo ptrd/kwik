@@ -18,9 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.log.Logger;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -46,7 +47,7 @@ public class ConnectionCloseFrame extends QuicFrame {
         errorCode = 0x00;
     }
 
-    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) {
+    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         frameType = buffer.get() & 0xff;
         if (frameType != 0x1c && frameType != 0x1d) {
             throw new RuntimeException();  // Programming error

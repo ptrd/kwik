@@ -18,9 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -138,7 +139,7 @@ public class AckFrame extends QuicFrame {
         return list.get(list.size()-1);
     }
 
-    public AckFrame parse(ByteBuffer buffer, Logger log) {
+    public AckFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         log.debug("Parsing AckFrame");
         acknowledgedPacketNumbers = new ArrayList<>();
 

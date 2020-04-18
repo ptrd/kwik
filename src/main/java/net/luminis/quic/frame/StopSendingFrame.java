@@ -18,9 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 
@@ -38,7 +39,7 @@ public class StopSendingFrame extends QuicFrame {
         return new byte[0];
     }
 
-    public StopSendingFrame parse(ByteBuffer buffer, Logger log) {
+    public StopSendingFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
 
         streamId = VariableLengthInteger.parse(buffer);

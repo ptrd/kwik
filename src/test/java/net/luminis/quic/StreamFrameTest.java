@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StreamFrameTest {
 
     @Test
-    void testStreamFrameParsing() {
+    void testStreamFrameParsing() throws Exception {
         byte[] data = generateByteArray(10);
         StreamFrame frame = new StreamFrame(16, 0, data, true);
         // Generate frame bytes and parse
@@ -44,7 +44,7 @@ class StreamFrameTest {
     }
 
     @Test
-    void testParseStreamWithoutOffsetAndLengthByte() {
+    void testParseStreamWithoutOffsetAndLengthByte() throws Exception {
         byte[] raw = new byte[] { 0x08, 0x02, 48, 49, 50, 51, 52 };
         StreamFrame frame = new StreamFrame().parse(ByteBuffer.wrap(raw), Mockito.mock(Logger.class));
 
@@ -56,7 +56,7 @@ class StreamFrameTest {
     }
 
     @Test
-    void testStreamFrameByteArraySlicing() {
+    void testStreamFrameByteArraySlicing() throws Exception {
         byte[] data = generateByteArray(26);
         StreamFrame frame = new StreamFrame(0, 0, data, 3, 5, true);
         // Generate frame bytes and parse to get access to copied data bytes.
@@ -64,7 +64,7 @@ class StreamFrameTest {
         assertThat(frame.getStreamData()).isEqualTo("34567".getBytes());
     }
 
-    private byte[] generateByteArray(int size) {
+    private byte[] generateByteArray(int size) throws Exception {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {
             // Generate 0-9 sequence; ASCII 0 = 48

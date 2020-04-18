@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.InvalidIntegerEncodingException;
+import net.luminis.quic.InvalidPacketException;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -510,7 +512,11 @@ class QuicStreamTest {
      * @return the resurrected frame
      */
     private StreamFrame resurrect(StreamFrame streamFrame) {
-        return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
+        try {
+            return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
+        } catch (InvalidIntegerEncodingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 

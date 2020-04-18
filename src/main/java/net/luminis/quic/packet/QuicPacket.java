@@ -187,7 +187,11 @@ abstract public class QuicPacket {
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
-        parseFrames(frameBytes, log);
+        try {
+            parseFrames(frameBytes, log);
+        } catch (InvalidIntegerEncodingException e) {
+            throw new InvalidPacketException();
+        }
     }
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
@@ -294,7 +298,7 @@ abstract public class QuicPacket {
         return candidatePn;
     }
 
-    protected void parseFrames(byte[] frameBytes, Logger log) {
+    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidIntegerEncodingException {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         while (buffer.remaining() > 0) {

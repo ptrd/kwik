@@ -18,8 +18,9 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
 
@@ -35,7 +36,7 @@ public class MaxDataFrame extends QuicFrame {
         maxData = flowControlMax;
     }
 
-    public MaxDataFrame parse(ByteBuffer buffer, Logger log) {
+    public MaxDataFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
         maxData = VariableLengthInteger.parse(buffer);
         return this;

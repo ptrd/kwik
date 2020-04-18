@@ -199,7 +199,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
             // "The length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes"
             length = VariableLengthInteger.parse(buffer);
         }
-        catch (IllegalArgumentException largerThanInt) {
+        catch (IllegalArgumentException | InvalidIntegerEncodingException invalidInt) {
             throw new InvalidPacketException();
         }
         log.debug("Length (PN + payload): " + length);

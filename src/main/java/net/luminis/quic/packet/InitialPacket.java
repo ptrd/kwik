@@ -107,14 +107,18 @@ public class InitialPacket extends LongHeaderPacket {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.5:
         // "An Initial packet (shown in Figure 13) has two additional header
         // fields that are added to the Long Header before the Length field."
-        int tokenLength = VariableLengthInteger.parse(buffer);
-        if (tokenLength > 0) {
-            if (tokenLength <= buffer.remaining()) {
-                buffer.position(buffer.position() + tokenLength);
+        try {
+            int tokenLength = VariableLengthInteger.parse(buffer);
+            if (tokenLength > 0) {
+                if (tokenLength <= buffer.remaining()) {
+                    buffer.position(buffer.position() + tokenLength);
+                }
+                else {
+                    throw new InvalidPacketException();
+                }
             }
-            else {
-                throw new InvalidPacketException();
-            }
+        } catch (InvalidIntegerEncodingException e) {
+            throw new InvalidPacketException();
         }
     }
 

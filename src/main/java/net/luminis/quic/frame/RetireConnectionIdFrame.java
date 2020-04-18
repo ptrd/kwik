@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.frame;
 
+import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
@@ -36,7 +37,7 @@ public class RetireConnectionIdFrame extends QuicFrame {
         this.sequenceNr = sequenceNumber;
     }
 
-    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) {
+    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
         sequenceNr = VariableLengthInteger.parse(buffer);
         return this;

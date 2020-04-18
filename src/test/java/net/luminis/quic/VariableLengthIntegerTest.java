@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VariableLengthIntegerTest {
 
     @Test
-    void parseSingleByteInteger() {
+    void parseSingleByteInteger() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "and the single byte 25 decodes to 37"
         int value = VariableLengthInteger.parse(wrap((byte) 0x25));
@@ -51,7 +51,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseTwoByteInteger() {
+    void parseTwoByteInteger() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "the two byte sequence 7b bd decodes to 15293; "
         int value = VariableLengthInteger.parse(wrap((byte) 0x7b, (byte) 0xbd));
@@ -69,7 +69,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseSingleByteIntegerEncodedInTwoByte() {
+    void parseSingleByteIntegerEncodedInTwoByte() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "(as does the two byte sequence 40 25)"
         int value = VariableLengthInteger.parse(wrap((byte) 0x40, (byte) 0x25));
@@ -78,7 +78,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseFourByteInteger() {
+    void parseFourByteInteger() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "the four byte sequence 9d 7f 3e 7d decodes to 494878333;"
         int value = VariableLengthInteger.parse(wrap((byte) 0x9d, (byte) 0x7f, (byte) 0x3e, (byte) 0x7d));
@@ -87,7 +87,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseFourByteIntegerFromStream() throws IOException {
+    void parseFourByteIntegerFromStream() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-16
         // "the four byte sequence 9d 7f 3e 7d decodes to 494878333;"
         int value = VariableLengthInteger.parse(wrapAsStream((byte) 0x9d, (byte) 0x7f, (byte) 0x3e, (byte) 0x7d));
@@ -96,14 +96,14 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseIncompleteFourByteIntegerFromStream() throws IOException {
+    void parseIncompleteFourByteIntegerFromStream() throws Exception {
         assertThatThrownBy(
                 () -> VariableLengthInteger.parse(wrapAsStream((byte) 0x9d, (byte) 0x7f, (byte) 0x3e)))
                 .isInstanceOf(EOFException.class);
     }
 
     @Test
-    void parseMaxInteger() {
+    void parseMaxInteger() throws Exception {
         int value = VariableLengthInteger.parse(wrap((byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00,
                 (byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff));
 
@@ -121,7 +121,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseLongValueGreaterThanMaxInteger() {
+    void parseLongValueGreaterThanMaxInteger() throws Exception {
         // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
         // "the eight byte sequence c2 19 7c 5e ff 14 e8 8c (in
         //   hexadecimal) decodes to the decimal value 151288809941952652;"
@@ -133,7 +133,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseMaxLong() {
+    void parseMaxLong() throws Exception {
         byte[] rawBytes = { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
                 (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
 
@@ -216,7 +216,7 @@ class VariableLengthIntegerTest {
     }
 
     @Test
-    void parseLong() {
+    void parseLong() throws Exception {
         long value = VariableLengthInteger.parseLong(
                 // Taken from https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
                 wrap(   (byte) 0xc2, (byte) 0x19, (byte) 0x7c, (byte) 0x5e,
@@ -235,7 +235,35 @@ class VariableLengthIntegerTest {
         assertThat(value).isEqualTo(151288809941952652L);
     }
 
-    private ByteBuffer wrap(byte... bytes) {
+    @Test
+    void parseEmptyBuffer() throws Exception {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.parse(wrap(new byte[0]))
+        ).isInstanceOf(InvalidIntegerEncodingException.class);
+    }
+
+    @Test
+    void parseTwoByteIntegerWithInvalidLength() throws Exception {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.parse(wrap((byte) 0x7b))
+        ).isInstanceOf(InvalidIntegerEncodingException.class);
+    }
+
+    @Test
+    void parseFourByteIntegerWithInvalidLength() throws Exception {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.parse(wrap((byte) 0x9d))
+        ).isInstanceOf(InvalidIntegerEncodingException.class);
+    }
+
+    @Test
+    void parseEightByteIntegerWithInvalidLength() throws Exception {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.parse(wrap((byte) 0xc2))
+        ).isInstanceOf(InvalidIntegerEncodingException.class);
+    }
+
+    private ByteBuffer wrap(byte... bytes) throws Exception {
         return ByteBuffer.wrap(bytes);
     }
 

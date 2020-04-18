@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
 public class VariableLengthInteger {
 
-    public static int parse(ByteBuffer buffer) {
+    public static int parse(ByteBuffer buffer) throws InvalidIntegerEncodingException {
         long value = parseLong(buffer);
         if (value <= Integer.MAX_VALUE) {
             return (int) value;
@@ -40,7 +40,11 @@ public class VariableLengthInteger {
         }
     }
 
-    public static long parseLong(ByteBuffer buffer) {
+    public static long parseLong(ByteBuffer buffer) throws InvalidIntegerEncodingException {
+        if (buffer.remaining() < 1) {
+            throw new InvalidIntegerEncodingException();
+        }
+
         long value;
         byte firstLengthByte = buffer.get();
         switch ((firstLengthByte & 0xc0) >> 6) {
@@ -48,14 +52,23 @@ public class VariableLengthInteger {
                 value = firstLengthByte;
                 break;
             case 1:
+                if (buffer.remaining() < 1) {
+                    throw new InvalidIntegerEncodingException();
+                }
                 buffer.position(buffer.position() - 1);
                 value = buffer.getShort() & 0x3fff;
                 break;
             case 2:
+                if (buffer.remaining() < 3) {
+                    throw new InvalidIntegerEncodingException();
+                }
                 buffer.position(buffer.position() - 1);
                 value = buffer.getInt() & 0x3fffffff;
                 break;
             case 3:
+                if (buffer.remaining() < 7) {
+                    throw new InvalidIntegerEncodingException();
+                }
                 buffer.position(buffer.position() - 1);
                 value = buffer.getLong() & 0x3fffffffffffffffL;
                 break;
@@ -173,7 +186,7 @@ public class VariableLengthInteger {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InvalidIntegerEncodingException {
         for (int i = 0; i < args.length; i++) {
             long value = parseLong(ByteBuffer.wrap(ByteUtils.hexToBytes(args[i])));
             System.out.println(args[i] + " => " + value);

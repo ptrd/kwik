@@ -160,7 +160,7 @@ public class CryptoStream {
         }
     }
 
-    private void processMessage(Message msg) {
+    private void processMessage(Message msg) throws TlsProtocolException {
         log.debug(this + " Detected " + msg.getClass().getSimpleName());
         if (msg instanceof ServerHello) {
             // Server Hello provides a new secret, so
@@ -184,13 +184,17 @@ public class CryptoStream {
         }
     }
 
-    private void parseExtension(UnknownExtension extension) {
+    private void parseExtension(UnknownExtension extension) throws TlsProtocolException {
         ByteBuffer buffer = ByteBuffer.wrap(extension.getData());
         int extensionType = buffer.getShort();
         buffer.rewind();
         if ((extensionType & 0xffff) == 0xffa5) {
             QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(quicVersion);
-            transportParametersExtension.parse(buffer, log);
+            try {
+                transportParametersExtension.parse(buffer, log);
+            } catch (InvalidIntegerEncodingException e) {
+                throw new TlsProtocolException("Invalid transport parameter extension");
+            }
             connection.setPeerTransportParameters(transportParametersExtension.getTransportParameters());
         }
         else {
