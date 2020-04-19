@@ -102,7 +102,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private boolean ignoreVersionNegotiation;
 
 
-    private QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt) throws UnknownHostException, SocketException {
+    private QuicConnectionImpl(String host, int port, NewSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -117,7 +117,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         streamManager = new StreamManager(this, log);
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
         connectionSecrets = new ConnectionSecrets(quicVersion, secretsFile, log);
-        sourceConnectionIds = new SourceConnectionIdRegistry(log);
+        sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
         transportParams = new TransportParameters(60, 250_000, 3 , 3);
         flowControlMax = transportParams.getInitialMaxData();
@@ -994,6 +994,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         Builder uri(URI uri);
 
+        Builder connectionIdLength(int length);
+
         Builder initialRtt(int initialRtt);
     }
 
@@ -1006,6 +1008,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         private String proxyHost;
         private Path secretsFile;
         private Integer initialRtt;
+        private int connectionIdLength;
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1018,7 +1021,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             if (initialRtt != null && initialRtt < 1) {
                 throw new IllegalArgumentException("Initial RTT must be larger than 0.");
             }
-            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt);
+            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength);
         }
 
         @Override
@@ -1060,6 +1063,15 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         public Builder uri(URI uri) {
             host = uri.getHost();
             port = uri.getPort();
+            return this;
+        }
+
+        @Override
+        public Builder connectionIdLength(int length) {
+            if (length < 0 || length > 20) {
+                throw new IllegalArgumentException("Connection ID length must between 0 and 20.");
+            }
+            connectionIdLength = length;
             return this;
         }
 

@@ -64,6 +64,7 @@ public class InteractiveShell {
     private void setupCommands() {
         commands.put("help", this::help);
         commands.put("set", this::setClientParameter);
+        commands.put("scid_legnth", this::setScidLength);
         commands.put("connect", this::connect);
         commands.put("close", this::close);
         commands.put("ping", this::sendPing);
@@ -293,8 +294,13 @@ public class InteractiveShell {
         }
     }
 
+    private void setScidLength(String arg) {
+        builder.connectionIdLength(toInt(arg));
+    }
+
     private void error(Exception error) {
         System.out.println("error: " + error);
+        error.printStackTrace();
     }
 
     private void prompt() {

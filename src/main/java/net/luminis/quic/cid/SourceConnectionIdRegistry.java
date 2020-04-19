@@ -28,8 +28,8 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
     private int activeConnectionIdLimit;
 
-    public SourceConnectionIdRegistry(Logger logger) {
-        super(logger);
+    public SourceConnectionIdRegistry(Integer cidLength, Logger logger) {
+        super(cidLength, logger);
     }
 
     public ConnectionIdInfo generateNew() {

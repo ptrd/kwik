@@ -27,14 +27,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class ConnectionIdRegistry {
 
+    public static final int DEFAULT_CID_LENGTH = 8;
+    
     protected Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
     private final Random random = new Random();
-    private final int connectionIdLength = 8;
+    private final int connectionIdLength;
 
     public ConnectionIdRegistry(Logger log) {
-        this.log = log;
+        this(DEFAULT_CID_LENGTH, log);
+    }
+
+    public ConnectionIdRegistry(Integer cidLength, Logger logger) {
+        connectionIdLength = cidLength != null? cidLength: DEFAULT_CID_LENGTH;
+        this.log = logger;
         currentConnectionId = generateConnectionId();
         connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
     }
