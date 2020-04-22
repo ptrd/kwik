@@ -18,9 +18,14 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.log.FileLogger;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.Version;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 
 import java.io.File;
@@ -45,13 +50,23 @@ public class InteropRunner extends KwikCli {
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
     public static final String TC_MULTI = "multiconnect";
-    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI);
+    public static final String TC_0RTT = "zerortt";
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI, TC_0RTT);
 
     private static File outputDir;
-    private static SysOutLogger logger = new SysOutLogger();
+    private static Logger logger;
 
 
     public static void main(String[] args) {
+        File logDir = new File("/logs");   // Interop runner runs in docker container and is expected to write logs to /logs
+        String logFile = (logDir.exists()? "/logs/": "./") + "kwik_client.log";
+        try {
+            logger = new FileLogger(new File(logFile));
+        } catch (IOException e) {
+            System.out.println("Cannot open log file " + logFile);
+            System.exit(1);
+        }
+
         if (args.length < 2) {
             System.out.println("Expected at least 3 arguments: <downloadDir> <testcase> <URL>");
             System.exit(1);
@@ -89,6 +104,9 @@ public class InteropRunner extends KwikCli {
             else if (testCase.equals(TC_MULTI)) {
                 testMultiConnect(downloadUrls, builder);
             }
+            else if (testCase.equals(TC_0RTT)) {
+                testZeroRtt(downloadUrls, builder);
+            }
         } catch (MalformedURLException | URISyntaxException e) {
             System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
         } catch (IOException e) {
@@ -118,7 +136,7 @@ public class InteropRunner extends KwikCli {
                                 }
                             }))
                     .get(5, TimeUnit.MINUTES);
-            System.out.println("Downloaded " + downloadUrls);
+            logger.info("Downloaded " + downloadUrls);
         } catch (InterruptedException e) {
             logger.error("download tasks interrupted", e);
         } catch (ExecutionException e) {
@@ -142,27 +160,25 @@ public class InteropRunner extends KwikCli {
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
-        System.out.println("Downloaded " + url1);
+        logger.info("Downloaded " + url1);
 
-        List<NewSessionTicket> newSessionTickets = connection.getNewSessionTickets();
+        List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
 
         connection.close();
 
         if (newSessionTickets.isEmpty()) {
-            System.out.println("Server did not provide any new session tickets.");
+            logger.info("Server did not provide any new session tickets.");
             System.exit(1);
         }
-
-        NewSessionTicket sessionTicket = NewSessionTicket.deserialize(newSessionTickets.get(0).serialize());   // TODO: oops!
 
         builder = QuicConnectionImpl.newBuilder();
         builder.uri(url2.toURI());
         builder.logger(logger);
-        builder.sessionTicket(sessionTicket);
+        builder.sessionTicket(newSessionTickets.get(0));
         QuicConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
-        System.out.println("Downloaded " + url2);
+        logger.info("Downloaded " + url2);
         connection2.close();
     }
 
@@ -175,21 +191,67 @@ public class InteropRunner extends KwikCli {
 
         for (URL download : downloadUrls) {
             try {
-                System.out.println("Starting download at " + timeNow());
+                logger.info("Starting download at " + timeNow());
 
                 QuicConnection connection = builder.build();
                 connection.connect(15_000);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
-                System.out.println("Downloaded " + download + " finished at " + timeNow());
+                logger.info("Downloaded " + download + " finished at " + timeNow());
 
                 connection.close();
             }
             catch (IOException ioError) {
-                System.out.println(timeNow() + " Error in client: " + ioError);
+                logger.error(timeNow() + " Error in client: " + ioError);
             }
         }
     }
+
+    private static void testZeroRtt(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+        logger.logInfo(true);
+        logger.logPackets(true);
+        logger.logRecovery(true);
+        logger.info("Starting first download at " + timeNow());
+
+        QuicConnection connection = builder.build();
+        connection.connect(15_000);
+
+        doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
+        logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
+        List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
+        if (newSessionTickets.isEmpty()) {
+            logger.error("Error: did not get any new session tickets; aborting test.");
+            return;
+        }
+        else {
+            logger.info("Got " + newSessionTickets.size() + " new session tickets");
+        }
+        connection.close();
+        logger.info("Connection closed; starting second connection with 0-rtt");
+
+        builder.sessionTicket(newSessionTickets.get(0));
+        QuicConnection connection2 = builder.build();
+
+        List<QuicConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();
+        for (int i = 1; i < downloadUrls.size(); i++) {
+            String httpRequest = "GET " + downloadUrls.get(i).getPath() + "\r\n";
+            earlyDataRequests.add(new QuicConnection.StreamEarlyData(httpRequest.getBytes(), true));
+        }
+        List<QuicStream> earlyDataStreams = connection2.connect(15_000, "hq-27", null, earlyDataRequests);
+        for (int i = 0; i < earlyDataRequests.size(); i++) {
+            if (earlyDataStreams.get(i) == null) {
+                logger.info("Attempting to create new stream after connect, because it failed on 0-rtt");
+            }
+            else {
+                logger.info("Processing response for stream " + earlyDataStreams.get(i));
+            }
+            doHttp09Request(connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
+        }
+
+        logger.info("Download finished at " + timeNow());
+        connection.close();
+    }
+
 
     static String timeNow() {
         LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));

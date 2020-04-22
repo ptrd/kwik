@@ -19,7 +19,6 @@
 package net.luminis.quic;
 
 import net.luminis.quic.stream.QuicStream;
-import net.luminis.tls.NewSessionTicket;
 
 import java.io.IOException;
 import java.util.List;
@@ -40,16 +39,26 @@ public interface QuicConnection {
 
     void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException;
 
-    void connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters) throws IOException;
+    List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 
     QuicStream createStream(boolean bidirectional);
 
-    List<NewSessionTicket> getNewSessionTickets();
+    List<QuicSessionTicket> getNewSessionTickets();
 
     void close();
 
     Statistics getStats();
+
+    class StreamEarlyData {
+        byte[] data;
+        boolean closeOutput;
+
+        public StreamEarlyData(byte[] data, boolean closeImmediately) {
+            this.data = data;
+            closeOutput = closeImmediately;
+        }
+    }
 }
 

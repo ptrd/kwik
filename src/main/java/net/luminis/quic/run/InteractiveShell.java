@@ -145,7 +145,7 @@ public class InteractiveShell {
                 quicConnection.connect(connectionTimeout, params);
             }
             else {
-                quicConnection.connect(connectionTimeout, alpn, params);
+                quicConnection.connect(connectionTimeout, alpn, params, null);
             }
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
@@ -240,6 +240,12 @@ public class InteractiveShell {
 
     private void sendPing(String arg) {
         quicConnection.ping();
+    }
+
+    private void printParams(String arg) {
+        TransportParameters parameters = quicConnection.getPeerTransportParameters();
+        System.out.println("Server idle time: " + parameters.getMaxIdleTimeout());
+        System.out.println("Server initial max data: " + parameters.getInitialMaxData());
     }
 
     private void printClientParams(String arg) {

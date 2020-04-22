@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,24 +18,11 @@
  */
 package net.luminis.quic;
 
-public enum EncryptionLevel {
+public enum EarlyDataStatus {
 
-    ZeroRTT,
-    Initial,
-    Handshake,
-    App;
-
-    public boolean higher(EncryptionLevel other) {
-        return this.ordinal() > other.ordinal();
-    }
-
-    public PnSpace relatedPnSpace() {
-        switch(this) {
-            case ZeroRTT: return PnSpace.App;
-            case Initial: return PnSpace.Initial;
-            case Handshake: return PnSpace.Handshake;
-            case App: return PnSpace.App;
-            default: return null;   // Never gets here
-        }
-    }
+    None,
+    Requested,
+    Accepted,
+    Refused;
 }
+

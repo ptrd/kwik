@@ -73,6 +73,11 @@ public class Keys {
         computeKeys(initialNodeSecret);
     }
 
+    public synchronized void computeZeroRttKeys(TlsState tlsState) {
+        byte[] earlySecret = tlsState.getClientEarlyTrafficSecret();
+        computeKeys(earlySecret);
+    }
+
     public synchronized void computeHandshakeKeys(TlsState tlsState) {
         if (nodeRole == Client) {
             trafficSecret = tlsState.getClientHandshakeTrafficSecret();

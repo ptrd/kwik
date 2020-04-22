@@ -103,6 +103,12 @@ public class FlowControl implements FrameProcessor {
         }
     }
 
+    public long getFlowControlLimit(QuicStream stream) {
+        synchronized (this) {
+            return currentStreamCredits(stream);
+        }
+    }
+
     /**
      * Waits for flow control credits. Returns immediately when credits are available for the given
      * stream, blocks until credits become available otherwise.
@@ -135,16 +141,79 @@ public class FlowControl implements FrameProcessor {
         }
     }
 
+    public synchronized void updateInitialValues(TransportParameters transportParameters) {
+        if (transportParameters.getInitialMaxData() > initialMaxData) {
+            log.info("Increasing initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
+            if (transportParameters.getInitialMaxData() > maxDataAllowed) {
+                maxDataAllowed = transportParameters.getInitialMaxData();
+            }
+        }
+        else if (transportParameters.getInitialMaxData() < initialMaxData) {
+            log.error("Ignoring attempt to reduce initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
+        }
+
+        if (transportParameters.getInitialMaxStreamDataBidiLocal() > initialMaxStreamDataBidiLocal) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+            maxStreamDataAllowed.entrySet().stream()
+                    // Find all server initiated bidirectional streams
+                    .filter(entry -> entry.getKey() % 4 == 1)
+                    .forEach(entry -> {
+                        if (transportParameters.getInitialMaxStreamDataBidiLocal() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiLocal());
+                        }
+                    });
+        }
+        else if (transportParameters.getInitialMaxStreamDataBidiLocal() < initialMaxStreamDataBidiLocal) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+        }
+
+        if (transportParameters.getInitialMaxStreamDataBidiRemote() > initialMaxStreamDataBidiRemote) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+            maxStreamDataAllowed.entrySet().stream()
+                    // Find all client initiated bidirectional streams
+                    .filter(entry -> entry.getKey() % 4 == 0)
+                    .forEach(entry -> {
+                        if (transportParameters.getInitialMaxStreamDataBidiRemote() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiRemote());
+                        }
+                    });
+        }
+        else if (transportParameters.getInitialMaxStreamDataBidiRemote() < initialMaxStreamDataBidiRemote) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+        }
+
+        if (transportParameters.getInitialMaxStreamDataUni() > initialMaxStreamDataUni) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+            maxStreamDataAllowed.entrySet().stream()
+                    // Find all client initiated unidirectional streams
+                    .filter(entry -> entry.getKey() % 4 == 2)
+                    .forEach(entry -> {
+                        if (transportParameters.getInitialMaxStreamDataUni() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataUni());
+                        }
+                    });
+        }
+        else if (transportParameters.getInitialMaxStreamDataUni() < initialMaxStreamDataUni) {
+            log.error("Ignoring attempt tomax data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+        }
+    }
+
     private long determineInitialMaxStreamData(QuicStream stream) {
         if (stream.isUnidirectional()) {
             return initialMaxStreamDataUni;
         }
         else if (stream.isClientInitiatedBidirectional()) {
-            // Assuming client role, so flow control is done by server and thus is remote
+            // Assuming client role, so for the receiver (imposing the limit) the stream is peer-initiated (remote).
+            // "This limit applies to newly created bidirectional streams opened by the endpoint that receives
+            // the transport parameter."
+            // The client has received this transport parameter, so it applies to stream opened by the client.
             return initialMaxStreamDataBidiRemote;
         }
         else if (stream.isServerInitiatedBidirectional()) {
-            // Assuming client role, so flow control is done by server and this is local
+            // Assuming client role, so for the receiver (imposing the limit), the stream is locally-initiated
+            // "This limit applies to newly created bidirectional streams opened by the endpoint that sends the
+            // transport parameter."
+            // The server has send this transport parameter, so it applies to streams opened by the server.
             return initialMaxStreamDataBidiLocal;
         }
         else {
@@ -186,14 +255,22 @@ public class FlowControl implements FrameProcessor {
     }
 
     private void process(MaxDataFrame frame) {
-        maxDataAllowed = frame.getMaxData();
+        synchronized (this) {
+            // If frames are received out of order, the new max can be smaller than the current value.
+            if (frame.getMaxData() > maxDataAllowed) {
+                maxDataAllowed = frame.getMaxData();
+            }
+        }
     }
 
     private void process(MaxStreamDataFrame frame) {
         synchronized (this) {
             int streamId = frame.getStreamId();
             long maxStreamData = frame.getMaxData();
-            maxStreamDataAllowed.put(streamId, maxStreamData);
+            // If frames are received out of order, the new max can be smaller than the current value.
+            if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
+                maxStreamDataAllowed.put(streamId, maxStreamData);
+            }
         }
     }
 }

@@ -37,6 +37,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 
 public class QuicStream {
@@ -45,11 +46,11 @@ public class QuicStream {
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
     private Object addMonitor = new Object();
-    private final Version quicVersion;
-    private final int streamId;
-    private final QuicConnectionImpl connection;
-    private final FlowControl flowController;
-    private final Logger log;
+    protected final Version quicVersion;
+    protected final int streamId;
+    protected final QuicConnectionImpl connection;
+    protected final FlowControl flowController;
+    protected final Logger log;
     private final BlockingQueue<StreamFrame> queuedFrames;
     private StreamFrame currentFrame;
     private int currentOffset;
@@ -151,6 +152,11 @@ public class QuicStream {
     public boolean isServerInitiatedBidirectional() {
         // "server-initiated streams have odd-numbered stream IDs"
         return (streamId & 0x0003) == 0x0001;
+    }
+
+    @Override
+    public String toString() {
+        return "Stream " + streamId;
     }
 
     private class StreamInputStream extends InputStream {
@@ -261,7 +267,7 @@ public class QuicStream {
 
         @Override
         public void close() throws IOException {
-            connection.send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame);
+            send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame);
         }
 
         private void sendData(byte[] data, int off, int len) {
@@ -270,7 +276,8 @@ public class QuicStream {
             int offsetInDataArray = off;
             while (remaining > 0) {
                 int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                connection.send(new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false), this::retransmitStreamFrame);
+                StreamFrame frame = new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false);
+                send(frame, this::retransmitStreamFrame);
                 remaining -= bytesInFrame;
                 offsetInDataArray += bytesInFrame;
                 currentOffset += bytesInFrame;
@@ -281,6 +288,14 @@ public class QuicStream {
             connection.send(frame, this::retransmitStreamFrame);
             log.recovery("Retransmitted lost stream frame " + frame);
         }
+    }
+
+    protected void resetOutputStream() {
+        outputStream.currentOffset = 0;
+    }
+
+    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+        connection.send(frame, lostFrameCallback);
     }
 
     void abort() {

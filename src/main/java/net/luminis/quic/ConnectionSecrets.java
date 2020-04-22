@@ -89,6 +89,12 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Server, log);
     }
 
+    public synchronized void computeEarlySecrets(TlsState tlsState) {
+        Keys zeroRttSecrets = new Keys(quicVersion, NodeRole.Client, log);
+        zeroRttSecrets.computeZeroRttKeys(tlsState);
+        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
+    }
+
     public synchronized void computeHandshakeSecrets(TlsState tlsState) {
         Keys handshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
         handshakeSecrets.computeHandshakeKeys(tlsState);

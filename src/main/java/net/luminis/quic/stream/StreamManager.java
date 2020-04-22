@@ -31,6 +31,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 
 public class StreamManager implements FrameProcessor {
@@ -65,7 +66,12 @@ public class StreamManager implements FrameProcessor {
         }
     }
 
-    public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit) throws TimeoutException {
+    public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
+        return createStream(bidirectional, timeout, timeoutUnit,
+                (quicVersion, streamId, connection, flowController, logger) -> new QuicStream(quicVersion, streamId, connection, flowController, logger));
+    }
+
+    private  QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
         try {
             boolean acquired;
             if (bidirectional) {
@@ -83,9 +89,24 @@ public class StreamManager implements FrameProcessor {
         }
 
         int streamId = generateClientStreamId(bidirectional);
-        QuicStream stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
+        QuicStream stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
         return stream;
+    }
+
+    /**
+     * Creates a quic stream that is able to send early data.
+     * Note that this method will not block; if the stream cannot be created due to no stream credit, null is returned.
+     * @param bidirectional
+     * @return
+     */
+    public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
+        try {
+            return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS,
+                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, connection, flowController, logger));
+        } catch (TimeoutException e) {
+            return null;
+        }
     }
 
     private synchronized int generateClientStreamId(boolean bidirectional) {
@@ -170,7 +191,7 @@ public class StreamManager implements FrameProcessor {
     }
 
     public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
-        if (maxStreamsBidi == null) {
+        if (maxStreamsBidi == null || initialMaxStreamsBidi >= maxStreamsBidi) {
             log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
             maxStreamsBidi = initialMaxStreamsBidi;
             if (initialMaxStreamsBidi > Integer.MAX_VALUE) {
@@ -180,12 +201,12 @@ public class StreamManager implements FrameProcessor {
             openBidirectionalStreams.release((int) initialMaxStreamsBidi);
         }
         else {
-            throw new IllegalStateException("initial max already set");
+            log.error("Attempt to reduce value of initial_max_streams_bidi from " + maxStreamsBidi + " to " + initialMaxStreamsBidi + "; ignoring.");
         }
     }
 
     public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
-        if (maxStreamsUni == null) {
+        if (maxStreamsUni == null || initialMaxStreamsUni >= maxStreamsUni) {
             log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);
             maxStreamsUni = initialMaxStreamsUni;
             if (initialMaxStreamsUni > Integer.MAX_VALUE) {
@@ -195,7 +216,7 @@ public class StreamManager implements FrameProcessor {
             openUnidirectionalStreams.release((int) initialMaxStreamsUni);
         }
         else {
-            throw new IllegalStateException("initial max already set");
+            log.error("Attempt to reduce value of initial_max_streams_uni from " + maxStreamsUni + " to " + initialMaxStreamsUni + "; ignoring.");
         }
     }
 
@@ -205,6 +226,10 @@ public class StreamManager implements FrameProcessor {
 
     public long getMaxUnirectionalStreams() {
         return maxStreamsUni;
+    }
+
+    interface QuicStreamSupplier {
+        QuicStream apply(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log);
     }
 }
 

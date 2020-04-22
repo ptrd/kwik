@@ -69,7 +69,7 @@ public class QuicTransportParametersExtension extends Extension {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.1
         // "The max idle timeout is a value in milliseconds
         //      that is encoded as an integer, see (Section 10.2)."
-        addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout() * 1000);
+        addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an

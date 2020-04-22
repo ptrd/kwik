@@ -63,6 +63,7 @@ public class KwikCli {
         cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
+        cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
@@ -90,7 +91,7 @@ public class KwikCli {
         }
 
         QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
-        String http09Request = null;
+        String httpRequestPath = null;
         if (args.size() == 1) {
             String arg = args.get(0);
             try {
@@ -99,7 +100,7 @@ public class KwikCli {
                         URL url = new URL(arg);
                         builder.uri(url.toURI());
                         if (!url.getPath().isEmpty()) {
-                            http09Request = url.getPath();
+                            httpRequestPath = url.getPath();
                         }
                     } catch (MalformedURLException e) {
                         System.out.println("Cannot parse URL '" + arg + "'");
@@ -221,12 +222,26 @@ public class KwikCli {
             }
         }
 
+        boolean useZeroRtt = false;
+        if (cmd.hasOption("Z")) {
+            useZeroRtt = true;
+        }
         if (cmd.hasOption("H")) {
-            http09Request = cmd.getOptionValue("H");
-            if (http09Request == null) {
+            httpRequestPath = cmd.getOptionValue("H");
+            if (httpRequestPath == null) {
                 usage();
                 System.exit(1);
             }
+            else {
+                if (! httpRequestPath.startsWith("/")) {
+                    httpRequestPath = "/" + httpRequestPath;
+
+                }
+            }
+        }
+        if (useZeroRtt && httpRequestPath == null) {
+            usage();
+            System.exit(1);
         }
 
         String outputFile = null;
@@ -264,6 +279,7 @@ public class KwikCli {
             }
         }
 
+        QuicSessionTicket sessionTicket = null;
         if (cmd.hasOption("R")) {
             String sessionTicketFile = null;
             sessionTicketFile = cmd.getOptionValue("R");
@@ -278,11 +294,15 @@ public class KwikCli {
             byte[] ticketData = new byte[0];
             try {
                 ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
-                NewSessionTicket sessionTicket = NewSessionTicket.deserialize(ticketData);
+                sessionTicket = QuicSessionTicket.deserialize(ticketData);
                 builder.sessionTicket(sessionTicket);
             } catch (IOException e) {
                 System.err.println("Error while reading session ticket file.");
             }
+        }
+        if (useZeroRtt && sessionTicket == null) {
+            System.err.println("Using 0-RTT requires a session ticket");
+            System.exit(1);
         }
 
         if (cmd.hasOption("T")) {
@@ -304,19 +324,26 @@ public class KwikCli {
                 new InteractiveShell(builder, alpn).start();
             }
             else {
+                QuicStream httpStream = null;
                 QuicConnection quicConnection = builder.build();
-                if (alpn == null) {
-                    quicConnection.connect(connectionTimeout * 1000);
+                if (useZeroRtt && httpRequestPath != null) {
+                    String http09Request = "GET " + httpRequestPath + "\r\n";
+                    QuicConnection.StreamEarlyData earlyData = new QuicConnection.StreamEarlyData(http09Request.getBytes(), true);
+                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, List.of(earlyData)).get(0);
                 }
                 else {
-                    quicConnection.connect(connectionTimeout * 1000, alpn, null);
+                    if (alpn == null) {
+                        quicConnection.connect(connectionTimeout * 1000);
+                    } else {
+                        quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
+                    }
                 }
 
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);
                 }
-                if (http09Request != null) {
-                    doHttp09Request(quicConnection, http09Request, outputFile);
+                if (httpRequestPath != null) {
+                    doHttp09Request(quicConnection, httpRequestPath, httpStream, outputFile);
                 } else {
                     if (keepAliveTime > 0) {
                         try {
@@ -346,7 +373,7 @@ public class KwikCli {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
 
-        if (!interactiveMode && http09Request == null && keepAliveTime == 0) {
+        if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
     }
@@ -386,14 +413,17 @@ public class KwikCli {
         }
     }
 
-    public static void doHttp09Request(QuicConnection quicConnection, String http09Request, String outputFile) throws IOException {
-        if (! http09Request.startsWith("/")) {
-            http09Request = "/" + http09Request;
+    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, String outputFile) throws IOException {
+        doHttp09Request(quicConnection, requestPath, null, outputFile);
+    }
+
+    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, QuicStream httpStream, String outputFile) throws IOException {
+        if (httpStream == null) {
+            boolean bidirectional = true;
+            httpStream = quicConnection.createStream(bidirectional);
+            httpStream.getOutputStream().write(("GET " + requestPath + "\r\n").getBytes());
+            httpStream.getOutputStream().close();
         }
-        boolean bidirectional = true;
-        QuicStream quicStream = quicConnection.createStream(bidirectional);
-        quicStream.getOutputStream().write(("GET " + http09Request + "\r\n").getBytes());
-        quicStream.getOutputStream().close();
 
         // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
         try {
@@ -403,7 +433,7 @@ public class KwikCli {
         if (outputFile != null) {
             FileOutputStream out;
             if (new File(outputFile).isDirectory()) {
-                String fileName = http09Request;
+                String fileName = requestPath;
                 if (fileName.equals("/")) {
                     fileName = "index";
                 }
@@ -412,10 +442,10 @@ public class KwikCli {
             else {
                 out = new FileOutputStream(outputFile);
             }
-            quicStream.getInputStream().transferTo(out);
+            httpStream.getInputStream().transferTo(out);
         }
         else {
-            BufferedReader input = new BufferedReader(new InputStreamReader(quicStream.getInputStream()));
+            BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
             String line;
             System.out.println("Server returns: ");
             while ((line = input.readLine()) != null) {

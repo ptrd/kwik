@@ -139,7 +139,7 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
 
-        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10);
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
     }
 
     @Test
@@ -150,7 +150,7 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
 
-        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(30);
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(30_000);
     }
 
     @Test
@@ -161,7 +161,7 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), mock(Logger.class));
 
-        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10);
+        assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
         assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamDataBidiLocal()).isEqualTo(1_048_576);
         assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamsBidi()).isEqualTo(1024);
         assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamsUni()).isEqualTo(256);

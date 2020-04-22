@@ -25,6 +25,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 import net.luminis.quic.recovery.RecoveryManager;
 
 import java.io.IOException;
@@ -91,7 +92,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
 
-        ackGenerators = new AckGenerator[3];
+        ackGenerators = new AckGenerator[PnSpace.values().length];
         Arrays.setAll(ackGenerators, i -> new AckGenerator());
     }
 
@@ -132,7 +133,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                     boolean ackWaiting = false;
                     if (!packetWaiting) {
                         level = lastReceivedMessageLevel;
-                        AckGenerator ackGenerator = ackGenerators[level.ordinal()];
+                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
                         ackWaiting = ackGenerator.hasNewAckToSend();
                     }
                     if (packetWaiting || !ackWaiting) {
@@ -182,14 +183,15 @@ public class Sender implements ProbeSender, FrameProcessor {
                     // Ah, here we are, allowed to send a packet. Before doing so, we should check whether there is
                     // an ack frame that should be coalesced with it.
 
-                    AckGenerator ackGenerator = ackGenerators[level.ordinal()];
-                    if (ackGenerator.hasAckToSend()) {
-                        AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
-                        if (packet == null) {
-                            packet = connection.createPacket(level, ackToSend);
-                        }
-                        else {
-                            packet.addFrame(ackToSend);
+                    if (packet == null || ! (packet instanceof ZeroRttPacket)) {
+                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
+                        if (ackGenerator.hasAckToSend()) {
+                            AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
+                            if (packet == null) {
+                                packet = connection.createPacket(level, ackToSend);
+                            } else {
+                                packet.addFrame(ackToSend);
+                            }
                         }
                     }
                     byte[] packetData = packet.generatePacketBytes(packetNumber, keys);
@@ -243,7 +245,7 @@ public class Sender implements ProbeSender, FrameProcessor {
 
     public void processPacketReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
-            ackGenerators[packet.getEncryptionLevel().ordinal()].packetReceived(packet);
+            ackGenerators[packet.getPnSpace().ordinal()].packetReceived(packet);
         }
     }
 

@@ -164,33 +164,25 @@ class StreamManagerTest {
     }
 
     @Test
-    void settingInitialMaxBidiStreamsCanOnlyBeDoneOnce() {
+    void settingInitialMaxBidiStreamsCanOnlyIncreaseValue() {
         // Given
-        streamManager.setInitialMaxStreamsBidi(2);
+        streamManager.setInitialMaxStreamsBidi(4);
 
-        assertThatThrownBy(
-                // When
-                () -> streamManager.setInitialMaxStreamsBidi(3)
-        )
-                // Then
-                .isInstanceOf(IllegalStateException.class);
+        // When
+        streamManager.setInitialMaxStreamsBidi(3);
 
-        assertThat(streamManager.getMaxBidirectionalStreams()).isEqualTo(2);
+        assertThat(streamManager.getMaxBidirectionalStreams()).isEqualTo(4);
     }
 
     @Test
-    void settingInitialMaxUniStreamsCanOnlyBeDoneOnce() {
+    void settingInitialMaxUniStreamsCanOnlyIncreaseValue() {
         // Given
-        streamManager.setInitialMaxStreamsUni(1);
+        streamManager.setInitialMaxStreamsUni(10);
 
-        assertThatThrownBy(
-                // When
-                () -> streamManager.setInitialMaxStreamsUni(3)
-        )
-                // Then
-                .isInstanceOf(IllegalStateException.class);
+        // When
+        streamManager.setInitialMaxStreamsUni(3);
 
-        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(1);
+        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(10);
     }
 
     @Test
@@ -241,4 +233,17 @@ class StreamManagerTest {
         assertThat(streamReference.get()).isNotNull();
     }
 
+    @Test
+    void creatingEarlyDataStreamShouldNotBlockWhenMaxStreamsReached() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsUni(1);
+        QuicStream firstStream = streamManager.createStream(false);
+        assertThat(firstStream).isNotNull();
+
+        // When
+        QuicStream earlyDataStream = streamManager.createEarlyDataStream(true);
+
+        // Then
+        assertThat(earlyDataStream).isNull();
+    }
 }
