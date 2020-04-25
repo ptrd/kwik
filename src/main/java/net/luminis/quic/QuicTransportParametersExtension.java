@@ -160,7 +160,7 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
-        int parameterId = VariableLengthInteger.parse(buffer);
+        long parameterId = VariableLengthInteger.parseLong(buffer);
         int size = VariableLengthInteger.parse(buffer);
         int startPosition = buffer.position();
 
