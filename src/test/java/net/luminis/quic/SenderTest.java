@@ -46,6 +46,7 @@ class SenderTest {
     private Sender sender;
     private DatagramSocket socket;
     private QuicConnectionImpl connection;
+    private RecoveryManager recoveryManager;
 
     // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
     private Instant whenever = Instant.now();
@@ -68,7 +69,7 @@ class SenderTest {
         // Set RttEstimator with short initial rtt, both on Sender and RecoveryManager
         RttEstimator rttEstimator = new RttEstimator(logger, 100);
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("rttEstimater"), rttEstimator);
-        RecoveryManager recoveryManager = (RecoveryManager) new FieldReader(sender, sender.getClass().getDeclaredField("recoveryManager")).read();
+        recoveryManager = (RecoveryManager) new FieldReader(sender, sender.getClass().getDeclaredField("recoveryManager")).read();
         FieldSetter.setField(recoveryManager, recoveryManager.getClass().getDeclaredField("rttEstimater"), rttEstimator);
     }
 
@@ -99,7 +100,7 @@ class SenderTest {
         verify(socket, times(1)).send(any(DatagramPacket.class));
 
         // An ack on first packet
-        sender.process(new AckFrame(Version.getDefault(), 0), PnSpace.App, Instant.now());
+        recoveryManager.process(new AckFrame(Version.getDefault(), 0), PnSpace.App, Instant.now());
 
         waitForSender();
         // Because congestion window is decreased, second packet should now have been sent too.

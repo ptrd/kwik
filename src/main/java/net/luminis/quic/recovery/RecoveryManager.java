@@ -26,7 +26,6 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.recovery.LossDetector;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,7 +41,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class RecoveryManager implements HandshakeStateListener {
+public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
@@ -57,7 +56,7 @@ public class RecoveryManager implements HandshakeStateListener {
     private volatile boolean firstHandshakeSent = false;
     private volatile boolean hasBeenReset = false;
 
-    public RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
+    public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);
@@ -65,6 +64,7 @@ public class RecoveryManager implements HandshakeStateListener {
         this.sender = sender;
         log = logger;
 
+        processorRegistry.registerProcessor(this);
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
         lossDetectionTimer = new NullScheduledFuture();
     }
@@ -369,6 +369,11 @@ public class RecoveryManager implements HandshakeStateListener {
                 setLossDetectionTimer();
             }
         }
+    }
+
+    @Override
+    public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
+        onAckReceived(frame, pnSpace);
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {

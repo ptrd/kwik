@@ -56,7 +56,7 @@ import static net.luminis.tls.Tls13.generateKeys;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
+public class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame> {
 
     enum Status {
         Idle,
@@ -104,7 +104,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
     private List<QuicFrame> queuedZeroRttFrames = new ArrayList<>();
-
+    private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
@@ -644,7 +644,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 if (peerTransportParams != null) {
                     ((AckFrame) frame).setDelayExponent(peerTransportParams.getAckDelayExponent());
                 }
-                sender.process(frame, packet.getPnSpace(), timeReceived);
+                ackProcessors.forEach(p -> p.process((AckFrame) frame, packet.getPnSpace(), timeReceived));
             }
             else if (frame instanceof StreamFrame) {
                 streamManager.process(frame, packet.getPnSpace(), timeReceived);
@@ -1098,6 +1098,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             // Impossible
             throw new IllegalStateException();
         }
+    }
+
+    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
+        ackProcessors.add(ackProcessor);
     }
 
     public static Builder newBuilder() {

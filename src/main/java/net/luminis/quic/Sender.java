@@ -89,7 +89,7 @@ public class Sender implements ProbeSender, FrameProcessor {
         else {
             rttEstimater = new RttEstimator(log, initialRtt);
         }
-        recoveryManager = new RecoveryManager(rttEstimater, congestionController, this, log);
+        recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
 
         ackGenerators = new AckGenerator[PnSpace.values().length];
@@ -239,10 +239,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         scheduler.shutdownNow();
     }
 
-    private List<QuicPacket> getNonAcknowlegded() {
-        return packetSentLog.values().stream().filter(p -> !p.acked).map(o -> o.packet).collect(Collectors.toList());
-    }
-
     public void processPacketReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
             ackGenerators[packet.getPnSpace().ordinal()].packetReceived(packet);
@@ -268,8 +264,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         ackGenerators[pnSpace.ordinal()].process(ackFrame);
 
         computeRttSample(ackFrame, pnSpace, timeReceived);
-
-        recoveryManager.onAckReceived(ackFrame, pnSpace);
 
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             PacketId id = new PacketId(pnSpace, pn);
