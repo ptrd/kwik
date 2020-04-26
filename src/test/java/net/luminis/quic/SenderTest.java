@@ -50,6 +50,7 @@ class SenderTest {
 
     // Arbitrary Instant value, used by tests to indicate the value does not matter for the test
     private Instant whenever = Instant.now();
+    private GlobalAckGenerator ackGenerator;
 
     @BeforeAll
     static void initLogger() {
@@ -64,7 +65,8 @@ class SenderTest {
         socket = mock(DatagramSocket.class);
         Logger logger = mock(Logger.class);
         connection = mock(QuicConnectionImpl.class);
-        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection, null);
+        ackGenerator = new GlobalAckGenerator();
+        sender = new Sender(socket, 1500, logger, InetAddress.getLoopbackAddress(), 443, connection, null, ackGenerator);
 
         // Set RttEstimator with short initial rtt, both on Sender and RecoveryManager
         RttEstimator rttEstimator = new RttEstimator(logger, 100);
@@ -147,7 +149,7 @@ class SenderTest {
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
                 .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
 
-        sender.processPacketReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new CryptoFrame()));
+        ackGenerator.packetReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new CryptoFrame()));
         sender.packetProcessed(EncryptionLevel.Initial);
 
         waitForSender();
@@ -161,7 +163,7 @@ class SenderTest {
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class)))
                 .thenReturn(new MockPacket(0, 10, EncryptionLevel.Initial));
 
-        sender.processPacketReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new AckFrame(0)));
+        ackGenerator.packetReceived(new MockPacket(0, 1000, EncryptionLevel.Initial, new AckFrame(0)));
         sender.packetProcessed(EncryptionLevel.Initial);
 
         waitForSender();
@@ -256,7 +258,7 @@ class SenderTest {
         verify(socket, times(1)).send(argThat(matchesPacket(0, EncryptionLevel.App)));
         clearInvocations(socket);
 
-        sender.processPacketReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
+        ackGenerator.packetReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
         sender.packetProcessed(EncryptionLevel.App);
         waitForSender();
 
@@ -269,7 +271,7 @@ class SenderTest {
         sender.start(mock(ConnectionSecrets.class));
         when(connection.createPacket(any(EncryptionLevel.class), any(QuicFrame.class))).thenAnswer(invocation -> new MockPacket(-1, 12, EncryptionLevel.App, "empty packet"));
 
-        sender.processPacketReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
+        ackGenerator.packetReceived(new MockPacket(19, 200, EncryptionLevel.App, new MaxDataFrame(1_000_000), "stream frame"));
         sender.packetProcessed(EncryptionLevel.App);
         waitForSender();
 

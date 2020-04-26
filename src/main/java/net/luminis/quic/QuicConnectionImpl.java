@@ -105,6 +105,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private volatile EarlyDataStatus earlyDataStatus = None;
     private List<QuicFrame> queuedZeroRttFrames = new ArrayList<>();
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private final GlobalAckGenerator ackGenerator;
+
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
@@ -116,7 +118,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         this.log = log;
 
         socket = new DatagramSocket();
-        sender = new Sender(socket, 1500, log, serverAddress, port, this, initialRtt);
+        ackGenerator = new GlobalAckGenerator();
+        registerProcessor(ackGenerator);
+        sender = new Sender(socket, 1500, log, serverAddress, port, this, initialRtt, ackGenerator);
         receiver = new Receiver(this, socket, 1500, log);
         streamManager = new StreamManager(this, log);
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
@@ -515,7 +519,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         // "A packet MUST NOT be acknowledged until packet protection has been
         //   successfully removed and all frames contained in the packet have been
         //   processed."
-        sender.processPacketReceived(packet);
+        ackGenerator.packetReceived(packet);
         packet.accept(this, timeReceived);
     }
 

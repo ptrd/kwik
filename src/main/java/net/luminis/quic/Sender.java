@@ -34,7 +34,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -42,7 +41,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 
 public class Sender implements ProbeSender, FrameProcessor {
@@ -61,7 +59,7 @@ public class Sender implements ProbeSender, FrameProcessor {
     private final RttEstimator rttEstimater;
     private QuicConnectionImpl connection;
     private EncryptionLevel lastReceivedMessageLevel = EncryptionLevel.Initial;
-    private AckGenerator[] ackGenerators;
+    private GlobalAckGenerator ackGenerator;
     private final long[] lastPacketNumber = new long[PnSpace.values().length];
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("sender-scheduler"));
     private RecoveryManager recoveryManager;
@@ -69,13 +67,14 @@ public class Sender implements ProbeSender, FrameProcessor {
     private volatile long sent;
     private volatile boolean mustSendProbe = false;
 
-    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection, Integer initialRtt) {
+    public Sender(DatagramSocket socket, int maxPacketSize, Logger log, InetAddress serverAddress, int port, QuicConnectionImpl connection, Integer initialRtt, GlobalAckGenerator ackGenerator) {
         this.socket = socket;
         this.maxPacketSize = maxPacketSize;
         this.log = log;
         this.serverAddress = serverAddress;
         this.port = port;
         this.connection = connection;
+        this.ackGenerator = ackGenerator;
 
         senderThread = new Thread(() -> run(), "sender");
         senderThread.setDaemon(true);
@@ -91,9 +90,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         }
         recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
-
-        ackGenerators = new AckGenerator[PnSpace.values().length];
-        Arrays.setAll(ackGenerators, i -> new AckGenerator());
     }
 
     public void send(QuicPacket packet, String logMessage, Consumer<QuicPacket> packetLostCallback) {
@@ -133,8 +129,7 @@ public class Sender implements ProbeSender, FrameProcessor {
                     boolean ackWaiting = false;
                     if (!packetWaiting) {
                         level = lastReceivedMessageLevel;
-                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
-                        ackWaiting = ackGenerator.hasNewAckToSend();
+                        ackWaiting = ackGenerator.hasNewAckToSend(level);
                     }
                     if (packetWaiting || !ackWaiting) {
                         WaitingPacket queued = incomingPacketQueue.take();
@@ -184,9 +179,8 @@ public class Sender implements ProbeSender, FrameProcessor {
                     // an ack frame that should be coalesced with it.
 
                     if (packet == null || ! (packet instanceof ZeroRttPacket)) {
-                        AckGenerator ackGenerator = ackGenerators[level.relatedPnSpace().ordinal()];
-                        if (ackGenerator.hasAckToSend()) {
-                            AckFrame ackToSend = ackGenerator.generateAckForPacket(packetNumber);
+                        if (ackGenerator.hasAckToSend(level)) {
+                            AckFrame ackToSend = ackGenerator.generateAckForPacket(level, packetNumber);
                             if (packet == null) {
                                 packet = connection.createPacket(level, ackToSend);
                             } else {
@@ -239,12 +233,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         scheduler.shutdownNow();
     }
 
-    public void processPacketReceived(QuicPacket packet) {
-        if (packet.canBeAcked()) {
-            ackGenerators[packet.getPnSpace().ordinal()].packetReceived(packet);
-        }
-    }
-
     /**
      * Process incoming acknowledgement.
      * @param ackFrame
@@ -261,8 +249,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     }
 
     private void processAck(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        ackGenerators[pnSpace.ordinal()].process(ackFrame);
-
         computeRttSample(ackFrame, pnSpace, timeReceived);
 
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
