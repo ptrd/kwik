@@ -141,9 +141,12 @@ public class RecoveryManager implements HandshakeStateListener {
         else if (Instant.now().isBefore(expiration)) {
             // Old timer task was cancelled, but it still fired; just ignore.
             log.warn("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
-            try {
-                Thread.sleep(Duration.between(Instant.now(), expiration).toMillis() + 1);   // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary
-            } catch (InterruptedException e) {
+            // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary to avoid that after the sleep, it's still too early
+            long remainingWaitTime = Duration.between(Instant.now(), expiration).toMillis() + 1;
+            if (remainingWaitTime > 0) {  // Time goes on, so remaining time could have become negative in the mean time
+                try {
+                    Thread.sleep(remainingWaitTime);
+                } catch (InterruptedException e) {}
             }
             expiration = timerExpiration;
             if (expiration == null) {
@@ -157,6 +160,9 @@ public class RecoveryManager implements HandshakeStateListener {
             else {
                 log.warn("Delayed task running now");
             }
+        }
+        else {
+            log.recovery("%s loss detection timeout handler running", Instant.now());
         }
 
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);

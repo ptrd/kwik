@@ -35,10 +35,10 @@ And apart from that: have fun!
 The status of the project is that most QUIC features are implemented. Interoperability is tested with a large
 number of server implementations, see the [automated interoperability tests](https://interop.seemann.io/) and 
 the [QUIC interop matrix](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit)
-for details. As you can see in the results of the automatic tests, Kwik is amongst the best clients w.r.t. 
-successful testcase. Sometimes "Cx" or "Lx" test cases fail; that is because those tests test packet corruption and severe 
-packets loss and due to the random nature of the (corruption/loss) simulation, there are sometimes cases that too much
-packets are lost or discarded to set up a connection with a limited time frame. 
+for details. Due the to fact that all (server) implementations are still in active development, and that some test cases
+(testing behaviour due to packet loss and packet corruption) are non-deterministic, the results of the automatic
+interoperability test vary with each run, but usually, Kwik is amongst the best clients w.r.t. the number of  
+successful testcases.  
 Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
 
 HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
