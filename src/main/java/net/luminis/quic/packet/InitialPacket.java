@@ -108,10 +108,10 @@ public class InitialPacket extends LongHeaderPacket {
         // "An Initial packet (shown in Figure 13) has two additional header
         // fields that are added to the Long Header before the Length field."
         try {
-            int tokenLength = VariableLengthInteger.parse(buffer);
+            long tokenLength = VariableLengthInteger.parseLong(buffer);
             if (tokenLength > 0) {
                 if (tokenLength <= buffer.remaining()) {
-                    buffer.position(buffer.position() + tokenLength);
+                    buffer.position(buffer.position() + (int) tokenLength);
                 }
                 else {
                     throw new InvalidPacketException();
