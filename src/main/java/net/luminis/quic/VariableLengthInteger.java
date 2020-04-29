@@ -137,6 +137,21 @@ public class VariableLengthInteger {
         return value;
     }
 
+    public static int bytesNeeded(int value) {
+        if (value <= 63) {
+            return 1;
+        }
+        else if (value <= 16383) {
+            return 2;
+        }
+        else if (value <= 1073741823) {
+            return 4;
+        }
+        else {
+            return 8;
+        }
+    }
+
     public static int encode(int value, ByteBuffer buffer) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
         // | 2Bit | Length | Usable Bits | Range                 |

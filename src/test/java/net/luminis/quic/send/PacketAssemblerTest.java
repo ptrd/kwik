@@ -1,0 +1,175 @@
+/*
+ * Copyright © 2020 Peter Doornbosch
+ *
+ * This file is part of Kwik, a QUIC client Java library
+ *
+ * Kwik is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Kwik is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+package net.luminis.quic.send;
+
+import net.luminis.quic.*;
+import net.luminis.quic.frame.*;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.tls.ByteUtils;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
+
+import javax.crypto.Cipher;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Percentage.withPercentage;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class PacketAssemblerTest {
+
+    public static final int MAX_PACKET_SIZE = 1232;
+
+    private static Keys keys;
+
+    private SendRequestQueue sendRequestQueue;
+    private PacketAssembler oneRttPacketAssembler;
+    private AckGenerator oneRttAckGenerator;
+
+    
+    @BeforeEach
+    void initKeys() throws Exception {
+        keys = mock(Keys.class);
+        when(keys.getHp()).thenReturn(new byte[16]);
+        when(keys.getWriteIV()).thenReturn(new byte[12]);
+        when(keys.getWriteKey()).thenReturn(new byte[16]);
+        Keys dummyKeys = new Keys(Version.getDefault(), new byte[16], null, mock(Logger.class));
+        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("hp"), new byte[16]);
+        Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
+        when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
+        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("writeKey"), new byte[16]);
+        Cipher wCipher = dummyKeys.getWriteCipher();
+        // The Java implementation of this cipher (GCM), prevents re-use with the same iv.
+        // As various tests often use the same packet numbers (used for creating the nonce), the cipher must be re-initialized for each test.
+        // Still, a consequence is that generatePacketBytes cannot be called twice on the same packet.
+        when(keys.getWriteCipher()).thenReturn(wCipher);
+        when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
+    }
+
+    @BeforeEach
+    void initObjectUnderTeset() {
+        sendRequestQueue = new SendRequestQueue();
+        oneRttAckGenerator = new AckGenerator();
+        oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, MAX_PACKET_SIZE, sendRequestQueue, oneRttAckGenerator);
+
+    }
+
+    @Test
+    void sendSingleShortPacket() {
+        // Given
+        byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[7], true), 4 + 7);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, destCid);
+        assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
+        assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
+        assertThat(packet.getFrames()).containsExactly(new StreamFrame(0, new byte[7], true));
+        assertThat(packet.generatePacketBytes(0, keys).length).isLessThan(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void sendSingleAck() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addAckRequest(0);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
+        assertThat(packet.getFrames()).allSatisfy(frame -> {
+            assertThat(frame).isInstanceOf(AckFrame.class);
+            assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(0);
+        });
+    }
+
+    @Test
+    void sendAckAndStreamData() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(10, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addAckRequest(0);
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true),    // Stream length will be > 63, so 2 bytes for length field
+                (3 + 2) + 1);  // Send at least 1 byte of data
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
+        assertThat(packet.getFrames()).anySatisfy(frame -> {
+            assertThat(frame).isInstanceOf(StreamFrame.class);
+            assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1200, withPercentage(0.5));
+        });
+        assertThat(packet.getFrames()).anySatisfy(frame -> {
+            assertThat(frame).isInstanceOf(AckFrame.class);
+            assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(10);
+        });
+        assertThat(packet.generatePacketBytes(1, keys).length).isEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void sendMultipleFrames() {
+        // When
+        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l));   // 10 bytes
+        sendRequestQueue.addRequest(new MaxDataFrame(0x05000000000000l));              //  9 bytes
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true), (3 + 2) + 1);  // Stream length will be > 63, so 2 bytes
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet.getFrames()).hasOnlyElementsOfTypes(MaxStreamDataFrame.class, MaxDataFrame.class, StreamFrame.class);
+        assertThat(packet.getFrames()).anySatisfy(frame -> {
+            assertThat(frame).isInstanceOf(StreamFrame.class);
+            // Short packet overhead is 18, so available for stream frame: 1232 - 18 - 10 - 9 = 1195. Frame overhead: 5 bytes.
+            assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1190, withPercentage(0.1));
+        });
+        assertThat(packet.generatePacketBytes(1, keys).length).isEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void whenFirstFrameDoesNotFitFindOneThatDoes() {
+        // Given
+        int remainingCwndSize = 25;  // Which leaves room for approx 7 bytes payload.
+
+        // When
+        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l));  // 10 bytes frame length
+        sendRequestQueue.addRequest(new DataBlockedFrame(60));  // 2 bytes frame length
+        sendRequestQueue.addRequest(maxSize ->
+                        new StreamFrame(0, new byte[Integer.min(maxSize, 63) - (3 + 1)], true),
+                        5);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(remainingCwndSize, 0, new byte[0], new byte[0]);
+        assertThat(packet.getFrames())
+                .hasAtLeastOneElementOfType(DataBlockedFrame.class)
+                .hasAtLeastOneElementOfType(StreamFrame.class);
+        assertThat(packet.generatePacketBytes(0, keys).length).isLessThanOrEqualTo(remainingCwndSize);
+    }
+
+
+}

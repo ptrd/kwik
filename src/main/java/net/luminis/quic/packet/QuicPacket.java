@@ -251,7 +251,7 @@ abstract public class QuicPacket {
             return cipherText;
         } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         }
     }
 
