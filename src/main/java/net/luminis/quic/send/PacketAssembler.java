@@ -23,6 +23,7 @@ import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 
@@ -83,11 +84,18 @@ public class PacketAssembler {
         else {
             return null;
         }
-
     }
 
     private QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
-        return new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
+        switch (level) {
+            case Handshake:
+                return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
+            case App:
+                return new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
+            default:
+                return null;
+        }
+
     }
 
 

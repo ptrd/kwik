@@ -21,6 +21,7 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.tls.ByteUtils;
@@ -42,7 +43,9 @@ class PacketAssemblerTest {
     private static Keys keys;
 
     private SendRequestQueue sendRequestQueue;
+    private PacketAssembler handshakePacketAssembler;
     private PacketAssembler oneRttPacketAssembler;
+    private AckGenerator handshakeAckGenerator;
     private AckGenerator oneRttAckGenerator;
 
     
@@ -68,6 +71,8 @@ class PacketAssemblerTest {
     @BeforeEach
     void initObjectUnderTeset() {
         sendRequestQueue = new SendRequestQueue();
+        handshakeAckGenerator = new AckGenerator();
+        handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, MAX_PACKET_SIZE, sendRequestQueue, handshakeAckGenerator);
         oneRttAckGenerator = new AckGenerator();
         oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, MAX_PACKET_SIZE, sendRequestQueue, oneRttAckGenerator);
 
@@ -95,12 +100,14 @@ class PacketAssemblerTest {
         oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
 
         // When
-        sendRequestQueue.addAckRequest(0);
+        sendRequestQueue.addAckRequest(0);    // This means the caller wants to send an _explicit_ ack.
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
-        assertThat(packet.getFrames()).allSatisfy(frame -> {
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .allSatisfy(frame -> {
             assertThat(frame).isInstanceOf(AckFrame.class);
             assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(0);
         });
@@ -171,5 +178,24 @@ class PacketAssemblerTest {
         assertThat(packet.generatePacketBytes(0, keys).length).isLessThanOrEqualTo(remainingCwndSize);
     }
 
+    @Test
+    void sendHandshakePacketWithMaxLengthCrypto() {
+        // Given
+        byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
+        byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (3 + (maxSize < 64? 1: 2))]), (3 + 2) + 1);
+
+        // Then
+        QuicPacket packet = handshakePacketAssembler.assemble(12000, 0, srcCid, destCid);
+        assertThat(packet).isInstanceOf(HandshakePacket.class);
+        assertThat(((HandshakePacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
+        assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfTypes(CryptoFrame.class);
+        assertThat(packet.generatePacketBytes(0, keys).length).isEqualTo(MAX_PACKET_SIZE);
+    }
 
 }
