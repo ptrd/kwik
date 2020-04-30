@@ -24,6 +24,7 @@ import net.luminis.quic.Version;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 
@@ -35,11 +36,11 @@ import java.util.function.Function;
  */
 public class PacketAssembler {
 
-    private final Version quicVersion;
+    protected final Version quicVersion;
     EncryptionLevel level;
-    int maxPacketSize;
-    SendRequestQueue requestQueue;
-    private final AckGenerator ackGenerator;
+    protected int maxPacketSize;
+    protected SendRequestQueue requestQueue;
+    protected final AckGenerator ackGenerator;
 
 
     public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
@@ -86,18 +87,16 @@ public class PacketAssembler {
         }
     }
 
-    private QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
+    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
         switch (level) {
             case Handshake:
                 return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
             case App:
                 return new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
             default:
-                return null;
+                throw new RuntimeException();  // programming error
         }
 
     }
-
-
 }
 

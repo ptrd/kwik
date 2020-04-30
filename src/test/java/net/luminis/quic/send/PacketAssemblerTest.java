@@ -22,6 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.tls.ByteUtils;
@@ -43,8 +44,10 @@ class PacketAssemblerTest {
     private static Keys keys;
 
     private SendRequestQueue sendRequestQueue;
+    private InitialPacketAssembler initialPacketAssembler;
     private PacketAssembler handshakePacketAssembler;
     private PacketAssembler oneRttPacketAssembler;
+    private AckGenerator initialAckGenerator;
     private AckGenerator handshakeAckGenerator;
     private AckGenerator oneRttAckGenerator;
 
@@ -71,6 +74,8 @@ class PacketAssemblerTest {
     @BeforeEach
     void initObjectUnderTeset() {
         sendRequestQueue = new SendRequestQueue();
+        initialAckGenerator = new AckGenerator();
+        initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), MAX_PACKET_SIZE, sendRequestQueue, initialAckGenerator);
         handshakeAckGenerator = new AckGenerator();
         handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, MAX_PACKET_SIZE, sendRequestQueue, handshakeAckGenerator);
         oneRttAckGenerator = new AckGenerator();
@@ -196,6 +201,71 @@ class PacketAssemblerTest {
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
         assertThat(packet.generatePacketBytes(0, keys).length).isEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void sendInitialPacketWithToken() {
+        // Given
+        byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
+        byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
+        initialPacketAssembler.setInitialToken(new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f });
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234);
+
+        // Then
+        QuicPacket packet = initialPacketAssembler.assemble(12000, 0, srcCid, destCid);
+        assertThat(packet).isInstanceOf(InitialPacket.class);
+        assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
+        assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
+        assertThat(packet.getFrames())
+                .hasSize(2)
+                .hasOnlyElementsOfTypes(CryptoFrame.class, Padding.class);
+        assertThat(((InitialPacket) packet).getToken()).hasSize(16);
+        assertThat(packet.generatePacketBytes(0, keys).length)
+                .isGreaterThanOrEqualTo(1200)
+                .isLessThanOrEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void sendInitialPacketWithoutToken() {
+        // Given
+        byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
+        byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234);
+
+        // Then
+        QuicPacket packet = initialPacketAssembler.assemble(12000, 0, srcCid, destCid);
+        assertThat(packet).isInstanceOf(InitialPacket.class);
+        assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
+        assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
+        assertThat(packet.getFrames())
+                .hasSize(2)
+                .hasOnlyElementsOfTypes(CryptoFrame.class, Padding.class);
+        assertThat(packet.generatePacketBytes(0, keys).length)
+                .isGreaterThanOrEqualTo(1200)
+                .isLessThanOrEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void anyInitialPacketShouldHaveToken() {
+        // Given
+        initialPacketAssembler.setInitialToken(new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 });
+        initialAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.Initial));
+
+        // When
+        sendRequestQueue.addAckRequest(0);    // This means the caller wants to send an _explicit_ ack.
+
+        // Then
+        InitialPacket packet = (InitialPacket) initialPacketAssembler.assemble(12000, 0, new byte[0], new byte[0]);
+        assertThat(packet.getFrames())
+                .hasOnlyElementsOfTypes(AckFrame.class, Padding.class);
+        assertThat(packet.getToken()).hasSize(8);
+        assertThat(packet.generatePacketBytes(0, keys).length)
+                .isGreaterThanOrEqualTo(1200)
+                .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
 }
