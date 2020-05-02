@@ -22,6 +22,8 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +38,7 @@ public class AckGenerator {
     private Version quicVersion = Version.getDefault();
     private List<Long> packetsToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
+    private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
 
     public synchronized boolean hasAckToSend() {
@@ -51,6 +54,9 @@ public class AckGenerator {
             packetsToAcknowledge.add(packet.getPacketNumber());
             if (packet.isAckEliciting()) {
                 newPacketsToAcknowledge = true;
+                newPacketsToAcknowlegdeSince = Instant.now();
+                // TODO: if second packet or not 1-rtt: sender.sendAck
+                //       otherwise: sender.sendAckWithin(maxDelay)
             }
         }
     }
@@ -77,9 +83,14 @@ public class AckGenerator {
      * @return
      */
     public synchronized AckFrame generateAckForPacket(long packetNumber) {
-        AckFrame ackFrame = new AckFrame(quicVersion, packetsToAcknowledge);
+        int delay = 0;
+        if (newPacketsToAcknowlegdeSince != null) {
+            delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
+        }
+        AckFrame ackFrame = new AckFrame(quicVersion, packetsToAcknowledge, delay);
         ackSentWithPacket.put(packetNumber, ackFrame);
         newPacketsToAcknowledge = false;
+        newPacketsToAcknowlegdeSince = null;
         return ackFrame;
     }
 }

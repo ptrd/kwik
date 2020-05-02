@@ -143,4 +143,31 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial, new AckFrame()));
         assertThat(ackGenerator.hasNewAckToSend()).isEqualTo(false);
     }
+
+    @Test
+    void ifAckIsDelayedTheDelayFieldIsSet() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
+
+        // When
+        Thread.sleep(10);
+
+        // Then
+        AckFrame ackFrame = ackGenerator.generateAckForPacket(13);
+        assertThat(ackFrame.getAckDelay()).isGreaterThanOrEqualTo(10);
+    }
+
+    @Test
+    void ifAckIsDelayedThenDelayFieldIsOnlySetForFirstAck() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
+
+        // When
+        Thread.sleep(10);
+
+        // Then
+        AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13);
+        AckFrame secondAckFrame = ackGenerator.generateAckForPacket(14);
+        assertThat(secondAckFrame.getAckDelay()).isEqualTo(0);
+    }
 }

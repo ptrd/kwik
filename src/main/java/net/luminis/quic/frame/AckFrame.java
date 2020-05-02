@@ -75,6 +75,11 @@ public class AckFrame extends QuicFrame {
     }
 
     public AckFrame(Version quicVersion, List<Long> packetNumbers) {
+        this(quicVersion, packetNumbers, 0);
+    }
+
+    public AckFrame(Version quicVersion, List<Long> packetNumbers, int ackDelay) {
+        this.ackDelay = ackDelay * 1000 / delayScale;
         if (packetNumbers.isEmpty()) {
             throw new IllegalArgumentException();
         }
