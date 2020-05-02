@@ -19,8 +19,11 @@
 package net.luminis.quic.send;
 
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.packet.InitialPacket;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,13 +34,24 @@ import java.util.function.Function;
 public class SendRequestQueue {
 
     private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
+    private volatile Instant nextAckTime;
 
 
     public void addRequest(QuicFrame fixedFrame) {
         requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame));
     }
 
-    public void addAckRequest(int maxDelay) {
+    public void addAckRequest() {
+        nextAckTime = Instant.now();
+    }
+
+    public void addAckRequest(int delay) {
+        nextAckTime = Instant.now().plusMillis(delay);
+    }
+
+    public boolean mustSendAck() {
+        Instant now = Instant.now();
+        return nextAckTime != null && now.isAfter(nextAckTime);
     }
 
     /**
@@ -53,6 +67,10 @@ public class SendRequestQueue {
         requestQueue.add(new SendRequest(estimatedSize, frameSupplier));
     }
 
+    public boolean hasRequests() {
+        return !requestQueue.isEmpty();
+    }
+    
     public Function<Integer, QuicFrame> next(int maxFrameLength) {
         if (maxFrameLength < 1) {  // Minimum frame size is 1 indeed: a frame may be just a type field.
             // Forget it

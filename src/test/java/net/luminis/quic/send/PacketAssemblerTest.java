@@ -32,6 +32,10 @@ import org.mockito.internal.util.reflection.FieldSetter;
 
 import javax.crypto.Cipher;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.function.Function;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Percentage.withPercentage;
 import static org.mockito.Mockito.mock;
@@ -268,4 +272,79 @@ class PacketAssemblerTest {
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
+    @Test
+    void whenNothingToSendDelayedAckIsSendAfterDelay() throws Exception {
+        // Given
+        int ackDelay = 10;
+
+        // When
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest(ackDelay);
+
+        // Then
+        QuicPacket firstCheck = oneRttPacketAssembler.assemble(12000, 0, null, new byte[]{ (byte) 0xdc, 0x1d });
+
+        // When
+        Thread.sleep(ackDelay);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[]{ (byte) 0xdc, 0x1d });
+        assertThat(firstCheck).isNull();
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames()).allSatisfy(frame -> {
+            assertThat(frame).isInstanceOf(AckFrame.class);
+            assertThat(((AckFrame) frame).getAckDelay()).isGreaterThanOrEqualTo(ackDelay);
+        });
+    }
+
+    @Test
+    void whenSendingDataSentPacketWillIncludeAck() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
+        assertThat(packet.getFrames())
+                .hasSize(2)
+                .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class)
+                .anySatisfy(frame -> {
+            assertThat(frame).isInstanceOf(AckFrame.class);
+            assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(8);
+        });
+    }
+
+    @Test
+    void whenNoDataToSendButAnExplicitAckIsQueueAssembleWillCreateAckOnlyPacket() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addAckRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(AckFrame.class);
+    }
+
+    @Test
+    void whenNoDataToSendAndNoExcplicitAckToSendAssembleWillNotGenerateAckOnlyPacket() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+
+        // When
+        // Nothing, no explicit ack requested
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isNull();
+    }
 }

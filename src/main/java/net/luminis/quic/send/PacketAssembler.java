@@ -31,15 +31,15 @@ import net.luminis.quic.packet.ShortHeaderPacket;
 import java.util.function.Function;
 
 /**
- * Assembles a quic packet, based on "send requests" that are previously queued.
+ * Assembles quic packets, based on "send requests" that are previously queued.
  *
  */
 public class PacketAssembler {
 
     protected final Version quicVersion;
-    EncryptionLevel level;
-    protected int maxPacketSize;
-    protected SendRequestQueue requestQueue;
+    protected final EncryptionLevel level;
+    protected final int maxPacketSize;
+    protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
 
 
@@ -61,11 +61,20 @@ public class PacketAssembler {
      */
     QuicPacket assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
+
         AckFrame ackFrame = null;
-        if (ackGenerator.hasAckToSend()) {
+        // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
+        if (requestQueue.mustSendAck()) {
             ackFrame = ackGenerator.generateAckForPacket(packetNumber);
         }
         QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, ackFrame);
+        if (ackFrame == null && requestQueue.hasRequests()) {
+            // If there is no explicit ack, but there is something to send, ack should always be included
+            if (ackGenerator.hasAckToSend()) {
+                ackFrame = ackGenerator.generateAckForPacket(packetNumber);
+                packet.addFrame(ackFrame);
+            }
+        }
         int estimatedSize = packet.estimateLength();   // TODO: if larger than remaining, or even then remaining - x, abort.
         Function<Integer, QuicFrame> next;
         while ((next = requestQueue.next(remaining - estimatedSize)) != null) {

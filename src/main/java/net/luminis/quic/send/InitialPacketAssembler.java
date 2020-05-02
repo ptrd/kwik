@@ -27,6 +27,12 @@ import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 
 
+/**
+ * Assembles initial packets, based on "send requests" that are previously queued.
+ * Overrides the generic based class, because Initial Packets may include a token.
+ * https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-8.1.3
+ * "The client MUST include the token in all Initial packets it sends,..."
+ */
 public class InitialPacketAssembler extends PacketAssembler {
 
     protected byte[] initialToken;
