@@ -132,7 +132,6 @@ class SenderTest {
         // Simulate a roundtrip first, to ensure loss detector has at least one ack-eliciting packet
         sender.send(new MockPacket(0, 120, EncryptionLevel.App, new PingFrame(), "packet 0"), "packet 0", p -> {});
         waitForSender();
-        sender.process(new AckFrame(0), PnSpace.App, Instant.now());
         recoveryManager.process(new AckFrame(0), PnSpace.App, Instant.now());
 
         clearInvocations(socket);

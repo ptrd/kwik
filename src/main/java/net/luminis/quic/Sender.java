@@ -33,18 +33,16 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.*;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 
-public class Sender implements ProbeSender, FrameProcessor {
+public class Sender implements ProbeSender {
 
     private DatagramSocket socket;
     private final int maxPacketSize;
@@ -54,7 +52,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     private int port;
     private volatile boolean running;
     private BlockingQueue<WaitingPacket> incomingPacketQueue;
-    private final Map<PacketId, PacketAckStatus> packetSentLog;
     private final CongestionController congestionController;
     private ConnectionSecrets connectionSecrets;
     private final RttEstimator rttEstimater;
@@ -81,7 +78,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         senderThread.setDaemon(true);
 
         incomingPacketQueue = new LinkedBlockingQueue<>();
-        packetSentLog = new ConcurrentHashMap<>();
         congestionController = new NewRenoCongestionController(log);
         if (initialRtt == null) {
             rttEstimater = new RttEstimator(log);
@@ -230,47 +226,12 @@ public class Sender implements ProbeSender, FrameProcessor {
     void shutdown() {
         running = false;
         senderThread.interrupt();
-        logStatistics();
         scheduler.shutdownNow();
-    }
-
-    /**
-     * Process incoming acknowledgement.
-     * @param ackFrame
-     * @param pnSpace
-     * @param timeReceived
-     */
-    public synchronized void process(QuicFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        if (ackFrame instanceof AckFrame) {
-            processAck((AckFrame) ackFrame, pnSpace, timeReceived);
-        }
-        else {
-            throw new RuntimeException();  // Would be programming error.
-        }
-    }
-
-    private void processAck(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
-            PacketId id = new PacketId(pnSpace, pn);
-            if (packetSentLog.containsKey(id)) {
-                Duration ackDuration = Duration.between(Instant.now(), packetSentLog.get(id).timeSent);
-                log.debug("Ack duration for " + id + ": " + ackDuration);
-                packetSentLog.get(id).acked = true;
-            }
-        });
     }
 
     private void logSent(QuicPacket packet, Instant sendTime, Consumer<QuicPacket> packetLostCallback) {
         recoveryManager.packetSent(packet, sendTime, packetLostCallback);
-        packetSentLog.put(packet.getId(), new PacketAckStatus(sendTime, packet));
         sent++;
-    }
-
-    void logStatistics() {
-        log.stats("Acknowledgement statistics (sent packets):");
-        packetSentLog.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e -> e.getValue()).forEach(e -> {
-            log.stats(e.packet.getId() + "\t" + e.status() + "\t" + e.packet);
-        });
     }
 
     public CongestionController getCongestionController() {
@@ -317,30 +278,6 @@ public class Sender implements ProbeSender, FrameProcessor {
         this.socket = newSocket;
     }
 
-
-    private static class PacketAckStatus {
-        final Instant timeSent;
-        final QuicPacket packet;
-        public boolean resent;
-        boolean acked;
-
-        public PacketAckStatus(Instant sent, QuicPacket packet) {
-            this.timeSent = sent;
-            this.packet = packet;
-        }
-
-        public String status() {
-            if (acked) {
-                return "Acked";
-            }
-            else if (resent) {
-                return "Resent";
-            }
-            else {
-                return "-";
-            }
-        }
-    }
 
     private static class WaitingPacket {
         final QuicPacket packet;
