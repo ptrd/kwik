@@ -27,6 +27,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
 import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.recovery.RttEstimator;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -249,8 +250,6 @@ public class Sender implements ProbeSender, FrameProcessor {
     }
 
     private void processAck(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        computeRttSample(ackFrame, pnSpace, timeReceived);
-
         ackFrame.getAckedPacketNumbers().stream().forEach(pn -> {
             PacketId id = new PacketId(pnSpace, pn);
             if (packetSentLog.containsKey(id)) {
@@ -259,14 +258,6 @@ public class Sender implements ProbeSender, FrameProcessor {
                 packetSentLog.get(id).acked = true;
             }
         });
-    }
-
-    private void computeRttSample(AckFrame ack, PnSpace pnSpace, Instant timeReceived) {
-        PacketId largestPnPacket = new PacketId(pnSpace, ack.getLargestAcknowledged());
-        PacketAckStatus packetStatus = packetSentLog.get(largestPnPacket);
-        if (packetStatus != null) {
-            rttEstimater.addSample(timeReceived, packetStatus.timeSent, ack.getAckDelay());
-        }
     }
 
     private void logSent(QuicPacket packet, Instant sendTime, Consumer<QuicPacket> packetLostCallback) {

@@ -22,6 +22,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.recovery.RttEstimator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,6 +133,8 @@ class SenderTest {
         sender.send(new MockPacket(0, 120, EncryptionLevel.App, new PingFrame(), "packet 0"), "packet 0", p -> {});
         waitForSender();
         sender.process(new AckFrame(0), PnSpace.App, Instant.now());
+        recoveryManager.process(new AckFrame(0), PnSpace.App, Instant.now());
+
         clearInvocations(socket);
 
         sender.send(new MockPacket(1, 1240, EncryptionLevel.App, new AckFrame(0), "packet 1"), "packet 1", p -> { /* retransmit function not needed, probe would be send */ });

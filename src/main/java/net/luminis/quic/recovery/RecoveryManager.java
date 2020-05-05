@@ -309,10 +309,10 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         timerExpiration = null;
     }
 
-    public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace) {
+    public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (! hasBeenReset) {
             ptoCount = 0;
-            lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame);
+            lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame, timeReceived);
         }
     }
 
@@ -373,7 +373,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     @Override
     public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
-        onAckReceived(frame, pnSpace);
+        onAckReceived(frame, pnSpace, timeReceived);
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {

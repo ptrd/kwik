@@ -16,12 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.recovery.PacketStatus;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 
 public class RttEstimator {
@@ -102,6 +106,13 @@ public class RttEstimator {
         }
         else {
             return rttVar;
+        }
+    }
+
+    public void ackReceived(AckFrame ack, Instant timeReceived, List<PacketStatus> newlyAcked) {
+        PacketStatus packetStatus = newlyAcked.get(0);
+        if (packetStatus != null) {
+            addSample(timeReceived, packetStatus.timeSent(), ack.getAckDelay());
         }
     }
 
