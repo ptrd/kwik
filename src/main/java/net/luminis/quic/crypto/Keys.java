@@ -47,13 +47,12 @@ public class Keys {
     private final Version quicVersion;
 
     private byte[] trafficSecret;
-    private byte[] writeKey;
-    private byte[] writeIV;
-    private byte[] pn;
-    private byte[] hp;
-    private Cipher hpCipher;
-    private SecretKeySpec writeKeySpec;
-    private Cipher writeCipher;
+    protected byte[] writeKey;
+    protected byte[] writeIV;
+    protected byte[] hp;
+    protected Cipher hpCipher;
+    protected SecretKeySpec writeKeySpec;
+    protected Cipher writeCipher;
 
 
     public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
@@ -117,7 +116,7 @@ public class Keys {
 
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        writeKey = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", (short) 16);
+        writeKey = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
         log.secret(nodeRole + " key", writeKey);
 
         writeIV = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
@@ -125,9 +124,15 @@ public class Keys {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
         // "The header protection key uses the "quic hp" label"
-        hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", (short) 16);
+        hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", getKeyLength());
         log.secret(nodeRole + " hp", hp);
     }
+
+    protected short getKeyLength() {
+        return 16;
+    }
+
+
 
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
     static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
@@ -158,10 +163,6 @@ public class Keys {
 
     public byte[] getWriteIV() {
         return writeIV;
-    }
-
-    public byte[] getPn() {
-        return pn;
     }
 
     public byte[] getHp() {

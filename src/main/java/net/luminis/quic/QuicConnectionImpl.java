@@ -61,6 +61,8 @@ import static net.luminis.tls.Tls13.generateKeys;
  */
 public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
+    private final List<TlsConstants.CipherSuite> cipherSuites;
+
     enum Status {
         Idle,
         Handshaking,
@@ -109,7 +111,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private List<QuicFrame> queuedZeroRttFrames = new ArrayList<>();
 
 
-    private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength) throws UnknownHostException, SocketException {
+    private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -117,6 +119,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         this.sessionTicket = sessionTicket;
         this.quicVersion = quicVersion;
         this.log = log;
+        this.cipherSuites = cipherSuites;
 
         socket = new DatagramSocket();
         sender = new Sender(socket, 1500, log, serverAddress, port, this, initialRtt);
@@ -294,7 +297,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
-        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, withEarlyData);
+        byte[] clientHello = createClientHello(host, cipherSuites, publicKey, applicationProtocol, withEarlyData);
         tlsState.clientHelloSend(privateKey, clientHello);
         connectionSecrets.computeEarlySecrets(tlsState);
 
@@ -534,9 +537,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private byte[] createClientHello(String host, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
+    private byte[] createClientHello(String host, List<TlsConstants.CipherSuite> supportedCiphers, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
         boolean compatibilityMode = false;
-        byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
         List<Extension> quicExtensions = new ArrayList<>();
         quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
@@ -1127,6 +1129,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         Builder connectionIdLength(int length);
 
         Builder initialRtt(int initialRtt);
+
+        Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
     }
 
     private static class BuilderImpl implements Builder {
@@ -1139,6 +1143,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         private Path secretsFile;
         private Integer initialRtt;
         private Integer connectionIdLength;
+        private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1151,7 +1156,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             if (initialRtt != null && initialRtt < 1) {
                 throw new IllegalArgumentException("Initial RTT must be larger than 0.");
             }
-            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength);
+            if (cipherSuites.isEmpty()) {
+                cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
+            }
+            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
         }
 
         @Override
@@ -1208,6 +1216,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         @Override
         public Builder initialRtt(int initialRtt) {
             this.initialRtt = initialRtt;
+            return this;
+        }
+
+        @Override
+        public Builder cipherSuite(TlsConstants.CipherSuite cipherSuite) {
+            cipherSuites.add(cipherSuite);
             return this;
         }
     }

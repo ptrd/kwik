@@ -24,6 +24,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.*;
@@ -67,6 +68,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 is only cipher suite");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -132,6 +134,11 @@ public class KwikCli {
         else if (args.size() > 2) {
             usage();
             return;
+        }
+
+        if (cmd.hasOption("chacha20")) {
+            builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+            System.out.println("YOH!!! MAMBO!");
         }
 
         Logger logger = null;

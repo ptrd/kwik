@@ -166,7 +166,8 @@ public class CryptoStream {
         log.debug(this + " Detected " + msg.getClass().getSimpleName());
         if (msg instanceof ServerHello) {
             // Server Hello provides a new secret, so
-            connectionSecrets.computeHandshakeSecrets(tlsState);
+            TlsConstants.CipherSuite selectedCipherSuite = ((ServerHello) msg).getCipherSuite();
+            connectionSecrets.computeHandshakeSecrets(tlsState, selectedCipherSuite);
             connection.hasHandshakeKeys();
         } else if (msg instanceof EncryptedExtensions) {
             for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {

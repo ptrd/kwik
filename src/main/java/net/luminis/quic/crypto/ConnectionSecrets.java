@@ -24,6 +24,7 @@ import net.luminis.quic.Version;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
+import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsState;
 
 import java.io.IOException;
@@ -34,6 +35,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConnectionSecrets {
+
+    private TlsConstants.CipherSuite selectedCipherSuite;
 
     enum NodeRole {
         Client,
@@ -97,14 +100,30 @@ public class ConnectionSecrets {
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
 
-    public synchronized void computeHandshakeSecrets(TlsState tlsState) {
-        Keys handshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
-        handshakeSecrets.computeHandshakeKeys(tlsState);
-        clientSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
+    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
+        Keys clientHandshakeSecrets;
+        Keys serverHandshakeSecrets;
+        if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
+            clientHandshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
+            serverHandshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
+        }
+        else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
+            clientHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Client, log);
+            serverHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Server, log);
+        }
+        else {
+            throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
+        }
+        clientSecrets[level.ordinal()] = clientHandshakeSecrets;
+        serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+    }
 
-        handshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
-        handshakeSecrets.computeHandshakeKeys(tlsState);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
+    public synchronized void computeHandshakeSecrets(TlsState tlsState, TlsConstants.CipherSuite selectedCipherSuite) {
+        this.selectedCipherSuite = selectedCipherSuite;
+        createKeys(EncryptionLevel.Handshake, selectedCipherSuite);
+
+        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
@@ -112,14 +131,11 @@ public class ConnectionSecrets {
     }
 
     public synchronized void computeApplicationSecrets(TlsState tlsState) {
-        Keys applicationSecrets = new Keys(quicVersion, NodeRole.Client, log);
-        applicationSecrets.computeApplicationKeys(tlsState);
-        clientSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
+        createKeys(EncryptionLevel.App, selectedCipherSuite);
 
-        applicationSecrets = new Keys(quicVersion, NodeRole.Server, log);
-        applicationSecrets.computeApplicationKeys(tlsState);
-        serverSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
-        
+        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
+
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
         }
