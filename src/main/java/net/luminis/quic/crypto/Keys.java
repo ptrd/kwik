@@ -16,9 +16,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
+import net.luminis.quic.DecryptionException;
+import net.luminis.quic.QuicRuntimeException;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsState;
 
@@ -32,8 +35,8 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
-import static net.luminis.quic.ConnectionSecrets.NodeRole.Client;
-import static net.luminis.quic.ConnectionSecrets.NodeRole.Server;
+import static net.luminis.quic.crypto.ConnectionSecrets.NodeRole.Client;
+import static net.luminis.quic.crypto.ConnectionSecrets.NodeRole.Server;
 
 public class Keys {
 

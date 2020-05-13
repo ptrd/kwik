@@ -21,6 +21,8 @@ package net.luminis.quic;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.cid.SourceConnectionIdRegistry;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;

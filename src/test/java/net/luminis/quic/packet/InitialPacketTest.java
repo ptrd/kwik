@@ -19,6 +19,8 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;

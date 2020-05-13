@@ -16,9 +16,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
+import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.Version;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 import net.luminis.tls.TlsState;
@@ -26,7 +29,6 @@ import net.luminis.tls.TlsState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;

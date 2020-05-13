@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
