@@ -23,10 +23,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsState;
 
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
+import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
@@ -207,5 +204,47 @@ public class Keys {
             }
         }
         return writeCipher;
+    }
+
+    public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
+        Cipher aeadCipher = getWriteCipher();
+        SecretKeySpec secretKey = getWriteKeySpec();
+        try {
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
+            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
+            aeadCipher.updateAAD(associatedData);
+            return aeadCipher.doFinal(message);
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+    }
+
+    public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
+        SecretKeySpec secretKey = getWriteKeySpec();
+        Cipher aeadCipher = getWriteCipher();
+        try {
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
+            aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
+            aeadCipher.updateAAD(associatedData);
+            return aeadCipher.doFinal(message);
+        } catch (AEADBadTagException decryptError) {
+            throw new DecryptionException();
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+    }
+
+    public byte[] createHeaderProtectionMask(byte[] sample) {
+        Cipher hpCipher = getHeaderProtectionCipher();
+        byte[] mask;
+        try {
+            mask = hpCipher.doFinal(sample);
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
+        return mask;
     }
 }

@@ -56,6 +56,9 @@ class HandshakePacketTest {
         Cipher wCipher = dummyKeys.getWriteCipher();
         when(keys.getWriteCipher()).thenReturn(wCipher);
         when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
+        when(keys.createHeaderProtectionMask(any())).thenCallRealMethod();
+        when(keys.aeadDecrypt(any(), any(), any())).thenCallRealMethod();
+        when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
     }
 
     @Test
