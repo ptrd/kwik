@@ -32,6 +32,7 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.*;
+import net.luminis.tls.extension.Extension;
 
 import java.io.IOException;
 import java.net.*;

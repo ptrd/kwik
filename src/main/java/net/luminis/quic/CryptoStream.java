@@ -22,6 +22,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
+import net.luminis.tls.extension.Extension;
 
 import java.nio.ByteBuffer;
 import java.util.*;
