@@ -66,7 +66,7 @@ class HandshakePacketTest {
         String data = "e5ff00001b040d0d0d0d040e0e0e0e1b4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195";
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
 
-        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+        HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
         handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4);
     }
 
@@ -75,7 +75,7 @@ class HandshakePacketTest {
         String data = "e5ff00001b 040d0d0d0d0 40e0e0e0e 2b4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195".replace(" ", "");
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
 
-        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+        HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
 
         assertThatThrownBy(
                 () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
