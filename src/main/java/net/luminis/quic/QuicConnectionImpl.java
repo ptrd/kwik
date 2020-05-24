@@ -171,6 +171,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         if (transportParameters != null) {
             this.transportParams = transportParameters;
         }
+        this.transportParams.setInitialSourceConnectionId(sourceConnectionIds.getCurrent());
         if (earlyData == null) {
             earlyData = Collections.emptyList();
         }

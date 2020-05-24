@@ -123,6 +123,16 @@ public class QuicTransportParametersExtension extends Extension {
         // "The maximum number of connection IDs from the peer that an endpoint is willing to store."
         addTransportParameter(buffer, active_connection_id_limit, params.getActiveConnectionIdLimit());
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-18.2
+        // "The value that the endpoint included in the Source Connection ID field of the first Initial packet it
+        // sends for the connection"
+        addTransportParameter(buffer, initial_source_connection_id, params.getInitialSourceConnectionId());
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-18.2
+        // "The value that the the server included in the Source Connection ID field of a Retry packet"
+        if (params.getRetrySourceConnectionId() != null) {
+            addTransportParameter(buffer, retry_source_connection_id, params.getRetrySourceConnectionId());
+        }
+
         int length = buffer.position();
         buffer.limit(length);
 
@@ -164,7 +174,13 @@ public class QuicTransportParametersExtension extends Extension {
         int size = VariableLengthInteger.parse(buffer);
         int startPosition = buffer.position();
 
-        if (parameterId == initial_max_stream_data_bidi_local.value) {
+        if (parameterId == original_destination_connection_id.value) {
+            byte[] destinationCid = new byte[size];
+            buffer.get(destinationCid);
+            log.debug("- original destination connection id: ", destinationCid);
+            params.setOriginalDestinationConnectionId(destinationCid);
+        }
+        else if (parameterId == initial_max_stream_data_bidi_local.value) {
             int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
             params.setInitialMaxStreamDataBidiLocal(maxStreamDataBidiLocal);
@@ -225,16 +241,22 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- max ack delay: " + maxAckDelay);
             params.setMaxAckDelay(maxAckDelay);
         }
-        else if (parameterId == retry_source_connection_id.value) {
-            byte[] retrySourceCid = new byte[size];
-            buffer.get(retrySourceCid);
-            log.debug("- retry source connection id: ", retrySourceCid);
-            params.setRetrySourceConnectionId(retrySourceCid);
-        }
         else if (parameterId == active_connection_id_limit.value) {
             int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
             log.debug("- active connection id limit: " + activeConnectionIdLimit);
             params.setActiveConnectionIdLimit(activeConnectionIdLimit);
+        }
+        else if (parameterId == initial_source_connection_id.value) {
+            byte[] initialSourceCid = new byte[size];
+            buffer.get(initialSourceCid);
+            log.debug("- initial source connection id: " + initialSourceCid);
+            params.setInitialSourceConnectionId(initialSourceCid);
+        }
+        else if (parameterId == retry_source_connection_id.value) {
+            byte[] retrySourceCid = new byte[size];
+            buffer.get(retrySourceCid);
+            log.debug("- retry source connection id: " + retrySourceCid);
+            params.setRetrySourceConnectionId(retrySourceCid);
         }
         else {
             log.debug("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
@@ -289,6 +311,12 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.reset();
         VariableLengthInteger.encode(encodedValueLength, buffer);
         VariableLengthInteger.encode(value, buffer);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, byte[] value) {
+        VariableLengthInteger.encode(id.value, buffer);
+        VariableLengthInteger.encode(value.length, buffer);
+        buffer.put(value);
     }
 
     public TransportParameters getTransportParameters() {

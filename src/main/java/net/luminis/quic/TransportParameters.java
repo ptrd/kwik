@@ -18,11 +18,13 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.ByteUtils;
+
 import java.net.InetAddress;
 
 public class TransportParameters {
 
-    private byte[] retrySourceConnectionId;
+    private byte[] originalDestinationConnectionId;
     private long maxIdleTimeout;
     private int maxPacketSize;
     private long initialMaxData;
@@ -36,7 +38,8 @@ public class TransportParameters {
     private PreferredAddress preferredAddress;
     private int maxAckDelay;
     private int activeConnectionIdLimit;
-
+    private byte[] initialSourceConnectionId;
+    private byte[] retrySourceConnectionId;
 
     public TransportParameters() {
         setDefaults();
@@ -61,12 +64,12 @@ public class TransportParameters {
         activeConnectionIdLimit = 2;
     }
 
-    public byte[] getRetrySourceConnectionId() {
-        return retrySourceConnectionId;
+    public byte[] getOriginalDestinationConnectionId() {
+        return originalDestinationConnectionId;
     }
 
-    public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
-        this.retrySourceConnectionId = retrySourceConnectionId;
+    public void setOriginalDestinationConnectionId(byte[] initialSourceConnectionId) {
+        this.originalDestinationConnectionId = initialSourceConnectionId;
     }
 
     public void setAckDelayExponent(int ackDelayExponent) {
@@ -172,9 +175,26 @@ public class TransportParameters {
         return disableMigration;
     }
 
+    public byte[] getInitialSourceConnectionId() {
+        return initialSourceConnectionId;
+    }
+
+    public void setInitialSourceConnectionId(byte[] initialSourceConnectionId) {
+        this.initialSourceConnectionId = initialSourceConnectionId;
+    }
+
+    public byte[] getRetrySourceConnectionId() {
+        return retrySourceConnectionId;
+    }
+
+    public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
+        this.retrySourceConnectionId = retrySourceConnectionId;
+    }
+
     @Override
     public String toString() {
-        return "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
+        return "\n- original destination connection id\t" + ByteUtils.bytesToHex(originalDestinationConnectionId) +
+                "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
                 // "\n- max packet size\t" +
                 "\n- initial max data\t\t\t" + initialMaxData +
                 "\n- initial max stream data bidi local\t" + initialMaxStreamDataBidiLocal +
@@ -184,7 +204,9 @@ public class TransportParameters {
                 "\n- initial max streams uni\t\t" + initialMaxStreamsUni +
                 "\n- max ack delay\t\t\t\t" + maxAckDelay +
                 "\n- disable migration\t\t\t" + disableMigration +
-                "\n- active connection id limit\t\t" + activeConnectionIdLimit;
+                "\n- active connection id limit\t\t" + activeConnectionIdLimit +
+                "\n- initial source connection id\t\t" + ByteUtils.bytesToHex(initialSourceConnectionId) +
+                "\n- retry source connection id\t\t" + retrySourceConnectionId;
     }
 
     public int getMaxPacketSize() {
