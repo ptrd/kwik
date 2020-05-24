@@ -22,7 +22,7 @@ import java.net.InetAddress;
 
 public class TransportParameters {
 
-    private byte[] originalConnectionId;
+    private byte[] retrySourceConnectionId;
     private long maxIdleTimeout;
     private int maxPacketSize;
     private long initialMaxData;
@@ -61,12 +61,12 @@ public class TransportParameters {
         activeConnectionIdLimit = 2;
     }
 
-    public byte[] getOriginalConnectionId() {
-        return originalConnectionId;
+    public byte[] getRetrySourceConnectionId() {
+        return retrySourceConnectionId;
     }
 
-    public void setOriginalConnectionId(byte[] originalConnectionId) {
-        this.originalConnectionId = originalConnectionId;
+    public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
+        this.retrySourceConnectionId = retrySourceConnectionId;
     }
 
     public void setAckDelayExponent(int ackDelayExponent) {

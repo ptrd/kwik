@@ -907,13 +907,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
         if (processedRetryPacket) {
-            if (transportParameters.getOriginalConnectionId() == null ||
-                    ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalConnectionId())) {
+            if (transportParameters.getRetrySourceConnectionId() == null ||
+                    ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getRetrySourceConnectionId())) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
         else {
-            if (transportParameters.getOriginalConnectionId() != null) {
+            if (transportParameters.getRetrySourceConnectionId() != null) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }

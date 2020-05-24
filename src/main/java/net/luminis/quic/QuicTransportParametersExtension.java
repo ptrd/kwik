@@ -225,11 +225,11 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- max ack delay: " + maxAckDelay);
             params.setMaxAckDelay(maxAckDelay);
         }
-        else if (parameterId == original_connection_id.value) {
-            byte[] originalConnectionId = new byte[size];
-            buffer.get(originalConnectionId);
-            log.debug("- original connection id: ", originalConnectionId);
-            params.setOriginalConnectionId(originalConnectionId);
+        else if (parameterId == retry_source_connection_id.value) {
+            byte[] retrySourceCid = new byte[size];
+            buffer.get(retrySourceCid);
+            log.debug("- retry source connection id: ", retrySourceCid);
+            params.setRetrySourceConnectionId(retrySourceCid);
         }
         else if (parameterId == active_connection_id_limit.value) {
             int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);

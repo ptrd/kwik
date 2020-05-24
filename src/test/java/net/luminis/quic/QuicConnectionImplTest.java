@@ -27,7 +27,6 @@ import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,9 +37,7 @@ import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.IOException;
-import java.net.SocketException;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
@@ -193,7 +190,7 @@ class QuicConnectionImplTest {
 
         // Simulate a TransportParametersExtension is received that does contain an original destination id
         TransportParameters transportParameters = new TransportParameters();
-        transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
+        transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
@@ -205,7 +202,7 @@ class QuicConnectionImplTest {
 
         // Simulate a TransportParametersExtension is received that does contain the original destination id
         TransportParameters transportParameters = new TransportParameters();
-        transportParameters.setOriginalConnectionId(originalDestinationId);
+        transportParameters.setRetrySourceConnectionId(originalDestinationId);
         connection.setPeerTransportParameters(transportParameters);
 
         verify(connection, never()).signalConnectionError(any());
@@ -227,7 +224,7 @@ class QuicConnectionImplTest {
 
         // Simulate a TransportParametersExtension is received that does contain an original destination id
         TransportParameters transportParameters = new TransportParameters();
-        transportParameters.setOriginalConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
+        transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
