@@ -621,6 +621,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 token = packet.getRetryToken();
                 byte[] destConnectionId = packet.getSourceConnectionId();
                 destConnectionIds.replaceInitialConnectionId(destConnectionId);
+                destConnectionIds.setRetrySourceConnectionId(destConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(destConnectionId));
                 generateInitialKeys();
 
@@ -885,6 +886,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
+        verifyConnectionIds(transportParameters);
         peerTransportParams = transportParameters;
         if (flowController == null) {
             flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
@@ -909,7 +911,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
         if (processedRetryPacket) {
             if (transportParameters.getRetrySourceConnectionId() == null ||
-                    ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getRetrySourceConnectionId())) {
+                    ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), transportParameters.getRetrySourceConnectionId())) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
@@ -920,9 +922,29 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
     }
 
+    private void verifyConnectionIds(TransportParameters transportParameters) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-7.3
+        // "An endpoint MUST treat any of the following as a connection error of type PROTOCOL_VIOLATION:
+        //   *  absence of the initial_source_connection_id transport parameter from either endpoint,
+        //   *  absence of the original_destination_connection_id transport parameter from the server,
+        //   *  a mismatch between values received from a peer in these transport parameters and the value sent in
+        //      the corresponding Destination or Source Connection ID fields of Initial packets."
+        if (transportParameters.getInitialSourceConnectionId() == null ||
+                ! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
+            log.error("Source connection id does not match corresponding transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+        }
+        if (transportParameters.getOriginalDestinationConnectionId() == null ||
+                ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
+            log.error("Original destination connection id does not match corresponding transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+        }
+    }
+
     void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
         log.info("ConnectionError " + transportError);
         // TODO: close connection with a frame type of 0x1c
+        abortConnection(null);
     }
 
     /**

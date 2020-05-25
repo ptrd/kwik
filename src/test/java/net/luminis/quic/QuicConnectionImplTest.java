@@ -197,23 +197,34 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void testAfterRetryPacketTransportParametersWithCorrectOriginalDestinationId() throws Exception {
-        simulateConnectionReceivingRetryPacket();
+    void testAfterRetryPacketTransportParametersWithCorrectRetrySourceConnectionId() throws Exception {
+        RetryPacket retryPacket = simulateConnectionReceivingRetryPacket();
 
-        // Simulate a TransportParametersExtension is received that does contain the original destination id
+        // Simulate a TransportParametersExtension is received that...
         TransportParameters transportParameters = new TransportParameters();
-        transportParameters.setRetrySourceConnectionId(originalDestinationId);
+        // - has the server's source cid (because the test stops after "sending" the retry-packet, this is not the "final" server source cid, but the one used in the retry packet)
+        transportParameters.setInitialSourceConnectionId(retryPacket.getSourceConnectionId());
+        // - does contain the original destination id
+        transportParameters.setOriginalDestinationConnectionId(originalDestinationId);
+        // - sets the retry cid to the source cid of the retry packet
+        transportParameters.setRetrySourceConnectionId(retryPacket.getSourceConnectionId());
         connection.setPeerTransportParameters(transportParameters);
 
         verify(connection, never()).signalConnectionError(any());
     }
 
     @Test
-    void testWithNormalConnectionTransportParametersShouldNotContainOriginalDestinationId() throws Exception {
+    void testWithNormalConnectionTransportParametersShouldNotContainRetrySourceId() throws Exception {
+        byte[] originalSourceConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        setFixedOriginalDestinationConnectionId(originalSourceConnectionId);
         simulateNormalConnection();
 
-        // Simulate a TransportParametersExtension is received that does not contain an original destination id
-        connection.setPeerTransportParameters(new TransportParameters());
+        // Simulate a TransportParametersExtension is received that does not contain a retry source id
+        TransportParameters transportParameters = new TransportParameters();
+        // But it must contain
+        transportParameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        transportParameters.setOriginalDestinationConnectionId(originalSourceConnectionId);
+        connection.setPeerTransportParameters(transportParameters);
 
         verify(connection, never()).signalConnectionError(any());
     }
@@ -230,7 +241,7 @@ class QuicConnectionImplTest {
         verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
     }
 
-    private void simulateConnectionReceivingRetryPacket() throws Exception {
+    private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
         Sender sender = Mockito.mock(Sender.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
@@ -255,6 +266,7 @@ class QuicConnectionImplTest {
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
         connection.process(retryPacket, null);
+        return retryPacket;
     }
 
     private void simulateNormalConnection() throws Exception {
