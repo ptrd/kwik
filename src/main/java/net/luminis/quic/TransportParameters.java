@@ -193,7 +193,7 @@ public class TransportParameters {
 
     @Override
     public String toString() {
-        return "\n- original destination connection id\t" + ByteUtils.bytesToHex(originalDestinationConnectionId) +
+        return "\n- original destination connection id\t" + formatCid(originalDestinationConnectionId) +
                 "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
                 // "\n- max packet size\t" +
                 "\n- initial max data\t\t\t" + initialMaxData +
@@ -205,8 +205,17 @@ public class TransportParameters {
                 "\n- max ack delay\t\t\t\t" + maxAckDelay +
                 "\n- disable migration\t\t\t" + disableMigration +
                 "\n- active connection id limit\t\t" + activeConnectionIdLimit +
-                "\n- initial source connection id\t\t" + ByteUtils.bytesToHex(initialSourceConnectionId) +
-                "\n- retry source connection id\t\t" + retrySourceConnectionId;
+                "\n- initial source connection id\t\t" + formatCid(initialSourceConnectionId) +
+                "\n- retry source connection id\t\t" + formatCid(retrySourceConnectionId);
+    }
+
+    private String formatCid(byte[] data) {
+        if (data != null) {
+            return ByteUtils.bytesToHex(data);
+        }
+        else {
+            return "null";
+        }
     }
 
     public int getMaxPacketSize() {

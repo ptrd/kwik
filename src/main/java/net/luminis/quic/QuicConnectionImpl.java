@@ -217,7 +217,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         if (!streamEarlyDataList.isEmpty()) {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
-            setPeerTransportParameters(rememberedTransportParameters);
+            setPeerTransportParameters(rememberedTransportParameters, false);  // Do not validate TP, as these are yet incomplete.
             // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.5
             // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
             //   transport parameter supplied by the server"
@@ -886,7 +886,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
-        verifyConnectionIds(transportParameters);
+        setPeerTransportParameters(transportParameters, true);
+    }
+
+    private void setPeerTransportParameters(TransportParameters transportParameters, boolean validate) {
+        if (validate) {
+            verifyConnectionIds(transportParameters);
+        }
         peerTransportParams = transportParameters;
         if (flowController == null) {
             flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
