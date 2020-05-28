@@ -221,7 +221,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.5
             // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
             //   transport parameter supplied by the server"
-            long earlyDataSizeLeft = sessionTicket.getEarlyDataMaxSize();
+            long earlyDataSizeLeft = sessionTicket.getInitialMaxData();
 
             List<QuicStream> earlyDataStreams = new ArrayList<>();
             for (StreamEarlyData streamEarlyData: streamEarlyDataList) {
