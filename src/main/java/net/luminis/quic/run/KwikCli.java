@@ -138,7 +138,6 @@ public class KwikCli {
 
         if (cmd.hasOption("chacha20")) {
             builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
-            System.out.println("YOH!!! MAMBO!");
         }
 
         Logger logger = null;

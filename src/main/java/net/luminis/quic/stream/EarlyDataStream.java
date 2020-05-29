@@ -53,10 +53,13 @@ public class EarlyDataStream extends QuicStream {
         earlyDataIsFinalInStream = fin;
         long flowControlLimit = flowController.getFlowControlLimit(this);
         int earlyDataLength = (int) Long.min(earlyData.length, Long.min(earlyDataSizeLeft, flowControlLimit));
-        log.info(String.format("Sending %d bytes of early data on %s", earlyDataLength, this));
-        if (earlyDataLength == 0) {
-            log.info(".... because: fc limit is " + flowControlLimit + "; early data size left is " + earlyDataSizeLeft + " and early data length is " + earlyData.length);
+        if (earlyDataLength > 0) {
+            log.info(String.format("Sending %d bytes of early data on %s", earlyDataLength, this));
         }
+        else {
+            log.error("Sending no early data because: fc limit is " + flowControlLimit + "; early data size left is " + earlyDataSizeLeft + " and early data length is " + earlyData.length);
+        }
+
         getOutputStream().write(earlyData, 0, earlyDataLength);
         if (earlyDataLength == earlyData.length && earlyDataIsFinalInStream) {
             getOutputStream().close();
