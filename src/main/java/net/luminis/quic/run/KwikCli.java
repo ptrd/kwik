@@ -431,11 +431,6 @@ public class KwikCli {
             httpStream.getOutputStream().close();
         }
 
-        // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {}
-
         if (outputFile != null) {
             FileOutputStream out;
             if (new File(outputFile).isDirectory()) {
@@ -451,6 +446,11 @@ public class KwikCli {
             httpStream.getInputStream().transferTo(out);
         }
         else {
+            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {}
+
             BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
             String line;
             System.out.println("Server returns: ");
