@@ -43,7 +43,7 @@ Kwik is still in active development, see [git history](https://bitbucket.org/pjt
 
 HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
 
-Kwik supports IETF draft-28, the latest draft published by the IETF.
+Kwik supports IETF draft-29, the latest draft published by the IETF.
 
 Implemented QUIC features:
 

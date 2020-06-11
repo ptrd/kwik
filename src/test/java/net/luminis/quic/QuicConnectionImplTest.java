@@ -93,7 +93,7 @@ class QuicConnectionImplTest {
         recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString(), any(Consumer.class));
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(originalConnectionId, "5e5f918434a24d4b601745b4f0db7908");
+        RetryPacket retryPacket = createRetryPacket(originalConnectionId, "2b57643b17ca7ce7c345771c37e1c6ed");
         connection.process(retryPacket, null);
 
         // A second InitialPacket should be send, with token and source connection id from retry packet
@@ -186,10 +186,15 @@ class QuicConnectionImplTest {
 
     @Test
     void testAfterRetryPacketTransportParametersWithIncorrectOriginalDestinationIdLeadsToConnectionError() throws Exception {
-        simulateConnectionReceivingRetryPacket();
+        RetryPacket retryPacket = simulateConnectionReceivingRetryPacket();
 
-        // Simulate a TransportParametersExtension is received that does contain an original destination id
+        // Simulate a TransportParametersExtension is received that...
         TransportParameters transportParameters = new TransportParameters();
+        // - has the server's source cid (because the test stops after "sending" the retry-packet, this is not the "final" server source cid, but the one used in the retry packet)
+        transportParameters.setInitialSourceConnectionId(retryPacket.getSourceConnectionId());
+        // - does contain the original destination id
+        transportParameters.setOriginalDestinationConnectionId(originalDestinationId);
+        // -  does contain an original destination id (but incorrect)
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
@@ -264,7 +269,7 @@ class QuicConnectionImplTest {
         originalDestinationId = connection.getDestinationConnectionId();
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "2b57643b17ca7ce7c345771c37e1c6ed");
         connection.process(retryPacket, null);
         return retryPacket;
     }
@@ -286,7 +291,10 @@ class QuicConnectionImplTest {
 
     @Test
     void testCreateStream() throws Exception {
-        connection.setPeerTransportParameters(new TransportParameters(10, 10, 10, 10));
+        TransportParameters parameters = new TransportParameters(10, 10, 10, 10);
+        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        connection.setPeerTransportParameters(parameters);
 
         QuicStream stream = connection.createStream(true);
         int firstStreamId = stream.getStreamId();
@@ -344,7 +352,10 @@ class QuicConnectionImplTest {
 
     @Test
     void receivingTransportParametersInitializesFlowController() {
-        connection.setPeerTransportParameters(new TransportParameters(30, 9000, 1, 1));
+        TransportParameters parameters = new TransportParameters(30, 9000, 1, 1);
+        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        connection.setPeerTransportParameters(parameters);
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
     }
@@ -352,6 +363,8 @@ class QuicConnectionImplTest {
     @Test
     void receivingMaxStreamDataFrameIncreasesFlowControlLimit() {
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
+        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
         parameters.setInitialMaxData(100_000);
         parameters.setInitialMaxStreamDataBidiRemote(9000);
         connection.setPeerTransportParameters(parameters);
@@ -368,6 +381,8 @@ class QuicConnectionImplTest {
     @Test
     void receivingMaxDataFrameIncreasesFlowControlLimit() {
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
+        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
         parameters.setInitialMaxData(1_000);
         parameters.setInitialMaxStreamDataBidiRemote(9000);
         connection.setPeerTransportParameters(parameters);
@@ -432,6 +447,8 @@ class QuicConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(1);
 
         TransportParameters params = new TransportParameters();
+        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
         params.setActiveConnectionIdLimit(3);
         connection.setPeerTransportParameters(params);
 
@@ -448,6 +465,8 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         TransportParameters params = new TransportParameters();
+        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
         params.setActiveConnectionIdLimit(7);
         connection.setPeerTransportParameters(params);
 

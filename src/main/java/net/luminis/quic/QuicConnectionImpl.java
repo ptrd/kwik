@@ -891,7 +891,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
 
     private void setPeerTransportParameters(TransportParameters transportParameters, boolean validate) {
         if (validate) {
-            verifyConnectionIds(transportParameters);
+            if (!verifyConnectionIds(transportParameters)) {
+                return;
+            }
         }
         peerTransportParams = transportParameters;
         if (flowController == null) {
@@ -928,23 +930,34 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
     }
 
-    private void verifyConnectionIds(TransportParameters transportParameters) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-7.3
-        // "An endpoint MUST treat any of the following as a connection error of type PROTOCOL_VIOLATION:
-        //   *  absence of the initial_source_connection_id transport parameter from either endpoint,
-        //   *  absence of the original_destination_connection_id transport parameter from the server,
-        //   *  a mismatch between values received from a peer in these transport parameters and the value sent in
-        //      the corresponding Destination or Source Connection ID fields of Initial packets."
-        if (transportParameters.getInitialSourceConnectionId() == null ||
-                ! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
+    private boolean verifyConnectionIds(TransportParameters transportParameters) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
+        // "An endpoint MUST treat absence of the initial_source_connection_id
+        //   transport parameter from either endpoint or absence of the
+        //   original_destination_connection_id transport parameter from the
+        //   server as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
+            log.error("Missing connection id from server transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+            return false;
+        }
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
+        // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:
+        //   *  a mismatch between values received from a peer in these transport parameters and the value sent in the
+        //      corresponding Destination or Source Connection ID fields of Initial packets."
+        if (! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
             signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            return false;
         }
-        if (transportParameters.getOriginalDestinationConnectionId() == null ||
-                ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
+        if (! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
             log.error("Original destination connection id does not match corresponding transport parameter");
             signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            return false;
         }
+
+        return true;
     }
 
     void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
