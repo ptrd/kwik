@@ -49,6 +49,12 @@ public class ConnectionSecrets {
             (byte) 0x11, (byte) 0xa7, (byte) 0xd2, (byte) 0x43, (byte) 0x2b, (byte) 0xb4, (byte) 0x63, (byte) 0x65,
             (byte) 0xbe, (byte) 0xf9, (byte) 0xf5, (byte) 0x02 };
 
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.2
+    public static final byte[] STATIC_SALT_DRAFT_29 = new byte[] {
+            (byte) 0xaf, (byte) 0xbf, (byte) 0xec, (byte) 0x28, (byte) 0x99, (byte) 0x93, (byte) 0xd2, (byte) 0x4c,
+            (byte) 0x9e, (byte) 0x97, (byte) 0x86, (byte) 0xf1, (byte) 0x9c, (byte) 0x61, (byte) 0x11, (byte) 0xe0,
+            (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
+
     private final Version quicVersion;
     private Logger log;
     private byte[] clientRandom;
@@ -85,7 +91,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = STATIC_SALT_DRAFT_23;
+        byte[] initialSalt = quicVersion.before(Version.IETF_draft_29)? STATIC_SALT_DRAFT_23: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);
