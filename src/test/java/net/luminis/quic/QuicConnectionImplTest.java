@@ -321,7 +321,7 @@ class QuicConnectionImplTest {
     void testMinimumQuicVersionIs23() {
         assertThatThrownBy(
                 () -> QuicConnectionImpl.newBuilder()
-                        .version​(Version.IETF_draft_19)
+                        .version(Version.IETF_draft_19)
                         .uri(new URI("//localhost:443"))
                         .logger(logger).build())
                 .isInstanceOf(IllegalArgumentException.class);
@@ -330,7 +330,7 @@ class QuicConnectionImplTest {
     @Test
     void testQuicVersion23IsSupported() throws Exception {
         assertThat(QuicConnectionImpl.newBuilder()
-                .version​(Version.IETF_draft_23)
+                .version(Version.IETF_draft_23)
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build())
                 .isNotNull();

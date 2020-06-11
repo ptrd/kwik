@@ -1141,9 +1141,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     public interface Builder {
         QuicConnectionImpl build() throws SocketException, UnknownHostException;
 
-        Builder connectTimeout​(Duration duration);
+        Builder connectTimeout(Duration duration);
 
-        Builder version​(Version version);
+        Builder version(Version version);
 
         Builder logger(Logger log);
 
@@ -1192,12 +1192,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
 
         @Override
-        public Builder connectTimeout​(Duration duration) {
+        public Builder connectTimeout(Duration duration) {
             return this;
         }
 
         @Override
-        public Builder version​(Version version) {
+        public Builder version(Version version) {
             quicVersion = version;
             return this;
         }

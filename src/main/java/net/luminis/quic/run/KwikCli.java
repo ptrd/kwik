@@ -196,7 +196,7 @@ public class KwikCli {
         if (cmd.hasOption("reservedVersion")) {
             quicVersion = Version.reserved_1;
         }
-        builder.version​(quicVersion);
+        builder.version(quicVersion);
 
         String alpn = null;
         if (cmd.hasOption("A")) {
