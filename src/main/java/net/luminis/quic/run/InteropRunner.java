@@ -237,7 +237,9 @@ public class InteropRunner extends KwikCli {
             String httpRequest = "GET " + downloadUrls.get(i).getPath() + "\r\n";
             earlyDataRequests.add(new QuicConnection.StreamEarlyData(httpRequest.getBytes(), true));
         }
-        List<QuicStream> earlyDataStreams = connection2.connect(15_000, "hq-28", null, earlyDataRequests);
+        Version quicVersion = Version.getDefault();
+        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        List<QuicStream> earlyDataStreams = connection2.connect(15_000, alpn, null, earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
             if (earlyDataStreams.get(i) == null) {
                 logger.info("Attempting to create new stream after connect, because it failed on 0-rtt");
