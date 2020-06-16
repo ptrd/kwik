@@ -51,8 +51,11 @@ public class RttEstimator {
 
     public void addSample(Instant timeReceived, Instant timeSent, int ackDelay) {
         if (timeReceived.isBefore(timeSent)) {
-            throw new IllegalArgumentException();
+            // This sometimes happens in the Interop runner; reconsider solution after new sender is implemented.
+            log.error("Receiving negative rtt estimate: sent=" + timeSent + ", received=" + timeReceived);
+            return;
         }
+
         // TODO: if ackDelay > maxAckDelay, limit it to ackDelay.
 
         int previousSmoothed = smoothedRtt;
