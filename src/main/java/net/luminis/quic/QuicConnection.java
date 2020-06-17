@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -50,6 +51,8 @@ public interface QuicConnection {
     void close();
 
     Statistics getStats();
+
+    InetSocketAddress getLocalAddress();
 
     class StreamEarlyData {
         byte[] data;

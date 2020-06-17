@@ -1147,6 +1147,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
     }
 
+    public InetSocketAddress getLocalAddress() {
+        return (InetSocketAddress) socket.getLocalSocketAddress();
+    }
+
+
     public static Builder newBuilder() {
         return new BuilderImpl();
     }
