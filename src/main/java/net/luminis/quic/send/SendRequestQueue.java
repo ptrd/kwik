@@ -19,23 +19,20 @@
 package net.luminis.quic.send;
 
 
-import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.InitialPacket;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 public class SendRequestQueue {
 
     private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
+    private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile Instant nextAckTime;
-
 
     public void addRequest(QuicFrame fixedFrame) {
         requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame));
@@ -47,6 +44,26 @@ public class SendRequestQueue {
 
     public void addAckRequest(int delay) {
         nextAckTime = Instant.now().plusMillis(delay);
+    }
+
+    public void addProbeRequest() {
+        probeQueue.add(Collections.emptyList());
+    }
+
+    public void addProbeRequest(List<QuicFrame> frames) {
+        probeQueue.add(frames);
+    }
+
+    public boolean hasProbe() {
+        return !probeQueue.isEmpty();
+    }
+
+    public boolean hasProbeWithData() {
+        return !probeQueue.isEmpty() && !probeQueue.get(0).isEmpty();
+    }
+
+    public List<QuicFrame> getProbe() {
+        return probeQueue.remove(0);
     }
 
     public boolean mustSendAck() {

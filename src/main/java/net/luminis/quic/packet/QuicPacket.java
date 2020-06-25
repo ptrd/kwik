@@ -448,6 +448,10 @@ abstract public class QuicPacket {
         frames.add(frame);
     }
 
+    public void addFrames(List<QuicFrame> frames) {
+        this.frames.addAll(frames);
+    }
+
     public int getSize() {
         if (packetSize > 0) {
             return packetSize;

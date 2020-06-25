@@ -22,12 +22,14 @@ import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -68,13 +70,22 @@ public class PacketAssembler {
             ackFrame = ackGenerator.generateAckForPacket(packetNumber);
         }
         QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, ackFrame);
+
         if (ackFrame == null && requestQueue.hasRequests()) {
-            // If there is no explicit ack, but there is something to send, ack should always be included
+            // If there is no explicit ack, but there is something to send, ack should always be included   // TODO: wrong, only if enough size
             if (ackGenerator.hasAckToSend()) {
                 ackFrame = ackGenerator.generateAckForPacket(packetNumber);
                 packet.addFrame(ackFrame);
             }
         }
+
+        if (requestQueue.hasProbeWithData()) {
+            // Probe is not limited by congestion control
+            List<QuicFrame> probeData = requestQueue.getProbe();
+            packet.addFrames(probeData);
+            return packet;
+        }
+
         int estimatedSize = packet.estimateLength();   // TODO: if larger than remaining, or even then remaining - x, abort.
         Function<Integer, QuicFrame> next;
         while ((next = requestQueue.next(remaining - estimatedSize)) != null) {
@@ -88,6 +99,12 @@ public class PacketAssembler {
             estimatedSize += nextFrame.getBytes().length;
             packet.addFrame(nextFrame);
         }
+
+        if (requestQueue.hasProbe() && packet.getFrames().isEmpty()) {
+            requestQueue.getProbe();
+            packet.addFrame(new PingFrame());
+        }
+
         if (packet.getFrames().size() > 0) {
             return packet;
         }

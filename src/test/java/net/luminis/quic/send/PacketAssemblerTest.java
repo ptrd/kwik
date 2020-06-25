@@ -34,6 +34,7 @@ import javax.crypto.Cipher;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -346,5 +347,76 @@ class PacketAssemblerTest {
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
         assertThat(packet).isNull();
+    }
+
+    @Test
+    void whenCwndReachedNoDataIsSent() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        int currentCwndRemaining = 16;
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 0, null, new byte[0]);
+        assertThat(packet).isNull();
+    }
+
+    @Test
+    void whenAddingProbeAndRequestListIsEmptyThenPingFrameShouldBeSent() {
+        // When
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]);
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(PingFrame.class);
+    }
+
+    @Test
+    void whenCwndReachedSendingProbeLeadsToSinglePing() {
+        // When
+        int currentCwndRemaining = 16;
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 0, null, new byte[0]);
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(PingFrame.class);
+
+        // And
+        QuicPacket another = oneRttPacketAssembler.assemble(currentCwndRemaining, 0, null, new byte[0]);
+        assertThat(another).isNull();
+    }
+
+    @Test
+    void whenAddingProbeToNonEmptySendQueueAndCwndIsLargeEnoughTheNextPacketIsSent() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(60, 0, null, new byte[0]);
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(MaxDataFrame.class);
+    }
+
+    @Test
+    void whenProbeContainsDataThisIsSendInsteadOfQueuedFrames() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[100])));
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 0, null, new byte[0]);
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(CryptoFrame.class);
     }
 }
