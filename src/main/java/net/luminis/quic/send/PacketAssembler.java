@@ -28,14 +28,18 @@ import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Assembles quic packets, based on "send requests" that are previously queued.
  *
  */
 public class PacketAssembler {
+
+    protected final static Consumer<QuicFrame> EMPTY_CALLBACK = f -> {};
 
     protected final Version quicVersion;
     protected final EncryptionLevel level;
@@ -60,21 +64,26 @@ public class PacketAssembler {
      * @param destinationConnectionId
      * @return
      */
-    Optional<QuicPacket> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
+
+        QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, null);
+        List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
         if (requestQueue.mustSendAck()) {
             ackFrame = ackGenerator.generateAckForPacket(packetNumber);
+            packet.addFrame(ackFrame);
+            callbacks.add(EMPTY_CALLBACK);
         }
-        QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, ackFrame);
 
         if (ackFrame == null && requestQueue.hasRequests()) {
             // If there is no explicit ack, but there is something to send, ack should always be included   // TODO: wrong, only if enough size
             if (ackGenerator.hasAckToSend()) {
                 ackFrame = ackGenerator.generateAckForPacket(packetNumber);
                 packet.addFrame(ackFrame);
+                callbacks.add(EMPTY_CALLBACK);
             }
         }
 
@@ -82,10 +91,10 @@ public class PacketAssembler {
             // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
             packet.addFrames(probeData);
-            return Optional.of(packet);
+            return Optional.of(new SendItem(packet));
         }
 
-        int estimatedSize = packet.estimateLength();   // TODO: if larger than remaining, or even then remaining - x, abort.
+        int estimatedSize = packet.estimateLength();
         Optional<SendRequest> next;
         while ((next = requestQueue.next(remaining - estimatedSize)).isPresent()) {
             QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
@@ -97,19 +106,35 @@ public class PacketAssembler {
             }
             estimatedSize += nextFrame.getBytes().length;
             packet.addFrame(nextFrame);
+            callbacks.add(next.get().getLostCallback());
         }
 
         if (requestQueue.hasProbe() && packet.getFrames().isEmpty()) {
             requestQueue.getProbe();
             packet.addFrame(new PingFrame());
+            callbacks.add(EMPTY_CALLBACK);
         }
 
         if (packet.getFrames().size() > 0) {
-            return Optional.of(packet);
+            return Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
         }
         else {
             return Optional.empty();
         }
+    }
+
+    private Consumer<QuicPacket> createPacketLostCallback(QuicPacket packet, List<Consumer<QuicFrame>> callbacks) {
+        if (packet.getFrames().size() != callbacks.size()) {
+            throw new IllegalStateException();
+        }
+        return lostPacket -> {
+            for (int i = 0; i < callbacks.size(); i++) {
+                if (callbacks.get(i) != EMPTY_CALLBACK) {
+                    QuicFrame lostFrame = lostPacket.getFrames().get(i);
+                    callbacks.get(i).accept(lostFrame);
+                }
+            }
+        };
     }
 
     protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
