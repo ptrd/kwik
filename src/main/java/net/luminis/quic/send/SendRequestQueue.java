@@ -25,7 +25,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class SendRequestQueue {
@@ -34,8 +35,8 @@ public class SendRequestQueue {
     private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile Instant nextAckTime;
 
-    public void addRequest(QuicFrame fixedFrame) {
-        requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame));
+    public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
+        requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
     }
 
     public void addAckRequest() {
@@ -72,44 +73,34 @@ public class SendRequestQueue {
     }
 
     /**
-     *
      * @param frameSupplier
      * @param estimatedSize   The minimum size of the frame that the supplier can produce. When the supplier is
      *                        requested to produce a frame of that size, it must return a frame of the size or smaller.
      *                        This leaves room for the caller to handle uncertainty of how large the frame will be,
      *                        for example due to a var-length int value that may be larger at the moment the frame
-     *                        must be produced than the actual value when the request is queued.
+     * @param lostCallback
      */
-    public void addRequest(Function<Integer, QuicFrame> frameSupplier, int estimatedSize) {
-        requestQueue.add(new SendRequest(estimatedSize, frameSupplier));
+    public void addRequest(Function<Integer, QuicFrame> frameSupplier, int estimatedSize, Consumer<QuicFrame> lostCallback) {
+        requestQueue.add(new SendRequest(estimatedSize, frameSupplier, lostCallback));
     }
 
     public boolean hasRequests() {
         return !requestQueue.isEmpty();
     }
     
-    public Function<Integer, QuicFrame> next(int maxFrameLength) {
-        if (maxFrameLength < 1) {  // Minimum frame size is 1 indeed: a frame may be just a type field.
+    public Optional<SendRequest> next(int maxFrameLength) {
+        if (maxFrameLength < 1) {  // Minimum frame size is 1: some frames (e.g. ping) are just a type field.
             // Forget it
-            return null;
+            return Optional.empty();
         }
         for (int i = 0; i < requestQueue.size(); i++) {
-            if (requestQueue.get(i).estimatedSize <= maxFrameLength) {
-                return requestQueue.remove(i).frameSupplier;
+            if (requestQueue.get(i).getEstimatedSize() <= maxFrameLength) {
+                return Optional.of(requestQueue.remove(i));
             }
         }
         // Couldn't find one.
-        return null;
+        return Optional.empty();
     }
 
-    static class SendRequest {
-        int estimatedSize;
-        Function<Integer, QuicFrame> frameSupplier;
-
-        public SendRequest(int estimatedSize, Function<Integer, QuicFrame> frameSupplier) {
-            this.estimatedSize = estimatedSize;
-            this.frameSupplier = frameSupplier;
-        }
-    }
 }
 

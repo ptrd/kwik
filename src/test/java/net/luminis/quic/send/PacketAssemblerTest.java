@@ -25,15 +25,12 @@ import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import javax.crypto.Cipher;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -94,7 +91,7 @@ class PacketAssemblerTest {
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[7], true), 4 + 7);
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[7], true), 4 + 7, null);
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, destCid).get();
@@ -134,7 +131,7 @@ class PacketAssemblerTest {
         // When
         sendRequestQueue.addAckRequest(0);
         sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true),    // Stream length will be > 63, so 2 bytes for length field
-                (3 + 2) + 1);  // Send at least 1 byte of data
+                (3 + 2) + 1, null);  // Send at least 1 byte of data
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]).get();
@@ -153,9 +150,9 @@ class PacketAssemblerTest {
     @Test
     void sendMultipleFrames() {
         // When
-        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l));   // 10 bytes
-        sendRequestQueue.addRequest(new MaxDataFrame(0x05000000000000l));              //  9 bytes
-        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true), (3 + 2) + 1);  // Stream length will be > 63, so 2 bytes
+        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l), null);   // 10 bytes
+        sendRequestQueue.addRequest(new MaxDataFrame(0x05000000000000l), null);              //  9 bytes
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true), (3 + 2) + 1, null);  // Stream length will be > 63, so 2 bytes
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]).get();
@@ -174,11 +171,11 @@ class PacketAssemblerTest {
         int remainingCwndSize = 25;  // Which leaves room for approx 7 bytes payload.
 
         // When
-        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l));  // 10 bytes frame length
-        sendRequestQueue.addRequest(new DataBlockedFrame(60));  // 2 bytes frame length
+        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l), null);  // 10 bytes frame length
+        sendRequestQueue.addRequest(new DataBlockedFrame(60), null);  // 2 bytes frame length
         sendRequestQueue.addRequest(maxSize ->
                         new StreamFrame(0, new byte[Integer.min(maxSize, 63) - (3 + 1)], true),
-                        5);
+                        5, null);
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(remainingCwndSize, 0, new byte[0], new byte[0]).get();
@@ -195,7 +192,7 @@ class PacketAssemblerTest {
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (3 + (maxSize < 64? 1: 2))]), (3 + 2) + 1);
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (3 + (maxSize < 64? 1: 2))]), (3 + 2) + 1, null);
 
         // Then
         QuicPacket packet = handshakePacketAssembler.assemble(12000, 0, srcCid, destCid).get();
@@ -216,7 +213,7 @@ class PacketAssemblerTest {
         initialPacketAssembler.setInitialToken(new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f });
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234);
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234, null);
 
         // Then
         QuicPacket packet = initialPacketAssembler.assemble(12000, 0, srcCid, destCid).get();
@@ -239,7 +236,7 @@ class PacketAssemblerTest {
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234);
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234, null);
 
         // Then
         QuicPacket packet = initialPacketAssembler.assemble(12000, 0, srcCid, destCid).get();
@@ -283,7 +280,7 @@ class PacketAssemblerTest {
         sendRequestQueue.addAckRequest(ackDelay);
 
         // Then
-        QuicPacket firstCheck = oneRttPacketAssembler.assemble(12000, 0, null, new byte[]{ (byte) 0xdc, 0x1d });
+        Optional<QuicPacket> firstCheck = oneRttPacketAssembler.assemble(12000, 0, null, new byte[]{ (byte) 0xdc, 0x1d });
 
         // When
         Thread.sleep(ackDelay);
@@ -306,7 +303,7 @@ class PacketAssemblerTest {
         oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37);
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37, null);
 
         // Then
         QuicPacket packet = oneRttPacketAssembler.assemble(12000, 0, null, new byte[0]).get();
@@ -352,7 +349,7 @@ class PacketAssemblerTest {
     @Test
     void whenCwndReachedNoDataIsSent() {
         // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
         int currentCwndRemaining = 16;
 
         // Then
@@ -377,7 +374,7 @@ class PacketAssemblerTest {
     void whenCwndReachedSendingProbeLeadsToSinglePing() {
         // When
         int currentCwndRemaining = 16;
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
         sendRequestQueue.addProbeRequest();
 
         // Then
@@ -395,7 +392,7 @@ class PacketAssemblerTest {
     @Test
     void whenAddingProbeToNonEmptySendQueueAndCwndIsLargeEnoughTheNextPacketIsSent() {
         // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
         sendRequestQueue.addProbeRequest();
 
         // Then
@@ -409,7 +406,7 @@ class PacketAssemblerTest {
     @Test
     void whenProbeContainsDataThisIsSendInsteadOfQueuedFrames() {
         // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000));
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
         sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[100])));
 
         // Then
