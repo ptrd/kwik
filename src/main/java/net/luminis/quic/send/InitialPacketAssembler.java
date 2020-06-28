@@ -26,6 +26,8 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.util.Optional;
+
 
 /**
  * Assembles initial packets, based on "send requests" that are previously queued.
@@ -42,13 +44,15 @@ public class InitialPacketAssembler extends PacketAssembler {
     }
 
     @Override
-    QuicPacket assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        QuicPacket packet = super.assemble(remainingCwndSize, packetNumber, sourceConnectionId, destinationConnectionId);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-14
-        // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to
-        // at least 1200 bytes, by adding PADDING frames to the Initial packet or ..."
-        int requiredPadding = 1200 - packet.estimateLength();
-        packet.addFrame(new Padding(requiredPadding));
+    Optional<QuicPacket> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        Optional<QuicPacket> packet = super.assemble(remainingCwndSize, packetNumber, sourceConnectionId, destinationConnectionId);
+        packet.ifPresent(initialPacket -> {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-14
+            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to
+            // at least 1200 bytes, by adding PADDING frames to the Initial packet or ..."
+            int requiredPadding = 1200 - initialPacket.estimateLength();
+            initialPacket.addFrame(new Padding(requiredPadding));
+        });
         return packet;
     }
 

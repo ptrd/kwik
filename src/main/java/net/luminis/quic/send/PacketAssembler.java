@@ -25,12 +25,11 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
-import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 
 import java.util.List;
-import java.util.function.Function;
+import java.util.Optional;
 
 /**
  * Assembles quic packets, based on "send requests" that are previously queued.
@@ -61,7 +60,7 @@ public class PacketAssembler {
      * @param destinationConnectionId
      * @return
      */
-    QuicPacket assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<QuicPacket> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
 
         AckFrame ackFrame = null;
@@ -83,13 +82,13 @@ public class PacketAssembler {
             // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
             packet.addFrames(probeData);
-            return packet;
+            return Optional.of(packet);
         }
 
         int estimatedSize = packet.estimateLength();   // TODO: if larger than remaining, or even then remaining - x, abort.
-        Function<Integer, QuicFrame> next;
-        while ((next = requestQueue.next(remaining - estimatedSize)) != null) {
-            QuicFrame nextFrame = next.apply(remaining - estimatedSize);
+        Optional<SendRequest> next;
+        while ((next = requestQueue.next(remaining - estimatedSize)).isPresent()) {
+            QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
             if (nextFrame == null) {
                 System.out.println("ERROR: supplier does not produce frame!");
             }
@@ -106,10 +105,10 @@ public class PacketAssembler {
         }
 
         if (packet.getFrames().size() > 0) {
-            return packet;
+            return Optional.of(packet);
         }
         else {
-            return null;
+            return Optional.empty();
         }
     }
 
