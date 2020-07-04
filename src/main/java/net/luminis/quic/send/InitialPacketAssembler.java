@@ -44,8 +44,8 @@ public class InitialPacketAssembler extends PacketAssembler {
     }
 
     @Override
-    Optional<SendItem> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        Optional<SendItem> packet = super.assemble(remainingCwndSize, packetNumber, sourceConnectionId, destinationConnectionId);
+    Optional<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        Optional<SendItem> packet = super.assemble(remainingCwndSize, sourceConnectionId, destinationConnectionId);
         packet.ifPresent(sendItem -> {
             QuicPacket initialPacket = sendItem.getPacket();
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-14

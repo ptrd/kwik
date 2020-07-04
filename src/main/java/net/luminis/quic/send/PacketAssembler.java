@@ -46,7 +46,7 @@ public class PacketAssembler {
     protected final int maxPacketSize;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
-
+    protected long nextPacketNumber;
 
     public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
         quicVersion = version;
@@ -59,20 +59,21 @@ public class PacketAssembler {
     /**
      *
      * @param remainingCwndSize
-     * @param packetNumber
      * @param sourceConnectionId        can be null when encryption level is 1-rtt; but not for the other levels; can be empty array though
      * @param destinationConnectionId
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, long packetNumber, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
 
         QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, null);
+        Long packetNumber = null;
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
         if (requestQueue.mustSendAck()) {
+            packetNumber = nextPacketNumber();
             ackFrame = ackGenerator.generateAckForPacket(packetNumber);
             packet.addFrame(ackFrame);
             callbacks.add(EMPTY_CALLBACK);
@@ -81,6 +82,7 @@ public class PacketAssembler {
         if (ackFrame == null && requestQueue.hasRequests()) {
             // If there is no explicit ack, but there is something to send, ack should always be included   // TODO: wrong, only if enough size
             if (ackGenerator.hasAckToSend()) {
+                packetNumber = nextPacketNumber();
                 ackFrame = ackGenerator.generateAckForPacket(packetNumber);
                 packet.addFrame(ackFrame);
                 callbacks.add(EMPTY_CALLBACK);
@@ -116,11 +118,19 @@ public class PacketAssembler {
         }
 
         if (packet.getFrames().size() > 0) {
+            if (packetNumber == null) {
+                packetNumber = nextPacketNumber();
+            }
+            packet.setPacketNumber(packetNumber);
             return Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
         }
         else {
             return Optional.empty();
         }
+    }
+
+    private long nextPacketNumber() {
+        return nextPacketNumber++;
     }
 
     private Consumer<QuicPacket> createPacketLostCallback(QuicPacket packet, List<Consumer<QuicFrame>> callbacks) {
@@ -146,7 +156,6 @@ public class PacketAssembler {
             default:
                 throw new RuntimeException();  // programming error
         }
-
     }
 }
 

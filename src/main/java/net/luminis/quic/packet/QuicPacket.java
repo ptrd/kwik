@@ -391,6 +391,14 @@ abstract public class QuicPacket {
         }
     }
 
+    // TODO: move to constructor once setting pn after packet creation is not used anymore
+    public void setPacketNumber(long pn) {
+        if (pn < 0) {
+            throw new IllegalArgumentException();
+        }
+        packetNumber = pn;
+    }
+
     protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
