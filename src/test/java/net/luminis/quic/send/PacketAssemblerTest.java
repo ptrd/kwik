@@ -25,6 +25,7 @@ import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -39,11 +40,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Percentage.withPercentage;
 import static org.mockito.Mockito.*;
 
-class PacketAssemblerTest {
+class PacketAssemblerTest extends AbstractAssemblerTest {
 
     public static final int MAX_PACKET_SIZE = 1232;
-
-    private static Keys keys;
 
     private SendRequestQueue sendRequestQueue;
     private InitialPacketAssembler initialPacketAssembler;
@@ -55,26 +54,7 @@ class PacketAssemblerTest {
 
     
     @BeforeEach
-    void initKeys() throws Exception {
-        keys = mock(Keys.class);
-        when(keys.getHp()).thenReturn(new byte[16]);
-        when(keys.getWriteIV()).thenReturn(new byte[12]);
-        when(keys.getWriteKey()).thenReturn(new byte[16]);
-        Keys dummyKeys = new Keys(Version.getDefault(), new byte[16], null, mock(Logger.class));
-        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("hp"), new byte[16]);
-        Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
-        when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
-        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("writeKey"), new byte[16]);
-        Cipher wCipher = dummyKeys.getWriteCipher();
-        // The Java implementation of this cipher (GCM), prevents re-use with the same iv.
-        // As various tests often use the same packet numbers (used for creating the nonce), the cipher must be re-initialized for each test.
-        // Still, a consequence is that generatePacketBytes cannot be called twice on the same packet.
-        when(keys.getWriteCipher()).thenReturn(wCipher);
-        when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
-    }
-
-    @BeforeEach
-    void initObjectUnderTeset() {
+    void initObjectUnderTest() {
         sendRequestQueue = new SendRequestQueue();
         initialAckGenerator = new AckGenerator();
         initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), MAX_PACKET_SIZE, sendRequestQueue, initialAckGenerator);
@@ -144,7 +124,7 @@ class PacketAssemblerTest {
             assertThat(frame).isInstanceOf(AckFrame.class);
             assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(10);
         });
-        assertThat(packet.generatePacketBytes(1, keys).length).isEqualTo(MAX_PACKET_SIZE);
+        assertThat(packet.generatePacketBytes(1, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -159,10 +139,10 @@ class PacketAssemblerTest {
         assertThat(packet.getFrames()).hasOnlyElementsOfTypes(MaxStreamDataFrame.class, MaxDataFrame.class, StreamFrame.class);
         assertThat(packet.getFrames()).anySatisfy(frame -> {
             assertThat(frame).isInstanceOf(StreamFrame.class);
-            // Short packet overhead is 18, so available for stream frame: 1232 - 18 - 10 - 9 = 1195. Frame overhead: 5 bytes.
-            assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1190, withPercentage(0.1));
+            // Short packet overhead is 18 to 21, so available for stream frame: 1232 - 21 - 10 - 9 = 1192. Frame overhead: 5 bytes.
+            assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1187, withPercentage(0.1));
         });
-        assertThat(packet.generatePacketBytes(1, keys).length).isEqualTo(MAX_PACKET_SIZE);
+        assertThat(packet.generatePacketBytes(1, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -202,7 +182,7 @@ class PacketAssemblerTest {
         assertThat(packet.getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
-        assertThat(packet.generatePacketBytes(0, keys).length).isEqualTo(MAX_PACKET_SIZE);
+        assertThat(packet.generatePacketBytes(0, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -221,11 +201,10 @@ class PacketAssemblerTest {
         assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
         assertThat(packet.getFrames())
-                .hasSize(2)
-                .hasOnlyElementsOfTypes(CryptoFrame.class, Padding.class);
+                .hasSize(1)
+                .hasOnlyElementsOfTypes(CryptoFrame.class);
         assertThat(((InitialPacket) packet).getToken()).hasSize(16);
         assertThat(packet.generatePacketBytes(0, keys).length)
-                .isGreaterThanOrEqualTo(1200)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
@@ -244,10 +223,9 @@ class PacketAssemblerTest {
         assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
         assertThat(packet.getFrames())
-                .hasSize(2)
-                .hasOnlyElementsOfTypes(CryptoFrame.class, Padding.class);
+                .hasSize(1)
+                .hasOnlyElementsOfTypes(CryptoFrame.class);
         assertThat(packet.generatePacketBytes(0, keys).length)
-                .isGreaterThanOrEqualTo(1200)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
@@ -266,7 +244,6 @@ class PacketAssemblerTest {
                 .hasOnlyElementsOfTypes(AckFrame.class, Padding.class);
         assertThat(packet.getToken()).hasSize(8);
         assertThat(packet.generatePacketBytes(0, keys).length)
-                .isGreaterThanOrEqualTo(1200)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 

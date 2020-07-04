@@ -44,20 +44,6 @@ public class InitialPacketAssembler extends PacketAssembler {
     }
 
     @Override
-    Optional<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        Optional<SendItem> packet = super.assemble(remainingCwndSize, sourceConnectionId, destinationConnectionId);
-        packet.ifPresent(sendItem -> {
-            QuicPacket initialPacket = sendItem.getPacket();
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-14
-            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to
-            // at least 1200 bytes, by adding PADDING frames to the Initial packet or ..."
-            int requiredPadding = 1200 - initialPacket.estimateLength();
-            initialPacket.addFrame(new Padding(requiredPadding));
-        });
-        return packet;
-    }
-
-    @Override
     protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
         return new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, initialToken, frame);
     }

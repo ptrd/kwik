@@ -27,6 +27,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,10 +49,11 @@ public class PacketAssembler {
     protected final AckGenerator ackGenerator;
     protected long nextPacketNumber;
 
+
     public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
         quicVersion = version;
         this.level = level;
-        this.maxPacketSize = maxPacketSize;
+        this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length
         this.requestQueue = requestQueue;
         this.ackGenerator = ackGenerator;
     }
@@ -102,9 +104,11 @@ public class PacketAssembler {
             QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
             if (nextFrame == null) {
                 System.out.println("ERROR: supplier does not produce frame!");
+                throw new IllegalStateException();
             }
             else if (nextFrame.getBytes().length > remaining - estimatedSize) {
                 System.out.println("ERROR: supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (remaining - estimatedSize) + " frame: " + nextFrame);
+                throw new IllegalStateException();
             }
             estimatedSize += nextFrame.getBytes().length;
             packet.addFrame(nextFrame);
@@ -153,6 +157,8 @@ public class PacketAssembler {
                 return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
             case App:
                 return new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
+            case ZeroRTT:
+                return new ZeroRttPacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
             default:
                 throw new RuntimeException();  // programming error
         }
