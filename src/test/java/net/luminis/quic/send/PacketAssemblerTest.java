@@ -478,4 +478,24 @@ class PacketAssemblerTest extends AbstractAssemblerTest {
                 .hasSize(1)
                 .hasOnlyElementsOfType(AckFrame.class);
     }
+
+    @Test
+    void whenAckWasRequestedButIsNotNecessaryAnymoreDoNotSendIt() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addRequest(new StreamFrame(0, new byte[160], false), f -> {});
+
+        // Simulate race condition where ack is picked up by a "normal" send
+        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, null, new byte[0]).get();
+        // Before the ack request was actually queued.
+        sendRequestQueue.addAckRequest(0);
+
+        // Then
+        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, null, new byte[0]);
+        assertThat(secondSendItem).isEmpty();
+
+        assertThat(firstSendItem.getPacket().getFrames())
+                .hasSize(2)
+                .hasAtLeastOneElementOfType(AckFrame.class);
+    }
 }
