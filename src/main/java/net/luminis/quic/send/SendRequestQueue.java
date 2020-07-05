@@ -72,6 +72,15 @@ public class SendRequestQueue {
         return nextAckTime != null && now.isAfter(nextAckTime);
     }
 
+    public Instant getAck() {
+        try {
+            return nextAckTime;
+        }
+        finally {
+            nextAckTime = null;
+        }
+    }
+
     /**
      * @param frameSupplier
      * @param estimatedSize   The minimum size of the frame that the supplier can produce. When the supplier is

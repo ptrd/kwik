@@ -461,4 +461,21 @@ class PacketAssemblerTest extends AbstractAssemblerTest {
         assertThat(packet3.getPacketNumber()).isGreaterThan(packet2.getPacketNumber());
     }
 
+    @Test
+    void whenAckIsSendThenAckSendRequestIsCleared() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest(0);
+
+        // When
+        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, null, new byte[0]).get();
+
+        // Then
+        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, null, new byte[0]);
+        assertThat(secondSendItem).isEmpty();
+
+        assertThat(firstSendItem.getPacket().getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(AckFrame.class);
+    }
 }

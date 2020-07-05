@@ -75,6 +75,7 @@ public class PacketAssembler {
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
         if (requestQueue.mustSendAck()) {
+            requestQueue.getAck();
             packetNumber = nextPacketNumber();
             ackFrame = ackGenerator.generateAckForPacket(packetNumber);
             packet.addFrame(ackFrame);
