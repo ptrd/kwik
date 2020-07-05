@@ -118,10 +118,22 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
         assertThat(datagramLength).isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
+    @Test
+    void whenLevelIsAbandonedNoPacketsAreAssembledForThatLevel() {
+        // Given
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addRequest(new MaxDataFrame(105_000), f -> {});
+
+        // When
+        globalPacketAssembler.stop(PnSpace.Initial);
+
+        // Then
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        assertThat(packets).isEmpty();
+    }
+
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();
         PacketAssembler packetAssember = (PacketAssembler) ((Object[]) packetAssemblers)[level.ordinal()];
         FieldSetter.setField(packetAssember, packetAssember.getClass().getDeclaredField("nextPacketNumber"), pn);
     }
-
 }

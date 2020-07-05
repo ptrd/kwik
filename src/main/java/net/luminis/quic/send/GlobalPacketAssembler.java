@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.AckGenerator;
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.GlobalAckGenerator;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.packet.InitialPacket;
 
@@ -30,7 +27,7 @@ import java.util.*;
 public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
-    private PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
+    private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
 
 
     public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator, int maxPacketSize) {
@@ -53,18 +50,20 @@ public class GlobalPacketAssembler {
         boolean hasInitial = false;
 
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
-        for (EncryptionLevel level: EncryptionLevel.values()) {  // TODO: use array of remaining levels to get rid of initial and handshake when handshake is done
-            Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remainingCwndSize, sourceConnectionId, destinationConnectionId);
-            if (item.isPresent()) {
-                packets.add(item.get());
-                size += item.get().getPacket().estimateLength();
-                if (level == EncryptionLevel.Initial) {
-                    hasInitial = true;
+        for (EncryptionLevel level: EncryptionLevel.values()) {
+            if (packetAssembler[level.ordinal()] != null) {
+                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remainingCwndSize, sourceConnectionId, destinationConnectionId);
+                if (item.isPresent()) {
+                    packets.add(item.get());
+                    size += item.get().getPacket().estimateLength();
+                    if (level == EncryptionLevel.Initial) {
+                        hasInitial = true;
+                    }
                 }
-            }
-            if (size + minPacketSize >= remainingCwndSize) {
-                // Trying a next level to produce a packet is useless
-                break;
+                if (size + minPacketSize >= remainingCwndSize) {
+                    // Trying a next level to produce a packet is useless
+                    break;
+                }
             }
         }
 
@@ -83,5 +82,8 @@ public class GlobalPacketAssembler {
         return packets;
     }
 
+    public void stop(PnSpace pnSpace) {
+        packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()] = null;
+    }
 }
 
