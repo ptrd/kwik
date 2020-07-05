@@ -54,7 +54,10 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
     @Override
     public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
         ackGenerators[pnSpace.ordinal()].process(frame);
+    }
 
+    public AckGenerator getAckGenerator(PnSpace pnSpace) {
+        return ackGenerators[pnSpace.ordinal()];
     }
 }
 

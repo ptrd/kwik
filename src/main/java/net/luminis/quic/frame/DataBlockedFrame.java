@@ -29,6 +29,13 @@ public class DataBlockedFrame extends QuicFrame {
 
     private int streamDataLimit;
 
+    public DataBlockedFrame() {
+    }
+
+    public DataBlockedFrame(int streamDataLimit) {
+        this.streamDataLimit = streamDataLimit;
+    }
+
     public DataBlockedFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
         streamDataLimit = VariableLengthInteger.parse(buffer);
@@ -38,7 +45,10 @@ public class DataBlockedFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(streamDataLimit));
+        buffer.put((byte) 0x14);
+        VariableLengthInteger.encode(streamDataLimit, buffer);
+        return buffer.array();
     }
 
     @Override
