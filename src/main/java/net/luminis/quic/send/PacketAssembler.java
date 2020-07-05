@@ -18,17 +18,18 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.AckGenerator;
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
 
+import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -68,8 +69,7 @@ public class PacketAssembler {
     Optional<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
 
-        QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId, null);
-        Long packetNumber = null;
+        Optional<QuicPacket> packet = Optional.empty();
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
@@ -77,9 +77,9 @@ public class PacketAssembler {
         if (requestQueue.mustSendAck()) {
             requestQueue.getAck();
             if (ackGenerator.hasNewAckToSend()) {
-                packetNumber = nextPacketNumber();
-                ackFrame = ackGenerator.generateAckForPacket(packetNumber);
-                packet.addFrame(ackFrame);
+                packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+                ackFrame = ackGenerator.generateAckForPacket(packet.get().getPacketNumber());
+                packet.get().addFrame(ackFrame);
                 callbacks.add(EMPTY_CALLBACK);
             }
         }
@@ -87,9 +87,9 @@ public class PacketAssembler {
         if (ackFrame == null && requestQueue.hasRequests()) {
             // If there is no explicit ack, but there is something to send, ack should always be included   // TODO: wrong, only if enough size
             if (ackGenerator.hasAckToSend()) {
-                packetNumber = nextPacketNumber();
-                ackFrame = ackGenerator.generateAckForPacket(packetNumber);
-                packet.addFrame(ackFrame);
+                packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+                ackFrame = ackGenerator.generateAckForPacket(packet.get().getPacketNumber());
+                packet.get().addFrame(ackFrame);
                 callbacks.add(EMPTY_CALLBACK);
             }
         }
@@ -97,47 +97,50 @@ public class PacketAssembler {
         if (requestQueue.hasProbeWithData()) {
             // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
-            packet.addFrames(probeData);
-            return Optional.of(new SendItem(packet));
+            packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+            packet.get().addFrames(probeData);
+            return Optional.of(new SendItem(packet.get()));
         }
 
-        int estimatedSize = packet.estimateLength();
-        Optional<SendRequest> next;
-        while ((next = requestQueue.next(remaining - estimatedSize)).isPresent()) {
-            QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
-            if (nextFrame == null) {
-                System.out.println("ERROR: supplier does not produce frame!");
-                throw new IllegalStateException();
+        if (requestQueue.hasRequests()) {
+            // Must create packet here, to have an initial estimate of packet header overhad
+            packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+            int estimatedSize = packet.get().estimateLength();
+            Optional<SendRequest> next;
+            while ((next = requestQueue.next(remaining - estimatedSize)).isPresent()) {
+                QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
+                if (nextFrame == null) {
+                    throw new RuntimeException("supplier does not produce frame");
+                } else if (nextFrame.getBytes().length > remaining - estimatedSize) {
+                    throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (remaining - estimatedSize) + " frame: " + nextFrame);
+                }
+                estimatedSize += nextFrame.getBytes().length;
+                packet.get().addFrame(nextFrame);
+                callbacks.add(next.get().getLostCallback());
             }
-            else if (nextFrame.getBytes().length > remaining - estimatedSize) {
-                System.out.println("ERROR: supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (remaining - estimatedSize) + " frame: " + nextFrame);
-                throw new IllegalStateException();
+            if (packet.get().getFrames().isEmpty()) {
+                // Nothing could be added, discard packet and mark packet number as not used
+                packet = Optional.empty();
+                restorePacketNumber();
             }
-            estimatedSize += nextFrame.getBytes().length;
-            packet.addFrame(nextFrame);
-            callbacks.add(next.get().getLostCallback());
         }
 
-        if (requestQueue.hasProbe() && packet.getFrames().isEmpty()) {
+        if (requestQueue.hasProbe() && packet.isEmpty()) {
+            packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             requestQueue.getProbe();
-            packet.addFrame(new PingFrame());
+            packet.get().addFrame(new PingFrame());
             callbacks.add(EMPTY_CALLBACK);
         }
 
-        if (packet.getFrames().size() > 0) {
-            if (packetNumber == null) {
-                packetNumber = nextPacketNumber();
-            }
-            packet.setPacketNumber(packetNumber);
-            return Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
-        }
-        else {
-            return Optional.empty();
-        }
+        return packet.map(p -> new SendItem(p, createPacketLostCallback(p, callbacks)));
     }
 
-    private long nextPacketNumber() {
+    protected long nextPacketNumber() {
         return nextPacketNumber++;
+    }
+
+    protected void restorePacketNumber() {
+        nextPacketNumber--;
     }
 
     private Consumer<QuicPacket> createPacketLostCallback(QuicPacket packet, List<Consumer<QuicFrame>> callbacks) {
@@ -155,16 +158,22 @@ public class PacketAssembler {
     }
 
     protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
+        QuicPacket packet;
         switch (level) {
             case Handshake:
-                return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
+                packet = new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
+                break;
             case App:
-                return new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
+                packet = new ShortHeaderPacket(quicVersion, destinationConnectionId, frame);
+                break;
             case ZeroRTT:
-                return new ZeroRttPacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
+                packet = new ZeroRttPacket(quicVersion, sourceConnectionId, destinationConnectionId, frame);
+                break;
             default:
                 throw new RuntimeException();  // programming error
         }
+        packet.setPacketNumber(nextPacketNumber());
+        return packet;
     }
 }
 
