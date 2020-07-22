@@ -16,22 +16,27 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
+import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.Version;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
+import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsState;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ConnectionSecrets {
+
+    private TlsConstants.CipherSuite selectedCipherSuite;
 
     enum NodeRole {
         Client,
@@ -43,6 +48,12 @@ public class ConnectionSecrets {
             (byte) 0xc3, (byte) 0xee, (byte) 0xf7, (byte) 0x12, (byte) 0xc7, (byte) 0x2e, (byte) 0xbb, (byte) 0x5a,
             (byte) 0x11, (byte) 0xa7, (byte) 0xd2, (byte) 0x43, (byte) 0x2b, (byte) 0xb4, (byte) 0x63, (byte) 0x65,
             (byte) 0xbe, (byte) 0xf9, (byte) 0xf5, (byte) 0x02 };
+
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.2
+    public static final byte[] STATIC_SALT_DRAFT_29 = new byte[] {
+            (byte) 0xaf, (byte) 0xbf, (byte) 0xec, (byte) 0x28, (byte) 0x99, (byte) 0x93, (byte) 0xd2, (byte) 0x4c,
+            (byte) 0x9e, (byte) 0x97, (byte) 0x86, (byte) 0xf1, (byte) 0x9c, (byte) 0x61, (byte) 0x11, (byte) 0xe0,
+            (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
 
     private final Version quicVersion;
     private Logger log;
@@ -80,7 +91,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = STATIC_SALT_DRAFT_23;
+        byte[] initialSalt = quicVersion.before(Version.IETF_draft_29)? STATIC_SALT_DRAFT_23: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);
@@ -95,14 +106,30 @@ public class ConnectionSecrets {
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
 
-    public synchronized void computeHandshakeSecrets(TlsState tlsState) {
-        Keys handshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
-        handshakeSecrets.computeHandshakeKeys(tlsState);
-        clientSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
+    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
+        Keys clientHandshakeSecrets;
+        Keys serverHandshakeSecrets;
+        if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
+            clientHandshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
+            serverHandshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
+        }
+        else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
+            clientHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Client, log);
+            serverHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Server, log);
+        }
+        else {
+            throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
+        }
+        clientSecrets[level.ordinal()] = clientHandshakeSecrets;
+        serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+    }
 
-        handshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
-        handshakeSecrets.computeHandshakeKeys(tlsState);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()] = handshakeSecrets;
+    public synchronized void computeHandshakeSecrets(TlsState tlsState, TlsConstants.CipherSuite selectedCipherSuite) {
+        this.selectedCipherSuite = selectedCipherSuite;
+        createKeys(EncryptionLevel.Handshake, selectedCipherSuite);
+
+        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
@@ -110,14 +137,11 @@ public class ConnectionSecrets {
     }
 
     public synchronized void computeApplicationSecrets(TlsState tlsState) {
-        Keys applicationSecrets = new Keys(quicVersion, NodeRole.Client, log);
-        applicationSecrets.computeApplicationKeys(tlsState);
-        clientSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
+        createKeys(EncryptionLevel.App, selectedCipherSuite);
 
-        applicationSecrets = new Keys(quicVersion, NodeRole.Server, log);
-        applicationSecrets.computeApplicationKeys(tlsState);
-        serverSecrets[EncryptionLevel.App.ordinal()] = applicationSecrets;
-        
+        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
+
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
         }

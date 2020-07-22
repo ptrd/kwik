@@ -19,17 +19,11 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
-import javax.crypto.*;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -211,15 +205,7 @@ abstract public class QuicPacket {
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample, 0, 16);
 
-        Cipher hpCipher = secrets.getHeaderProtectionCipher();
-        byte[] mask;
-        try {
-            mask = hpCipher.doFinal(sample);
-        } catch (IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-        return mask;
+        return secrets.createHeaderProtectionMask(sample);
     }
 
     byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) {
@@ -241,18 +227,7 @@ abstract public class QuicPacket {
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
-        Cipher aeadCipher = secrets.getWriteCipher();
-        SecretKeySpec secretKey = secrets.getWriteKeySpec();
-        try {
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
-            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
-            aeadCipher.updateAAD(associatedData);
-            byte[] cipherText = aeadCipher.doFinal(message);
-            return cipherText;
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException(e);
-        }
+        return secrets.aeadEncrypt(associatedData, message, nonce);
     }
 
     byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) throws DecryptionException {
@@ -266,19 +241,7 @@ abstract public class QuicPacket {
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
-        SecretKeySpec secretKey = secrets.getWriteKeySpec();
-        Cipher aeadCipher = secrets.getWriteCipher();
-        try {
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
-            aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
-            aeadCipher.updateAAD(associatedData);
-            return aeadCipher.doFinal(message);
-        } catch (AEADBadTagException decryptError) {
-            throw new DecryptionException();
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
+        return secrets.aeadDecrypt(associatedData, message, nonce);
     }
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {

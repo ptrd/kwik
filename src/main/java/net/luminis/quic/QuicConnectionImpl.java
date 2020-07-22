@@ -21,6 +21,8 @@ package net.luminis.quic;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.cid.SourceConnectionIdRegistry;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -30,6 +32,7 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.*;
+import net.luminis.tls.extension.Extension;
 
 import java.io.IOException;
 import java.net.*;
@@ -57,6 +60,8 @@ import static net.luminis.tls.Tls13.generateKeys;
  * Creates and maintains a QUIC connection with a QUIC server.
  */
 public class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame> {
+
+    private final List<TlsConstants.CipherSuite> cipherSuites;
 
     enum Status {
         Idle,
@@ -108,7 +113,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private final GlobalAckGenerator ackGenerator;
 
 
-    private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength) throws UnknownHostException, SocketException {
+    private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -116,6 +121,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         this.sessionTicket = sessionTicket;
         this.quicVersion = quicVersion;
         this.log = log;
+        this.cipherSuites = cipherSuites;
 
         socket = new DatagramSocket();
         ackGenerator = new GlobalAckGenerator();
@@ -169,6 +175,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         if (transportParameters != null) {
             this.transportParams = transportParameters;
         }
+        this.transportParams.setInitialSourceConnectionId(sourceConnectionIds.getCurrent());
         if (earlyData == null) {
             earlyData = Collections.emptyList();
         }
@@ -214,11 +221,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         if (!streamEarlyDataList.isEmpty()) {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
-            setPeerTransportParameters(rememberedTransportParameters);
+            setPeerTransportParameters(rememberedTransportParameters, false);  // Do not validate TP, as these are yet incomplete.
             // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.5
             // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
             //   transport parameter supplied by the server"
-            long earlyDataSizeLeft = sessionTicket.getEarlyDataMaxSize();
+            long earlyDataSizeLeft = sessionTicket.getInitialMaxData();
 
             List<QuicStream> earlyDataStreams = new ArrayList<>();
             for (StreamEarlyData streamEarlyData: streamEarlyDataList) {
@@ -295,7 +302,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
-        byte[] clientHello = createClientHello(host, publicKey, applicationProtocol, withEarlyData);
+        byte[] clientHello = createClientHello(host, cipherSuites, publicKey, applicationProtocol, withEarlyData);
         tlsState.clientHelloSend(privateKey, clientHello);
         connectionSecrets.computeEarlySecrets(tlsState);
 
@@ -535,9 +542,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
 
-    private byte[] createClientHello(String host, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
+    private byte[] createClientHello(String host, List<TlsConstants.CipherSuite> supportedCiphers, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
         boolean compatibilityMode = false;
-        byte[][] supportedCiphers = new byte[][]{ TlsConstants.TLS_AES_128_GCM_SHA256 };
 
         List<Extension> quicExtensions = new ArrayList<>();
         quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
@@ -619,6 +625,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 token = packet.getRetryToken();
                 byte[] destConnectionId = packet.getSourceConnectionId();
                 destConnectionIds.replaceInitialConnectionId(destConnectionId);
+                destConnectionIds.setRetrySourceConnectionId(destConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(destConnectionId));
                 generateInitialKeys();
 
@@ -883,6 +890,15 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
+        setPeerTransportParameters(transportParameters, true);
+    }
+
+    private void setPeerTransportParameters(TransportParameters transportParameters, boolean validate) {
+        if (validate) {
+            if (!verifyConnectionIds(transportParameters)) {
+                return;
+            }
+        }
         peerTransportParams = transportParameters;
         if (flowController == null) {
             flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
@@ -906,21 +922,52 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
         if (processedRetryPacket) {
-            if (transportParameters.getOriginalConnectionId() == null ||
-                    ! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalConnectionId())) {
+            if (transportParameters.getRetrySourceConnectionId() == null ||
+                    ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), transportParameters.getRetrySourceConnectionId())) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
         else {
-            if (transportParameters.getOriginalConnectionId() != null) {
+            if (transportParameters.getRetrySourceConnectionId() != null) {
                 signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
             }
         }
     }
 
+    private boolean verifyConnectionIds(TransportParameters transportParameters) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
+        // "An endpoint MUST treat absence of the initial_source_connection_id
+        //   transport parameter from either endpoint or absence of the
+        //   original_destination_connection_id transport parameter from the
+        //   server as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
+            log.error("Missing connection id from server transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+            return false;
+        }
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
+        // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:
+        //   *  a mismatch between values received from a peer in these transport parameters and the value sent in the
+        //      corresponding Destination or Source Connection ID fields of Initial packets."
+        if (! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
+            log.error("Source connection id does not match corresponding transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            return false;
+        }
+        if (! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
+            log.error("Original destination connection id does not match corresponding transport parameter");
+            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            return false;
+        }
+
+        return true;
+    }
+
     void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
         log.info("ConnectionError " + transportError);
         // TODO: close connection with a frame type of 0x1c
+        abortConnection(null);
     }
 
     /**
@@ -1108,6 +1155,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         ackProcessors.add(ackProcessor);
     }
 
+    public InetSocketAddress getLocalAddress() {
+        return (InetSocketAddress) socket.getLocalSocketAddress();
+    }
+
+
     public static Builder newBuilder() {
         return new BuilderImpl();
     }
@@ -1115,9 +1167,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     public interface Builder {
         QuicConnectionImpl build() throws SocketException, UnknownHostException;
 
-        Builder connectTimeout​(Duration duration);
+        Builder connectTimeout(Duration duration);
 
-        Builder version​(Version version);
+        Builder version(Version version);
 
         Builder logger(Logger log);
 
@@ -1132,6 +1184,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         Builder connectionIdLength(int length);
 
         Builder initialRtt(int initialRtt);
+
+        Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
     }
 
     private static class BuilderImpl implements Builder {
@@ -1144,6 +1198,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         private Path secretsFile;
         private Integer initialRtt;
         private Integer connectionIdLength;
+        private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1156,16 +1211,19 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             if (initialRtt != null && initialRtt < 1) {
                 throw new IllegalArgumentException("Initial RTT must be larger than 0.");
             }
-            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength);
+            if (cipherSuites.isEmpty()) {
+                cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
+            }
+            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
         }
 
         @Override
-        public Builder connectTimeout​(Duration duration) {
+        public Builder connectTimeout(Duration duration) {
             return this;
         }
 
         @Override
-        public Builder version​(Version version) {
+        public Builder version(Version version) {
             quicVersion = version;
             return this;
         }
@@ -1213,6 +1271,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         @Override
         public Builder initialRtt(int initialRtt) {
             this.initialRtt = initialRtt;
+            return this;
+        }
+
+        @Override
+        public Builder cipherSuite(TlsConstants.CipherSuite cipherSuite) {
+            cipherSuites.add(cipherSuite);
             return this;
         }
     }

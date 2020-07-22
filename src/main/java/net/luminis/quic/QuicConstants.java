@@ -23,7 +23,7 @@ public class QuicConstants {
 
     // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18
     public enum TransportParameterId {
-        original_connection_id(0),
+        original_destination_connection_id (0),
         idle_timeout(1),
         stateless_reset_token(2),
         max_packet_size(3),
@@ -33,11 +33,13 @@ public class QuicConstants {
         initial_max_stream_data_uni(7),
         initial_max_streams_bidi(8),
         initial_max_streams_uni(9),
-        ack_delay_exponent(10),
-        max_ack_delay(11),
-        disable_active_migration(12),
-        preferred_address(13),
-        active_connection_id_limit(14),
+        ack_delay_exponent(0x0a),
+        max_ack_delay(0x0b),
+        disable_active_migration(0x0c),
+        preferred_address(0x0d),
+        active_connection_id_limit(0x0e),
+        initial_source_connection_id(0x0f),
+        retry_source_connection_id(0x10)
         // (65535)
         ;
         public final short value;

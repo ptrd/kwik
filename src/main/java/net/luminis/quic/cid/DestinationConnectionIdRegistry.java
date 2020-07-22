@@ -29,6 +29,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     private final byte[] originalConnectionId;
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
+    private volatile byte[] retrySourceConnectionId;
 
     public DestinationConnectionIdRegistry(Logger log) {
         super(log);
@@ -103,6 +104,14 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         }
 
         return toRetire;
+    }
+
+    public byte[] getRetrySourceConnectionId() {
+        return retrySourceConnectionId;
+    }
+
+    public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
+        this.retrySourceConnectionId = retrySourceConnectionId;
     }
 }
 

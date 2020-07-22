@@ -20,14 +20,15 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Keys;
 import net.luminis.quic.Version;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import javax.crypto.Cipher;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +63,9 @@ public class AbstractAssemblerTest {
         // Still, a consequence is that generatePacketBytes cannot be called twice on the same packet.
         when(keys.getWriteCipher()).thenReturn(wCipher);
         when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
+
+        when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
+        when(keys.createHeaderProtectionMask(any())).thenCallRealMethod();
 
         return keys;
     }

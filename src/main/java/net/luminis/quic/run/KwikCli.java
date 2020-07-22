@@ -24,6 +24,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.*;
@@ -67,6 +68,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 is only cipher suite");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -134,6 +136,10 @@ public class KwikCli {
             return;
         }
 
+        if (cmd.hasOption("chacha20")) {
+            builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+        }
+
         Logger logger = null;
         if (cmd.hasOption("L")) {
             String logFilename = cmd.getOptionValue("L");
@@ -190,7 +196,7 @@ public class KwikCli {
         if (cmd.hasOption("reservedVersion")) {
             quicVersion = Version.reserved_1;
         }
-        builder.version​(quicVersion);
+        builder.version(quicVersion);
 
         String alpn = null;
         if (cmd.hasOption("A")) {
@@ -425,11 +431,6 @@ public class KwikCli {
             httpStream.getOutputStream().close();
         }
 
-        // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {}
-
         if (outputFile != null) {
             FileOutputStream out;
             if (new File(outputFile).isDirectory()) {
@@ -445,6 +446,11 @@ public class KwikCli {
             httpStream.getInputStream().transferTo(out);
         }
         else {
+            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {}
+
             BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
             String line;
             System.out.println("Server returns: ");

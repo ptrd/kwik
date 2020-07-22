@@ -19,6 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 
@@ -41,14 +42,16 @@ import java.util.Arrays;
 public class RetryPacket extends QuicPacket {
 
     public static final int RETRY_INTEGRITY_TAG_LENGTH = 16;    // The Retry Integrity Tag is 128 bits.
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8:
-    // "The secret key, K, is 128 bits equal to 0x4d32ecdb2a2133c841e4043df27d4430."
-    public static final byte[] SECRET_KEY = new byte[] { 0x4d, 0x32, (byte) 0xec, (byte) 0xdb, 0x2a, 0x21, 0x33, (byte) 0xc8,
-            0x41, (byte) 0xe4, 0x04, 0x3d, (byte) 0xf2, 0x7d, 0x44, 0x30 };
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8:
-    // "The nonce, N, is 96 bits equal to 0x4d1611d05513a552c587d575."
-    public static final byte[] NONCE = new byte[] { 0x4d, 0x16, 0x11, (byte) 0xd0, 0x55, 0x13, (byte) 0xa5, 0x52,
-            (byte) 0xc5, (byte) 0x87, (byte) 0xd5, 0x75 };
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
+    // "The secret key, K, is 128 bits equal to 0xccce187ed09a09d05728155a6cb96be1."
+    public static final byte[] SECRET_KEY = new byte[] {
+            (byte) 0xcc, (byte) 0xce, (byte) 0x18, (byte) 0x7e, (byte) 0xd0, (byte) 0x9a, (byte) 0x09, (byte) 0xd0,
+            (byte) 0x57, (byte) 0x28, (byte) 0x15, (byte) 0x5a, (byte) 0x6c, (byte) 0xb9, (byte) 0x6b, (byte) 0xe1 };
+    // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
+    // "The nonce, N, is 96 bits equal to 0xe54930f97f2136f0530a8c1c."
+    public static final byte[] NONCE = new byte[] {
+            (byte) 0xe5, (byte) 0x49, (byte) 0x30, (byte) 0xf9, (byte) 0x7f, (byte) 0x21, (byte) 0x36, (byte) 0xf0,
+            (byte) 0x53, (byte) 0x0a, (byte) 0x8c, (byte) 0x1c };
 
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;

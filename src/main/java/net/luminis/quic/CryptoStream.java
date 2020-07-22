@@ -18,9 +18,11 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
+import net.luminis.tls.extension.Extension;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -164,7 +166,8 @@ public class CryptoStream {
         log.debug(this + " Detected " + msg.getClass().getSimpleName());
         if (msg instanceof ServerHello) {
             // Server Hello provides a new secret, so
-            connectionSecrets.computeHandshakeSecrets(tlsState);
+            TlsConstants.CipherSuite selectedCipherSuite = ((ServerHello) msg).getCipherSuite();
+            connectionSecrets.computeHandshakeSecrets(tlsState, selectedCipherSuite);
             connection.hasHandshakeKeys();
         } else if (msg instanceof EncryptedExtensions) {
             for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {

@@ -19,22 +19,22 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import javax.crypto.Cipher;
 import java.nio.ByteBuffer;
-import java.security.interfaces.ECPublicKey;
-import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -56,6 +56,9 @@ class HandshakePacketTest {
         Cipher wCipher = dummyKeys.getWriteCipher();
         when(keys.getWriteCipher()).thenReturn(wCipher);
         when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
+        when(keys.createHeaderProtectionMask(any())).thenCallRealMethod();
+        when(keys.aeadDecrypt(any(), any(), any())).thenCallRealMethod();
+        when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
     }
 
     @Test
@@ -63,7 +66,7 @@ class HandshakePacketTest {
         String data = "e5ff00001b040d0d0d0d040e0e0e0e1b4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195";
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
 
-        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+        HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
         handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4);
     }
 
@@ -72,7 +75,7 @@ class HandshakePacketTest {
         String data = "e5ff00001b 040d0d0d0d0 40e0e0e0e 2b4e6f01d930078872bd5b3208c041a80cab857e6fa776b7fdb3b195".replace(" ", "");
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
 
-        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
+        HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
 
         assertThatThrownBy(
                 () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
