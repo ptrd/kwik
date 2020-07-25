@@ -112,6 +112,11 @@ public class AbstractCongestionController implements CongestionController {
         return congestionWindow;
     }
 
+    @Override
+    public long remainingCwnd() {
+        return congestionWindow - bytesInFlight;
+    }
+
     public void waitForUpdate() throws InterruptedException {
         synchronized (lock) {
             lock.wait();

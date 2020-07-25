@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.send.SenderV2;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -28,9 +29,9 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
 
     private AckGenerator[] ackGenerators;
 
-    public GlobalAckGenerator() {
+    public GlobalAckGenerator(SenderV2 sender) {
         ackGenerators = new AckGenerator[PnSpace.values().length];
-        Arrays.setAll(ackGenerators, i -> new AckGenerator());
+        Arrays.stream(PnSpace.values()).forEach(pnSpace -> ackGenerators[pnSpace.ordinal()] = new AckGenerator(pnSpace, sender));
     }
 
     public boolean hasNewAckToSend(EncryptionLevel level) {

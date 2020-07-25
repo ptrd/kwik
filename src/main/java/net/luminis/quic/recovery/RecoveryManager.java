@@ -26,6 +26,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.send.SenderV2;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -45,7 +46,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
-    private final ProbeSender sender;
+    private final SenderV2 sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
     private int receiverMaxAckDelay;
@@ -56,7 +57,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private volatile boolean firstHandshakeSent = false;
     private volatile boolean hasBeenReset = false;
 
-    public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
+    public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, SenderV2 sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);

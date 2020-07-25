@@ -18,16 +18,14 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
-import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.send.SenderV2;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-
 
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static net.luminis.quic.EncryptionLevel.App;
@@ -38,17 +36,17 @@ public class KeepAliveActor {
     private final Version quicVersion;
     private final int keepAliveTime;
     private final int peerIdleTimeout;
-    private final QuicConnectionImpl connection;
+    private final SenderV2 sender;
     private final Instant started;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final int pingInterval;
     private volatile ScheduledFuture<?> scheduledTask;
 
-    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, QuicConnectionImpl connection) {
+    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, SenderV2 sender) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
         this.peerIdleTimeout = peerIdleTimeout;
-        this.connection = connection;
+        this.sender = sender;
         started = Instant.now();
         pingInterval = peerIdleTimeout / 2;
 
@@ -56,14 +54,8 @@ public class KeepAliveActor {
     }
 
     private void ping() {
-        QuicPacket packet = connection.createPacket(App, new PingFrame(quicVersion));
-        connection.send(packet, "ping");
+        sender.send(new PingFrame(quicVersion), App);
 
-        scheduleNextPing();
-    }
-
-    public void notifyPacketSent() {
-        scheduledTask.cancel(false);
         scheduleNextPing();
     }
 

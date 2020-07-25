@@ -85,5 +85,9 @@ public class GlobalPacketAssembler {
     public void stop(PnSpace pnSpace) {
         packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()] = null;
     }
+
+    public void setInitialToken(byte[] token) {
+        ((InitialPacketAssembler) packetAssembler[EncryptionLevel.Initial.ordinal()]).setInitialToken(token);
+    }
 }
 

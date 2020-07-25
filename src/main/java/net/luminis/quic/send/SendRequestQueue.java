@@ -111,5 +111,10 @@ public class SendRequestQueue {
         return Optional.empty();
     }
 
+    public void clear() {
+        requestQueue.clear();
+        probeQueue.clear();
+        nextAckTime = null;
+    }
 }
 

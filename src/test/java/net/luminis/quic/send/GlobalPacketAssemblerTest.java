@@ -34,6 +34,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
 
@@ -43,7 +44,7 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new GlobalAckGenerator();
+        ackGenerator = new GlobalAckGenerator(mock(SenderV2.class));
         sendRequestQueues = new SendRequestQueue[4];
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue();
