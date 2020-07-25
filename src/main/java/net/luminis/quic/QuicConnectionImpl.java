@@ -381,45 +381,46 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
-        int packetStart = data.position();
-        int packetSize = 0;
         EncryptionLevel highestEncryptionLevelInPacket = null;
 
-        QuicPacket packet;
-        try {
-            packet = parsePacket(data);
-            packetSize = data.position() - packetStart;
-            if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
-                highestEncryptionLevelInPacket = packet.getEncryptionLevel();
+        while (data.remaining() > 0) {
+            try {
+                QuicPacket packet = parsePacket(data);
+                if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
+                    highestEncryptionLevelInPacket = packet.getEncryptionLevel();
+                }
+
+                log.received(timeReceived, datagram, packet);
+                log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+                processPacket(timeReceived, packet);
+            }
+            catch (DecryptionException | MissingKeysException cannotParse) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
+                // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
+                log.error("Discarding packet (" + data.position() + " bytes) that cannot be decrypted (" + cannotParse + ")");
+            }
+            catch (InvalidPacketException invalidPacket) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+                // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
+                log.debug("Dropping invalid packet");
             }
 
-            log.received(timeReceived, datagram, packet);
-            log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
-            processPacket(timeReceived, packet);
-        }
-        catch (DecryptionException | MissingKeysException cannotParse) {
-            packetSize = data.position() - packetStart;
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
-            // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
-            log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
-        }
-        catch (InvalidPacketException invalidPacket) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
-            // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
-            log.debug("Dropping invalid packet");
+            if (data.position() == 0) {
+                // If parsing (or an attempt to parse a) packet does not advance the buffer, there is no point in going on.
+                break;
+            }
+
+            // Make sure the packet starts at the beginning of the buffer (required by parse routines)
+            data = data.slice();
         }
 
-        if (packetSize > 0 && data.position() < data.limit()) {  
-            parsePackets(datagram, timeReceived, data.slice());
-        }
-        else {
-            // Processed all packets in the datagram. Select the "highest" level for ack.
-            if (highestEncryptionLevelInPacket != null)
-                sender.packetProcessed(highestEncryptionLevelInPacket);
-        }
+        // Processed all packets in the datagram. Select the "highest" level for ack.
+        if (highestEncryptionLevelInPacket != null)
+            sender.packetProcessed(highestEncryptionLevelInPacket);
     }
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+        data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
         }

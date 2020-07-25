@@ -150,7 +150,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
-        int startPosition = buffer.position();
+        if (buffer.position() != 0) {
+            // parsePacketNumberAndPayload method requires packet to start at 0.
+            throw new IllegalStateException();
+        }
         if (buffer.remaining() < MIN_PACKET_LENGTH) {
             throw new InvalidPacketException();
         }
@@ -209,7 +212,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
             parsePacketNumberAndPayload(buffer, flags, length, keys, largestPacketNumber, log);
         }
         finally {
-            packetSize = buffer.position() - startPosition;
+            packetSize = buffer.position() - 0;
         }
     }
 

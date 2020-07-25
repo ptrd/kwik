@@ -64,7 +64,10 @@ public class ShortHeaderPacket extends QuicPacket {
         if (buffer.remaining() < 1 + sourceConnectionIdLength) {
             throw new InvalidPacketException();
         }
-        int startPosition = buffer.position();
+        if (buffer.position() != 0) {
+            // parsePacketNumberAndPayload method requires packet to start at 0.
+            throw new IllegalStateException();
+        }
         byte flags = buffer.get();
         checkPacketType(flags);
 
@@ -82,7 +85,7 @@ public class ShortHeaderPacket extends QuicPacket {
             parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), keys, largestPacketNumber, log);
         }
         finally {
-            packetSize = buffer.position() - startPosition;
+            packetSize = buffer.position() - 0;
         }
     }
 
