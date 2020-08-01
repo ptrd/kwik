@@ -343,7 +343,7 @@ public abstract class BaseLogger implements Logger {
                 start = time;
             }
             Duration relativeTime = Duration.between(start, time);
-            return String.format("%d.%03d", relativeTime.getSeconds(), relativeTime.getNano() / 1_000_000);
+            return String.format("%.3f", ((double) relativeTime.toNanos()) / 1000000000);  // Use nano's to get correct rounding to millis
         }
         else {
             LocalTime localTimeNow = LocalTime.from(time.atZone(ZoneId.systemDefault()));

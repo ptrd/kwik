@@ -1,2 +1,2 @@
 #!/bin/sh
-java -jar build/libs/kwik.jar $*
+java -Duser.language=en -Duser.country=US -jar build/libs/kwik.jar $*
