@@ -27,11 +27,13 @@ import java.util.*;
 public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
+    private final int maxPacketSize;
     private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
 
 
     public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator, int maxPacketSize) {
         this.sendRequestQueue = sendRequestQueues;
+        this.maxPacketSize = maxPacketSize;
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
@@ -50,12 +52,16 @@ public class GlobalPacketAssembler {
         boolean hasInitial = false;
 
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
+        int remaining = Integer.min(remainingCwndSize, maxPacketSize);
+
         for (EncryptionLevel level: EncryptionLevel.values()) {
             if (packetAssembler[level.ordinal()] != null) {
-                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remainingCwndSize, sourceConnectionId, destinationConnectionId);
+                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remaining, sourceConnectionId, destinationConnectionId);
                 if (item.isPresent()) {
                     packets.add(item.get());
-                    size += item.get().getPacket().estimateLength();
+                    int packetSize = item.get().getPacket().estimateLength();
+                    size += packetSize;
+                    remaining -= packetSize;
                     if (level == EncryptionLevel.Initial) {
                         hasInitial = true;
                     }

@@ -120,6 +120,26 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
     }
 
     @Test
+    void multiplePacketsMustBeSmallerThenMaxPacketSize() throws Exception {
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[14]), f -> {});
+        for (int i = 0; i < 30; i++) {
+            sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
+            sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[0], true), f -> {});
+        }
+
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+
+        int datagramLength = packets.stream()
+                .mapToInt(p -> {
+                    QuicPacket packet = p.getPacket();
+                    byte[] generatedBytes = packet.generatePacketBytes(packet.getPacketNumber(), levelKeys[packet.getEncryptionLevel().ordinal()]);
+                    return generatedBytes.length;
+                })
+                .sum();
+        assertThat(datagramLength).isLessThanOrEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
     void whenLevelIsAbandonedNoPacketsAreAssembledForThatLevel() {
         // Given
         sendRequestQueues[EncryptionLevel.Initial.ordinal()].addRequest(new MaxDataFrame(105_000), f -> {});
