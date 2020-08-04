@@ -34,6 +34,7 @@ public class SendRequestQueue {
     private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
     private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile Instant nextAckTime;
+    private volatile boolean cleared;
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
         requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
@@ -103,8 +104,19 @@ public class SendRequestQueue {
             return Optional.empty();
         }
         for (int i = 0; i < requestQueue.size(); i++) {
-            if (requestQueue.get(i).getEstimatedSize() <= maxFrameLength) {
-                return Optional.of(requestQueue.remove(i));
+            try {
+                if (requestQueue.get(i).getEstimatedSize() <= maxFrameLength) {
+                    return Optional.of(requestQueue.remove(i));
+                }
+            }
+            catch (java.lang.IndexOutOfBoundsException indexError) {
+                if (cleared) {
+                    // Caused by concurrent clear, don't bother
+                    return Optional.empty();
+                }
+                else {
+                    throw indexError;
+                }
             }
         }
         // Couldn't find one.
@@ -112,6 +124,7 @@ public class SendRequestQueue {
     }
 
     public void clear() {
+        cleared = true;
         requestQueue.clear();
         probeQueue.clear();
         nextAckTime = null;
