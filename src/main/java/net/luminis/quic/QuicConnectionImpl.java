@@ -196,7 +196,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
-                throw new ConnectException("Connection timed out");
+                throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
                 throw new ConnectException("Handshake error");
