@@ -73,8 +73,10 @@ public class SenderV2Impl implements SenderV2 {
     private final GlobalAckGenerator globalAckGenerator;
     private final RecoveryManager recoveryManager;
     private final Thread senderThread;
-    private final Object condition = new Object();
     private ConnectionSecrets connectionSecrets;
+    private final Object condition = new Object();
+    private boolean signalled;
+
     private volatile boolean running;
     private volatile int receiverMaxAckDelay;
     private volatile Instant nextAckTime;
@@ -196,15 +198,22 @@ public class SenderV2Impl implements SenderV2 {
         try {
             running = true;
             while (running) {
-                long timeout = determineMinimalDelay();
+                boolean interrupted = false;
                 synchronized (condition) {
                     try {
-                        condition.wait(timeout);
-                        sendIfAny();
+                        if (! signalled) {
+                            long timeout = determineMinimalDelay();
+                            condition.wait(timeout);
+                        }
+                        signalled = false;
                     }
                     catch (InterruptedException e) {
-                        log.debug("Sender thread is interrupted; shutting down?");
+                        interrupted = true;
+                        log.debug("Sender thread is interrupted; shutting down? " + running);
                     }
+                }
+                if (! interrupted) {
+                    sendIfAny();
                 }
             }
         }
@@ -227,6 +236,7 @@ public class SenderV2Impl implements SenderV2 {
 
     private void wakeUpSenderLoop() {
         synchronized (condition) {
+            signalled = true;
             condition.notify();
         }
     }
