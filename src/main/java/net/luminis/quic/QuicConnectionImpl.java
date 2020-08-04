@@ -966,7 +966,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             log.debug("New generated source connection id", cid.getConnectionId());
             sender.send(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()), App);
         }
-
+        sender.flush();
+        
         return newConnectionIds;
     }
 
