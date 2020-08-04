@@ -62,6 +62,7 @@ public class InteropRunner extends KwikCli {
         String logFile = (logDir.exists()? "/logs/": "./") + "kwik_client.log";
         try {
             logger = new FileLogger(new File(logFile));
+            logger.logInfo(true);
         } catch (IOException e) {
             System.out.println("Cannot open log file " + logFile);
             System.exit(1);
@@ -117,7 +118,6 @@ public class InteropRunner extends KwikCli {
     private static void testTransfer(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         URL url1 = downloadUrls.get(0);
         // logger.logPackets(true);
-        logger.logInfo(true);
         logger.logCongestionControl(true);
         logger.logRecovery(true);
 
@@ -154,7 +154,6 @@ public class InteropRunner extends KwikCli {
         }
         URL url1 = downloadUrls.get(0);
         URL url2 = downloadUrls.get(1);
-        // logger.logPackets(true);
 
         QuicConnection connection = builder.build();
         connection.connect(5_000);
@@ -186,7 +185,6 @@ public class InteropRunner extends KwikCli {
         logger.useRelativeTime(true);
         logger.logRecovery(true);
         logger.logCongestionControl(true);
-        logger.logInfo(true);
         logger.logPackets(true);
 
         for (URL download : downloadUrls) {
@@ -208,7 +206,6 @@ public class InteropRunner extends KwikCli {
     }
 
     private static void testZeroRtt(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
-        logger.logInfo(true);
         logger.logPackets(true);
         logger.logRecovery(true);
         logger.info("Starting first download at " + timeNow());
