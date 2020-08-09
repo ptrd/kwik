@@ -693,6 +693,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         connectionState = Status.Closing;
         streamManager.abortAll();
         send(new ConnectionCloseFrame(quicVersion), f -> {});
+        sender.flush();
 
         int closingPeriod = 3 * sender.getPto();
         log.debug("closing/draining for " + closingPeriod + " ms");
