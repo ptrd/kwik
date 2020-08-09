@@ -35,6 +35,8 @@ public class GlobalPacketAssembler {
         this.sendRequestQueue = sendRequestQueues;
         this.maxPacketSize = maxPacketSize;
 
+        PacketNumberGenerator appSpacePnGenerator = new PacketNumberGenerator();
+
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
             AckGenerator ackGenerator =
@@ -43,13 +45,19 @@ public class GlobalPacketAssembler {
                             // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-17.2.3
                             // "... a client cannot send an ACK frame in a 0-RTT packet, ..."
                             new NullAckGenerator();
-            packetAssembler[levelIndex] =
-                    (level == EncryptionLevel.Initial)?
-                            new InitialPacketAssembler(quicVersion, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator):
-                            new PacketAssembler(quicVersion, level, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator);
+            switch (level) {
+                case ZeroRTT:
+                case App:
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator, appSpacePnGenerator);
+                    break;
+                case Initial:
+                    packetAssembler[levelIndex] = new InitialPacketAssembler(quicVersion, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator);
+                    break;
+                default:
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator);
+            }
         });
     }
-
 
     public List<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         List<SendItem> packets = new ArrayList<>();

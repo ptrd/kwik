@@ -18,26 +18,25 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
+import net.luminis.quic.AckGenerator;
+import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.Version;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
 
-import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Assembles quic packets, based on "send requests" that are previously queued.
- *
+ * Assembles quic packets for a given encryption level, based on "send requests" that are previously queued.
+ * These send request either contain a frame or can produce a frame to be sent.
  */
 public class PacketAssembler {
 
@@ -48,15 +47,21 @@ public class PacketAssembler {
     protected final int maxPacketSize;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
+    private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
 
 
     public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+        this(version, level, maxPacketSize, requestQueue, ackGenerator, new PacketNumberGenerator());
+    }
+
+    public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
         this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length
         this.requestQueue = requestQueue;
         this.ackGenerator = ackGenerator;
+        packetNumberGenerator = pnGenerator;
     }
 
     /**
@@ -136,11 +141,11 @@ public class PacketAssembler {
     }
 
     protected long nextPacketNumber() {
-        return nextPacketNumber++;
+        return packetNumberGenerator.nextPacketNumber();
     }
 
     protected void restorePacketNumber() {
-        nextPacketNumber--;
+        packetNumberGenerator.restorePacketNumber();
     }
 
     private Consumer<QuicPacket> createPacketLostCallback(QuicPacket packet, List<Consumer<QuicFrame>> callbacks) {

@@ -178,7 +178,7 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
 
         // When
         List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
-        List<QuicPacket> packets = sendItems.stream().map(si -> si.getPacket()).collect(Collectors.toList());
+        List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
 
         // Then
         assertThat(packets.get(0).getEncryptionLevel() == EncryptionLevel.ZeroRTT);
