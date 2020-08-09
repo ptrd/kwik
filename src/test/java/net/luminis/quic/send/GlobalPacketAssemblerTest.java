@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -34,7 +35,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
 
@@ -150,6 +153,20 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
         // Then
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
         assertThat(packets).isEmpty();
+    }
+
+    @Test
+    void zeroRttPacketsShouldNeverContainAckFrames() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.App));
+
+        // When
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
+
+        // Then
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        assertThat(packets).hasSize(1);
+        assertThat(packets.get(0).getPacket().getFrames()).doesNotHaveAnyElementsOfTypes(AckFrame.class);
     }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {

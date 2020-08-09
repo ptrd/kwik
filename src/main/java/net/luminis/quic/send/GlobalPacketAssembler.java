@@ -37,7 +37,12 @@ public class GlobalPacketAssembler {
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
-            AckGenerator ackGenerator = globalAckGenerator.getAckGenerator(level.relatedPnSpace());
+            AckGenerator ackGenerator =
+                    (level != EncryptionLevel.ZeroRTT)?
+                            globalAckGenerator.getAckGenerator(level.relatedPnSpace()):
+                            // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-17.2.3
+                            // "... a client cannot send an ACK frame in a 0-RTT packet, ..."
+                            new NullAckGenerator();
             packetAssembler[levelIndex] =
                     (level == EncryptionLevel.Initial)?
                             new InitialPacketAssembler(quicVersion, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator):
