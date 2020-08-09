@@ -32,6 +32,7 @@ import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -167,6 +168,22 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
         assertThat(packets).hasSize(1);
         assertThat(packets.get(0).getPacket().getFrames()).doesNotHaveAnyElementsOfTypes(AckFrame.class);
+    }
+
+    @Test
+    void zeroRttAndOneRttShouldNotUseSamePacketNumbers() {
+        // Given
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
+
+        // When
+        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<QuicPacket> packets = sendItems.stream().map(si -> si.getPacket()).collect(Collectors.toList());
+
+        // Then
+        assertThat(packets.get(0).getEncryptionLevel() == EncryptionLevel.ZeroRTT);
+        assertThat(packets.get(0).getEncryptionLevel() == EncryptionLevel.App);
+        assertThat(packets.get(1).getPacketNumber()).isGreaterThan(packets.get(0).getPacketNumber());
     }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
