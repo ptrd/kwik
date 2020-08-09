@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Percentage.withPercentage;
 import static org.mockito.Mockito.*;
 
-class PacketAssemblerTest extends AbstractAssemblerTest {
+class PacketAssemblerTest extends AbstractSenderTest {
 
     public static final int MAX_PACKET_SIZE = 1232;
 

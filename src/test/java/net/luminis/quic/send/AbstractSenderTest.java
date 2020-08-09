@@ -32,7 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class AbstractAssemblerTest {
+public class AbstractSenderTest {
 
     public static final int MAX_PACKET_SIZE = 1232;
 
@@ -47,7 +47,7 @@ public class AbstractAssemblerTest {
         }
     }
 
-    Keys createKeys() throws Exception {
+    protected Keys createKeys() throws Exception {
         Keys keys = mock(Keys.class);
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);

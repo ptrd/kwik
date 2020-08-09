@@ -18,24 +18,27 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.frame.DataBlockedFrame;
+import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.ShortHeaderPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
-class SenderV2ImplTest {
+class SenderV2ImplTest extends AbstractSenderTest {
 
     private SenderV2Impl sender;
     private GlobalPacketAssembler packetAssembler;
@@ -48,8 +51,12 @@ class SenderV2ImplTest {
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
 
+        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        Keys keys = createKeys();
+        when(connectionSecrets.getClientSecrets(any(EncryptionLevel.class))).thenReturn(keys);
+
         sender = new SenderV2Impl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, mock(Logger.class));
-        sender.start(mock(ConnectionSecrets.class));
+        sender.start(connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
@@ -64,5 +71,20 @@ class SenderV2ImplTest {
         Thread.sleep(20);
 
         verify(packetAssembler, times(1)).assemble(anyInt(), any(byte[].class), any(byte[].class));
+    }
+
+    @Test
+    void senderStatisticsShouldWork() throws Exception {
+        ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
+        ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
+        packet1.setPacketNumber(10);
+        sender.send(List.of(new SendItem(packet1)));
+        packet1.setPacketNumber(11);
+        packet2.setPacketNumber(12);
+        sender.send(List.of(new SendItem(packet1), new SendItem(packet2)));
+
+        assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
+        assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
+        assertThat(sender.getStatistics().bytesSent()).isBetween(2200l, 2300l);
     }
 }

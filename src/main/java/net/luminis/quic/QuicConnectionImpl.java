@@ -1001,7 +1001,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     public Statistics getStats() {
-        return null; // TODO sender.getStats();
+        return new Statistics(sender.getStatistics());
     }
 
 

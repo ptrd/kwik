@@ -80,6 +80,9 @@ public class SenderV2Impl implements SenderV2 {
     private volatile boolean running;
     private volatile int receiverMaxAckDelay;
     private volatile Instant nextAckTime;
+    private volatile int datagramsSent;
+    private volatile long bytesSent;
+    private volatile long packetsSent;
 
 
     public SenderV2Impl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -223,7 +226,7 @@ public class SenderV2Impl implements SenderV2 {
         }
     }
 
-    private void sendIfAny() throws IOException {
+    void sendIfAny() throws IOException {
         List<SendItem> items;
         do {
             items = assemblePacket();
@@ -255,7 +258,7 @@ public class SenderV2Impl implements SenderV2 {
         return 5000;
     }
 
-    private void send(List<SendItem> itemsToSend) throws IOException {
+    void send(List<SendItem> itemsToSend) throws IOException {
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
         itemsToSend.stream()
@@ -271,6 +274,9 @@ public class SenderV2Impl implements SenderV2 {
 
         Instant timeSent = Instant.now();
         socket.send(datagram);
+        datagramsSent++;
+        packetsSent += itemsToSend.size();
+        bytesSent += buffer.position();
 
         itemsToSend.stream()
                 .forEach(item -> recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback()));
@@ -300,6 +306,10 @@ public class SenderV2Impl implements SenderV2 {
         else {
             return instant2;
         }
+    }
+
+    public SendStatistics getStatistics() {
+        return new SendStatistics(datagramsSent, packetsSent, bytesSent, recoveryManager.getLost());
     }
 
     public int getPto() {

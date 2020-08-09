@@ -24,7 +24,6 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.recovery.RecoveryManager;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,11 +35,9 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
+class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     private SendRequestQueue[] sendRequestQueues;
     private GlobalAckGenerator ackGenerator;

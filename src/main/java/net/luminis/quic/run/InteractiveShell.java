@@ -75,6 +75,7 @@ public class InteractiveShell {
         commands.put("cid_list", this::printConnectionIds);
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
+        commands.put("statistics", this::printStatistics);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
     }
@@ -335,6 +336,12 @@ public class InteractiveShell {
         }
         else {
             System.out.println("Server transport parameters still unknown (no connection)");
+        }
+    }
+
+    private void printStatistics(String arg) {
+        if (quicConnection != null) {
+            System.out.println(quicConnection.getStats());
         }
     }
 
