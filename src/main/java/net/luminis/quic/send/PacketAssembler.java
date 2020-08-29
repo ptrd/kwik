@@ -65,13 +65,14 @@ public class PacketAssembler {
     }
 
     /**
-     *
+     * Assembles a QUIC packet for the encryption level handled by this instance.
      * @param remainingCwndSize
+     * @param availablePacketSize
      * @param sourceConnectionId        can be null when encryption level is 1-rtt; but not for the other levels; can be empty array though
      * @param destinationConnectionId
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
 
         Optional<QuicPacket> packet = Optional.empty();
@@ -102,6 +103,10 @@ public class PacketAssembler {
         if (requestQueue.hasProbeWithData()) {
             // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
+            // But it is limited by max packet length
+            if (probeData.stream().mapToInt(f -> f.getBytes().length).sum() > availablePacketSize) {
+                probeData = List.of(new PingFrame());
+            }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             packet.get().addFrames(probeData);
             return Optional.of(new SendItem(packet.get()));

@@ -186,6 +186,44 @@ class GlobalPacketAssemblerTest extends AbstractAssemblerTest {
         assertThat(packets.get(1).getPacketNumber()).isGreaterThan(packets.get(0).getPacketNumber());
     }
 
+    @Test
+    void totalSizeOfAssembledPacketsShouldBeLessThenMaxPacketSize() {
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[1000], false), f -> {});
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
+
+        // When
+        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        int datagramPayloadSize = packets.stream().mapToInt(p -> p.estimateLength()).sum();
+
+        assertThat(datagramPayloadSize).isLessThanOrEqualTo(MAX_PACKET_SIZE);
+    }
+
+    @Test
+    void whenProbeDataIsLargerThenRemainingCwndItShouldBeUsed() {
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[1000], false), f -> {});
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
+
+        // When
+        List<SendItem> sendItems = globalPacketAssembler.assemble(200, new byte[0], new byte[0]);
+        List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+
+        // Then
+        assertThat(packets).anyMatch(p -> p.getFrames().stream().allMatch(f -> f instanceof CryptoFrame));
+    }
+
+    @Test
+    void whenCwndIsMinimalProbeShouldStillBeSent() {
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
+
+        // When
+        List<SendItem> sendItems = globalPacketAssembler.assemble(0, new byte[0], new byte[0]);
+        List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+
+        // Then
+        assertThat(packets).anyMatch(p -> p.getFrames().stream().allMatch(f -> f instanceof CryptoFrame));
+    }
+
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();
         PacketAssembler packetAssember = (PacketAssembler) ((Object[]) packetAssemblers)[level.ordinal()];

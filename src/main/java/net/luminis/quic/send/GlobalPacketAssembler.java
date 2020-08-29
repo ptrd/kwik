@@ -24,6 +24,9 @@ import net.luminis.quic.packet.InitialPacket;
 
 import java.util.*;
 
+/**
+ * Assembles QUIC packets for sending.
+ */
 public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
@@ -59,6 +62,14 @@ public class GlobalPacketAssembler {
         });
     }
 
+    /**
+     * Assembles packets for sending in one datagram. The total size of the QUIC packets returned will never exceed
+     * max packet size and for packets not containing probes, it will not exceed the remaining congestion window size.
+     * @param remainingCwndSize
+     * @param sourceConnectionId
+     * @param destinationConnectionId
+     * @return
+     */
     public List<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
@@ -69,7 +80,7 @@ public class GlobalPacketAssembler {
 
         for (EncryptionLevel level: EncryptionLevel.values()) {
             if (packetAssembler[level.ordinal()] != null) {
-                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remaining, sourceConnectionId, destinationConnectionId);
+                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remaining, maxPacketSize - size, sourceConnectionId, destinationConnectionId);
                 if (item.isPresent()) {
                     packets.add(item.get());
                     int packetSize = item.get().getPacket().estimateLength();
@@ -79,7 +90,7 @@ public class GlobalPacketAssembler {
                         hasInitial = true;
                     }
                 }
-                if (size + minPacketSize >= remainingCwndSize) {
+                if (remaining < minPacketSize && (maxPacketSize - size) < minPacketSize) {
                     // Trying a next level to produce a packet is useless
                     break;
                 }
