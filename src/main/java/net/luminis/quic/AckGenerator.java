@@ -90,15 +90,23 @@ public class AckGenerator {
      * @return
      */
     public synchronized AckFrame generateAckForPacket(long packetNumber) {
+        AckFrame ackFrame = generateAck();
+        registerAckSendWithPacket(ackFrame, packetNumber);
+        return ackFrame;
+    }
+
+    public synchronized AckFrame generateAck() {
         int delay = 0;
         if (newPacketsToAcknowlegdeSince != null) {
             delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
         }
-        AckFrame ackFrame = new AckFrame(quicVersion, packetsToAcknowledge, delay);
+        return new AckFrame(quicVersion, packetsToAcknowledge, delay);
+    }
+
+    public synchronized void registerAckSendWithPacket(AckFrame ackFrame, long packetNumber) {
         ackSentWithPacket.put(packetNumber, ackFrame);
         newPacketsToAcknowledge = false;
         newPacketsToAcknowlegdeSince = null;
-        return ackFrame;
     }
 }
 
