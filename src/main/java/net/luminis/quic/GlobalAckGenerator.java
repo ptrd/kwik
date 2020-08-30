@@ -34,18 +34,6 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
         Arrays.stream(PnSpace.values()).forEach(pnSpace -> ackGenerators[pnSpace.ordinal()] = new AckGenerator(pnSpace, sender));
     }
 
-    public boolean hasNewAckToSend(EncryptionLevel level) {
-        return ackGenerators[level.relatedPnSpace().ordinal()].hasNewAckToSend();
-    }
-
-    public boolean hasAckToSend(EncryptionLevel level) {
-        return ackGenerators[level.relatedPnSpace().ordinal()].hasAckToSend();
-    }
-
-    public AckFrame generateAckForPacket(EncryptionLevel level, long packetNumber) {
-        return ackGenerators[level.relatedPnSpace().ordinal()].generateAckForPacket(packetNumber);
-    }
-
     public void packetReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
             ackGenerators[packet.getPnSpace().ordinal()].packetReceived(packet);
