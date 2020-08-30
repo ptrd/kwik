@@ -267,7 +267,7 @@ public class QuicStream {
 
         @Override
         public void close() throws IOException {
-            send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame);
+            send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame, true);
         }
 
         private void sendData(byte[] data, int off, int len) {
@@ -277,7 +277,7 @@ public class QuicStream {
             while (remaining > 0) {
                 int bytesInFrame = Math.min(maxDataPerFrame, remaining);
                 StreamFrame frame = new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false);
-                send(frame, this::retransmitStreamFrame);
+                send(frame, this::retransmitStreamFrame, false);
                 remaining -= bytesInFrame;
                 offsetInDataArray += bytesInFrame;
                 currentOffset += bytesInFrame;
@@ -285,7 +285,7 @@ public class QuicStream {
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
-            connection.send(frame, this::retransmitStreamFrame);
+            connection.send(frame, this::retransmitStreamFrame, true);
             log.recovery("Retransmitted lost stream frame " + frame);
         }
     }
@@ -294,8 +294,8 @@ public class QuicStream {
         outputStream.currentOffset = 0;
     }
 
-    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
-        connection.send(frame, lostFrameCallback);
+    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
+        connection.send(frame, lostFrameCallback, flush);
     }
 
     void abort() {

@@ -86,12 +86,12 @@ public class EarlyDataStream extends QuicStream {
     }
 
     @Override
-    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
         if (sendingEarlyData) {
             connection.sendZeroRtt(frame, lostFrameCallback);
         }
         else {
-            connection.send(frame, lostFrameCallback);
+            connection.send(frame, lostFrameCallback, flush);
         }
     }
 

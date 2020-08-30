@@ -765,7 +765,14 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+        send(frame, lostFrameCallback, false);
+    }
+
+    public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
         sender.send(frame, App, lostFrameCallback);
+        if (flush) {
+            sender.flush();
+        }
     }
 
     public void sendZeroRtt(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
