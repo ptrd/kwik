@@ -446,10 +446,6 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public PacketId getId() {
-        return new PacketId(getPnSpace(), getPacketNumber());
-    }
-
     public abstract void accept(PacketProcessor processor, Instant time);
 
     /**
