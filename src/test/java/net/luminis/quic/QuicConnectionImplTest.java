@@ -74,7 +74,6 @@ class QuicConnectionImplTest {
         sender = Mockito.mock(SenderV2Impl.class);
     }
 
-    /*
     @Test
     void testRetryPacketInitiatesInitialPacketWithToken() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
@@ -94,20 +93,17 @@ class QuicConnectionImplTest {
         Thread.sleep(1000);  // Give connection a chance to send packet.
 
         // First InitialPacket should not contain a token.
-        recorder.verify(sender).send(argThat((InitialPacket p) -> p.getToken() == null), anyString(), any(Consumer.class));
+        recorder.verify(sender).sendInitial(any(QuicFrame.class), argThat(token -> token == null));
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(originalConnectionId, "2b57643b17ca7ce7c345771c37e1c6ed");
         connection.process(retryPacket, null);
 
-        // A second InitialPacket should be send, with token and source connection id from retry packet
-        recorder.verify(sender).send(argThat((InitialPacket p) ->
-                p.getToken() != null
-                && Arrays.equals(p.getToken(), new byte[] { 0x01, 0x02, 0x03 })
-                && Arrays.equals(p.getDestinationConnectionId(), new byte[] { 0x0b, 0x0b, 0x0b, 0x0b })
-        ), anyString(), any(Consumer.class));
+        // A second InitialPacket should be send with token
+        recorder.verify(sender).sendInitial(any(QuicFrame.class),
+                argThat(token -> token != null && Arrays.equals(token, new byte[] { 0x01, 0x02, 0x03 })));
     }
-*/
+
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("destConnectionIds"),
                 new DestinationConnectionIdRegistry(originalConnectionId, mock(Logger.class)));
