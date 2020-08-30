@@ -307,6 +307,20 @@ class PacketAssemblerTest extends AbstractAssemblerTest {
     }
 
     @Test
+    void whenExplicitAckIsAssembledNextTimeItWillNot() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addAckRequest();
+        oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]);
+
+        // Then
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]);
+        assertThat(optionalSendItem).isEmpty();
+    }
+
+    @Test
     void whenNoDataToSendAndNoExcplicitAckToSendAssembleWillNotGenerateAckOnlyPacket() throws Exception {
         // Given
         oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
@@ -494,4 +508,53 @@ class PacketAssemblerTest extends AbstractAssemblerTest {
                 .hasSize(2)
                 .hasAtLeastOneElementOfType(AckFrame.class);
     }
+
+    @Test
+    void whenExplicitAckDoesNotFitInPacketDontSendIt() {
+        // This can happen when coalescing packets into one datagram and the space left is not enough
+
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest();
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 20, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isEmpty();
+        assertThat(oneRttAckGenerator.hasNewAckToSend()).isTrue();
+    }
+
+    @Test
+    void explicitAckIsSentEvenIfCWndIsZero() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest();
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(0, 25, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(AckFrame.class);
+    }
+
+    @Test
+    void whenExplicitAckDoesNotFitInPacketItIsSendWithNextPacket() {
+        // This can happen when coalescing packets into one datagram and the space left is not enough
+
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest();
+        oneRttPacketAssembler.assemble(1200, 20, null, new byte[0]);
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(AckFrame.class);
+    }
+
+
 }

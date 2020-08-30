@@ -35,8 +35,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Assembles quic packets for a given encryption level, based on "send requests" that are previously queued.
- * These send request either contain a frame or can produce a frame to be sent.
+ * Assembles QUIC packets for a given encryption level, based on "send requests" that are previously queued.
+ * These send requests either contain a frame, or can produce a frame to be sent.
  */
 public class PacketAssembler {
 
@@ -81,12 +81,25 @@ public class PacketAssembler {
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
         if (requestQueue.mustSendAck()) {
-            requestQueue.getAck();
             if (ackGenerator.hasNewAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-                ackFrame = ackGenerator.generateAckForPacket(packet.get().getPacketNumber());
-                packet.get().addFrame(ackFrame);
-                callbacks.add(EMPTY_CALLBACK);
+                ackFrame = ackGenerator.generateAck();
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2
+                // "... packets containing only ACK frames are not congestion controlled ..."
+                // So: only check if it fits within available packet space
+                if (packet.get().estimateLength() + ackFrame.getBytes().length <= availablePacketSize) {
+                    packet.get().addFrame(ackFrame);
+                    callbacks.add(EMPTY_CALLBACK);
+                    ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
+                    requestQueue.getAck();
+                }
+                else {
+                    // If not even a mandatory ack can be added, don't bother about other frames: theoretically there might be frames
+                    // that can be fit, but this is very unlikely to happen (because limit packet size is caused by coalescing packets
+                    // in one datagram, which will only happen during handshake, when acks are still small) and even then: there
+                    // will be a next packet in due time.
+                    return Optional.empty();
+                }
             }
         }
 
@@ -113,7 +126,7 @@ public class PacketAssembler {
         }
 
         if (requestQueue.hasRequests()) {
-            // Must create packet here, to have an initial estimate of packet header overhad
+            // Must create packet here, to have an initial estimate of packet header overhead
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             int estimatedSize = packet.get().estimateLength();
             Optional<SendRequest> next;
