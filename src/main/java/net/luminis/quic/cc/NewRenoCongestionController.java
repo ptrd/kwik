@@ -48,8 +48,8 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     private long slowStartThreshold = Long.MAX_VALUE;
     private Instant congestionRecoveryStartTime;
 
-    public NewRenoCongestionController(Logger logger) {
-        super(logger);
+    public NewRenoCongestionController(Logger logger, CongestionControlEventListener eventListener) {
+        super(logger, eventListener);
         congestionRecoveryStartTime = Instant.MIN;
     }
 

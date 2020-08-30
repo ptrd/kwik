@@ -19,6 +19,7 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.frame.AckFrame;
@@ -401,7 +402,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class));
+        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 
@@ -419,7 +420,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class));
+        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 

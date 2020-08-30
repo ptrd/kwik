@@ -44,7 +44,7 @@ class NewRenoCongestionControllerTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        congestionController = new NewRenoCongestionController(mock(Logger.class));
+        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
     }
 
     @Test

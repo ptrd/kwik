@@ -35,9 +35,11 @@ public class AbstractCongestionController implements CongestionController {
     private final Object lock = new Object();
     protected volatile long bytesInFlight;
     protected volatile long congestionWindow;
+    protected final CongestionControlEventListener eventListener;
 
-    public AbstractCongestionController(Logger logger) {
+    public AbstractCongestionController(Logger logger, CongestionControlEventListener eventListener) {
         this.log = logger;
+        this.eventListener = eventListener;
         congestionWindow = initialWindowSize;
     }
 
@@ -45,6 +47,7 @@ public class AbstractCongestionController implements CongestionController {
     public synchronized void registerInFlight(QuicPacket sentPacket) {
         if (! sentPacket.isAckOnly()) {
             bytesInFlight += sentPacket.getSize();
+            eventListener.bytesInFlightIncreased(bytesInFlight);
             log.debug("Bytes in flight increased to " + bytesInFlight);
             if (bytesInFlight > congestionWindow) {
                 log.cc("Bytes in flight exceeds congestion window: " + bytesInFlight + " > " + congestionWindow);
@@ -64,6 +67,7 @@ public class AbstractCongestionController implements CongestionController {
 
         if (bytesInFlightAcked > 0) {
             bytesInFlight -= bytesInFlightAcked;
+            eventListener.bytesInFlightDecreased(bytesInFlight);
             checkBytesInFlight();
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
             synchronized (lock) {
@@ -79,6 +83,7 @@ public class AbstractCongestionController implements CongestionController {
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= lostBytes;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
 
         if (lostBytes > 0) {
             checkBytesInFlight();
@@ -93,6 +98,7 @@ public class AbstractCongestionController implements CongestionController {
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= discardedBytes;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
 
         if (discardedBytes > 0) {
             checkBytesInFlight();
@@ -126,12 +132,14 @@ public class AbstractCongestionController implements CongestionController {
     public void reset() {
         log.debug("Resetting congestion controller.");
         bytesInFlight = 0;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
     }
 
     private void checkBytesInFlight() {
         if (bytesInFlight < 0) {
             log.error("Inconsistency error in congestion controller; attempt to set bytes in-flight below 0");
             bytesInFlight = 0;
+            eventListener.bytesInFlightDecreased(bytesInFlight);
         }
     }
 }

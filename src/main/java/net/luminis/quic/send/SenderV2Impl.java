@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.crypto.ConnectionSecrets;
@@ -61,7 +62,7 @@ import static java.lang.Long.max;
  * - delayed ack timeout
  * - congestion controller becoming unblocked due to timer-induced loss detection
  */
-public class SenderV2Impl implements SenderV2 {
+public class SenderV2Impl implements SenderV2, CongestionControlEventListener {
 
     private final int maxPacketSize;
     private volatile DatagramSocket socket;
@@ -102,7 +103,7 @@ public class SenderV2Impl implements SenderV2 {
         globalAckGenerator = new GlobalAckGenerator(this);
         packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, 1200);
 
-        congestionController = new NewRenoCongestionController(log);
+        congestionController = new NewRenoCongestionController(log, this);
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
 
         recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
@@ -197,6 +198,15 @@ public class SenderV2Impl implements SenderV2 {
     public void shutdown() {
         running = false;
         senderThread.interrupt();
+    }
+
+    @Override
+    public void bytesInFlightIncreased(long bytesInFlight) {
+    }
+
+    @Override
+    public void bytesInFlightDecreased(long bytesInFlight) {
+        wakeUpSenderLoop();
     }
 
     private void sendLoop() {
