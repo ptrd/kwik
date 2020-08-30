@@ -556,5 +556,31 @@ class PacketAssemblerTest extends AbstractAssemblerTest {
         assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(AckFrame.class);
     }
 
+    @Test
+    void whenAckDoesNotFitInPacketItShouldNotBeAdded() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37, null);
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(4, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isEmpty();
+    }
+
+    @Test
+    void whenAckDoesNotFitWithOtherFrameOnlyFrameShouldBeAdded() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addRequest(new PingFrame(), f -> {});
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(18 + 4, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(PingFrame.class);
+    }
 
 }
