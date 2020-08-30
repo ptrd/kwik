@@ -410,12 +410,12 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(new MockPacket(1, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
         lossDetector.packetSent(new MockPacket(2, 40, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
 
-        assertThat(congestionController.canSend(1)).isFalse();
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
 
         // An ack on a non-existent packet, shouldn't change anything.
         lossDetector.onAckReceived(new AckFrame(0), Instant.now());
 
-        assertThat(congestionController.canSend(12 + 1)).isFalse();   // Because the 12 is acked, the cwnd is increased by 12 too.
+        assertThat(congestionController.remainingCwnd()).isLessThan(12 + 1);   // Because the 12 is acked, the cwnd is increased by 12 too.
     }
 
     @Test
@@ -427,12 +427,12 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
         lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
 
-        assertThat(congestionController.canSend(1)).isFalse();
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
 
         // An ack on a non-existent packet, shouldn't change anything.
         lossDetector.onAckReceived(new AckFrame(3), Instant.now());
 
-        assertThat(congestionController.canSend(1)).isFalse();
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
     }
 
     // This test was used to reproduce a race condition in the LossDetector. It is of no use to run it in each build.

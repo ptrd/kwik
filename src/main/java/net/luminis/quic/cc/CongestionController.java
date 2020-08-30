@@ -39,8 +39,6 @@ public interface CongestionController {
 
     void reset();
 
-    void waitForUpdate() throws InterruptedException;
-
     void discard(List<? extends PacketInfo> packetStatusStream);
 
     long remainingCwnd();

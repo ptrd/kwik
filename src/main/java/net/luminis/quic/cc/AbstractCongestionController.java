@@ -32,7 +32,6 @@ public class AbstractCongestionController implements CongestionController {
     protected static final int initialWindowSize = 10 * 1200;
 
     protected final Logger log;
-    private final Object lock = new Object();
     protected volatile long bytesInFlight;
     protected volatile long congestionWindow;
     protected final CongestionControlEventListener eventListener;
@@ -52,9 +51,6 @@ public class AbstractCongestionController implements CongestionController {
             if (bytesInFlight > congestionWindow) {
                 log.cc("Bytes in flight exceeds congestion window: " + bytesInFlight + " > " + congestionWindow);
             }
-            synchronized (lock) {
-                lock.notifyAll();
-            }
         }
     }
 
@@ -70,9 +66,6 @@ public class AbstractCongestionController implements CongestionController {
             eventListener.bytesInFlightDecreased(bytesInFlight);
             checkBytesInFlight();
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
-            synchronized (lock) {
-                lock.notifyAll();
-            }
         }
     }
 
@@ -121,12 +114,6 @@ public class AbstractCongestionController implements CongestionController {
     @Override
     public long remainingCwnd() {
         return congestionWindow - bytesInFlight;
-    }
-
-    public void waitForUpdate() throws InterruptedException {
-        synchronized (lock) {
-            lock.wait();
-        }
     }
 
     public void reset() {
