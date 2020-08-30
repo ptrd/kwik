@@ -19,6 +19,7 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;

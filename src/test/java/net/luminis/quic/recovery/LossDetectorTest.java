@@ -19,6 +19,8 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionController;
+import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;

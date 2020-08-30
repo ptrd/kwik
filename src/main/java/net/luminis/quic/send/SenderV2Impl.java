@@ -19,6 +19,8 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionController;
+import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.QuicFrame;

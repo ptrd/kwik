@@ -19,6 +19,7 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;

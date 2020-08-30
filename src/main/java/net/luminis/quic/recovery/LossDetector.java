@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.CongestionController;
+import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;

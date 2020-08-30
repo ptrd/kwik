@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
@@ -25,7 +26,6 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.send.SenderV2;
 import net.luminis.quic.send.SenderV2Impl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
