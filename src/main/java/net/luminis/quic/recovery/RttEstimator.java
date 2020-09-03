@@ -16,12 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.recovery;
 
+import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.recovery.PacketStatus;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 
 public class RttEstimator {
@@ -105,6 +109,21 @@ public class RttEstimator {
         }
         else {
             return rttVar;
+        }
+    }
+
+    public void ackReceived(AckFrame ack, Instant timeReceived, List<PacketStatus> newlyAcked) {
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-4.1
+        // "An endpoint generates an RTT sample on receiving an ACK frame that meets the following two conditions:
+        //   *  the largest acknowledged packet number is newly acknowledged, and
+        //   *  at least one of the newly acknowledged packets was ack-eliciting."
+        Optional<PacketStatus> largestAcked = newlyAcked.stream()
+                .filter(s -> s.packet().getPacketNumber() == ack.getLargestAcknowledged())
+                .findFirst();
+        if (largestAcked.isPresent()) {
+            if (newlyAcked.stream().anyMatch(s -> s.packet().isAckEliciting())) {
+                addSample(timeReceived, largestAcked.get().timeSent(), ack.getAckDelay());
+            }
         }
     }
 

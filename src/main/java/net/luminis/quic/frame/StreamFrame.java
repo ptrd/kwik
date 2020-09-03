@@ -24,6 +24,8 @@ import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 
@@ -116,6 +118,23 @@ public class StreamFrame extends QuicFrame {
     @Override
     public String toString() {
         return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",f": "") + "]";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof StreamFrame)) return false;
+        StreamFrame that = (StreamFrame) o;
+        return streamId == that.streamId &&
+                offset == that.offset &&
+                length == that.length &&
+                isFinal == that.isFinal &&
+                Arrays.equals(streamData, that.streamData);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(streamId, offset, length);
     }
 
     public int getStreamId() {

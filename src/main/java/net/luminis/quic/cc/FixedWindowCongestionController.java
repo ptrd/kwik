@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.cc;
 
 import net.luminis.quic.log.Logger;
 
@@ -26,13 +26,21 @@ import net.luminis.quic.log.Logger;
 public class FixedWindowCongestionController extends AbstractCongestionController implements CongestionController {
 
     public FixedWindowCongestionController(Logger logger) {
-        super(logger);
+        super(logger, new NoOpCongestionControlEventListener());
         congestionWindow = initialWindowSize;
     }
 
     public FixedWindowCongestionController(int initialWindowSize, Logger logger) {
-        super(logger);
+        super(logger, new NoOpCongestionControlEventListener());
         congestionWindow = initialWindowSize;
+    }
+
+    private static class NoOpCongestionControlEventListener implements CongestionControlEventListener {
+        @Override
+        public void bytesInFlightIncreased(long bytesInFlight) {}
+
+        @Override
+        public void bytesInFlightDecreased(long bytesInFlight) {}
     }
 }
 

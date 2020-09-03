@@ -21,7 +21,10 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.send.Sender;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,10 +36,18 @@ import java.util.Map;
  */
 public class AckGenerator {
 
-    private Version quicVersion = Version.getDefault();
+    private final Version quicVersion = Version.getDefault();
+    private final PnSpace pnSpace;
+    private final Sender sender;
     private List<Long> packetsToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
+    private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
+
+    public AckGenerator(PnSpace pnSpace, Sender sender) {
+        this.pnSpace = pnSpace;
+        this.sender = sender;
+    }
 
     public synchronized boolean hasAckToSend() {
         return !packetsToAcknowledge.isEmpty();
@@ -51,6 +62,8 @@ public class AckGenerator {
             packetsToAcknowledge.add(packet.getPacketNumber());
             if (packet.isAckEliciting()) {
                 newPacketsToAcknowledge = true;
+                newPacketsToAcknowlegdeSince = Instant.now();
+                sender.sendAck(pnSpace, 0);
             }
         }
     }
@@ -77,10 +90,23 @@ public class AckGenerator {
      * @return
      */
     public synchronized AckFrame generateAckForPacket(long packetNumber) {
-        AckFrame ackFrame = new AckFrame(quicVersion, packetsToAcknowledge);
+        AckFrame ackFrame = generateAck();
+        registerAckSendWithPacket(ackFrame, packetNumber);
+        return ackFrame;
+    }
+
+    public synchronized AckFrame generateAck() {
+        int delay = 0;
+        if (newPacketsToAcknowlegdeSince != null) {
+            delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
+        }
+        return new AckFrame(quicVersion, packetsToAcknowledge, delay);
+    }
+
+    public synchronized void registerAckSendWithPacket(AckFrame ackFrame, long packetNumber) {
         ackSentWithPacket.put(packetNumber, ackFrame);
         newPacketsToAcknowledge = false;
-        return ackFrame;
+        newPacketsToAcknowlegdeSince = null;
     }
 }
 

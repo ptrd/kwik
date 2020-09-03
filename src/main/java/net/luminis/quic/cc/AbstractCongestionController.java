@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.cc;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.PacketInfo;
@@ -32,12 +32,13 @@ public class AbstractCongestionController implements CongestionController {
     protected static final int initialWindowSize = 10 * 1200;
 
     protected final Logger log;
-    private final Object lock = new Object();
     protected volatile long bytesInFlight;
     protected volatile long congestionWindow;
+    protected final CongestionControlEventListener eventListener;
 
-    public AbstractCongestionController(Logger logger) {
+    public AbstractCongestionController(Logger logger, CongestionControlEventListener eventListener) {
         this.log = logger;
+        this.eventListener = eventListener;
         congestionWindow = initialWindowSize;
     }
 
@@ -45,12 +46,10 @@ public class AbstractCongestionController implements CongestionController {
     public synchronized void registerInFlight(QuicPacket sentPacket) {
         if (! sentPacket.isAckOnly()) {
             bytesInFlight += sentPacket.getSize();
+            eventListener.bytesInFlightIncreased(bytesInFlight);
             log.debug("Bytes in flight increased to " + bytesInFlight);
             if (bytesInFlight > congestionWindow) {
                 log.cc("Bytes in flight exceeds congestion window: " + bytesInFlight + " > " + congestionWindow);
-            }
-            synchronized (lock) {
-                lock.notifyAll();
             }
         }
     }
@@ -64,11 +63,9 @@ public class AbstractCongestionController implements CongestionController {
 
         if (bytesInFlightAcked > 0) {
             bytesInFlight -= bytesInFlightAcked;
+            eventListener.bytesInFlightDecreased(bytesInFlight);
             checkBytesInFlight();
             log.debug("Bytes in flight decreased to " + bytesInFlight + " (" + acknowlegdedPackets.size() + " packets acked)");
-            synchronized (lock) {
-                lock.notifyAll();
-            }
         }
     }
 
@@ -79,6 +76,7 @@ public class AbstractCongestionController implements CongestionController {
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= lostBytes;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
 
         if (lostBytes > 0) {
             checkBytesInFlight();
@@ -93,6 +91,7 @@ public class AbstractCongestionController implements CongestionController {
                 .mapToInt(packet -> packet.getSize())
                 .sum();
         bytesInFlight -= discardedBytes;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
 
         if (discardedBytes > 0) {
             checkBytesInFlight();
@@ -112,21 +111,22 @@ public class AbstractCongestionController implements CongestionController {
         return congestionWindow;
     }
 
-    public void waitForUpdate() throws InterruptedException {
-        synchronized (lock) {
-            lock.wait();
-        }
+    @Override
+    public long remainingCwnd() {
+        return congestionWindow - bytesInFlight;
     }
 
     public void reset() {
         log.debug("Resetting congestion controller.");
         bytesInFlight = 0;
+        eventListener.bytesInFlightDecreased(bytesInFlight);
     }
 
     private void checkBytesInFlight() {
         if (bytesInFlight < 0) {
             log.error("Inconsistency error in congestion controller; attempt to set bytes in-flight below 0");
             bytesInFlight = 0;
+            eventListener.bytesInFlightDecreased(bytesInFlight);
         }
     }
 }

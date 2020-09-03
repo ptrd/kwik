@@ -354,6 +354,14 @@ abstract public class QuicPacket {
         }
     }
 
+    // TODO: move to constructor once setting pn after packet creation is not used anymore
+    public void setPacketNumber(long pn) {
+        if (pn < 0) {
+            throw new IllegalArgumentException();
+        }
+        packetNumber = pn;
+    }
+
     protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
@@ -411,6 +419,10 @@ abstract public class QuicPacket {
         frames.add(frame);
     }
 
+    public void addFrames(List<QuicFrame> frames) {
+        this.frames.addAll(frames);
+    }
+
     public int getSize() {
         if (packetSize > 0) {
             return packetSize;
@@ -432,10 +444,6 @@ abstract public class QuicPacket {
 
     public List<QuicFrame> getFrames() {
         return frames;
-    }
-
-    public PacketId getId() {
-        return new PacketId(getPnSpace(), getPacketNumber());
     }
 
     public abstract void accept(PacketProcessor processor, Instant time);

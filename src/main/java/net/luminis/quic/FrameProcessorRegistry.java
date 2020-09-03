@@ -18,22 +18,11 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.send.SendStatistics;
+import net.luminis.quic.frame.QuicFrame;
 
-public class Statistics {
+public interface FrameProcessorRegistry<F extends QuicFrame> {
 
-    private final SendStatistics senderStatistics;
+    void registerProcessor(FrameProcessor2<F> processor);
 
-    public Statistics(SendStatistics statistics) {
-        senderStatistics = statistics;
-    }
-
-    @Override
-    public String toString() {
-        return "datagrams sent: " + senderStatistics.datagramsSent() +
-                "\npackets send: " + senderStatistics.packetsSent() +
-                "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets();
-
-    }
 }
+

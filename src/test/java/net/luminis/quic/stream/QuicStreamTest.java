@@ -244,21 +244,21 @@ class QuicStreamTest {
     void testStreamOutputWithByteArray() throws IOException {
         quicStream.getOutputStream().write("hello world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
     }
 
     @Test
     void testStreamOutputWithByteArrayFragment() throws IOException {
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
     }
 
     @Test
     void testStreamOutputWithSingleByte() throws IOException {
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -266,8 +266,8 @@ class QuicStreamTest {
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())), any(Consumer.class));
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())), any(Consumer.class), anyBoolean());
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -275,7 +275,7 @@ class QuicStreamTest {
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)), any(Consumer.class));
+        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -284,7 +284,7 @@ class QuicStreamTest {
         quicStream.getOutputStream().write(data);
 
         ArgumentCaptor<StreamFrame> captor = ArgumentCaptor.forClass(StreamFrame.class);
-        verify(connection, times(2)).send(captor.capture(), any(Consumer.class));
+        verify(connection, times(2)).send(captor.capture(), any(Consumer.class), anyBoolean());
         // This is what the test is about: the first frame should be less than max packet size.
         int lengthFirstFrame = captor.getAllValues().get(0).getLength();
         assertThat(lengthFirstFrame).isLessThan(1300);
@@ -337,7 +337,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
 
         quicStream.getOutputStream().write("this frame might get lost".getBytes());
-        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame lostFrame = sendFrameCaptor.getValue();
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
@@ -348,7 +348,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(2)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+        verify(connection, times(2)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -390,13 +390,13 @@ class QuicStreamTest {
     @Test
     void lostFinalFrameShouldBeRetransmitted() throws IOException {
         quicStream.getOutputStream().write("just a stream frame".getBytes());
-        verify(connection, times(1)).send(any(QuicFrame.class), any(Consumer.class));
+        verify(connection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
 
         quicStream.getOutputStream().close();  // Close will send an empty final frame.
 
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(2)).send(resendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+        verify(connection, times(2)).send(resendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame lostFrame = resendFrameCaptor.getValue();
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
@@ -407,7 +407,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(3)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+        verify(connection, times(3)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -445,7 +445,7 @@ class QuicStreamTest {
         QuicStream stream = new QuicStream(1, connection, flowController);
         stream.getOutputStream().write(new byte[100]);
 
-        verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any());
+        verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
         verify(flowController, never()).waitForFlowControlCredits(any(QuicStream.class));
     }
 
@@ -463,8 +463,8 @@ class QuicStreamTest {
         verify(flowController, times(2)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
 
         InOrder inOrder = inOrder(connection);
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any());
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(400)), any());
+        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
+        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(400)), any(), anyBoolean());
     }
 
     @Test
@@ -486,7 +486,7 @@ class QuicStreamTest {
         verify(flowController, times(6)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
 
         ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(6)).send(sendFrameCaptor.capture(), any(Consumer.class));
+        verify(connection, times(6)).send(sendFrameCaptor.capture(), any(Consumer.class), anyBoolean());
 
         String sentData = sendFrameCaptor.getAllValues().stream()
                 .map(frame -> new String(((StreamFrame) frame).getStreamData()))

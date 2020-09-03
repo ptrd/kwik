@@ -27,6 +27,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
+import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
@@ -59,7 +60,7 @@ import static net.luminis.tls.Tls13.generateKeys;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
+public class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame> {
 
     private final List<TlsConstants.CipherSuite> cipherSuites;
 
@@ -81,7 +82,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private final TlsState tlsState;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
-    private final Sender sender;
+    private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
     private final ECPrivateKey privateKey;
@@ -108,7 +109,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
-    private List<QuicFrame> queuedZeroRttFrames = new ArrayList<>();
+    private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private final GlobalAckGenerator ackGenerator;
+    private final List<Runnable> postProcessingActions = new ArrayList<>();
 
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
@@ -122,7 +125,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         this.cipherSuites = cipherSuites;
 
         socket = new DatagramSocket();
-        sender = new Sender(socket, 1500, log, serverAddress, port, this, initialRtt);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
+                        this, initialRtt, log);
+        ackGenerator = sender.getGlobalAckGenerator();
+        registerProcessor(ackGenerator);
+
         receiver = new Receiver(this, socket, 1500, log);
         streamManager = new StreamManager(this, log);
         tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
@@ -190,7 +197,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
-                throw new ConnectException("Connection timed out");
+                throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
                 throw new ConnectException("Handshake error");
@@ -235,7 +242,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 }
                 earlyDataStreams.add(earlyDataStream);
             }
-            sendQueuedZeroRttFrames();
             earlyDataStatus = Requested;
             return earlyDataStreams;
         }
@@ -249,13 +255,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             throw new IllegalStateException("keep alive can only be set when connected");
         }
 
-        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getMaxIdleTimeout(), this);
+        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getMaxIdleTimeout(), sender);
     }
 
     public void ping() {
         if (connectionState == Status.Connected) {
-            QuicPacket packet = createPacket(App, new PingFrame(quicVersion));
-            send(packet, "ping");
+            sender.send(new PingFrame(quicVersion), App);
+            sender.flush();
         }
         else {
             throw new IllegalStateException("not connected");
@@ -281,6 +287,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
                     parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
+                    sender.datagramProcessed(receiver.hasMore());
                 }
             }
         }
@@ -302,12 +309,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         tlsState.clientHelloSend(privateKey, clientHello);
         connectionSecrets.computeEarlySecrets(tlsState);
 
-        InitialPacket clientHelloPacket = (InitialPacket) createPacket(EncryptionLevel.Initial, new CryptoFrame(quicVersion, clientHello));
-        // Initial packet should at least be 1200 bytes (https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-14)
-        clientHelloPacket.ensureSize(1200);
-
+        CryptoFrame clientHelloFrame = new CryptoFrame(quicVersion, clientHello);
         connectionState = Status.Handshaking;
-        sender.send(clientHelloPacket, "client hello", p -> {});
+        sender.sendInitial(clientHelloFrame, token);
     }
 
     public void hasHandshakeKeys() {
@@ -320,14 +324,26 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 log.debug("Handshake state cannot be set to HasHandshakeKeys");
             }
         }
+
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-4.11.1
+        // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet (...). This results in
+        //  abandoning loss recovery state for the Initial encryption level and ignoring any outstanding Initial packets."
+        // This is done as post-processing action to ensure ack on Initial level is sent.
+        postProcessingActions.add(() -> {
+            log.recovery("Discarding pn-space Initial, because first Handshake message is being sent");
+            discard(PnSpace.Initial);
+        });
+    }
+
+    private void discard(PnSpace pnSpace) {
+        sender.discard(pnSpace);
     }
 
     void finishHandshake(TlsState tlsState) {
         if (tlsState.isServerFinished()) {
             FinishedMessage finishedMessage = new FinishedMessage(tlsState);
             CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
-            QuicPacket finishedPacket = createPacket(Handshake, cryptoFrame);
-            sendClientFinished(finishedPacket);
+            sendClientFinished(cryptoFrame);
             tlsState.computeApplicationSecrets();
             connectionSecrets.computeApplicationSecrets(tlsState);
             synchronized (handshakeState) {
@@ -344,78 +360,54 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         }
     }
 
-    void sendClientFinished(QuicPacket packet) {
-        sender.send(packet, "client finished", p -> {
-            QuicFrame frameToRetransmit = packet.getFrames().stream()
-                    .filter(frame -> frame instanceof CryptoFrame)
-                    .findFirst().get();
-            QuicPacket clientFinishedPacket = createPacket(Handshake, frameToRetransmit);
+    void sendClientFinished(QuicFrame cryptoFrame) {
+        sender.send(cryptoFrame, Handshake, frameToRetransmit -> {
             log.recovery("Retransmitting client finished.");
-            sender.send(clientFinishedPacket, "client finished", this::sendClientFinished);
+            sender.send(frameToRetransmit, Handshake, this::sendClientFinished);
         });
     }
 
-    QuicPacket createPacket(EncryptionLevel level, QuicFrame frame) {
-        QuicPacket packet;
-        switch (level) {
-           case ZeroRTT:
-                packet = new ZeroRttPacket(quicVersion, sourceConnectionIds.getCurrent(), destConnectionIds.getCurrent(), frame);
-                break;
-            case Initial:
-                packet = new InitialPacket(quicVersion, sourceConnectionIds.getCurrent(), destConnectionIds.getCurrent(), token, frame);
-                break;
-            case Handshake:
-                packet = new HandshakePacket(quicVersion, sourceConnectionIds.getCurrent(), destConnectionIds.getCurrent(), frame);
-                break;
-            case App:
-                packet = new ShortHeaderPacket(quicVersion, destConnectionIds.getCurrent(), frame);
-                break;
-            default:
-                throw new RuntimeException();  // Cannot happen, just here to satisfy the compiler.
-        }
-        return packet;
-    }
-
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
-        int packetStart = data.position();
-        int packetSize = 0;
-        EncryptionLevel highestEncryptionLevelInPacket = null;
+        while (data.remaining() > 0) {
+            try {
+                QuicPacket packet = parsePacket(data);
 
-        QuicPacket packet;
-        try {
-            packet = parsePacket(data);
-            packetSize = data.position() - packetStart;
-            if (highestEncryptionLevelInPacket == null || packet.getEncryptionLevel().higher(highestEncryptionLevelInPacket)) {
-                highestEncryptionLevelInPacket = packet.getEncryptionLevel();
+                log.received(timeReceived, datagram, packet);
+                log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+
+                processPacket(timeReceived, packet);
+                sender.packetProcessed(data.hasRemaining());
+            }
+            catch (DecryptionException | MissingKeysException cannotParse) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
+                // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
+                log.error("Discarding packet (" + data.position() + " bytes) that cannot be decrypted (" + cannotParse + ")");
+            }
+            catch (InvalidPacketException invalidPacket) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
+                // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
+                log.debug("Dropping invalid packet");
             }
 
-            log.received(timeReceived, datagram, packet);
-            log.debug("Parsed packet with size " + (data.position() - packetStart) + "; " + data.remaining() + " bytes left.");
-            processPacket(timeReceived, packet);
-        }
-        catch (DecryptionException | MissingKeysException cannotParse) {
-            packetSize = data.position() - packetStart;
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
-            // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
-            log.error("Discarding packet (" + packetSize + " bytes) that cannot be decrypted (" + cannotParse + ")");
-        }
-        catch (InvalidPacketException invalidPacket) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
-            // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
-            log.debug("Dropping invalid packet");
+            if (data.position() == 0) {
+                // If parsing (or an attempt to parse a) packet does not advance the buffer, there is no point in going on.
+                break;
+            }
+
+            // Make sure the packet starts at the beginning of the buffer (required by parse routines)
+            data = data.slice();
         }
 
-        if (packetSize > 0 && data.position() < data.limit()) {  
-            parsePackets(datagram, timeReceived, data.slice());
-        }
-        else {
-            // Processed all packets in the datagram. Select the "highest" level for ack.
-            if (highestEncryptionLevelInPacket != null)
-                sender.packetProcessed(highestEncryptionLevelInPacket);
-        }
+        // Processed all packets in the datagram.
+        sender.packetProcessed(false);
+
+        // Finally, execute actions that need to be executed after all responses and acks are sent.
+        postProcessingActions.forEach(action -> action.run());
+        postProcessingActions.clear();
     }
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+        data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
         }
@@ -517,13 +509,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     private void processPacket(Instant timeReceived, QuicPacket packet) {
-        // TODO: strictly speaking, processing packet received event, which includes generating acks, should be done after processing the packet itself, see
+        packet.accept(this, timeReceived);
         // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-13.1
         // "A packet MUST NOT be acknowledged until packet protection has been
         //   successfully removed and all frames contained in the packet have been
         //   processed."
-        sender.processPacketReceived(packet);
-        packet.accept(this, timeReceived);
+        ackGenerator.packetReceived(packet);
     }
 
     private CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
@@ -651,7 +642,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 if (peerTransportParams != null) {
                     ((AckFrame) frame).setDelayExponent(peerTransportParams.getAckDelayExponent());
                 }
-                sender.process(frame, packet.getPnSpace(), timeReceived);
+                ackProcessors.forEach(p -> p.process((AckFrame) frame, packet.getPnSpace(), timeReceived));
             }
             else if (frame instanceof StreamFrame) {
                 streamManager.process(frame, packet.getPnSpace(), timeReceived);
@@ -680,7 +671,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
                 send(response, f -> {});
             }
             else if (frame instanceof HandshakeDoneFrame) {
-                sender.stopRecovery(PnSpace.Handshake);
+                log.recovery("Discarding pn space Handshake because HandshakeDone is received");
+                sender.discard(PnSpace.Handshake);
                 synchronized (handshakeState) {
                     if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                         handshakeState = HandshakeState.Confirmed;
@@ -720,6 +712,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
         connectionState = Status.Closing;
         streamManager.abortAll();
         send(new ConnectionCloseFrame(quicVersion), f -> {});
+        sender.flush();
 
         int closingPeriod = 3 * sender.getPto();
         log.debug("closing/draining for " + closingPeriod + " ms");
@@ -791,47 +784,22 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
-        QuicPacket packet = createPacket(App, frame);
-        sender.send(packet, "application data", p -> lostFrameCallback.accept(p.getFrames().get(0)));
+        send(frame, lostFrameCallback, false);
     }
 
-    void send(QuicPacket packet, String logMessage) {
-        if (logMessage == null) {
-            logMessage = "application data";
+    public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
+        sender.send(frame, App, lostFrameCallback);
+        if (flush) {
+            sender.flush();
         }
-        sender.send(packet, logMessage, p -> {});
     }
 
     public void sendZeroRtt(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
-        queuedZeroRttFrames.add(frame);
+        sender.send(frame, ZeroRTT, lostFrameCallback);
     }
 
-    private void sendQueuedZeroRttFrames() {
-        QuicPacket packet = createPacket(ZeroRTT, null);
-        int currentSize = 0;
-        for (QuicFrame frame: queuedZeroRttFrames) {
-            if (currentSize + frame.getBytes().length < 1100) {
-                packet.addFrame(frame);
-                currentSize += frame.getBytes().length;
-            }
-            else {
-                sender.send(packet, "0-RTT data", this::retransmitZeroRttData);
-                packet = createPacket(ZeroRTT, frame);
-                currentSize = frame.getBytes().length;
-            }
-        }
-        if (!packet.getFrames().isEmpty()) {
-                sender.send(packet, "0-RTT data", this::retransmitZeroRttData);
-        }
-        queuedZeroRttFrames.clear();
-    }
-
-    public void retransmitZeroRttData(QuicPacket zeroRttPacket) {
-        QuicPacket oneRtt = createPacket(EncryptionLevel.App, null);
-        for (QuicFrame frame: zeroRttPacket.getFrames()) {
-            oneRtt.addFrame(frame);
-        }
-        sender.send(oneRtt, "1-rtt", this::retransmitZeroRttData);
+    private void retransmitAppData(QuicFrame frame) {
+        sender.send(frame, App, this::retransmitAppData);
     }
 
     public void slideFlowControlWindow(int size) {
@@ -853,8 +821,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             log.error("Changing local address failed", e);
         }
     }
-
-
 
     public int getMaxPacketSize() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:
@@ -970,7 +936,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
      * Abort connection due to a fatal error in this client. No message is sent to peer; just inform client it's all over.
      * @param error  the exception that caused the trouble
      */
-    void abortConnection(Throwable error) {
+    public void abortConnection(Throwable error) {
         if (error != null) {
             if (connectionState == Status.Handshaking) {
                 connectionState = Status.HandshakeError;
@@ -1019,17 +985,16 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public byte[][] newConnectionIds(int count, int retirePriorTo) {
-        QuicPacket packet = createPacket(App, null);
         byte[][] newConnectionIds = new byte[count][];
 
         for (int i = 0; i < count; i++) {
             ConnectionIdInfo cid = sourceConnectionIds.generateNew();
             newConnectionIds[i] = cid.getConnectionId();
             log.debug("New generated source connection id", cid.getConnectionId());
-            packet.addFrame(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()));
+            sender.send(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()), App);
         }
-
-        send(packet, "new connection id's");
+        sender.flush();
+        
         return newConnectionIds;
     }
 
@@ -1062,7 +1027,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
     }
 
     public Statistics getStats() {
-        return sender.getStats();
+        return new Statistics(sender.getStatistics());
     }
 
 
@@ -1145,6 +1110,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor {
             // Impossible
             throw new IllegalStateException();
         }
+    }
+
+    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
+        ackProcessors.add(ackProcessor);
     }
 
     public InetSocketAddress getLocalAddress() {

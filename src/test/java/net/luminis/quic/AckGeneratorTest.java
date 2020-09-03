@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.send.Sender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +34,7 @@ class AckGeneratorTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new AckGenerator();
+        ackGenerator = new AckGenerator(PnSpace.App, mock(Sender.class));
     }
 
     @Test
@@ -142,5 +143,32 @@ class AckGeneratorTest {
     void ifTheNotAcknowledgedPacketIsAckOnlyThereIsNowAckNewToSend() throws Exception {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial, new AckFrame()));
         assertThat(ackGenerator.hasNewAckToSend()).isEqualTo(false);
+    }
+
+    @Test
+    void ifAckIsDelayedTheDelayFieldIsSet() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
+
+        // When
+        Thread.sleep(10);
+
+        // Then
+        AckFrame ackFrame = ackGenerator.generateAckForPacket(13);
+        assertThat(ackFrame.getAckDelay()).isGreaterThanOrEqualTo(10);
+    }
+
+    @Test
+    void ifAckIsDelayedThenDelayFieldIsOnlySetForFirstAck() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
+
+        // When
+        Thread.sleep(10);
+
+        // Then
+        AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13);
+        AckFrame secondAckFrame = ackGenerator.generateAckForPacket(14);
+        assertThat(secondAckFrame.getAckDelay()).isEqualTo(0);
     }
 }

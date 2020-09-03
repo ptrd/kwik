@@ -16,24 +16,18 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.send;
 
-import net.luminis.quic.send.SendStatistics;
+public class PacketNumberGenerator {
 
-public class Statistics {
+    private long packetNumber;
 
-    private final SendStatistics senderStatistics;
-
-    public Statistics(SendStatistics statistics) {
-        senderStatistics = statistics;
+    public long nextPacketNumber() {
+        return packetNumber++;
     }
 
-    @Override
-    public String toString() {
-        return "datagrams sent: " + senderStatistics.datagramsSent() +
-                "\npackets send: " + senderStatistics.packetsSent() +
-                "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets();
-
+    public void restorePacketNumber() {
+        packetNumber--;
     }
 }
+

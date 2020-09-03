@@ -44,7 +44,8 @@ public class EarlyDataStream extends QuicStream {
     }
 
     /**
-     * Write early data, assuming the provided data is complete and fits into one StreamFrame.
+     * Write early data, keeping flow control limits into account. Data that cannot be sent as 0-rtt will be stored
+     * for sending in 1-rtt packets (see writeRemaining).
      * @param earlyData
      * @param earlyDataSizeLeft
      */
@@ -85,12 +86,12 @@ public class EarlyDataStream extends QuicStream {
     }
 
     @Override
-    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback) {
+    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
         if (sendingEarlyData) {
-            connection.sendZeroRtt(frame, f -> {});
+            connection.sendZeroRtt(frame, lostFrameCallback);
         }
         else {
-            connection.send(frame, lostFrameCallback);
+            connection.send(frame, lostFrameCallback, flush);
         }
     }
 

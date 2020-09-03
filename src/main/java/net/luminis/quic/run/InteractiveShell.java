@@ -24,11 +24,10 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
@@ -64,9 +63,10 @@ public class InteractiveShell {
     private void setupCommands() {
         commands.put("help", this::help);
         commands.put("set", this::setClientParameter);
-        commands.put("scid_legnth", this::setScidLength);
+        commands.put("scid_length", this::setScidLength);
         commands.put("connect", this::connect);
         commands.put("close", this::close);
+        commands.put("get", this::httpGet);
         commands.put("ping", this::sendPing);
         commands.put("params", this::printClientParams);
         commands.put("server_params", this::printServerParams);
@@ -75,6 +75,7 @@ public class InteractiveShell {
         commands.put("cid_list", this::printConnectionIds);
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
+        commands.put("statistics", this::printStatistics);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
     }
@@ -157,6 +158,44 @@ public class InteractiveShell {
         if (quicConnection != null) {
             quicConnection.close();
         }
+    }
+
+    private void httpGet(String arg) {
+        if (quicConnection == null) {
+            System.out.println("Error: no connected");
+            return;
+        }
+
+        OutputStream out;
+        try {
+            QuicStream httpStream = quicConnection.createStream(true);
+            httpStream.getOutputStream().write(("GET " + arg + "\r\n").getBytes());
+            httpStream.getOutputStream().close();
+            File outputFile = createNewFile(arg);
+            out = new FileOutputStream(outputFile);
+            httpStream.getInputStream().transferTo(out);
+            out.close();
+        } catch (IOException e) {
+            System.out.println("Error: " + e);
+        }
+    }
+
+    private File createNewFile(String baseName) throws IOException {
+        if (baseName.startsWith("/") && baseName.length() > 1) {
+            baseName = baseName.substring(1);
+        }
+        baseName = baseName.replace('/', '_');
+        File file = new File(baseName + ".dat");
+        if (! file.exists()) {
+            return file;
+        }
+        for (int i = 0; i < 1000; i++) {
+            file = new File(baseName + i + ".dat");
+            if (! file.exists()) {
+                return file;
+            }
+        }
+        throw new IOException("Cannot create output file '" + baseName + ".dat" + "'");
     }
 
     private void newConnectionIds(String args) {
@@ -297,6 +336,12 @@ public class InteractiveShell {
         }
         else {
             System.out.println("Server transport parameters still unknown (no connection)");
+        }
+    }
+
+    private void printStatistics(String arg) {
+        if (quicConnection != null) {
+            System.out.println(quicConnection.getStats());
         }
     }
 

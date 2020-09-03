@@ -18,8 +18,7 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.CongestionController;
-import net.luminis.quic.RttEstimator;
+import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
@@ -65,7 +64,7 @@ public class LossDetector {
         packetSentLog.put(packet.getPacketNumber(), new PacketStatus(sent, packet, lostPacketCallback));
     }
 
-    public void onAckReceived(AckFrame ackFrame) {
+    public void onAckReceived(AckFrame ackFrame, Instant timeReceived) {
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
         List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
@@ -80,6 +79,8 @@ public class LossDetector {
         detectLostPackets();
 
         recoveryManager.setLossDetectionTimer();
+
+        rttEstimater.ackReceived(ackFrame, timeReceived, newlyAcked);
     }
 
     void detectLostPackets() {

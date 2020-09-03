@@ -74,6 +74,10 @@ public class Receiver {
         return receivedPacketsQueue.take();
     }
 
+    public boolean hasMore() {
+        return !receivedPacketsQueue.isEmpty();
+    }
+
     /**
      * Retrieves a received packet from the queue.
      * @param timeout    the wait timeout in seconds

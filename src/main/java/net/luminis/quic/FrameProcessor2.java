@@ -18,22 +18,13 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.send.SendStatistics;
+import net.luminis.quic.frame.QuicFrame;
 
-public class Statistics {
+import java.time.Instant;
 
-    private final SendStatistics senderStatistics;
+public interface FrameProcessor2<F extends QuicFrame> {
 
-    public Statistics(SendStatistics statistics) {
-        senderStatistics = statistics;
-    }
+    void process(F frame, PnSpace pnSpace, Instant timeReceived);
 
-    @Override
-    public String toString() {
-        return "datagrams sent: " + senderStatistics.datagramsSent() +
-                "\npackets send: " + senderStatistics.packetsSent() +
-                "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets();
-
-    }
 }
+

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2020 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,28 +18,15 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.packet.PacketInfo;
-import net.luminis.quic.packet.QuicPacket;
+import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import static net.luminis.quic.EncryptionLevel.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-public interface CongestionController {
+class EncryptionLevelTest {
 
-    void registerInFlight(QuicPacket sentPacket);
-
-    void registerAcked(List<? extends PacketInfo> acknowlegdedPackets);
-
-    void registerLost(List<? extends PacketInfo> lostPackets);
-
-    boolean canSend(int bytes);
-
-    long getBytesInFlight();
-
-    long getWindowSize();
-
-    void reset();
-
-    void waitForUpdate() throws InterruptedException;
-
-    void discard(List<? extends PacketInfo> packetStatusStream);
+    @Test
+    void validateOrderOfEncryptionLevels() {
+        assertThat(EncryptionLevel.values()).containsExactly(Initial, ZeroRTT, Handshake, App);
+    }
 }

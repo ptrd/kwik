@@ -19,6 +19,7 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
@@ -26,7 +27,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.recovery.LossDetector;
+import net.luminis.quic.send.Sender;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,11 +43,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class RecoveryManager implements HandshakeStateListener {
+public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
-    private final ProbeSender sender;
+    private final Sender sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
     private int receiverMaxAckDelay;
@@ -54,10 +55,9 @@ public class RecoveryManager implements HandshakeStateListener {
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
-    private volatile boolean firstHandshakeSent = false;
     private volatile boolean hasBeenReset = false;
 
-    public RecoveryManager(RttEstimator rttEstimater, CongestionController congestionController, ProbeSender sender, Logger logger) {
+    public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);
@@ -65,6 +65,7 @@ public class RecoveryManager implements HandshakeStateListener {
         this.sender = sender;
         log = logger;
 
+        processorRegistry.registerProcessor(this);
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
         lossDetectionTimer = new NullScheduledFuture();
     }
@@ -309,24 +310,15 @@ public class RecoveryManager implements HandshakeStateListener {
         timerExpiration = null;
     }
 
-    public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace) {
+    public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (! hasBeenReset) {
             ptoCount = 0;
-            lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame);
+            lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame, timeReceived);
         }
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (! hasBeenReset) {
-            if (packet.getEncryptionLevel() == EncryptionLevel.Handshake && !firstHandshakeSent) {
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.10.1
-                // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet"
-                // "This results in abandoning loss recovery state for the Initial
-                //   encryption level and ignoring any outstanding Initial packets."
-                log.recovery("Resetting Initial pn-space, because first Handshake message is sent");
-                lossDetectors[PnSpace.Initial.ordinal()].reset();
-                firstHandshakeSent = true;
-            }
             if (packet.isInflightPacket()) {
                 // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
@@ -352,7 +344,6 @@ public class RecoveryManager implements HandshakeStateListener {
     }
 
     public void stopRecovery(PnSpace pnSpace) {
-        log.recovery("Resetting loss detector " + pnSpace);
         lossDetectors[pnSpace.ordinal()].reset();
     }
 
@@ -369,6 +360,11 @@ public class RecoveryManager implements HandshakeStateListener {
                 setLossDetectionTimer();
             }
         }
+    }
+
+    @Override
+    public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
+        onAckReceived(frame, pnSpace, timeReceived);
     }
 
     private static class NullScheduledFuture implements ScheduledFuture<Void> {

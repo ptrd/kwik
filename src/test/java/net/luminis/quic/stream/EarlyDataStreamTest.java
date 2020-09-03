@@ -138,7 +138,7 @@ class EarlyDataStreamTest {
         // Then
         ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         verify(connection, atLeast(1)).sendZeroRtt(argumentCaptor.capture(), any(Consumer.class));
-        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class));
+        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class), anyBoolean());
         byte[] transmittedData = transmittedByteStream(argumentCaptor);
         assertThat(transmittedData).isEqualTo(data);
         StreamFrame lastFrame = ((StreamFrame) argumentCaptor.getAllValues().get(argumentCaptor.getAllValues().size() - 1));
@@ -159,7 +159,7 @@ class EarlyDataStreamTest {
 
         // Then
         ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class));
+        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class), anyBoolean());
         byte[] transmittedData = transmittedByteStream(argumentCaptor);
         assertThat(transmittedData).isEqualTo(data);
         StreamFrame firstFrame = (StreamFrame) argumentCaptor.getAllValues().get(0);

@@ -16,24 +16,35 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.send;
 
-import net.luminis.quic.send.SendStatistics;
+public class SendStatistics {
 
-public class Statistics {
+    private final int datagramsSent;
+    private final long packetsSent;
+    private final long bytesSent;
+    private final long lostPackets;
 
-    private final SendStatistics senderStatistics;
-
-    public Statistics(SendStatistics statistics) {
-        senderStatistics = statistics;
+    public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long lostPackets) {
+        this.datagramsSent = datagramsSent;
+        this.packetsSent = packetsSent;
+        this.bytesSent = bytesSent;
+        this.lostPackets = lostPackets;
     }
 
-    @Override
-    public String toString() {
-        return "datagrams sent: " + senderStatistics.datagramsSent() +
-                "\npackets send: " + senderStatistics.packetsSent() +
-                "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets();
+    public int datagramsSent() {
+        return datagramsSent;
+    }
 
+    public long bytesSent() {
+        return bytesSent;
+    }
+
+    public long lostPackets() {
+        return lostPackets;
+    }
+
+    public long packetsSent() {
+        return packetsSent;
     }
 }

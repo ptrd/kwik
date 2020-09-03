@@ -18,10 +18,21 @@
  */
 package net.luminis.quic;
 
+/**
+ * https://tools.ietf.org/html/draft-ietf-quic-tls-29#section2.1
+ * "Data is protected using a number of encryption levels:
+ *  Initial Keys
+ *  Early Data (0-RTT) Keys
+ *  Handshake Keys
+ *  Application Data (1-RTT) Keys"
+ *
+ * https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-12.2
+ * "...order of increasing encryption levels (Initial, 0-RTT, Handshake, 1-RTT...)"
+ */
 public enum EncryptionLevel {
 
-    ZeroRTT,
     Initial,
+    ZeroRTT,
     Handshake,
     App;
 
