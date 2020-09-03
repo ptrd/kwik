@@ -21,6 +21,7 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.frame.QuicFrame;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,7 +46,10 @@ public class SendRequestQueue {
     }
 
     public void addAckRequest(int delay) {
-        nextAckTime = Instant.now().plusMillis(delay);
+        Instant requestedAckTime = Instant.now().plusMillis(delay);
+        if (nextAckTime == null || requestedAckTime.isBefore(nextAckTime)) {
+            nextAckTime = requestedAckTime;
+        }
     }
 
     public void addProbeRequest() {
@@ -70,7 +74,7 @@ public class SendRequestQueue {
 
     public boolean mustSendAck() {
         Instant now = Instant.now();
-        return nextAckTime != null && now.isAfter(nextAckTime);
+        return nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
     }
 
     public Instant getAck() {
@@ -80,6 +84,10 @@ public class SendRequestQueue {
         finally {
             nextAckTime = null;
         }
+    }
+
+    public Instant nextDelayedSend() {
+        return nextAckTime;
     }
 
     /**

@@ -26,15 +26,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
 
 class AckGeneratorTest {
 
     private AckGenerator ackGenerator;
+    private Sender sender;
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new AckGenerator(PnSpace.App, mock(Sender.class));
+        sender = mock(Sender.class);
+        ackGenerator = new AckGenerator(PnSpace.App, sender);
     }
 
     @Test
@@ -170,5 +174,37 @@ class AckGeneratorTest {
         AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13);
         AckFrame secondAckFrame = ackGenerator.generateAckForPacket(14);
         assertThat(secondAckFrame.getAckDelay()).isEqualTo(0);
+    }
+
+    @Test
+    void ifAcksAreDelayedThenAckDelayShouldBeBasedOnOldestAck() throws Exception {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.Initial));
+
+        // When
+        Thread.sleep(10);
+        ackGenerator.packetReceived(new MockPacket(2, 83, EncryptionLevel.Initial));
+        Thread.sleep(10);
+
+        // Then
+        AckFrame ack = ackGenerator.generateAckForPacket(13);
+        assertThat(ack.getAckDelay())
+                .isGreaterThanOrEqualTo(20)
+                .isLessThanOrEqualTo(25);
+    }
+
+    @Test
+    void oneRttAcksAreGeneratedForEverySecondPacket() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.App));
+
+        // Then
+        verify(sender, times(1)).sendAck(PnSpace.App, 20);
+        clearInvocations(sender);
+
+        // And When
+        ackGenerator.packetReceived(new MockPacket(2, 83, EncryptionLevel.App));
+        // Then
+        verify(sender, timeout(1)).sendAck(PnSpace.App, 0);
     }
 }
