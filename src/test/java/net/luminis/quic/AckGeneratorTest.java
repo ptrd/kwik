@@ -21,7 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
-import net.luminis.quic.send.SenderV2;
+import net.luminis.quic.send.Sender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +34,7 @@ class AckGeneratorTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new AckGenerator(PnSpace.App, mock(SenderV2.class));
+        ackGenerator = new AckGenerator(PnSpace.App, mock(Sender.class));
     }
 
     @Test

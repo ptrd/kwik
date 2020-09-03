@@ -45,7 +45,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new GlobalAckGenerator(mock(SenderV2.class));
+        ackGenerator = new GlobalAckGenerator(mock(Sender.class));
         sendRequestQueues = new SendRequestQueue[4];
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue();

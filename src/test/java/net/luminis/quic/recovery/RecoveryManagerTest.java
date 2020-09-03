@@ -24,7 +24,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.send.SenderV2;
+import net.luminis.quic.send.Sender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private int defaultRtt = 80;
     private int defaultRttVar = defaultRtt / 4;
     private int epsilon = defaultRtt / 4;  // A small value to check for events that should occur at a specified time; the epsilon is the variance allowed.
-    private SenderV2 probeSender;
+    private Sender probeSender;
     private RttEstimator rttEstimator;
 
     @BeforeEach
@@ -56,7 +56,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
-        probeSender = mock(SenderV2.class);
+        probeSender = mock(Sender.class);
         Logger logger = mock(Logger.class);
         // logger = new SysOutLogger();
         // logger.logRecovery(true);

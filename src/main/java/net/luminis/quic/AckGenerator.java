@@ -21,7 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.send.SenderV2;
+import net.luminis.quic.send.Sender;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -38,13 +38,13 @@ public class AckGenerator {
 
     private final Version quicVersion = Version.getDefault();
     private final PnSpace pnSpace;
-    private final SenderV2 sender;
+    private final Sender sender;
     private List<Long> packetsToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
     private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
 
-    public AckGenerator(PnSpace pnSpace, SenderV2 sender) {
+    public AckGenerator(PnSpace pnSpace, Sender sender) {
         this.pnSpace = pnSpace;
         this.sender = sender;
     }

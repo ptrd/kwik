@@ -62,7 +62,7 @@ import static java.lang.Long.max;
  * - delayed ack timeout
  * - congestion controller becoming unblocked due to timer-induced loss detection
  */
-public class SenderV2Impl implements SenderV2, CongestionControlEventListener {
+public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private final int maxPacketSize;
     private volatile DatagramSocket socket;
@@ -89,8 +89,8 @@ public class SenderV2Impl implements SenderV2, CongestionControlEventListener {
     private volatile long packetsSent;
 
 
-    public SenderV2Impl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
-                         QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+    public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
         this.maxPacketSize = maxPacketSize;
         this.socket = socket;
         this.peerAddress = peerAddress;

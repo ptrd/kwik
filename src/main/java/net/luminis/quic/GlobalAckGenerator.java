@@ -21,7 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.NullAckGenerator;
-import net.luminis.quic.send.SenderV2;
+import net.luminis.quic.send.Sender;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -30,7 +30,7 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
 
     private AckGenerator[] ackGenerators;
 
-    public GlobalAckGenerator(SenderV2 sender) {
+    public GlobalAckGenerator(Sender sender) {
         ackGenerators = new AckGenerator[PnSpace.values().length];
         Arrays.stream(PnSpace.values()).forEach(pnSpace -> ackGenerators[pnSpace.ordinal()] = new AckGenerator(pnSpace, sender));
     }

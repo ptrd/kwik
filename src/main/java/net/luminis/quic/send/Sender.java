@@ -38,7 +38,7 @@ import java.util.function.Function;
  * The notification methods <code>packetProcessed</code> and <code>datagramProcessed</code> should be used to notify
  * the sender implementation of these events, which enables the sender to coalesce packets efficiently.
  */
-public interface SenderV2 {
+public interface Sender {
 
     /**
      * Sends a (fixed) frame. Should not be used to send data that is subject to change (e.g. a flow control level),

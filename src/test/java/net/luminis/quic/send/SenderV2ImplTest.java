@@ -40,7 +40,7 @@ import static org.mockito.Mockito.*;
 
 class SenderV2ImplTest extends AbstractSenderTest {
 
-    private SenderV2Impl sender;
+    private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
 
     @BeforeEach
@@ -55,7 +55,7 @@ class SenderV2ImplTest extends AbstractSenderTest {
         Keys keys = createKeys();
         when(connectionSecrets.getClientSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderV2Impl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, mock(Logger.class));
+        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, mock(Logger.class));
         sender.start(connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);

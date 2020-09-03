@@ -26,7 +26,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.send.SenderV2Impl;
+import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,7 +60,7 @@ class QuicConnectionImplTest {
 
     private QuicConnectionImpl connection;
     private byte[] originalDestinationId;
-    private SenderV2Impl sender;
+    private SenderImpl sender;
 
     @BeforeAll
     static void initLogger() {
@@ -71,7 +71,7 @@ class QuicConnectionImplTest {
     @BeforeEach
     void initConnectionUnderTest() throws Exception {
         connection = QuicConnectionImpl.newBuilder().uri(new URI("//localhost:443")).logger(logger).build();
-        sender = Mockito.mock(SenderV2Impl.class);
+        sender = Mockito.mock(SenderImpl.class);
     }
 
     @Test

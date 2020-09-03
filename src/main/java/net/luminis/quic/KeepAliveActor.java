@@ -19,7 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.PingFrame;
-import net.luminis.quic.send.SenderV2;
+import net.luminis.quic.send.Sender;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -36,13 +36,13 @@ public class KeepAliveActor {
     private final Version quicVersion;
     private final int keepAliveTime;
     private final int peerIdleTimeout;
-    private final SenderV2 sender;
+    private final Sender sender;
     private final Instant started;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final int pingInterval;
     private volatile ScheduledFuture<?> scheduledTask;
 
-    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, SenderV2 sender) {
+    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
         this.peerIdleTimeout = peerIdleTimeout;

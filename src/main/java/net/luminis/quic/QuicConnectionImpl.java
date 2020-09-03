@@ -27,7 +27,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
-import net.luminis.quic.send.SenderV2Impl;
+import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
@@ -82,7 +82,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private final TlsState tlsState;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
-    private final SenderV2Impl sender;
+    private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
     private final ECPrivateKey privateKey;
@@ -125,7 +125,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         this.cipherSuites = cipherSuites;
 
         socket = new DatagramSocket();
-        sender = new SenderV2Impl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
                         this, initialRtt, log);
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
