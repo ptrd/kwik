@@ -79,6 +79,7 @@ public class SenderV2Impl implements SenderV2, CongestionControlEventListener {
     private ConnectionSecrets connectionSecrets;
     private final Object condition = new Object();
     private boolean signalled;
+    private boolean[] discardedSpaces = new boolean[PnSpace.values().length];
 
     private volatile boolean running;
     private volatile int receiverMaxAckDelay;
@@ -180,8 +181,14 @@ public class SenderV2Impl implements SenderV2, CongestionControlEventListener {
         socket = newSocket;
     }
 
-    public void stopRecovery(PnSpace space) {
-        recoveryManager.stopRecovery(space);
+    public void discard(PnSpace space) {
+        if (! discardedSpaces[space.ordinal()]) {
+            packetAssembler.stop(space);
+            recoveryManager.stopRecovery(space);
+            sendRequestQueue[space.ordinal()].clear();
+            globalAckGenerator.discard(space);
+            discardedSpaces[space.ordinal()] = true;
+        }
     }
 
     /**

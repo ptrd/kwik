@@ -55,7 +55,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
-    private volatile boolean firstHandshakeSent = false;
     private volatile boolean hasBeenReset = false;
 
     public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, SenderV2 sender, Logger logger) {
@@ -320,15 +319,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (! hasBeenReset) {
-            if (packet.getEncryptionLevel() == EncryptionLevel.Handshake && !firstHandshakeSent) {
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.10.1
-                // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet"
-                // "This results in abandoning loss recovery state for the Initial
-                //   encryption level and ignoring any outstanding Initial packets."
-                log.recovery("Resetting Initial pn-space, because first Handshake message is sent");
-                lossDetectors[PnSpace.Initial.ordinal()].reset();
-                firstHandshakeSent = true;
-            }
             if (packet.isInflightPacket()) {
                 // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
@@ -354,7 +344,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     public void stopRecovery(PnSpace pnSpace) {
-        log.recovery("Resetting loss detector " + pnSpace);
         lossDetectors[pnSpace.ordinal()].reset();
     }
 

@@ -111,6 +111,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private volatile EarlyDataStatus earlyDataStatus = None;
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final GlobalAckGenerator ackGenerator;
+    private final List<Runnable> postProcessingActions = new ArrayList<>();
 
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
@@ -323,6 +324,19 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 log.debug("Handshake state cannot be set to HasHandshakeKeys");
             }
         }
+
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-4.11.1
+        // "Thus, a client MUST discard Initial keys when it first sends a Handshake packet (...). This results in
+        //  abandoning loss recovery state for the Initial encryption level and ignoring any outstanding Initial packets."
+        // This is done as post-processing action to ensure ack on Initial level is sent.
+        postProcessingActions.add(() -> {
+            log.recovery("Discarding pn-space Initial, because first Handshake message is being sent");
+            discard(PnSpace.Initial);
+        });
+    }
+
+    private void discard(PnSpace pnSpace) {
+        sender.discard(pnSpace);
     }
 
     void finishHandshake(TlsState tlsState) {
@@ -386,6 +400,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
 
         // Processed all packets in the datagram.
         sender.packetProcessed(false);
+
+        // Finally, execute actions that need to be executed after all responses and acks are sent.
+        postProcessingActions.forEach(action -> action.run());
+        postProcessingActions.clear();
     }
 
     QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
@@ -653,7 +671,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 send(response, f -> {});
             }
             else if (frame instanceof HandshakeDoneFrame) {
-                sender.stopRecovery(PnSpace.Handshake);
+                log.recovery("Discarding pn space Handshake because HandshakeDone is received");
+                sender.discard(PnSpace.Handshake);
                 synchronized (handshakeState) {
                     if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                         handshakeState = HandshakeState.Confirmed;

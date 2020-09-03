@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.send.NullAckGenerator;
 import net.luminis.quic.send.SenderV2;
 
 import java.time.Instant;
@@ -48,5 +49,11 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
     public AckGenerator getAckGenerator(PnSpace pnSpace) {
         return ackGenerators[pnSpace.ordinal()];
     }
-}
 
+    public void discard(PnSpace pnSpace) {
+        // Discard existing ackgenerator for given space, but install a no-op ack generator to catch calls for received
+        // packets in that space. This is necessary because even the space is discarded, packets for that space might
+        // be received and processed (until its keys are discarded).
+        ackGenerators[pnSpace.ordinal()] = new NullAckGenerator();
+    }
+}
