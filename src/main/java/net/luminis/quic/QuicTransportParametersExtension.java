@@ -259,7 +259,20 @@ public class QuicTransportParametersExtension extends Extension {
             params.setRetrySourceConnectionId(retrySourceCid);
         }
         else {
-            log.debug("- unknown transport parameter " + parameterId + ", (" + size + " bytes)");
+            String msg = String.format("- unknown transport parameter 0x%04x, size %d", parameterId, size);
+            String extension = "";
+            if (parameterId == 0x0020) extension = "datagram";
+            if (parameterId == 0x0040) extension = "multi-path";
+            if (parameterId == 0x1057) extension = "loss-bits";
+            if (parameterId == 0x173e) extension = "discard";
+            if (parameterId == 0x2ab2) extension = "grease-quic-bit";
+            if (parameterId == 0x7157) extension = "timestamp";
+            if (parameterId == 0x73db) extension = "version-negotiation";
+            if (parameterId == 0xde1a) extension = "delayed-ack";
+            if (!extension.isBlank()) {
+                msg += " (" + extension + " extension)";
+            }
+            log.info(msg);
             buffer.get(new byte[size]);
         }
 
