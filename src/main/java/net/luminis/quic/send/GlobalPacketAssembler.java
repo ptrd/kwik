@@ -79,8 +79,9 @@ public class GlobalPacketAssembler {
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
 
         for (EncryptionLevel level: EncryptionLevel.values()) {
-            if (packetAssembler[level.ordinal()] != null) {
-                Optional<SendItem> item = packetAssembler[level.ordinal()].assemble(remaining, maxPacketSize - size, sourceConnectionId, destinationConnectionId);
+            PacketAssembler assembler = this.packetAssembler[level.ordinal()];
+            if (assembler != null) {
+                Optional<SendItem> item = assembler.assemble(remaining, maxPacketSize - size, sourceConnectionId, destinationConnectionId);
                 if (item.isPresent()) {
                     packets.add(item.get());
                     int packetSize = item.get().getPacket().estimateLength();
