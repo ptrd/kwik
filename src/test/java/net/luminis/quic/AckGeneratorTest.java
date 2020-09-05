@@ -47,7 +47,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(true);
 
-        AckFrame ack = ackGenerator.generateAckForPacket(0);
+        AckFrame ack = ackGenerator.generateAckForPacket(0).get();
 
         assertThat(ack.getLargestAcknowledged()).isEqualTo(0);
         assertThat(ack.getAckedPacketNumbers()).containsOnly(0L);
@@ -61,7 +61,7 @@ class AckGeneratorTest {
 
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(true);
 
-        AckFrame ack = ackGenerator.generateAckForPacket(0);
+        AckFrame ack = ackGenerator.generateAckForPacket(0).get();
 
         assertThat(ack.getLargestAcknowledged()).isEqualTo(2);
         assertThat(ack.getAckedPacketNumbers()).containsOnly(0L, 1L, 2L);
@@ -72,14 +72,14 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
         ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.Initial));
 
-        AckFrame ack1 = ackGenerator.generateAckForPacket(1);
+        AckFrame ack1 = ackGenerator.generateAckForPacket(1).get();
         assertThat(ack1.getAckedPacketNumbers()).containsOnly(0L, 1L);
 
         ackGenerator.packetReceived(new MockPacket(3, 83, EncryptionLevel.Initial));
         ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.Initial));
         ackGenerator.packetReceived(new MockPacket(6, 83, EncryptionLevel.Initial));
 
-        AckFrame ack2 = ackGenerator.generateAckForPacket(1);
+        AckFrame ack2 = ackGenerator.generateAckForPacket(1).get();
 
         assertThat(ack2.getLargestAcknowledged()).isEqualTo(6);
         assertThat(ack2.getAckedPacketNumbers()).containsOnly(0L, 1L, 3L, 5L, 6L);
@@ -90,7 +90,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
         ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.Initial));
 
-        AckFrame ack1 = ackGenerator.generateAckForPacket(1);
+        AckFrame ack1 = ackGenerator.generateAckForPacket(1).get();
         assertThat(ack1.getAckedPacketNumbers()).containsOnly(0L, 1L);
 
         ackGenerator.process(new AckFrame(1));
@@ -103,7 +103,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
         ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.Initial));
 
-        AckFrame ack1 = ackGenerator.generateAckForPacket(6);
+        AckFrame ack1 = ackGenerator.generateAckForPacket(6).get();
         assertThat(ack1.getAckedPacketNumbers()).containsOnly(0L, 1L);
 
         ackGenerator.process(new AckFrame(6));  // This acks the ack sent in packet 6 -> ack1
@@ -111,7 +111,7 @@ class AckGeneratorTest {
 
         assertThat(ackGenerator.hasAckToSend()).isEqualTo(true);
 
-        AckFrame ack2 = ackGenerator.generateAckForPacket(2);
+        AckFrame ack2 = ackGenerator.generateAckForPacket(2).get();
         assertThat(ack2.getAckedPacketNumbers()).containsOnly(2L);
     }
 
@@ -134,7 +134,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
         assertThat(ackGenerator.hasNewAckToSend()).isEqualTo(true);
 
-        AckFrame ack = ackGenerator.generateAckForPacket(0);
+        AckFrame ack = ackGenerator.generateAckForPacket(0).get();
 
         assertThat(ackGenerator.hasNewAckToSend()).isEqualTo(false);
     }
@@ -154,7 +154,7 @@ class AckGeneratorTest {
         Thread.sleep(10);
 
         // Then
-        AckFrame ackFrame = ackGenerator.generateAckForPacket(13);
+        AckFrame ackFrame = ackGenerator.generateAckForPacket(13).get();
         assertThat(ackFrame.getAckDelay()).isGreaterThanOrEqualTo(10);
     }
 
@@ -167,8 +167,8 @@ class AckGeneratorTest {
         Thread.sleep(10);
 
         // Then
-        AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13);
-        AckFrame secondAckFrame = ackGenerator.generateAckForPacket(14);
+        AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13).get();
+        AckFrame secondAckFrame = ackGenerator.generateAckForPacket(14).get();
         assertThat(secondAckFrame.getAckDelay()).isEqualTo(0);
     }
 }

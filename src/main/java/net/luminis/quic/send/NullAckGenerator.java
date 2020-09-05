@@ -19,10 +19,11 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.AckGenerator;
-import net.luminis.quic.PnSpace;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
+
+import java.util.Optional;
 
 /**
  * AckGenerator that does nothing ("Null Pattern")
@@ -52,7 +53,7 @@ public class NullAckGenerator extends AckGenerator {
     }
 
     @Override
-    public synchronized AckFrame generateAckForPacket(long packetNumber) {
+    public synchronized Optional<AckFrame> generateAckForPacket(long packetNumber) {
         throw new IllegalStateException();
     }
 }

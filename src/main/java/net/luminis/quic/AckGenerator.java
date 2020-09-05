@@ -25,10 +25,7 @@ import net.luminis.quic.send.Sender;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -89,18 +86,26 @@ public class AckGenerator {
      * @param packetNumber
      * @return
      */
-    public synchronized AckFrame generateAckForPacket(long packetNumber) {
-        AckFrame ackFrame = generateAck();
-        registerAckSendWithPacket(ackFrame, packetNumber);
+    public synchronized Optional<AckFrame> generateAckForPacket(long packetNumber) {
+        Optional<AckFrame> ackFrame = generateAck();
+        if (ackFrame.isPresent()) {
+            registerAckSendWithPacket(ackFrame.get(), packetNumber);
+        }
         return ackFrame;
     }
 
-    public synchronized AckFrame generateAck() {
+    public synchronized Optional<AckFrame> generateAck() {
         int delay = 0;
         if (newPacketsToAcknowlegdeSince != null) {
             delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
         }
-        return new AckFrame(quicVersion, packetsToAcknowledge, delay);
+        List<Long> packetsToAck = this.packetsToAcknowledge;
+        if (!packetsToAck.isEmpty()) {
+            return Optional.of(new AckFrame(quicVersion, this.packetsToAcknowledge, delay));
+        }
+        else {
+            return Optional.empty();
+        }
     }
 
     public synchronized void registerAckSendWithPacket(AckFrame ackFrame, long packetNumber) {

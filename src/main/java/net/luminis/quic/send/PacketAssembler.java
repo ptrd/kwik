@@ -83,7 +83,7 @@ public class PacketAssembler {
         if (requestQueue.mustSendAck()) {
             if (ackGenerator.hasNewAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-                ackFrame = ackGenerator.generateAck();
+                ackFrame = ackGenerator.generateAck().get();   // Explicit ack cannot disappear by other means than sending it.
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2
                 // "... packets containing only ACK frames are not congestion controlled ..."
                 // So: only check if it fits within available packet space
@@ -108,8 +108,8 @@ public class PacketAssembler {
             // If there is no explicit ack, but there is something to send, ack should be included if possible
             if (ackGenerator.hasAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-                ackFrame = ackGenerator.generateAck();
-                optionalAckPending = true;
+                ackFrame = ackGenerator.generateAck().orElse(null);
+                optionalAckPending = (ackFrame != null);
             }
         }
 
