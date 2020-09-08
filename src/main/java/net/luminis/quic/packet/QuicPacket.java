@@ -362,6 +362,29 @@ abstract public class QuicPacket {
         packetNumber = pn;
     }
 
+    protected ByteBuffer generatePayloadBytes(int encodedPacketNumberLength) {
+        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
+        int serializeFramesLength = frameBytes.position();
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
+        // "To ensure that sufficient data is available for sampling, packets are
+        //   padded so that the combined lengths of the encoded packet number and
+        //   protected payload is at least 4 bytes longer than the sample required
+        //   for header protection."
+
+        // "To ensure that sufficient data is available for sampling, packets are padded so that the combined lengths
+        //   of the encoded packet number and protected payload is at least 4 bytes longer than the sample required
+        //   for header protection. (...). This results in needing at least 3 bytes of frames in the unprotected payload
+        //   if the packet number is encoded on a single byte, or 2 bytes of frames for a 2-byte packet number encoding."
+        if (encodedPacketNumberLength + serializeFramesLength < 4) {
+            Padding padding = new Padding(4 - encodedPacketNumberLength - frameBytes.position());
+            frames.add(padding);
+            frameBytes.put(padding.getBytes());
+        }
+        frameBytes.flip();
+        return frameBytes;
+    }
+
     protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 

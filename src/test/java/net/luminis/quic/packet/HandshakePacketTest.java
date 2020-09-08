@@ -149,6 +149,17 @@ class HandshakePacketTest {
         ).isInstanceOf(InvalidPacketException.class);
     }
 
+    @Test
+    void packetWithMinimalFrameShouldBePaddedToGetEnoughBytesForEncrypting() throws Exception {
+        HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
+
+        Keys keys = TestUtils.createKeys();
+        handshakePacket.generatePacketBytes(1, keys);
+
+        // If it gets here, it is already sure the encryption succeeded.
+        assertThat(handshakePacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
+    }
+
 
     // Utility method to generate an encrypted and protected Handshake packet
     void generateHandshakePacket() {

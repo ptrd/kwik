@@ -80,14 +80,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public byte[] generatePacketBytes(long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
 
-        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
-        frameBytes.flip();
 
         ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         generateFrameHeaderInvariant(packetBuffer);
         generateAdditionalFields(packetBuffer);
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
+        ByteBuffer frameBytes = generatePayloadBytes(encodedPacketNumber.length);
         addLength(packetBuffer, encodedPacketNumber.length, frameBytes.limit());
         packetBuffer.put(encodedPacketNumber);
 

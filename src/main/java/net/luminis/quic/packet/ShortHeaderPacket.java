@@ -135,21 +135,7 @@ public class ShortHeaderPacket extends QuicPacket {
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
         buffer.put(encodedPacketNumber);
 
-        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
-        int serializeFramesLength = frameBytes.position();
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
-        // "To ensure that sufficient data is available for sampling, packets are
-        //   padded so that the combined lengths of the encoded packet number and
-        //   protected payload is at least 4 bytes longer than the sample required
-        //   for header protection."
-        if (encodedPacketNumber.length + serializeFramesLength < 4) {
-            Padding padding = new Padding(4 - encodedPacketNumber.length - frameBytes.position());
-            frames.add(padding);
-            frameBytes.put(padding.getBytes());
-        }
-        frameBytes.flip();
-
+        ByteBuffer frameBytes = generatePayloadBytes(encodedPacketNumber.length);
         protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, keys);
 
         buffer.limit(buffer.position());
