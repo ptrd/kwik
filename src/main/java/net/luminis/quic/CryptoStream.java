@@ -21,6 +21,8 @@ package net.luminis.quic;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.stream.BaseStream;
+import net.luminis.quic.stream.StreamElement;
 import net.luminis.tls.*;
 import net.luminis.tls.extension.Extension;
 
@@ -29,9 +31,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 
-public class CryptoStream {
+public class CryptoStream extends BaseStream {
 
-    private SortedSet<CryptoFrame> frames = new TreeSet<>();
     private final Version quicVersion;
     private final QuicConnectionImpl connection;
     private final EncryptionLevel encryptionLevel;
@@ -40,7 +41,6 @@ public class CryptoStream {
     private final Logger log;
     private List<Message> messages;
     private TlsMessageParser tlsMessageParser;
-    private int parsedToOffset = 0;
 
 
     public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
@@ -57,8 +57,7 @@ public class CryptoStream {
 
     public void add(CryptoFrame cryptoFrame) {
         try {
-            if (cryptoFrame.getUpToOffset() > parsedToOffset) {
-                frames.add(cryptoFrame);
+            if (super.add(cryptoFrame)) {
 
                 int availableBytes = bytesAvailable();
                 while (availableBytes >= 4) {
@@ -78,9 +77,9 @@ public class CryptoStream {
                         if (msgBuffer.limit() - msgBuffer.position() > 0) {
                             throw new RuntimeException();  // Must be programming error
                         }
-                        parsedToOffset += read;
+
+                        read(read);
                         availableBytes -= read;
-                        removeParsedFrames();
 
                         messages.add(tlsMessage);
                         processMessage(tlsMessage);
@@ -90,75 +89,12 @@ public class CryptoStream {
                     }
                 }
             } else {
-                log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + parsedToOffset);
+                log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + getProcessedOffset());
             }
         }
         catch (TlsProtocolException tlsError) {
             log.error("Parsing TLS message failed", tlsError);
             throw new ProtocolError("TLS error");
-        }
-    }
-
-    private int bytesAvailable() {
-        if (frames.isEmpty()) {
-            return 0;
-        }
-        else {
-            int available = 0;
-            int readUpTo = parsedToOffset;
-            Iterator<CryptoFrame> iterator = frames.iterator();
-
-            while (iterator.hasNext()) {
-                CryptoFrame nextFrame = iterator.next();
-                if (nextFrame.getOffset() <= readUpTo) {
-                    if (nextFrame.getUpToOffset() > readUpTo) {
-                        available += nextFrame.getUpToOffset() - readUpTo;
-                        readUpTo = nextFrame.getUpToOffset();
-                    }
-                } else {
-                    break;
-                }
-            }
-            return available;
-        }
-    }
-
-    private int read(ByteBuffer buffer) {
-        if (frames.isEmpty()) {
-            return 0;
-        }
-        else {
-            int read = 0;
-            int readUpTo = parsedToOffset;
-            Iterator<CryptoFrame> iterator = frames.iterator();
-
-            while (iterator.hasNext() && buffer.remaining() > 0) {
-                CryptoFrame nextFrame = iterator.next();
-                if (nextFrame.getOffset() <= readUpTo) {
-                    if (nextFrame.getUpToOffset() > readUpTo) {
-                        int available = nextFrame.getOffset() - readUpTo + nextFrame.getLength();
-                        int bytesToRead = Integer.min(buffer.limit() - buffer.position(), available);
-                        buffer.put(nextFrame.getCryptoData(), readUpTo - nextFrame.getOffset(), bytesToRead);
-                        readUpTo += bytesToRead;
-                        read += bytesToRead;
-                    }
-                } else {
-                    break;
-                }
-            }
-            return read;
-        }
-    }
-
-    private void removeParsedFrames() {
-        Iterator<CryptoFrame> iterator = frames.iterator();
-        while (iterator.hasNext()) {
-            if (iterator.next().getUpToOffset() <= parsedToOffset) {
-                iterator.remove();
-            }
-            else {
-                break;
-            }
         }
     }
 
