@@ -18,19 +18,26 @@
  */
 package net.luminis.quic.stream;
 
-
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+
 public class BaseStream {
 
     private SortedSet<StreamElement> frames = new TreeSet<>();
-    private int parsedToOffset = 0;
+    private int processedToOffset = 0;
 
+    /**
+     * Add a stream frame to this stream. The frame can contain any number of bytes positioned anywhere in the stream;
+     * the read method will take care of returning stream bytes in the right order, without gaps.
+     * @param frame
+     * @return true if the frame is adds bytes to this stream; false if the frame does not add bytes to the stream
+     * (because the frame is a duplicate or its stream bytes where already received with previous frames).
+     */
     protected boolean add(StreamElement frame) {
-        if (frame.getUpToOffset() > parsedToOffset) {
+        if (frame.getUpToOffset() > processedToOffset) {
             frames.add(frame);
             return true;
         }
@@ -39,13 +46,17 @@ public class BaseStream {
         }
     }
 
+    /**
+     * Returns the number of bytes that can be read from this stream.
+     * @return
+     */
     protected int bytesAvailable() {
         if (frames.isEmpty()) {
             return 0;
         }
         else {
             int available = 0;
-            int readUpTo = parsedToOffset;
+            int readUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext()) {
@@ -63,13 +74,19 @@ public class BaseStream {
         }
     }
 
+    /**
+     * Read a much as possible bytes from the stream (limited by the size of the given buffer or the number of bytes
+     * available on the stream).
+     * @param buffer
+     * @return
+     */
     protected int read(ByteBuffer buffer) {
         if (frames.isEmpty()) {
             return 0;
         }
         else {
             int read = 0;
-            int readUpTo = parsedToOffset;
+            int readUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext() && buffer.remaining() > 0) {
@@ -86,19 +103,16 @@ public class BaseStream {
                     break;
                 }
             }
+            processedToOffset += read;
+            removeParsedFrames();
             return read;
         }
-    }
-
-    protected void read(int count) {
-        parsedToOffset += count;
-        removeParsedFrames();
     }
 
     private void removeParsedFrames() {
         Iterator<StreamElement> iterator = frames.iterator();
         while (iterator.hasNext()) {
-            if (iterator.next().getUpToOffset() <= parsedToOffset) {
+            if (iterator.next().getUpToOffset() <= processedToOffset) {
                 iterator.remove();
             }
             else {
@@ -107,8 +121,12 @@ public class BaseStream {
         }
     }
 
-    protected long getProcessedOffset() {
-        return parsedToOffset;
+    /**
+     * Returns the position in the stream up to where stream bytes are read.
+     * @return
+     */
+    protected long readOffset() {
+        return processedToOffset;
     }
 }
 

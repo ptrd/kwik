@@ -52,19 +52,24 @@ class CryptoStreamTest {
         FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
         setParseFunction(buffer -> {
-            int length = buffer.getInt();
+            buffer.mark();
+            int type = buffer.get();
+            buffer.reset();
+            int length = buffer.getInt() & 0x00ffffff;
             byte[] stringBytes = new byte[length];
             buffer.get(stringBytes);
-            return new MockTlsMessage(new String(stringBytes));
+            return new MockTlsMessage(type, new String(stringBytes));
         });
     }
 
     @Test
     void parseSingleMessageInSingleFrame() throws Exception {
-        cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes("first crypto frame")));
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(13, "first crypto frame")));
 
-        assertThat(cryptoStream.getTlsMessages().isEmpty()).isFalse();
-        assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("first crypto frame"));
+        assertThat(cryptoStream.getTlsMessages())
+                .isNotEmpty()
+                .contains(new MockTlsMessage("first crypto frame"));
+        assertThat(((MockTlsMessage) cryptoStream.getTlsMessages().get(0)).getType()).isEqualTo(13);
     }
 
     @Test
@@ -189,17 +194,30 @@ class CryptoStreamTest {
     }
 
     private byte[] convertToMsgBytes(String content) {
+        return convertToMsgBytes(0, content);
+    }
+
+    private byte[] convertToMsgBytes(int type, String content) {
         byte[] bytes = new byte[content.getBytes().length + 4];
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         buffer.putInt(content.getBytes().length);
         buffer.put(content.getBytes());
+        buffer.rewind();
+        buffer.put((byte) type);
         return bytes;
     }
 
     static class MockTlsMessage extends Message {
-        String contents;
+        private final int type;
+        private final String contents;
+
+        public MockTlsMessage(int type, String contents) {
+            this.type = type;
+            this.contents = contents;
+        }
 
         public MockTlsMessage(String contents) {
+            this.type = 0;
             this.contents = contents;
         }
 
@@ -219,6 +237,10 @@ class CryptoStreamTest {
         @Override
         public String toString() {
             return "Message: " + contents;
+        }
+
+        public int getType() {
+            return type;
         }
     }
 
