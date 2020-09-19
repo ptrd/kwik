@@ -802,7 +802,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         sender.send(frame, App, this::retransmitAppData);
     }
 
-    public void slideFlowControlWindow(int size) {
+    public void updateConnectionFlowControl(int size) {
         flowControlMax += size;
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
             send(new MaxDataFrame(flowControlMax), f -> {});

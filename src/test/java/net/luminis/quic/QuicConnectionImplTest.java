@@ -307,16 +307,16 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
 
-        connection.slideFlowControlWindow(10);
+        connection.updateConnectionFlowControl(10);
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));  // No initial update, value is advertised in transport parameters.
 
-        connection.slideFlowControlWindow((int) flowControlIncrement);
+        connection.updateConnectionFlowControl((int) flowControlIncrement);
         verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
 
-        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.8));
+        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
         verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
 
-        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.21));
+        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
         verify(sender, times(2)).send(any(QuicFrame.class), any(EncryptionLevel.class) , any(Consumer.class));
     }
 
