@@ -36,7 +36,7 @@ public class BaseStream {
      * @return true if the frame is adds bytes to this stream; false if the frame does not add bytes to the stream
      * (because the frame is a duplicate or its stream bytes where already received with previous frames).
      */
-    protected boolean add(StreamElement frame) {
+    protected synchronized boolean add(StreamElement frame) {
         if (frame.getUpToOffset() > processedToOffset) {
             frames.add(frame);
             return true;
@@ -50,21 +50,24 @@ public class BaseStream {
      * Returns the number of bytes that can be read from this stream.
      * @return
      */
-    protected int bytesAvailable() {
+    protected synchronized int bytesAvailable() {
+        if (isStreamEnd(processedToOffset)) {
+            return -1;
+        }
         if (frames.isEmpty()) {
             return 0;
         }
         else {
             int available = 0;
-            int readUpTo = processedToOffset;
+            int countedUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext()) {
                 StreamElement nextFrame = iterator.next();
-                if (nextFrame.getOffset() <= readUpTo) {
-                    if (nextFrame.getUpToOffset() > readUpTo) {
-                        available += nextFrame.getUpToOffset() - readUpTo;
-                        readUpTo = nextFrame.getUpToOffset();
+                if (nextFrame.getOffset() <= countedUpTo) {
+                    if (nextFrame.getUpToOffset() > countedUpTo) {
+                        available += nextFrame.getUpToOffset() - countedUpTo;
+                        countedUpTo = nextFrame.getUpToOffset();
                     }
                 } else {
                     break;
@@ -74,13 +77,18 @@ public class BaseStream {
         }
     }
 
+
     /**
      * Read a much as possible bytes from the stream (limited by the size of the given buffer or the number of bytes
-     * available on the stream).
+     * available on the stream). If no byte is available because the end of the stream has been reached, the value -1 is returned.
+     * Does not block: returns 0 when no bytes can be read.
      * @param buffer
      * @return
      */
-    protected int read(ByteBuffer buffer) {
+    protected synchronized int read(ByteBuffer buffer) {
+        if (isStreamEnd(processedToOffset)) {
+            return -1;
+        }
         if (frames.isEmpty()) {
             return 0;
         }
@@ -103,10 +111,21 @@ public class BaseStream {
                     break;
                 }
             }
+
             processedToOffset += read;
             removeParsedFrames();
             return read;
         }
+    }
+
+    /**
+     * Indicates whether the given offset is end of stream.
+     * @param offset
+     * @return when offset is beyond the last byte of the stream. For example, if offset is equal to the length of the
+     * stream, return value should be true.
+     */
+    protected boolean isStreamEnd(int offset) {
+        return false;
     }
 
     private void removeParsedFrames() {
@@ -125,7 +144,7 @@ public class BaseStream {
      * Returns the position in the stream up to where stream bytes are read.
      * @return
      */
-    protected long readOffset() {
+    protected synchronized long readOffset() {
         return processedToOffset;
     }
 }

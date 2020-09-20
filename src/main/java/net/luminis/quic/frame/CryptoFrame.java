@@ -27,7 +27,7 @@ import net.luminis.quic.stream.StreamElement;
 
 import java.nio.ByteBuffer;
 
-public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<CryptoFrame> {
+public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
 
     private int offset;
     private int length;
@@ -96,12 +96,12 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
     }
 
     @Override
-    public int compareTo(CryptoFrame other) {
-        if (this.offset != other.offset) {
-            return Integer.compare(this.offset, other.offset);
+    public int compareTo(StreamElement other) {
+        if (this.offset != other.getOffset()) {
+            return Integer.compare(this.offset, other.getOffset());
         }
         else {
-            return Integer.compare(this.length, other.length);
+            return Integer.compare(this.length, other.getLength());
         }
     }
 

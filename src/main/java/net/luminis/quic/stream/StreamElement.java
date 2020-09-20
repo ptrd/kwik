@@ -19,7 +19,7 @@
 package net.luminis.quic.stream;
 
 
-public interface StreamElement {
+public interface StreamElement extends Comparable<StreamElement> {
 
     int getOffset();
 

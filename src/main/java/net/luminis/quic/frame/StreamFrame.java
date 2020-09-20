@@ -22,6 +22,7 @@ import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.stream.StreamElement;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -29,7 +30,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 
-public class StreamFrame extends QuicFrame {
+public class StreamFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
 
     private StreamType streamType;
     private int streamId;
@@ -137,6 +138,16 @@ public class StreamFrame extends QuicFrame {
         return Objects.hash(streamId, offset, length);
     }
 
+    @Override
+    public int compareTo(StreamElement other) {
+        if (this.offset != other.getOffset()) {
+            return Integer.compare(this.offset, other.getOffset());
+        }
+        else {
+            return Integer.compare(this.length, other.getLength());
+        }
+    }
+
     public int getStreamId() {
         return streamId;
     }
@@ -151,6 +162,11 @@ public class StreamFrame extends QuicFrame {
 
     public byte[] getStreamData() {
         return streamData;
+    }
+
+    @Override
+    public int getUpToOffset() {
+        return offset + length;
     }
 
     public boolean isFinal() {
