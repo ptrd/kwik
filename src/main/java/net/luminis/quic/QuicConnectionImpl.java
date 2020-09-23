@@ -350,7 +350,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                     handshakeState = HandshakeState.HasAppKeys;
                     handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
                 } else {
-                    log.debug("Handshake state cannot be set to HasAppKeys");
+                    log.error("Handshake state cannot be set to HasAppKeys; current state is " + handshakeState);
                 }
             }
 
