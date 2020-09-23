@@ -192,7 +192,7 @@ public class InteropRunner extends KwikCli {
                 logger.info("Starting download at " + timeNow());
 
                 QuicConnection connection = builder.build();
-                connection.connect(15_000);
+                connection.connect(30_000);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
                 logger.info("Downloaded " + download + " finished at " + timeNow());
