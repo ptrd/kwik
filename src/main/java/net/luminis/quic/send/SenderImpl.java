@@ -181,8 +181,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         socket = newSocket;
     }
 
-    public void discard(PnSpace space) {
+    public void discard(PnSpace space, String reason) {
         if (! discardedSpaces[space.ordinal()]) {
+            log.recovery("Discarding pn space " + space + " because " + reason);
             packetAssembler.stop(space);
             recoveryManager.stopRecovery(space);
             sendRequestQueue[space.ordinal()].clear();
