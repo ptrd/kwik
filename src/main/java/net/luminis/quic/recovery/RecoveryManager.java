@@ -237,7 +237,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             }
         }
         else if (earliestLastAckElicitingSentTime != null) {
-            // SendOneOrTwoAckElicitingPackets(pn_space)
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-29#appendix-A.9
+            // "SendOneOrTwoAckElicitingPackets(pn_space)"
             EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
             if (!framesToRetransmit.isEmpty()) {
@@ -357,6 +358,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-30#section-6.2.1
+                // "A sender SHOULD restart its PTO timer (...), when the handshake is confirmed (...),"
                 setLossDetectionTimer();
             }
         }
