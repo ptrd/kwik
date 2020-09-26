@@ -93,7 +93,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                         earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
                     }
                     else {
-                        throw new IllegalStateException("Missing last ack eliciting sent time");
+                        throw new IllegalStateException("Missing last ack eliciting sent time for " + earliestLastAckElicitingSentTime.pnSpace);
                     }
                 }
 
