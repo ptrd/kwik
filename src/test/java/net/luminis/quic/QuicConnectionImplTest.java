@@ -22,13 +22,16 @@ import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.cid.DestinationConnectionIdRegistry;
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.ByteUtils;
+import net.luminis.tls.TlsState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -307,16 +310,16 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
 
-        connection.slideFlowControlWindow(10);
+        connection.updateConnectionFlowControl(10);
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));  // No initial update, value is advertised in transport parameters.
 
-        connection.slideFlowControlWindow((int) flowControlIncrement);
+        connection.updateConnectionFlowControl((int) flowControlIncrement);
         verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
 
-        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.8));
+        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
         verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
 
-        connection.slideFlowControlWindow((int) (flowControlIncrement * 0.21));
+        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
         verify(sender, times(2)).send(any(QuicFrame.class), any(EncryptionLevel.class) , any(Consumer.class));
     }
 
@@ -629,4 +632,47 @@ class QuicConnectionImplTest {
         ).isInstanceOf(InvalidPacketException.class);
     }
 
+    void connectionShouldBeSilentlyClosedAfterIdleTimeout() throws Exception {
+
+        // Given
+        simulateNormalConnectionSetup(1);
+
+        // When
+        Thread.sleep(1000);
+
+        // Then
+        verify(connection, times(1)).silentlyCloseConnection(anyLong());
+    }
+
+    private void simulateNormalConnectionSetup(int idleTimeoutInSeconds) throws Exception {
+        Sender sender = Mockito.mock(Sender.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionSecrets"), mock(ConnectionSecrets.class));
+        connection = Mockito.spy(connection);
+
+        new Thread(() -> {
+            try {
+                connection.connect(3 * idleTimeoutInSeconds * 1000);
+            } catch (IOException e) {
+                System.out.println("Exception in connect method: " + e);
+            }
+        }).start();
+
+        connection.setPeerTransportParameters(new TransportParameters(idleTimeoutInSeconds, 1_000_000, 10, 10));
+        connection.finishHandshake(new MockTlsState());
+    }
+
+    static class MockTlsState extends TlsState {
+        @Override
+        protected byte[] computeHandshakeFinishedHmac(boolean b) {
+            return new byte[32];
+        }
+        @Override
+        public boolean isServerFinished() {
+            return true;
+        }
+        @Override
+        public void computeApplicationSecrets() {
+        }
+    }
 }

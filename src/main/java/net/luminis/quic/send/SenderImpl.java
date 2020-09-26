@@ -75,6 +75,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final GlobalPacketAssembler packetAssembler;
     private final GlobalAckGenerator globalAckGenerator;
     private final RecoveryManager recoveryManager;
+    private final IdleTimer idleTimer;
     private final Thread senderThread;
     private ConnectionSecrets connectionSecrets;
     private final Object condition = new Object();
@@ -109,6 +110,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
+
+        idleTimer = connection.getIdleTimer();
 
         senderThread = new Thread(() -> sendLoop(), "sender-loop");
         senderThread.setDaemon(true);
@@ -299,7 +302,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         bytesSent += buffer.position();
 
         itemsToSend.stream()
-                .forEach(item -> recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback()));
+                .forEach(item -> {
+                    recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback());
+                    idleTimer.packetSent(item.getPacket(), timeSent);
+                });
 
         itemsToSend.stream()
                 .map(item -> item.getPacket())

@@ -40,12 +40,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -59,8 +59,7 @@ class QuicStreamTest {
 
     @BeforeAll
     static void setFiniteWaitForNextFrameTimeout() {
-        originalWaitForNextFrameTimeoutValue = QuicStream.waitForNextFrameTimeout;
-        QuicStream.waitForNextFrameTimeout = 1;
+        setFiniteWaitForNextFrameTimeout(5);
     }
 
     @AfterAll
@@ -204,7 +203,7 @@ class QuicStreamTest {
             quicStream.getInputStream().read(buffer, initialReadCount, buffer.length - initialReadCount);
 
             // It should not get here
-            fail("read method should not succesfully return");
+            fail("read method should not successfully return");
         }
         catch (SocketTimeoutException e) {
             // This is expected, as the read method should have blocked for QuicStream.waitForNextFrameTimeout seconds.
@@ -327,8 +326,9 @@ class QuicStreamTest {
         inputStream.read(new byte[2]);
         verify(connection, times(2)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
 
+        clearInvocations();
         inputStream.read(new byte[(int) (initialWindow * factor * 3.1)]);
-        verify(connection, times(5)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
+        verify(connection, times(3)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
     }
 
     @Test
@@ -495,6 +495,64 @@ class QuicStreamTest {
         assertThat(sentData).isEqualTo("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
     }
 
+    @Test
+    void readReturnsMinusOneWhenEndOfStreamIsReached() {
+        // Given
+        quicStream.add(new StreamFrame(9, new byte[10], true));
+        ByteBuffer buffer = ByteBuffer.allocate(50);
+
+        // When
+        int read = quicStream.read(buffer);
+        assertThat(read).isEqualTo(10);
+
+        // Then
+        read = quicStream.read(buffer);
+        assertThat(read).isEqualTo(-1);
+    }
+
+    @Test
+    void availableReturnsNegativeWhenEndOfStreamIsReached() {
+        // Given
+        quicStream.add(new StreamFrame(9, new byte[10], true));
+        ByteBuffer buffer = ByteBuffer.allocate(50);
+
+        // When
+        int read = quicStream.read(buffer);
+        assertThat(read).isEqualTo(10);
+
+        // Then
+        int available = quicStream.bytesAvailable();
+        assertThat(available).isEqualTo(-1);
+    }
+
+    @Test
+    void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
+        setFiniteWaitForNextFrameTimeout(25);       // Make long enough to have reader thread blocking when new frame arrives
+        // Given
+        InputStream inputStream = quicStream.getInputStream();
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));
+        int firstRead = inputStream.read(new byte[100]);
+
+        // When
+        // Async add of stream frame while read is already blocking
+        new Thread(() -> {
+            try {
+                Thread.sleep(5);   // Wait long enough to have reader thread block, but not to long to cause wait timeout
+            } catch (InterruptedException e) {}
+            quicStream.add(resurrect(new StreamFrame(0, 4, new byte[0], true)));
+        }).start();
+
+        int secondRead = inputStream.read(new byte[100]);
+
+        // Then
+        assertThat(firstRead).isEqualTo(4);
+        assertThat(secondRead).isEqualTo(-1);
+    }
+
+    static private void setFiniteWaitForNextFrameTimeout(int timeout) {
+        originalWaitForNextFrameTimeoutValue = QuicStream.waitForNextFrameTimeout;
+        QuicStream.waitForNextFrameTimeout = timeout;
+    }
 
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
