@@ -126,8 +126,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         this.cipherSuites = cipherSuites;
 
         socket = new DatagramSocket();
+
+        idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
                         this, initialRtt, log);
+        idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
 
@@ -141,8 +144,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         flowControlMax = transportParams.getInitialMaxData();
         flowControlLastAdvertised = flowControlMax;
         flowControlIncrement = flowControlMax / 10;
-
-        idleTimer = new IdleTimer(this, sender::getPto, log);
 
         try {
             ECKey[] keys = generateKeys("secp256r1");

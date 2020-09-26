@@ -34,19 +34,19 @@ public class IdleTimer {
     private final int timerResolution;
     private long timeout;
     private final QuicConnectionImpl connection;
-    private final IntSupplier ptoSupplier;
     private final Logger log;
+    private volatile IntSupplier ptoSupplier;
     private volatile Instant lastAction;
     private volatile boolean enabled;
 
 
-    public IdleTimer(QuicConnectionImpl connection, IntSupplier ptoSupplier, Logger logger) {
-        this(connection, ptoSupplier, logger, 1000);
+    public IdleTimer(QuicConnectionImpl connection, Logger logger) {
+        this(connection, logger, 1000);
     }
 
-    public IdleTimer(QuicConnectionImpl connection, IntSupplier ptoSupplier, Logger logger, int timerResolution) {
+    public IdleTimer(QuicConnectionImpl connection, Logger logger, int timerResolution) {
         this.connection = connection;
-        this.ptoSupplier = ptoSupplier;
+        this.ptoSupplier = () -> 0;
         this.log = logger;
         this.timerResolution = timerResolution;
 
@@ -68,6 +68,10 @@ public class IdleTimer {
         else {
             log.error("idle timeout was set already; can't be set twice on same connection");
         }
+    }
+
+    public void setPtoSupplier(IntSupplier ptoSupplier) {
+        this.ptoSupplier = ptoSupplier;
     }
 
     private void checkIdle() {

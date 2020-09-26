@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.PnSpace;
-import net.luminis.quic.QuicConnectionImpl;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
@@ -50,6 +47,7 @@ class SenderV2ImplTest extends AbstractSenderTest {
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
+        when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, mock(Logger.class)));
 
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
         Keys keys = createKeys();

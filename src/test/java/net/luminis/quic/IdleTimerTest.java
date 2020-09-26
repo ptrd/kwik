@@ -42,7 +42,7 @@ class IdleTimerTest {
     @BeforeEach
     void initObjectUnderTest() {
         connection = Mockito.spy(mock(QuicConnectionImpl.class));
-        idleTimer = new IdleTimer(connection, () -> 50, mock(Logger.class), 10);
+        idleTimer = new IdleTimer(connection, mock(Logger.class), 10);
     }
 
     @AfterEach
@@ -80,8 +80,9 @@ class IdleTimerTest {
 
     @Test
     void ifThreeTimesPtoIsLargerThanIdleTimeoutConnectionShouldNotTimeoutBeforeThreeTimesPto() throws Exception {
-        idleTimer = new IdleTimer(connection, () -> 100, mock(Logger.class), 10);
+        idleTimer = new IdleTimer(connection, mock(Logger.class), 10);
         idleTimer.setIdleTimeout(200);
+        idleTimer.setPtoSupplier(() -> 100);
 
         Thread.sleep(200 + delta);
         verify(connection, never()).silentlyCloseConnection(anyLong());

@@ -75,6 +75,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final GlobalPacketAssembler packetAssembler;
     private final GlobalAckGenerator globalAckGenerator;
     private final RecoveryManager recoveryManager;
+    private final IdleTimer idleTimer;
     private final Thread senderThread;
     private ConnectionSecrets connectionSecrets;
     private final Object condition = new Object();
@@ -87,7 +88,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int datagramsSent;
     private volatile long bytesSent;
     private volatile long packetsSent;
-    private final IdleTimer idleTimer;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -303,9 +303,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         itemsToSend.stream()
                 .forEach(item -> {
                     recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback());
-                    if (idleTimer != null) {
-                        idleTimer.packetSent(item.getPacket(), timeSent);
-                    }
+                    idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
         itemsToSend.stream()
