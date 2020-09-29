@@ -93,7 +93,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                         earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
                     }
                     else {
-                        throw new IllegalStateException("Missing last ack eliciting sent time for " + earliestLastAckElicitingSentTime.pnSpace);
+                        // Race condition: ack eliciting was acked in the meant time, can happen. So act as if ackElicitingInFlight == false
+                        if (!peerAwaitingAddressValidation) {
+                            log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                            unschedule();
+                        }
                     }
                 }
 
