@@ -150,11 +150,13 @@ public class AckFrame extends QuicFrame {
 
         buffer.get();  // Eat type.
 
-        largestAcknowledged = VariableLengthInteger.parse(buffer);
+        largestAcknowledged = VariableLengthInteger.parseLong(buffer);
 
-        ackDelay = VariableLengthInteger.parse(buffer);
+        // Parse as long to protect to against buggy peers. Convert to int as MAX_INT is large enough to hold the
+        // largest ack delay that makes sense (even with an delay exponent of 0, MAX_INT is approx 2147 seconds, approx. half an hour).
+        ackDelay = (int) VariableLengthInteger.parseLong(buffer);
 
-        int ackBlockCount = VariableLengthInteger.parse(buffer);
+        int ackBlockCount = (int) VariableLengthInteger.parseLong(buffer);
 
         long currentSmallest = largestAcknowledged;
         // The smallest of the first block is the largest - (rangeSize - 1).
