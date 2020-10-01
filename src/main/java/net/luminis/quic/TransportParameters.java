@@ -56,6 +56,9 @@ public class TransportParameters {
     }
 
     private void setDefaults() {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
+        // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
+        ackDelayExponent = 3;
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
         // "If this value is absent, a default of 25 milliseconds is assumed."
         maxAckDelay = 25;
@@ -202,6 +205,7 @@ public class TransportParameters {
                 "\n- initial max stream data unit\t\t" + initialMaxStreamDataUni +
                 "\n- initial max streams bidi\t\t" + initialMaxStreamsBidi +
                 "\n- initial max streams uni\t\t" + initialMaxStreamsUni +
+                "\n- ack delay exponent\t\t\t" + ackDelayExponent +
                 "\n- max ack delay\t\t\t\t" + maxAckDelay +
                 "\n- disable migration\t\t\t" + disableMigration +
                 "\n- active connection id limit\t\t" + activeConnectionIdLimit +
