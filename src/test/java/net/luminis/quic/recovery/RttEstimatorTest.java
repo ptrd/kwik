@@ -77,6 +77,7 @@ class RttEstimatorTest {
     @Test
     void ackDelayShouldBeSubtractedFromRtt() throws Exception {
         FieldSetter.setField(rttEstimator, rttEstimator.getClass().getDeclaredField("minRtt"), 100);
+        rttEstimator.setMaxAckDelay(100);
         Instant start = Instant.now();
         Instant end = start.plusMillis(253);
         rttEstimator.addSample(end, start, 80);
@@ -143,5 +144,20 @@ class RttEstimatorTest {
 
         // Then
         assertThat(rttEstimator.getLatestRtt()).isEqualTo(10);
+    }
+
+    @Test
+    void whenAckDelayGreaterThanMaxLimitIt() throws Exception {
+        // Given
+        FieldSetter.setField(rttEstimator, rttEstimator.getClass().getDeclaredField("minRtt"), 100);
+        rttEstimator.setMaxAckDelay(50);
+
+        // When
+        Instant start = Instant.now();
+        Instant end = start.plusMillis(253);
+        rttEstimator.addSample(end, start, 80);
+
+        // Then
+        assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(203);
     }
 }

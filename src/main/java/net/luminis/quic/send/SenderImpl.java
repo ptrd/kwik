@@ -347,6 +347,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public void setReceiverMaxAckDelay(int maxAckDelay) {
         this.receiverMaxAckDelay = maxAckDelay;
+        rttEstimater.setMaxAckDelay(maxAckDelay);
     }
 
     public GlobalAckGenerator getGlobalAckGenerator() {

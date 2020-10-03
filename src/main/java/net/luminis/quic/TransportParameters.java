@@ -158,6 +158,10 @@ public class TransportParameters {
         this.maxAckDelay = maxAckDelay;
     }
 
+    /**
+     * Retrieve the max ack delay in milliseconds
+     * @return
+     */
     public int getMaxAckDelay() {
         return maxAckDelay;
     }
