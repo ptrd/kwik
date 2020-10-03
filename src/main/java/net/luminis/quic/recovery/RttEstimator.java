@@ -64,14 +64,15 @@ public class RttEstimator {
 
         int previousSmoothed = smoothedRtt;
 
-        int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000 - ackDelay;
-        latestRtt = rttSample;
+        int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000;
         if (rttSample < minRtt)
             minRtt = rttSample;
-        // Adjust for ack delay if it's plausible.
-        if (rttSample > minRtt + ackDelay) {
+        // Adjust for ack delay if it's plausible. Because times are truncated at millisecond precision,
+        // consider rtt equal to min as plausible.
+        if (rttSample >= minRtt + ackDelay) {
             rttSample -= ackDelay;
         }
+        latestRtt = rttSample;
 
         if (smoothedRtt == 0) {
             // First time
