@@ -63,6 +63,7 @@ public class InteropRunner extends KwikCli {
         try {
             logger = new FileLogger(new File(logFile));
             logger.logInfo(true);
+            logger.logWarning(true);
         } catch (IOException e) {
             System.out.println("Cannot open log file " + logFile);
             System.exit(1);
