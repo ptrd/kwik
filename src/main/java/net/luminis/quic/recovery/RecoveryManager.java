@@ -86,18 +86,17 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 // "As with loss detection, the probe timeout is per packet number space."
                 PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
                 if (earliestLastAckElicitingSentTime == null) {
-                    if (!ackElicitingInFlight) {
+                    if (peerAwaitingAddressValidation) {
                         log.error("Missing last ack eliciting sent time, probably caused by peer awaiting address validation and initial recovery state being discarded");
                         // This can happen when Initial pn space is already discarded, but no ack-eliciting handshake packet has been sent, and peer is still awaiting address validation
                         // Hack: use "now" as start time; must ask experts what to do here
                         earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
                     }
                     else {
-                        // Race condition: ack eliciting was acked in the meant time, can happen. So act as if ackElicitingInFlight == false
-                        if (!peerAwaitingAddressValidation) {
-                            log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
-                            unschedule();
-                        }
+                        // Race condition: the (only) space that had ack eliciting in flight has been reset in the meantime.
+                        // Act as if ackElicitingInFlight was false in the first place.
+                        log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2)) - ack eliciting in flight: " + ackElicitingInFlight());
+                        unschedule();
                     }
                 }
 
@@ -121,7 +120,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
                 unschedule();
             }
         }
