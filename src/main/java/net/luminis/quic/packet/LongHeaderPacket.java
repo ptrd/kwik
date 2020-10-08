@@ -217,6 +217,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     @Override
     public String toString() {
         return "Packet "
+                + (isProbe? "P": "")
                 + getEncryptionLevel().name().charAt(0) + "|"
                 + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "L" + "|"
