@@ -316,7 +316,16 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (! hasBeenReset) {
-            ptoCount = 0;
+            if (ptoCount > 0) {
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.1
+                // "... a client does not reset the PTO backoff factor on receiving acknowledgements until the handshake
+                //  is confirmed;"
+                if (handshakeState.isConfirmed()) {
+                    ptoCount = 0;
+                } else {
+                    log.recovery("probe count not reset on ack because handshake not yet confirmed");
+                }
+            }
             lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame, timeReceived);
         }
     }

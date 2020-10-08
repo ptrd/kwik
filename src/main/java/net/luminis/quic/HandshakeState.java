@@ -44,5 +44,9 @@ public enum HandshakeState {
     public boolean isNotConfirmed() {
         return this.ordinal() < Confirmed.ordinal();
     }
+
+    public boolean isConfirmed() {
+        return this.ordinal() >= Confirmed.ordinal();
+    }
 }
 
