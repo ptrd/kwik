@@ -30,13 +30,14 @@ import java.util.Optional;
 
 public class RttEstimator {
 
-    private Logger log;
+    private final Logger log;
     // All intervals are in milliseconds (1/1000 second)
-    private int initialRtt;
-    private int minRtt = Integer.MAX_VALUE;
-    private int smoothedRtt = 0;
-    private int rttVar;
-    private int latestRtt;
+    private volatile int initialRtt;
+    private volatile int minRtt = Integer.MAX_VALUE;
+    private volatile int smoothedRtt = 0;
+    private volatile int rttVar;
+    private volatile int latestRtt;
+    private volatile int maxAckDelay;
 
 
     public RttEstimator(Logger log) {
@@ -46,6 +47,10 @@ public class RttEstimator {
         // "If no previous RTT is available, or if the network
         //   changes, the initial RTT SHOULD be set to 500ms"
         initialRtt = 500;
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-30#section-8.2
+        // "If this value is absent, a default of 25 milliseconds is assumed."
+        maxAckDelay = 25;
     }
 
     public RttEstimator(Logger log, int initialRtt) {
@@ -60,18 +65,21 @@ public class RttEstimator {
             return;
         }
 
-        // TODO: if ackDelay > maxAckDelay, limit it to ackDelay.
+        if (ackDelay > maxAckDelay) {
+            ackDelay = maxAckDelay;
+        }
 
         int previousSmoothed = smoothedRtt;
 
-        int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000 - ackDelay;
-        latestRtt = rttSample;
+        int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000;
         if (rttSample < minRtt)
             minRtt = rttSample;
-        // Adjust for ack delay if it's plausible.
-        if (rttSample > minRtt + ackDelay) {
+        // Adjust for ack delay if it's plausible. Because times are truncated at millisecond precision,
+        // consider rtt equal to min as plausible.
+        if (rttSample >= minRtt + ackDelay) {
             rttSample -= ackDelay;
         }
+        latestRtt = rttSample;
 
         if (smoothedRtt == 0) {
             // First time
@@ -129,5 +137,9 @@ public class RttEstimator {
 
     public int getLatestRtt() {
         return latestRtt;
+    }
+
+    public void setMaxAckDelay(int maxAckDelay) {
+        this.maxAckDelay = maxAckDelay;
     }
 }

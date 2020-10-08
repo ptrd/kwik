@@ -26,6 +26,7 @@ import net.luminis.quic.recovery.RttEstimator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -74,7 +75,9 @@ class RttEstimatorTest {
     }
 
     @Test
-    void ackDelayShouldBeSubtractedFromRtt() {
+    void ackDelayShouldBeSubtractedFromRtt() throws Exception {
+        FieldSetter.setField(rttEstimator, rttEstimator.getClass().getDeclaredField("minRtt"), 100);
+        rttEstimator.setMaxAckDelay(100);
         Instant start = Instant.now();
         Instant end = start.plusMillis(253);
         rttEstimator.addSample(end, start, 80);
@@ -127,4 +130,34 @@ class RttEstimatorTest {
         assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(500);
     }
 
+    @Test
+    void latestRttCanNeverBeSmallerThanMinRtt() {
+        // Given
+        Instant t0 = Instant.now();
+        Instant t1 = t0.plusMillis(10);
+        Instant t2 = t1.plusMillis(10);
+
+        rttEstimator.addSample(t1, t0, 0);
+
+        // When
+        rttEstimator.addSample(t2, t1, 20);
+
+        // Then
+        assertThat(rttEstimator.getLatestRtt()).isEqualTo(10);
+    }
+
+    @Test
+    void whenAckDelayGreaterThanMaxLimitIt() throws Exception {
+        // Given
+        FieldSetter.setField(rttEstimator, rttEstimator.getClass().getDeclaredField("minRtt"), 100);
+        rttEstimator.setMaxAckDelay(50);
+
+        // When
+        Instant start = Instant.now();
+        Instant end = start.plusMillis(253);
+        rttEstimator.addSample(end, start, 80);
+
+        // Then
+        assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(203);
+    }
 }

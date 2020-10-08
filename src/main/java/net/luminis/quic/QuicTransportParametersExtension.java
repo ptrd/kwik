@@ -237,6 +237,9 @@ public class QuicTransportParametersExtension extends Extension {
             params.setInitialMaxStreamDataUni(maxStreamDataUni);
         }
         else if (parameterId == max_ack_delay.value) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-30#section-18.2
+            // "The maximum acknowledgement delay is an integer value indicating the maximum amount of time in
+            //  milliseconds by which the endpoint will delay sending acknowledgments. "
             int maxAckDelay = VariableLengthInteger.parse(buffer);
             log.debug("- max ack delay: " + maxAckDelay);
             params.setMaxAckDelay(maxAckDelay);
