@@ -127,11 +127,10 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     private boolean peerAwaitingAddressValidation() {
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
-        // "That is, the client MUST set the probe timer if the client has not received an
-        //   acknowledgement for one of its Handshake or 1-RTT packets."
-        // See also https://github.com/quicwg/base-drafts/issues/3502
-        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived() && lossDetectors[PnSpace.App.ordinal()].noAckedReceived();
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.2.1
+        // "the client MUST set the probe timer if the client has not received an acknowledgement for one of its
+        // Handshake packets and the handshake is not confirmed"
+        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived();
     }
 
     private void lossDetectionTimeout() {
@@ -318,9 +317,10 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (! hasBeenReset) {
             if (ptoCount > 0) {
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.1
-                // "... a client does not reset the PTO backoff factor on receiving acknowledgements until the handshake
-                //  is confirmed;"
-                if (handshakeState.isConfirmed()) {
+                // "the PTO backoff is not reset at a client that is not yet certain that the server has finished
+                //   validating the client's address. That is, a client does not reset the PTO backoff factor on
+                //   receiving acknowledgements until the handshake is confirmed;"
+                if (!peerAwaitingAddressValidation()) {
                     ptoCount = 0;
                 } else {
                     log.recovery("probe count not reset on ack because handshake not yet confirmed");
