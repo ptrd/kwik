@@ -75,6 +75,7 @@ public class InteractiveShell {
         commands.put("cid_list", this::printConnectionIds);
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
+        commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
@@ -347,6 +348,11 @@ public class InteractiveShell {
 
     private void setScidLength(String arg) {
         builder.connectionIdLength(toInt(arg));
+    }
+
+    private void updateKeys(String arg) {
+        quicConnection.updateKeys();
+        quicConnection.ping();
     }
 
     private void error(Exception error) {

@@ -23,13 +23,10 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.Version;
 import net.luminis.quic.stream.QuicStream;
-import net.luminis.tls.NewSessionTicket;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -51,7 +48,8 @@ public class InteropRunner extends KwikCli {
     public static final String TC_RESUMPTION = "resumption";
     public static final String TC_MULTI = "multiconnect";
     public static final String TC_0RTT = "zerortt";
-    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI, TC_0RTT);
+    public static final String TC_KEYUPDATE = "keyupdate";
+    public static List TESTCASES = List.of(TC_TRANSFER, TC_RESUMPTION, TC_MULTI, TC_0RTT, TC_KEYUPDATE);
 
     private static File outputDir;
     private static Logger logger;
@@ -107,6 +105,9 @@ public class InteropRunner extends KwikCli {
             }
             else if (testCase.equals(TC_0RTT)) {
                 testZeroRtt(downloadUrls, builder);
+            }
+            else if (testCase.equals(TC_KEYUPDATE)) {
+                testKeyUpdate(downloadUrls, builder);
             }
         } catch (MalformedURLException | URISyntaxException e) {
             System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
@@ -251,6 +252,41 @@ public class InteropRunner extends KwikCli {
         connection.close();
     }
 
+    private static void testKeyUpdate(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+        logger.logPackets(true);
+        logger.info("Starting download at " + timeNow());
+
+        QuicConnection connection = builder.build();
+        connection.connect(5_000);
+
+        String requestPath = downloadUrls.get(0).getPath();
+        String outputFile = outputDir.getAbsolutePath();
+
+        QuicStream httpStream = connection.createStream(true);
+        httpStream.getOutputStream().write(("GET " + requestPath + "\r\n").getBytes());
+        httpStream.getOutputStream().close();
+
+        String fileName = requestPath;
+        FileOutputStream  out = new FileOutputStream(new File(outputFile, fileName));
+        // Read the first 100KB of bytes (approx.)
+        transfer(httpStream.getInputStream(), out, 100 * 1024);
+        // Initiate the key update; test specification requires the update to take place before 1MB is downloaded.
+        logger.info("Initiating key update");
+        ((QuicConnectionImpl) connection).updateKeys();
+        // And download the rest.
+        httpStream.getInputStream().transferTo(out);
+        logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
+    }
+
+    private static void transfer(InputStream in, FileOutputStream out, int bytes) throws IOException {
+        byte[] buffer = new byte[1200];
+        int transferred = 0;
+        int read;
+        while (transferred < bytes && (read = in.read(buffer, 0, 1200)) >= 0) {
+            out.write(buffer, 0, read);
+            transferred += read;
+        }
+    }
 
     static String timeNow() {
         LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
