@@ -97,6 +97,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                         // Act as if ackElicitingInFlight was false in the first place.
                         log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2)) - ack eliciting in flight: " + ackElicitingInFlight());
                         unschedule();
+                        return;
                     }
                 }
 
