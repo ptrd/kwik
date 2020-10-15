@@ -47,13 +47,18 @@ public class Keys {
     private final Version quicVersion;
 
     private byte[] trafficSecret;
+    private byte[] newApplicationTrafficSecret;
     protected byte[] writeKey;
+    protected byte[] newKey;
     protected byte[] writeIV;
+    protected byte[] newIV;
     protected byte[] hp;
     protected Cipher hpCipher;
     protected SecretKeySpec writeKeySpec;
+    protected SecretKeySpec newWriteKeySpec;
     protected Cipher writeCipher;
-
+    private int keyUpdateCounter = 0;
+    private boolean possibleKeyUpdateInProgresss = false;
 
     public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
         this.nodeRole = nodeRole;
@@ -69,24 +74,24 @@ public class Keys {
         byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
         log.secret(nodeRole + " initial secret", initialNodeSecret);
 
-        computeKeys(initialNodeSecret);
+        computeKeys(initialNodeSecret, true, true);
     }
 
     public synchronized void computeZeroRttKeys(TlsState tlsState) {
         byte[] earlySecret = tlsState.getClientEarlyTrafficSecret();
-        computeKeys(earlySecret);
+        computeKeys(earlySecret, true, true);
     }
 
     public synchronized void computeHandshakeKeys(TlsState tlsState) {
         if (nodeRole == Client) {
             trafficSecret = tlsState.getClientHandshakeTrafficSecret();
             log.secret("ClientHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret);
+            computeKeys(trafficSecret, true, true);
         }
         if (nodeRole == Server) {
             trafficSecret = tlsState.getServerHandshakeTrafficSecret();
             log.secret("ServerHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret);
+            computeKeys(trafficSecret, true, true);
         }
     }
 
@@ -94,16 +99,68 @@ public class Keys {
         if (nodeRole == Client) {
             trafficSecret = tlsState.getClientApplicationTrafficSecret();
             log.secret("ClientApplicationTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret);
+            computeKeys(trafficSecret, true, true);
         }
         if (nodeRole == Server) {
             trafficSecret = tlsState.getServerApplicationTrafficSecret();
             log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", trafficSecret);
-            computeKeys(trafficSecret);
+            computeKeys(trafficSecret, true, true);
         }
     }
 
-    private void computeKeys(byte[] secret) {
+    /**
+     * Compute new keys. Note that depending on the role of this Keys object, computing new keys concerns updating
+     * the write secrets (role that initiates the key update) or the read secrets (role that responds to the key update).
+     * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
+     */
+    public synchronized void computeKeyUpdate(boolean selfInitiated) {
+        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, "quic ku", "", (short) 32);
+        log.secret("Updated ApplicationTrafficSecret (" + (selfInitiated? "self":"peer") + "): ", newApplicationTrafficSecret);
+        computeKeys(newApplicationTrafficSecret, false, selfInitiated);
+        if (selfInitiated) {
+            // If updating this Keys object was self initiated, the new keys can be installed immediately.
+            trafficSecret = newApplicationTrafficSecret;
+            keyUpdateCounter++;
+            newApplicationTrafficSecret = null;
+        }
+        // Else, updating this Keys object was initiated by receiving a packet with different key phase, and the new keys
+        // can only be installed permanently if the decryption of the packet (that introduced the new key phase) has succeeded.
+    }
+
+    /**
+     * Confirm that, if a key update was in progress, it has been successful and thus the new keys can (and should) be
+     * used for decrypting all incoming packets.
+     */
+    public synchronized void confirmKeyUpdateIfInProgress() {
+        if (possibleKeyUpdateInProgresss) {
+            log.info("Installing updated keys (initiated by peer)");
+            trafficSecret = newApplicationTrafficSecret;
+            writeKey = newKey;
+            writeKeySpec = null;
+            writeIV = newIV;
+            keyUpdateCounter++;
+            newApplicationTrafficSecret = null;
+            possibleKeyUpdateInProgresss = false;
+            newKey = null;
+            newIV = null;
+        }
+    }
+
+    /**
+     * Confirm that, if a key update was in progress, it has been unsuccessful and thus the new keys should not be
+     * used for decrypting all incoming packets.
+     */
+    public synchronized void cancelKeyUpdateIfInProgress() {
+        if (possibleKeyUpdateInProgresss) {
+            log.info("Discarding updated keys (initiated by peer)");
+            newApplicationTrafficSecret = null;
+            possibleKeyUpdateInProgresss = false;
+            newKey = null;
+            newIV = null;
+        }
+    }
+
+    private void computeKeys(byte[] secret, boolean includeHP, boolean replaceKeys) {
 
         String prefix;
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
@@ -114,25 +171,38 @@ public class Keys {
         //   key separation between QUIC and TLS, see Section 9.4."
         prefix = "quic ";
 
-
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        writeKey = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
-        log.secret(nodeRole + " key", writeKey);
+        byte[] key = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
+        if (replaceKeys) {
+            writeKey = key;
+            writeKeySpec = null;
+        }
+        else {
+            newKey = key;
+            newWriteKeySpec = null;
+        }
+        log.secret(nodeRole + " key", key);
 
-        writeIV = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
-        log.secret(nodeRole + " iv", writeIV);
+        byte[] iv = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
+        if (replaceKeys) {
+            writeIV = iv;
+        }
+        else {
+            newIV = iv;
+        }
+        log.secret(nodeRole + " iv", iv);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
-        // "The header protection key uses the "quic hp" label"
-        hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", getKeyLength());
-        log.secret(nodeRole + " hp", hp);
+        if (includeHP) {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
+            // "The header protection key uses the "quic hp" label"
+            hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", getKeyLength());
+            log.secret(nodeRole + " hp", hp);
+        }
     }
 
     protected short getKeyLength() {
         return 16;
     }
-
-
 
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
     static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
@@ -158,10 +228,16 @@ public class Keys {
     }
 
     public byte[] getWriteKey() {
+        if (possibleKeyUpdateInProgresss) {
+            return newKey;
+        }
         return writeKey;
     }
 
     public byte[] getWriteIV() {
+        if (possibleKeyUpdateInProgresss) {
+            return newIV;
+        }
         return writeIV;
     }
 
@@ -189,10 +265,18 @@ public class Keys {
     }
 
     public SecretKeySpec getWriteKeySpec() {
-        if (writeKeySpec == null) {
-            writeKeySpec = new SecretKeySpec(writeKey, "AES");
+        if (possibleKeyUpdateInProgresss) {
+            if (newWriteKeySpec == null) {
+                newWriteKeySpec = new SecretKeySpec(newKey, "AES");
+            }
+            return newWriteKeySpec;
         }
-        return writeKeySpec;
+        else {
+            if (writeKeySpec == null) {
+                writeKeySpec = new SecretKeySpec(writeKey, "AES");
+            }
+            return writeKeySpec;
+        }
     }
 
     public Cipher getWriteCipher() {
@@ -250,5 +334,28 @@ public class Keys {
             throw new RuntimeException();
         }
         return mask;
+    }
+
+    public short getKeyPhase() {
+        return (short) (keyUpdateCounter % 2);
+    }
+
+    /**
+     * Check whether the key phase carried by a received packet still matches the current key phase; if not, compute
+     * new keys (to be used for decryption). Note that the changed key phase can also be caused by packet corruption,
+     * so it is not yet sure whether a key update is really in progress (this will be sure when decryption of the packet
+     * failed or succeeded).
+     * @param keyPhaseBit
+     */
+    public void checkKeyPhase(short keyPhaseBit) {
+        if ((keyUpdateCounter % 2) != keyPhaseBit) {
+            if (newKey == null) {
+                computeKeyUpdate(false);
+                log.secret("Computed new (updated) key", newKey);
+                log.secret("Computed new (updated) iv", newIV);
+            }
+            log.debug("Received key phase does not match current => possible key update in progress");
+            possibleKeyUpdateInProgresss = true;
+        }
     }
 }

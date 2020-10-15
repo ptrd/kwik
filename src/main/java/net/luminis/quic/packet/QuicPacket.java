@@ -236,6 +236,10 @@ abstract public class QuicPacket {
         nonceInput.putInt(0);
         nonceInput.putLong(packetNumber);
 
+        if (this instanceof ShortHeaderPacket) {
+            secrets.checkKeyPhase(((ShortHeaderPacket) this).keyPhaseBit);
+        }
+
         byte[] writeIV = secrets.getWriteIV();
         byte[] nonce = new byte[12];
         int i = 0;

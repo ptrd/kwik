@@ -831,6 +831,17 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         }
     }
 
+    public void updateKeys() {
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-31#section-6
+        // "Once the handshake is confirmed (see Section 4.1.2), an endpoint MAY initiate a key update."
+        if (handshakeState == HandshakeState.Confirmed) {
+            connectionSecrets.getClientSecrets(App).computeKeyUpdate(true);
+        }
+        else {
+            log.error("Refusing key update because handshake is not yet confirmed");
+        }
+    }
+
     public int getMaxPacketSize() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:
         // "An endpoint SHOULD use Datagram Packetization Layer PMTU Discovery

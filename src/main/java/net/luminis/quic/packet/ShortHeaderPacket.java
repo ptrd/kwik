@@ -20,7 +20,6 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.Keys;
-import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.ByteUtils;
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
 public class ShortHeaderPacket extends QuicPacket {
 
     private byte[] packetBytes;
-    private short keyPhaseBit;
+    protected short keyPhaseBit;
 
     /**
      * Constructs an empty short header packet for use with the parse() method.
@@ -83,6 +82,11 @@ public class ShortHeaderPacket extends QuicPacket {
 
         try {
             parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), keys, largestPacketNumber, log);
+            keys.confirmKeyUpdateIfInProgress();
+        }
+        catch (DecryptionException cantDecrypt) {
+            keys.cancelKeyUpdateIfInProgress();
+            throw cantDecrypt;
         }
         finally {
             packetSize = buffer.position() - 0;
@@ -128,6 +132,8 @@ public class ShortHeaderPacket extends QuicPacket {
         // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
         //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
         flags = 0x40;  // 0100 0000
+        keyPhaseBit = keys.getKeyPhase();
+        flags = (byte) (flags | (keyPhaseBit << 2));
         flags = encodePacketNumberLength(flags, packetNumber);
         buffer.put(flags);
         buffer.put(destinationConnectionId);
