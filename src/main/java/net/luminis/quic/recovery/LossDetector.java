@@ -44,7 +44,7 @@ public class LossDetector {
     private volatile long lost;
     private volatile Instant lossTime;
     private volatile Instant lastAckElicitingSent;
-
+    private volatile boolean isReset;
 
     public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController) {
         this.recoveryManager = recoveryManager;
@@ -53,7 +53,11 @@ public class LossDetector {
         packetSentLog = new ConcurrentHashMap<>();
     }
 
-    public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
+    public synchronized void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
+        if (isReset) {
+            return;
+        }
+
         if (packet.isInflightPacket()) {
             congestionController.registerInFlight(packet);
         }
@@ -61,10 +65,16 @@ public class LossDetector {
         if (packet.isAckEliciting()) {
             lastAckElicitingSent = sent;
         }
+
+        // This method is synchronized, because during a reset operation, no new packets must be logged as sent.
         packetSentLog.put(packet.getPacketNumber(), new PacketStatus(sent, packet, lostPacketCallback));
     }
 
     public void onAckReceived(AckFrame ackFrame, Instant timeReceived) {
+        if (isReset) {
+            return;
+        }
+
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
         List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
@@ -83,8 +93,22 @@ public class LossDetector {
         rttEstimater.ackReceived(ackFrame, timeReceived, newlyAcked);
     }
 
-    void detectLostPackets() {
+    public synchronized void reset() {
+        List<PacketStatus> inflightPackets = packetSentLog.values().stream()
+                .filter(packet -> packet.inFlight())
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
+                .collect(Collectors.toList());
+        congestionController.discard(inflightPackets);
+        packetSentLog.clear();
         lossTime = null;
+        lastAckElicitingSent = null;
+        isReset = true;
+    }
+
+    void detectLostPackets() {
+        if (isReset) {
+            return;
+        }
 
         int lossDelay = (int) (kTimeThreshold * Integer.max(rttEstimater.getSmoothedRtt(), rttEstimater.getLatestRtt()));
         Instant lostSendTime = Instant.now().minusMillis(lossDelay);
@@ -118,6 +142,9 @@ public class LossDetector {
 
         if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
             lossTime = earliestSentTime.get().plusMillis(lossDelay);
+        }
+        else {
+            lossTime = null;
         }
     }
 
@@ -177,25 +204,14 @@ public class LossDetector {
         congestionController.registerLost(filterInFlight(lostPacketsInfo));
     }
 
-    public void reset() {
-        List<PacketStatus> inflightPackets = packetSentLog.values().stream()
-                .filter(packet -> packet.inFlight())
-                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
-                .collect(Collectors.toList());
-        congestionController.discard(inflightPackets);
-        packetSentLog.clear();
-        lossTime = null;
-        lastAckElicitingSent = null;
-    }
-
-    public long getLost() {
-        return lost;
-    }
-
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {
         return packets.stream()
                 .filter(packetInfo -> packetInfo.packet().isInflightPacket())
                 .collect(Collectors.toList());
+    }
+
+    public long getLost() {
+        return lost;
     }
 
     public boolean noAckedReceived() {

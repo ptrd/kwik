@@ -37,6 +37,7 @@ abstract public class QuicPacket {
     protected List<QuicFrame> frames = new ArrayList<>();
     protected int packetSize = -1;
     protected byte[] destinationConnectionId;
+    protected boolean isProbe;
 
     public QuicPacket() {
         frames = new ArrayList<>();
@@ -511,5 +512,9 @@ abstract public class QuicPacket {
 
     public byte[] getDestinationConnectionId() {
         return destinationConnectionId;
+    }
+
+    public void setIsProbe(boolean probe) {
+        isProbe = probe;
     }
 }

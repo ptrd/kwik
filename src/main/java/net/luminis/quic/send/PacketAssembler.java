@@ -121,6 +121,7 @@ public class PacketAssembler {
                 probeData = List.of(new PingFrame());
             }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+            packet.get().setIsProbe(true);
             packet.get().addFrames(probeData);
             return Optional.of(new SendItem(packet.get()));
         }
@@ -171,6 +172,7 @@ public class PacketAssembler {
         if (requestQueue.hasProbe() && packet.isEmpty()) {
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             requestQueue.getProbe();
+            packet.get().setIsProbe(true);
             packet.get().addFrame(new PingFrame());
             callbacks.add(EMPTY_CALLBACK);
         }

@@ -86,14 +86,18 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 // "As with loss detection, the probe timeout is per packet number space."
                 PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
                 if (earliestLastAckElicitingSentTime == null) {
-                    if (!ackElicitingInFlight) {
+                    if (peerAwaitingAddressValidation) {
                         log.error("Missing last ack eliciting sent time, probably caused by peer awaiting address validation and initial recovery state being discarded");
                         // This can happen when Initial pn space is already discarded, but no ack-eliciting handshake packet has been sent, and peer is still awaiting address validation
                         // Hack: use "now" as start time; must ask experts what to do here
                         earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
                     }
                     else {
-                        throw new IllegalStateException("Missing last ack eliciting sent time for " + earliestLastAckElicitingSentTime.pnSpace);
+                        // Race condition: the (only) space that had ack eliciting in flight has been reset in the meantime.
+                        // Act as if ackElicitingInFlight was false in the first place.
+                        log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2)) - ack eliciting in flight: " + ackElicitingInFlight());
+                        unschedule();
+                        return;
                     }
                 }
 
@@ -117,18 +121,17 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
                 unschedule();
             }
         }
     }
 
     private boolean peerAwaitingAddressValidation() {
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
-        // "That is, the client MUST set the probe timer if the client has not received an
-        //   acknowledgement for one of its Handshake or 1-RTT packets."
-        // See also https://github.com/quicwg/base-drafts/issues/3502
-        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived() && lossDetectors[PnSpace.App.ordinal()].noAckedReceived();
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.2.1
+        // "the client MUST set the probe timer if the client has not received an acknowledgement for one of its
+        // Handshake packets and the handshake is not confirmed"
+        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived();
     }
 
     private void lossDetectionTimeout() {
@@ -237,7 +240,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             }
         }
         else if (earliestLastAckElicitingSentTime != null) {
-            // SendOneOrTwoAckElicitingPackets(pn_space)
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-29#appendix-A.9
+            // "SendOneOrTwoAckElicitingPackets(pn_space)"
             EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
             if (!framesToRetransmit.isEmpty()) {
@@ -312,7 +316,17 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (! hasBeenReset) {
-            ptoCount = 0;
+            if (ptoCount > 0) {
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.1
+                // "the PTO backoff is not reset at a client that is not yet certain that the server has finished
+                //   validating the client's address. That is, a client does not reset the PTO backoff factor on
+                //   receiving acknowledgements until the handshake is confirmed;"
+                if (!peerAwaitingAddressValidation()) {
+                    ptoCount = 0;
+                } else {
+                    log.recovery("probe count not reset on ack because handshake not yet confirmed");
+                }
+            }
             lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame, timeReceived);
         }
     }
@@ -357,6 +371,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-30#section-6.2.1
+                // "A sender SHOULD restart its PTO timer (...), when the handshake is confirmed (...),"
                 setLossDetectionTimer();
             }
         }

@@ -18,35 +18,17 @@
  */
 package net.luminis.quic;
 
-public enum HandshakeState {
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 
-    Initial,
-    HasHandshakeKeys,
-    HasAppKeys,
-    Completed,
-    Confirmed;
+import static org.assertj.core.api.Assertions.assertThat;
 
-    public boolean hasNoHandshakeKeys() {
-        return ordinal() < HasHandshakeKeys.ordinal();
-    }
+class PnSpaceTest {
 
-    /**
-     * @return  true when endpoint has handshake keys, but no 1-RTT keys
-     */
-    public boolean hasOnlyHandshakeKeys() {
-        return this == HasHandshakeKeys;
-    }
+    @Test
+    void valuesMethodShouldReturnPnSpacesInOrder() {
+        PnSpace[] pnSpaces = PnSpace.values();
 
-    public boolean transitionAllowed(HandshakeState proposedState) {
-        return this.ordinal() < proposedState.ordinal();
-    }
-
-    public boolean isNotConfirmed() {
-        return this.ordinal() < Confirmed.ordinal();
-    }
-
-    public boolean isConfirmed() {
-        return this.ordinal() >= Confirmed.ordinal();
+        assertThat(pnSpaces).containsExactly(PnSpace.Initial, PnSpace.Handshake, PnSpace.App);
     }
 }
-

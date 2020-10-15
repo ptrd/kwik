@@ -77,10 +77,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final RecoveryManager recoveryManager;
     private final IdleTimer idleTimer;
     private final Thread senderThread;
+    private final boolean[] discardedSpaces = new boolean[PnSpace.values().length];
     private ConnectionSecrets connectionSecrets;
     private final Object condition = new Object();
     private boolean signalled;
-    private boolean[] discardedSpaces = new boolean[PnSpace.values().length];
 
     private volatile boolean running;
     private volatile int receiverMaxAckDelay;
@@ -155,14 +155,31 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void sendProbe(EncryptionLevel level) {
-        sendRequestQueue[level.ordinal()].addProbeRequest();
-        wakeUpSenderLoop();
+        synchronized (discardedSpaces) {
+            if (! discardedSpaces[level.relatedPnSpace().ordinal()]) {
+                sendRequestQueue[level.ordinal()].addProbeRequest();
+                wakeUpSenderLoop();
+            }
+            else {
+                log.warn("Attempt to send probe on discarded space => moving to next");
+                level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
+            }
+        }
     }
 
     @Override
     public void sendProbe(List<QuicFrame> frames, EncryptionLevel level) {
-        sendRequestQueue[level.ordinal()].addProbeRequest(frames);
-        wakeUpSenderLoop();
+        synchronized (discardedSpaces) {
+            if (! discardedSpaces[level.relatedPnSpace().ordinal()]) {
+                sendRequestQueue[level.ordinal()].addProbeRequest(frames);
+                wakeUpSenderLoop();
+            }
+            else {
+                log.warn("Attempt to send probe on discarded space => moving to next");
+                // Do not move frames from one level to another, just create a ping probe.
+                level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
+            }
+        }
     }
 
     @Override
@@ -184,13 +201,20 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         socket = newSocket;
     }
 
-    public void discard(PnSpace space) {
-        if (! discardedSpaces[space.ordinal()]) {
-            packetAssembler.stop(space);
-            recoveryManager.stopRecovery(space);
-            sendRequestQueue[space.ordinal()].clear();
-            globalAckGenerator.discard(space);
-            discardedSpaces[space.ordinal()] = true;
+    public void discard(PnSpace space, String reason) {
+        synchronized (discardedSpaces) {
+            if (!discardedSpaces[space.ordinal()]) {
+                log.recovery("Discarding pn space " + space + " because " + reason);
+                packetAssembler.stop(space);
+                recoveryManager.stopRecovery(space);
+                if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
+                    log.warn("Discarding space that contains probe; moving probe to next level");
+                    space.relatedEncryptionLevel().next().ifPresent(nextLevel -> sendProbe(nextLevel));
+                }
+                sendRequestQueue[space.ordinal()].clear();
+                globalAckGenerator.discard(space);
+                discardedSpaces[space.ordinal()] = true;
+            }
         }
     }
 

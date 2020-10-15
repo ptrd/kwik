@@ -26,6 +26,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.net.DatagramSocket;
@@ -84,5 +85,35 @@ class SenderV2ImplTest extends AbstractSenderTest {
         assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
         assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
         assertThat(sender.getStatistics().bytesSent()).isBetween(2200l, 2300l);
+    }
+
+    @Test
+    void addingProbeToDiscardedSpaceMovesItToNext() throws Exception {
+        // Given
+        SendRequestQueue[] senderQueues = (SendRequestQueue[]) new FieldReader(sender, sender.getClass().getDeclaredField("sendRequestQueue")).read();
+
+        sender.discard(PnSpace.Initial, "test");
+
+        // When
+        sender.sendProbe(EncryptionLevel.Initial);
+
+        // Then
+        assertThat(senderQueues[EncryptionLevel.Initial.ordinal()].hasProbe()).isFalse();
+        assertThat(senderQueues[EncryptionLevel.Handshake.ordinal()].hasProbe()).isTrue();
+    }
+
+    @Test
+    void whenDiscardingSpacePendingProbeIsMovedToNextLevel() throws Exception {
+        // Given
+        SendRequestQueue[] senderQueues = (SendRequestQueue[]) new FieldReader(sender, sender.getClass().getDeclaredField("sendRequestQueue")).read();
+
+        sender.sendProbe(EncryptionLevel.Initial);
+
+        // When
+        sender.discard(PnSpace.Initial, "test");
+
+        // Then
+        assertThat(senderQueues[EncryptionLevel.Initial.ordinal()].hasProbe()).isFalse();
+        assertThat(senderQueues[EncryptionLevel.Handshake.ordinal()].hasProbe()).isTrue();
     }
 }

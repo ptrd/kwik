@@ -195,6 +195,8 @@ class RecoveryManagerTest extends RecoveryTests {
         // Simulate a round trip to get rid of peer awaiting address validation
         recoveryManager.packetSent(createPacket(1), Instant.now(), p -> {});
         recoveryManager.onAckReceived(new AckFrame(1), PnSpace.App, Instant.now());
+        // And set handshake state to confirmed
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
         clearInvocations(probeSender);
 
         Instant firstPacketTime = Instant.now();

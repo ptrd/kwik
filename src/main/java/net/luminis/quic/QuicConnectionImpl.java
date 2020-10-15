@@ -337,13 +337,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         //  abandoning loss recovery state for the Initial encryption level and ignoring any outstanding Initial packets."
         // This is done as post-processing action to ensure ack on Initial level is sent.
         postProcessingActions.add(() -> {
-            log.recovery("Discarding pn-space Initial, because first Handshake message is being sent");
-            discard(PnSpace.Initial);
+            discard(PnSpace.Initial, "first Handshake message is being sent");
         });
     }
 
-    private void discard(PnSpace pnSpace) {
-        sender.discard(pnSpace);
+    private void discard(PnSpace pnSpace, String reason) {
+        sender.discard(pnSpace, reason);
     }
 
     void finishHandshake(TlsState tlsState) {
@@ -358,7 +357,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                     handshakeState = HandshakeState.HasAppKeys;
                     handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
                 } else {
-                    log.debug("Handshake state cannot be set to HasAppKeys");
+                    log.error("Handshake state cannot be set to HasAppKeys; current state is " + handshakeState);
                 }
             }
 
@@ -681,8 +680,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 send(response, f -> {});
             }
             else if (frame instanceof HandshakeDoneFrame) {
-                log.recovery("Discarding pn space Handshake because HandshakeDone is received");
-                sender.discard(PnSpace.Handshake);
+                sender.discard(PnSpace.Handshake, "HandshakeDone is received");
                 synchronized (handshakeState) {
                     if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                         handshakeState = HandshakeState.Confirmed;
