@@ -36,7 +36,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
-class SenderV2ImplTest extends AbstractSenderTest {
+class SenderImplTest extends AbstractSenderTest {
 
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
@@ -64,12 +64,16 @@ class SenderV2ImplTest extends AbstractSenderTest {
     @Test
     void assemblePacketIsCalledBeforeAckDelayHasPassed() throws Exception {
         sender.sendAck(PnSpace.App, 50);
-        Thread.sleep(40);
+        sender.packetProcessed(false);
+
+        Thread.sleep(5);
+        clearInvocations(packetAssembler);  // PacketProcessed will check to see if anything must be sent
+
+        Thread.sleep(30);
         verify(packetAssembler, never()).assemble(anyInt(), any(byte[].class), any(byte[].class));
 
         Thread.sleep(20);
-
-        verify(packetAssembler, times(1)).assemble(anyInt(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), any(byte[].class), any(byte[].class));
     }
 
     @Test

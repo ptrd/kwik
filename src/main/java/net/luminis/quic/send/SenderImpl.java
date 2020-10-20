@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -149,8 +150,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     @Override
     public void sendAck(PnSpace pnSpace, int maxDelay) {
         sendRequestQueue[pnSpace.relatedEncryptionLevel().ordinal()].addAckRequest(maxDelay);
-        nextAckTime = earliest(nextAckTime, Instant.now().plusMillis(maxDelay));
-        senderThread.interrupt();  // Interrupt thread to compute new waiting period
+        if (maxDelay > 0) {
+            // Now, the sender loop must use a different wait-period, to ensure it wakes up when the delayed ack
+            // must be sent.
+            // However, given the current implementation of packetProcessed (i.e. it always wakes up the sender loop),
+            // it is not necessary to do this with a ...
+            // senderThread.interrupt
+            // ... because packetProcessed will ensure the new period is computed.
+        }
     }
 
     @Override
@@ -184,7 +191,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void packetProcessed(boolean expectingMore) {
-        wakeUpSenderLoop();
+        wakeUpSenderLoop();  // If you change this, review sendAck!
     }
 
     @Override
@@ -252,7 +259,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     try {
                         if (! signalled) {
                             long timeout = determineMinimalDelay();
-                            condition.wait(timeout);
+                            if (timeout > 0) {
+                                condition.wait(timeout);
+                            }
                         }
                         signalled = false;
                     }
@@ -291,10 +300,18 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     private long determineMinimalDelay() {
-        if (nextAckTime != null) {
-            long delay = max(Duration.between(Instant.now(), nextAckTime).toMillis(), 0);
+        Optional<Instant> nextDelayedSendTime = Arrays.stream(sendRequestQueue)
+                .filter(q -> q.nextDelayedSend() != null)
+                .map(q -> q.nextDelayedSend()).findFirst();
+
+        if (nextDelayedSendTime.isPresent()) {
+            long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
                 return delay;
+            }
+            else {
+                // Next time is already in the past, hurry up!
+                return 0;
             }
         }
 

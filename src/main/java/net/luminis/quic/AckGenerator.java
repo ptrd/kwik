@@ -40,6 +40,7 @@ public class AckGenerator {
     private boolean newPacketsToAcknowledge;
     private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
+    private int acksNotSend = 0;
 
     public AckGenerator(PnSpace pnSpace, Sender sender) {
         this.pnSpace = pnSpace;
@@ -59,8 +60,27 @@ public class AckGenerator {
             packetsToAcknowledge.add(packet.getPacketNumber());
             if (packet.isAckEliciting()) {
                 newPacketsToAcknowledge = true;
-                newPacketsToAcknowlegdeSince = Instant.now();
-                sender.sendAck(pnSpace, 0);
+                if (newPacketsToAcknowlegdeSince == null) {
+                    newPacketsToAcknowlegdeSince = Instant.now();
+                }
+                if (pnSpace != PnSpace.App) {
+                    sender.sendAck(pnSpace, 0);
+                }
+                else {
+                    // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2.2
+                    // "A receiver SHOULD send an ACK frame after receiving at least two ack-eliciting packets."
+                    int ackFrequency = 2;
+
+                    acksNotSend++;
+                    if (acksNotSend >= ackFrequency) {
+                        sender.sendAck(pnSpace, 0);
+                        acksNotSend = 0;
+                    }
+                    else {
+                        // Default max ack delay is 25, use 20 to give some slack for timing issues
+                        sender.sendAck(pnSpace, 20);
+                    }
+                }
             }
         }
     }
@@ -112,6 +132,7 @@ public class AckGenerator {
         ackSentWithPacket.put(packetNumber, ackFrame);
         newPacketsToAcknowledge = false;
         newPacketsToAcknowlegdeSince = null;
+        acksNotSend = 0;
     }
 }
 
