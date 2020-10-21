@@ -32,6 +32,9 @@ public class PathResponseFrame extends QuicFrame {
     private byte[] data;
 
     public PathResponseFrame(Version quicVersion, byte[] data) {
+        if (data.length != 8) {
+            throw new IllegalArgumentException("Path Response Frame must contain 8 bytes data");
+        }
         this.data = data;
     }
 

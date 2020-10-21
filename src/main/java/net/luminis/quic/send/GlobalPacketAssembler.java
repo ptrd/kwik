@@ -20,6 +20,8 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.Padding;
+import net.luminis.quic.frame.PathChallengeFrame;
+import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
 
 import java.util.*;
@@ -74,6 +76,7 @@ public class GlobalPacketAssembler {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
+        boolean hasPathChallengeOrResponse = false;
 
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
         int remaining = Integer.min(remainingCwndSize, maxPacketSize);
@@ -89,6 +92,9 @@ public class GlobalPacketAssembler {
                     remaining -= packetSize;
                     if (level == EncryptionLevel.Initial) {
                         hasInitial = true;
+                    }
+                    if (item.get().getPacket().getFrames().stream().anyMatch(f -> f instanceof PathChallengeFrame || f instanceof PathResponseFrame)) {
+                        hasPathChallengeOrResponse = true;
                     }
                 }
                 if (remaining < minPacketSize && (maxPacketSize - size) < minPacketSize) {
@@ -108,6 +114,22 @@ public class GlobalPacketAssembler {
                     .filter(p -> p instanceof InitialPacket)
                     .findFirst()
                     .ifPresent(initial -> initial.addFrame(new Padding(requiredPadding)));
+            size += requiredPadding;
+        }
+
+        if (hasPathChallengeOrResponse && size < 1200) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-8.2.1
+            // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
+            //  maximum datagram size of 1200 bytes."
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-8.2.2
+            // "An endpoint MUST expand datagrams that contain a PATH_RESPONSE frame to at least the smallest allowed
+            // maximum datagram size of 1200 bytes."
+            int requiredPadding = 1200 - size;
+            packets.stream()
+                    .map(item -> item.getPacket())
+                    .findFirst()
+                    .ifPresent(packet -> packet.addFrame(new Padding(requiredPadding)));
+            size += requiredPadding;
         }
 
         return packets;

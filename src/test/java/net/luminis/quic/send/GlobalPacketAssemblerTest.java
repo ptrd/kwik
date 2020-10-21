@@ -19,10 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.frame.MaxDataFrame;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
@@ -220,6 +217,17 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         // Then
         assertThat(packets).anyMatch(p -> p.getFrames().stream().allMatch(f -> f instanceof CryptoFrame));
     }
+
+    @Test
+    void packetContainingPathResponseMustBeAtLeast1200Bytes() {
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new PathResponseFrame(Version.getDefault(), new byte[8]), f -> {});
+
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength()).sum();
+        assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
+    }
+
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();
