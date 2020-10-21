@@ -18,11 +18,15 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.Version;
+import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.QuicFrame;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,5 +69,24 @@ class SendRequestQueueTest {
         Instant next = sendRequestQueue.nextDelayedSend();
 
         assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(0);
+    }
+
+    @Test
+    void whenProbeIsVanishedDueToClearDoReturnProbe() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[100])));
+
+        boolean hasProbe = sendRequestQueue.hasProbeWithData();   // client is checking for probe
+        assertThat(hasProbe).isTrue();
+
+        // When
+        sendRequestQueue.clear();   // But concurrent call to clear removes it
+
+        // Then
+        List<QuicFrame> probe = sendRequestQueue.getProbe();
+        assertThat(probe)
+                .isNotNull()
+                .isNotEmpty();
     }
 }

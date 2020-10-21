@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 
 import java.time.Duration;
@@ -65,11 +66,22 @@ public class SendRequestQueue {
     }
 
     public boolean hasProbeWithData() {
-        return !probeQueue.isEmpty() && !probeQueue.get(0).isEmpty();
+        synchronized (probeQueue) {
+            return !probeQueue.isEmpty() && !probeQueue.get(0).isEmpty();
+        }
     }
 
     public List<QuicFrame> getProbe() {
-        return probeQueue.remove(0);
+        synchronized (probeQueue) {
+            if (hasProbe()) {
+                return probeQueue.remove(0);
+            }
+            else {
+                // Even when client first checks for a probe, this might happen due to race condition with clear().
+                // (and don't bother to much about the chance of an unnecessary probe)
+                return List.of(new PingFrame());
+            }
+        }
     }
 
     public boolean mustSendAck() {
