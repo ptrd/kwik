@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -301,8 +302,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private long determineMinimalDelay() {
         Optional<Instant> nextDelayedSendTime = Arrays.stream(sendRequestQueue)
-                .filter(q -> q.nextDelayedSend() != null)
-                .map(q -> q.nextDelayedSend()).findFirst();
+                .map(q -> q.nextDelayedSend())
+                .filter(Objects::nonNull)     // Filter after mapping because value can become null during iteration
+                .findFirst();
 
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
