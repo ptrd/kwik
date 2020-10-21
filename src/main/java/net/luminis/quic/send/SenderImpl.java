@@ -86,7 +86,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private volatile boolean running;
     private volatile int receiverMaxAckDelay;
-    private volatile Instant nextAckTime;
     private volatile int datagramsSent;
     private volatile long bytesSent;
     private volatile long packetsSent;
@@ -277,8 +276,13 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             }
         }
         catch (Throwable fatalError) {
-            log.error("Sender thread aborted with exception", fatalError);
-            connection.abortConnection(fatalError);
+            if (running) {
+                log.error("Sender thread aborted with exception", fatalError);
+                connection.abortConnection(fatalError);
+            }
+            else {
+                log.error("Ignoring ", fatalError);
+            }
         }
     }
 
