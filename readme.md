@@ -4,7 +4,7 @@
 
 Kwik is a client implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in Java.
 
-QUIC is a brand new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
+QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
 "next generation TCP". It has similar properties as TCP, e.g. provide a reliable ordered stream, but is better in many ways:
 
@@ -37,7 +37,7 @@ number of server implementations, see the [automated interoperability tests](htt
 the [QUIC interop matrix](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit)
 for details. Due the to fact that all (server) implementations are still in active development, and that some test cases
 (testing behaviour due to packet loss and packet corruption) are non-deterministic, the results of the automatic
-interoperability test vary with each run, but usually, Kwik is amongst the best clients w.r.t. the number of  
+interoperability test vary with each run, but usually, Kwik is amongst the best clients w.r.t. the number of
 successful testcases.  
 Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
 
@@ -55,6 +55,7 @@ Implemented QUIC features:
 * connection migration (use the interactive mode of the sample client to try it)
 * 0-RTT
 * cipher suites TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256
+* key update
 
 
 ## Usage
@@ -71,12 +72,18 @@ To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/
 Usage of the sample client:
 
     kwik <host>:<port> OR quic <host> <port> OR kwik http[s]://host:port
+     -29                            use Quic version IETF_draft_29
+     -30                            use Quic version IETF_draft_30
+     -31                            use Quic version IETF_draft_31
+     -32                            use Quic version IETF_draft_32    
      -A,--alpn <arg>                set alpn (default is hq-xx)
      -c,--connectionTimeout <arg>   connection timeout in seconds
+        --chacha20                  use ChaCha20 as only cipher suite     
      -h,--help                      show help
      -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
                                     '/index.html'
      -i,--interactive               start interactive shell
+        --initialRtt <arg>          custom initial RTT value (default is 500)
      -k,--keepAlive <arg>           connection keep alive time in seconds
      -l,--log <arg>                 logging options: [pdrcsiRSD]: (p)ackets
                                     received/sent, (d)ecrypted bytes, (r)ecovery,
@@ -89,7 +96,8 @@ Usage of the sample client:
         --reservedVersion           use reserved version to trigger version
      -S,--storeTickets <arg>        basename of file to store new session tickets
         --secrets <arg>             write secrets to file (Wireshark format)
-     -T,--relativeTime              log with time (in seconds) since first packet                                    
+     -T,--relativeTime              log with time (in seconds) since first packet 
+     -v,--version                   show Kwik version                                   
      -Z,--use0RTT                   use 0-RTT if possible (requires -H and -R)
             
 If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.

@@ -72,7 +72,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
-        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 is only cipher suite");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
