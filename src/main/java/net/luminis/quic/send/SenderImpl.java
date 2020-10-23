@@ -281,7 +281,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 connection.abortConnection(fatalError);
             }
             else {
-                log.error("Ignoring ", fatalError);
+                log.warn("Ignoring " + fatalError + " because sender is shutting down.");
             }
         }
     }
