@@ -84,7 +84,13 @@ public class QuicSessionTicket extends NewSessionTicket {
     }
 
     public byte[] serialize() {
-        byte[] serializedTicket = wrappedTicket.serialize();
+        byte[] serializedTicket;
+        if (wrappedTicket != this) {
+            serializedTicket = wrappedTicket.serialize();
+        }
+        else {
+            serializedTicket = super.serialize();
+        }
         ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + SERIALIZED_SIZE);
         buffer.put(serializedTicket);
         buffer.putLong(maxIdleTimeout);
@@ -102,22 +108,42 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     @Override
     public byte[] getPSK() {
-        return wrappedTicket.getPSK();
+        if (wrappedTicket != this) {
+            return wrappedTicket.getPSK();
+        }
+        else {
+            return super.getPSK();
+        }
     }
 
     @Override
     public Date getTicketCreationDate() {
-        return wrappedTicket.getTicketCreationDate();
+        if (wrappedTicket != this) {
+            return wrappedTicket.getTicketCreationDate();
+        }
+        else {
+            return super.getTicketCreationDate();
+        }
     }
 
     @Override
     public long getTicketAgeAdd() {
-        return wrappedTicket.getTicketAgeAdd();
+        if (wrappedTicket != this) {
+            return wrappedTicket.getTicketAgeAdd();
+        }
+        else {
+            return super.getTicketAgeAdd();
+        }
     }
 
     @Override
     public byte[] getSessionTicketIdentity() {
-        return wrappedTicket.getSessionTicketIdentity();
+        if (wrappedTicket != this) {
+            return wrappedTicket.getSessionTicketIdentity();
+        }
+        else {
+            return super.getSessionTicketIdentity();
+        }
     }
 
     public void copyTo(TransportParameters tp) {
