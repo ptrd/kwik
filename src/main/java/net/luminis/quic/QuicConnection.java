@@ -22,6 +22,7 @@ import net.luminis.quic.stream.QuicStream;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -53,6 +54,8 @@ public interface QuicConnection {
     Statistics getStats();
 
     InetSocketAddress getLocalAddress();
+
+    List<X509Certificate> getServerCertificateChain();
 
     class StreamEarlyData {
         byte[] data;

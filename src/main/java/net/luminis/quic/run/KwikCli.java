@@ -35,6 +35,9 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -73,6 +76,8 @@ public class KwikCli {
         cmdLineOptions.addOption("v", "version", false, "show Kwik version");
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
         cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
+        cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
+        cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -142,6 +147,15 @@ public class KwikCli {
 
         if (cmd.hasOption("chacha20")) {
             builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+        }
+
+        if (cmd.hasOption("noCertificateCheck")) {
+            builder.noServerCertificateCheck();
+        }
+
+        String serverCertificatesFile = null;
+        if (cmd.hasOption("saveServerCertificates")) {
+            serverCertificatesFile = cmd.getOptionValue("saveServerCertificates");
         }
 
         Logger logger = null;
@@ -366,6 +380,11 @@ public class KwikCli {
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);
                 }
+
+                if (serverCertificatesFile != null) {
+                    storeServerCertificates(quicConnection, serverCertificatesFile);
+                }
+
                 if (httpRequestPath != null) {
                     doHttp09Request(quicConnection, httpRequestPath, httpStream, outputFile);
                 } else {
@@ -400,6 +419,25 @@ public class KwikCli {
         if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
+    }
+
+    private static void storeServerCertificates(QuicConnection quicConnection, String serverCertificatesFile) throws IOException {
+        List<X509Certificate> serverCertificateChain = quicConnection.getServerCertificateChain();
+        if (! serverCertificatesFile.endsWith(".pem")) {
+            serverCertificatesFile += ".pem";
+        }
+        PrintStream out = new PrintStream(new FileOutputStream(new File(serverCertificatesFile)));
+        for (X509Certificate cert: serverCertificateChain) {
+            out.println("-----BEGIN CERTIFICATE-----");
+            try {
+                out.print(new String(Base64.getMimeEncoder().encode(cert.getEncoded())));
+            } catch (CertificateEncodingException e) {
+                throw new IOException(e.getMessage());
+            }
+            out.println("\n-----END CERTIFICATE-----");
+            out.println("\n");
+        }
+        out.close();
     }
 
     private static void storeNewSessionTickets(QuicConnection quicConnection, String baseFilename) {

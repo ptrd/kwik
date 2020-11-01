@@ -25,10 +25,9 @@ Kwik is created an maintained by Peter Doornbosch. The latest greatest can alway
 Kwik is not yet suitable for production use. 
 Apart from the fact that the QUIC specification is still work in progress by the IETF, Kwik does not yet implement 
 the complete (draft) specification. 
-Important features like congestion control are implemented but not yet extensively tested. 
-Also, a secure connection is not guaranteed, as server certificates are not yet validated.
-Use at your own risk.
-And apart from that: have fun!
+Moreover, Kwik has not yet been tested in production-like environments. 
+Use at your own risk (as with all open source software ;-)).
+But apart from that: have fun!
 
 ## Status
 
@@ -91,10 +90,12 @@ Usage of the sample client:
                                     bytes, (S)ecrets, (D)ebug; default is "ip", use
                                     (n)one to disable
      -L,--logFile <arg>             file to write log message too
+        --noCertificateCheck        do not check server certificate
      -O,--output <arg>              write server response to file
      -R,--resumption key <arg>      session ticket file
         --reservedVersion           use reserved version to trigger version
      -S,--storeTickets <arg>        basename of file to store new session tickets
+        --saveServerCertificates <arg>   store server certificates in given file
         --secrets <arg>             write secrets to file (Wireshark format)
      -T,--relativeTime              log with time (in seconds) since first packet 
      -v,--version                   show Kwik version                                   

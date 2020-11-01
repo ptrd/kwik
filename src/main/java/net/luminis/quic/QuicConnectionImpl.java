@@ -1186,6 +1186,26 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }
 
+    @Override
+    public List<X509Certificate> getServerCertificateChain() {
+        return tlsEngine.getServerCertificateChain();
+    }
+
+    public void trustAll() {
+        X509TrustManager trustAllCerts =
+            new X509TrustManager() {
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                    return null;
+                }
+                public void checkClientTrusted(
+                        java.security.cert.X509Certificate[] certs, String authType) {
+                }
+                public void checkServerTrusted(
+                        java.security.cert.X509Certificate[] certs, String authType) {
+                }
+        };
+        tlsEngine.setTrustManager(trustAllCerts);
+    }
 
     public static Builder newBuilder() {
         return new BuilderImpl();
@@ -1213,6 +1233,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         Builder initialRtt(int initialRtt);
 
         Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
+
+        Builder noServerCertificateCheck();
     }
 
     private static class BuilderImpl implements Builder {
@@ -1226,6 +1248,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         private Integer initialRtt;
         private Integer connectionIdLength;
         private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
+        private boolean omitCertificateCheck;
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1241,7 +1264,13 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             if (cipherSuites.isEmpty()) {
                 cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
             }
-            return new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
+
+            QuicConnectionImpl quicConnection = new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
+            if (omitCertificateCheck) {
+                quicConnection.trustAll();
+            }
+
+            return quicConnection;
         }
 
         @Override
@@ -1304,6 +1333,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         @Override
         public Builder cipherSuite(TlsConstants.CipherSuite cipherSuite) {
             cipherSuites.add(cipherSuite);
+            return this;
+        }
+
+        @Override
+        public Builder noServerCertificateCheck() {
+            omitCertificateCheck = true;
             return this;
         }
     }
