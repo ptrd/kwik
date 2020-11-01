@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import java.net.DatagramPacket;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -54,5 +55,13 @@ public class RawPacket {
 
     public int getLength() {
         return data.limit();
+    }
+
+    public InetAddress getAddress() {
+        return receivedPacket.getAddress();
+    }
+
+    public int getPort() {
+        return receivedPacket.getPort();
     }
 }
