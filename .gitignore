@@ -9,3 +9,7 @@ sessionTickets
 /.classpath
 /.project
 /.settings/
+/*.iml
+.idea/modules.xml
+.idea/modules/*.iml
+.idea/libraries/*.xml
