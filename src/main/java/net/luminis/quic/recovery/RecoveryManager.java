@@ -173,6 +173,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
+            sender.flush();
             setLossDetectionTimer();
         }
         else {

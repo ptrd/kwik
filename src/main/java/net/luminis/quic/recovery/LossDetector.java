@@ -197,6 +197,9 @@ public class LossDetector {
 
         lostPacketsInfo.stream()
                 .forEach(packetStatus -> {
+                    // Retransmitting the frames in the lost packet is delegated to the lost frame callback, because
+                    // whether retransmitting the frame is necessary (and in which manner) depends on frame type,
+                    // see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.3
                     packetStatus.lostPacketCallback().accept(packetStatus.packet());
                     lost++;
                 });
