@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
@@ -36,7 +37,11 @@ public class VersionNegotiationPacket extends QuicPacket {
 
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid version
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  4;
+    private static Random random = new Random();
 
+    private Version quicVersion;
+    private byte[] sourceConnectionId;
+    private byte[] destinationConnectionId;
     private int packetSize;
     private List<Version> serverSupportedVersions = new ArrayList<>();
 
@@ -47,6 +52,12 @@ public class VersionNegotiationPacket extends QuicPacket {
 
     public VersionNegotiationPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
+    }
+
+    public VersionNegotiationPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        this.quicVersion = quicVersion;
+        this.sourceConnectionId = sourceConnectionId;
+        this.destinationConnectionId = destinationConnectionId;
     }
 
     public List<Version> getServerSupportedVersions() {
@@ -71,8 +82,6 @@ public class VersionNegotiationPacket extends QuicPacket {
             throw new ImplementationError();
         }
 
-        byte[] destinationConnectionId;
-        byte[] sourceConnectionId;
         int dstConnIdLength = buffer.get() & 0xff;
         if (packetLength < MIN_PACKET_LENGTH + dstConnIdLength) {
             throw new InvalidPacketException();
@@ -136,7 +145,22 @@ public class VersionNegotiationPacket extends QuicPacket {
 
     @Override
     public byte[] generatePacketBytes(long packetNumber, Keys keys) {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.1
+        // "The value in the Unused field is selected randomly by the server. (...)
+        //  Servers SHOULD set the most significant bit of this field (0x40) to 1 so that Version Negotiation packets
+        //  appear to have the Fixed Bit field."
+        buffer.put((byte) ((byte) random.nextInt(256) | 0b11000000));
+        // "The Version field of a Version Negotiation packet MUST be set to 0x00000000."
+        buffer.putInt(0x00000000);
+        buffer.put((byte) destinationConnectionId.length);
+        buffer.put(destinationConnectionId);
+        buffer.put((byte) sourceConnectionId.length);
+        buffer.put(sourceConnectionId);
+        buffer.put(quicVersion.getBytes());
+
+        return buffer.array();
     }
 
     @Override
@@ -162,4 +186,11 @@ public class VersionNegotiationPacket extends QuicPacket {
                 + serverSupportedVersions.stream().map(v -> v.toString()).collect(Collectors.joining(", "));
     }
 
+    public byte[] getScid() {
+        return sourceConnectionId;
+    }
+
+    public byte[] getDcid() {
+        return destinationConnectionId;
+    }
 }

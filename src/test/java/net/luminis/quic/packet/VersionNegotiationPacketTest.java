@@ -19,6 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.InvalidPacketException;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +81,33 @@ class VersionNegotiationPacketTest {
         assertThatThrownBy(
                 () -> new VersionNegotiationPacket().parse(buffer, null, 0, log, 0)
         ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void serializedVersionNegotationPacketHasTwoMostSignificantBitsSetToOne() throws Exception {
+        // Given
+        VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(Version.getDefault(), new byte[]{ 0x01, 0x02, 0x03, 0x04 }, new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
+
+        // When
+        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+
+        // Then
+        assertThat(packetBytes[0] & 0b11000000).isEqualTo(0b11000000);
+    }
+
+    @Test
+    void createVersionNegotationPacket() throws Exception {
+        // Given
+        VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(Version.getDefault(), new byte[]{ 0x01, 0x02, 0x03, 0x04 }, new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
+        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+        
+        // When
+        VersionNegotiationPacket vnPacket = new VersionNegotiationPacket();
+        vnPacket.parse(ByteBuffer.wrap(packetBytes), null, 0, log, 0);
+
+        // Then
+        assertThat(vnPacket.getScid()).isEqualTo(new byte[]{ 0x01, 0x02, 0x03, 0x04 });
+        assertThat(vnPacket.getDcid()).isEqualTo(new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
     }
 
     private String generateHexBytes(int length) {
