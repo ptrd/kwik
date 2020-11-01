@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
 

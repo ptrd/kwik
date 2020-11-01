@@ -21,11 +21,10 @@ package net.luminis.quic.crypto;
 import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.ByteUtils;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.*;
+import net.luminis.tls.handshake.TlsClientEngine;
+import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -100,9 +99,9 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Server, log);
     }
 
-    public synchronized void computeEarlySecrets(TlsState tlsState) {
+    public synchronized void computeEarlySecrets(TrafficSecrets secrets) {
         Keys zeroRttSecrets = new Keys(quicVersion, NodeRole.Client, log);
-        zeroRttSecrets.computeZeroRttKeys(tlsState);
+        zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
 
@@ -124,23 +123,23 @@ public class ConnectionSecrets {
         serverSecrets[level.ordinal()] = serverHandshakeSecrets;
     }
 
-    public synchronized void computeHandshakeSecrets(TlsState tlsState, TlsConstants.CipherSuite selectedCipherSuite) {
+    public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
         this.selectedCipherSuite = selectedCipherSuite;
         createKeys(EncryptionLevel.Handshake, selectedCipherSuite);
 
-        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(tlsState);
+        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
         }
     }
 
-    public synchronized void computeApplicationSecrets(TlsState tlsState) {
+    public synchronized void computeApplicationSecrets(TlsClientEngine engine) {
         createKeys(EncryptionLevel.App, selectedCipherSuite);
 
-        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(tlsState);
+        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);

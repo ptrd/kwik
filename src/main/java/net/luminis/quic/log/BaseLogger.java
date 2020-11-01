@@ -19,7 +19,7 @@
 package net.luminis.quic.log;
 
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;

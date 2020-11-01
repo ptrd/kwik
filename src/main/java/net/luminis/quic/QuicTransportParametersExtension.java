@@ -19,7 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.extension.Extension;
 
 import java.net.InetAddress;
@@ -150,7 +150,7 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     // Assuming Handshake message type encrypted_extensions
-    public void parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public QuicTransportParametersExtension parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         int extensionType = buffer.getShort() & 0xffff;
         if (extensionType != 0xffa5) {
             throw new RuntimeException();  // Must be programming error
@@ -167,6 +167,7 @@ public class QuicTransportParametersExtension extends Extension {
         if (realSize != extensionLength) {
             throw new ProtocolError("inconsistent size in transport parameter" + "  should be: " + realSize);
         }
+        return this;
     }
 
     void parseTransportParameter(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {

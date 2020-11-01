@@ -21,7 +21,7 @@ package net.luminis.quic.packet;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;

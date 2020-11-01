@@ -20,7 +20,6 @@ package net.luminis.quic;
 
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.tls.ByteUtils;
 import org.mockito.ArgumentMatcher;
 
 import java.util.Arrays;

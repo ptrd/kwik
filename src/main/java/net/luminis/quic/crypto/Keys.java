@@ -23,7 +23,7 @@ import net.luminis.quic.DecryptionException;
 import net.luminis.quic.QuicRuntimeException;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.TrafficSecrets;
 
 
 import javax.crypto.*;
@@ -77,32 +77,32 @@ public class Keys {
         computeKeys(initialNodeSecret, true, true);
     }
 
-    public synchronized void computeZeroRttKeys(TlsState tlsState) {
-        byte[] earlySecret = tlsState.getClientEarlyTrafficSecret();
+    public synchronized void computeZeroRttKeys(TrafficSecrets secrets) {
+        byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
         computeKeys(earlySecret, true, true);
     }
 
-    public synchronized void computeHandshakeKeys(TlsState tlsState) {
+    public synchronized void computeHandshakeKeys(TrafficSecrets secrets) {
         if (nodeRole == Client) {
-            trafficSecret = tlsState.getClientHandshakeTrafficSecret();
+            trafficSecret = secrets.getClientHandshakeTrafficSecret();
             log.secret("ClientHandshakeTrafficSecret: ", trafficSecret);
             computeKeys(trafficSecret, true, true);
         }
         if (nodeRole == Server) {
-            trafficSecret = tlsState.getServerHandshakeTrafficSecret();
+            trafficSecret = secrets.getServerHandshakeTrafficSecret();
             log.secret("ServerHandshakeTrafficSecret: ", trafficSecret);
             computeKeys(trafficSecret, true, true);
         }
     }
 
-    public synchronized void computeApplicationKeys(TlsState tlsState) {
+    public synchronized void computeApplicationKeys(TrafficSecrets secrets) {
         if (nodeRole == Client) {
-            trafficSecret = tlsState.getClientApplicationTrafficSecret();
+            trafficSecret = secrets.getClientApplicationTrafficSecret();
             log.secret("ClientApplicationTrafficSecret: ", trafficSecret);
             computeKeys(trafficSecret, true, true);
         }
         if (nodeRole == Server) {
-            trafficSecret = tlsState.getServerApplicationTrafficSecret();
+            trafficSecret = secrets.getServerApplicationTrafficSecret();
             log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", trafficSecret);
             computeKeys(trafficSecret, true, true);
         }

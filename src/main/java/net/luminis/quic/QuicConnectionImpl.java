@@ -33,15 +33,17 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.*;
+import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
+import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
+import net.luminis.tls.handshake.*;
 
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.interfaces.ECKey;
-import java.security.interfaces.ECPrivateKey;
-import java.security.interfaces.ECPublicKey;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -53,14 +55,13 @@ import java.util.stream.Collectors;
 
 import static net.luminis.quic.EarlyDataStatus.*;
 import static net.luminis.quic.EncryptionLevel.*;
-import static net.luminis.tls.ByteUtils.bytesToHex;
-import static net.luminis.tls.Tls13.generateKeys;
+import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame> {
+public class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler {
 
     private final List<TlsConstants.CipherSuite> cipherSuites;
 
@@ -79,14 +80,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private final String host;
     private final int port;
     private final QuicSessionTicket sessionTicket;
-    private final TlsState tlsState;
+    private final TlsClientEngine tlsEngine;
     private final DatagramSocket socket;
     private final InetAddress serverAddress;
     private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
-    private final ECPrivateKey privateKey;
-    private final ECPublicKey publicKey;
     private volatile byte[] token;
     private final ConnectionSecrets connectionSecrets;
     private final List<CryptoStream> cryptoStreams = new ArrayList<>();
@@ -136,7 +135,6 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
 
         receiver = new Receiver(this, socket, 1500, log);
         streamManager = new StreamManager(this, log);
-        tlsState = sessionTicket == null? new QuicTlsState(quicVersion): new QuicTlsState(quicVersion, sessionTicket);
         connectionSecrets = new ConnectionSecrets(quicVersion, secretsFile, log);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
@@ -145,15 +143,25 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         flowControlLastAdvertised = flowControlMax;
         flowControlIncrement = flowControlMax / 10;
 
-        try {
-            ECKey[] keys = generateKeys("secp256r1");
-            privateKey = (ECPrivateKey) keys[0];
-            publicKey = (ECPublicKey) keys[1];
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate key pair.");
-        }
-
         connectionState = Status.Idle;
+        tlsEngine = new TlsClientEngine(new ClientMessageSender() {
+            @Override
+            public void send(ClientHello clientHello) {
+                sender.sendInitial(new CryptoFrame(quicVersion, clientHello.getBytes()), token);
+                connectionState = Status.Handshaking;
+                connectionSecrets.setClientRandom(clientHello.getClientRandom());
+            }
+
+            @Override
+            public void send(FinishedMessage finished) {
+                sendHandshakeFrameWithRetransmit(new CryptoFrame(quicVersion, finished.getBytes()));
+                sender.flush();
+            }
+        }, this);
+    }
+
+    private void sendHandshakeFrameWithRetransmit(QuicFrame frame) {
+        sender.send(frame, Handshake, this::sendHandshakeFrameWithRetransmit);
     }
 
     /**
@@ -312,13 +320,35 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
-        byte[] clientHello = createClientHello(host, cipherSuites, publicKey, applicationProtocol, withEarlyData);
-        tlsState.clientHelloSend(privateKey, clientHello);
-        connectionSecrets.computeEarlySecrets(tlsState);
+        tlsEngine.setServerName(host);
+        tlsEngine.addSupportedCiphers(cipherSuites);
 
-        CryptoFrame clientHelloFrame = new CryptoFrame(quicVersion, clientHello);
-        connectionState = Status.Handshaking;
-        sender.sendInitial(clientHelloFrame, token);
+        tlsEngine.add(new QuicTransportParametersExtension(quicVersion, transportParams));
+        tlsEngine.add(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol));
+        if (withEarlyData) {
+            tlsEngine.add(new EarlyDataExtension());
+        }
+        if (sessionTicket != null) {
+            tlsEngine.setNewSessionTicket(sessionTicket);
+        }
+
+        try {
+            tlsEngine.startHandshake();
+        } catch (IOException e) {
+            // Will not happen, as our ClientMessageSender implementation will not throw.
+        }
+    }
+
+    @Override
+    public void earlySecretsKnown() {
+        connectionSecrets.computeEarlySecrets(tlsEngine);
+    }
+
+    @Override
+    public void handshakeSecretsKnown() {
+        // Server Hello provides a new secret, so:
+        connectionSecrets.computeHandshakeSecrets(tlsEngine, tlsEngine.getSelectedCipher());
+        hasHandshakeKeys();
     }
 
     public void hasHandshakeKeys() {
@@ -341,17 +371,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         });
     }
 
-    private void discard(PnSpace pnSpace, String reason) {
-        sender.discard(pnSpace, reason);
-    }
-
-    void finishHandshake(TlsState tlsState) {
-        if (tlsState.isServerFinished()) {
-            FinishedMessage finishedMessage = new FinishedMessage(tlsState);
-            CryptoFrame cryptoFrame = new CryptoFrame(quicVersion, finishedMessage.getBytes());
-            sendClientFinished(cryptoFrame);
-            tlsState.computeApplicationSecrets();
-            connectionSecrets.computeApplicationSecrets(tlsState);
+    @Override
+    public void handshakeFinished() {
+            connectionSecrets.computeApplicationSecrets(tlsEngine);
             synchronized (handshakeState) {
                 if (handshakeState.transitionAllowed(HandshakeState.HasAppKeys)) {
                     handshakeState = HandshakeState.HasAppKeys;
@@ -363,14 +385,28 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
 
             connectionState = Status.Connected;
             handshakeFinishedCondition.countDown();
-        }
     }
 
-    void sendClientFinished(QuicFrame cryptoFrame) {
-        sender.send(cryptoFrame, Handshake, frameToRetransmit -> {
-            log.recovery("Retransmitting client finished.");
-            sender.send(frameToRetransmit, Handshake, this::sendClientFinished);
+    @Override
+    public void newSessionTicketReceived(NewSessionTicket ticket) {
+        addNewSessionTicket(ticket);
+    }
+
+    @Override
+    public void extensionsReceived(List<Extension> extensions) {
+        extensions.forEach(ex -> {
+            if (ex instanceof EarlyDataExtension) {
+                setEarlyDataStatus(EarlyDataStatus.Accepted);
+                log.info("Server has accepted early data.");
+            }
+            else if (ex instanceof QuicTransportParametersExtension) {
+                setPeerTransportParameters(((QuicTransportParametersExtension) ex).getTransportParameters());
+            }
         });
+    }
+
+    private void discard(PnSpace pnSpace, String reason) {
+        sender.discard(pnSpace, reason);
     }
 
     void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
@@ -532,29 +568,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         //   encryption level"
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsState, log));
+                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsEngine, log));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
-    }
-
-    private byte[] createClientHello(String host, List<TlsConstants.CipherSuite> supportedCiphers, ECPublicKey publicKey, String alpnProtocol, boolean useEarlyData) {
-        boolean compatibilityMode = false;
-
-        List<Extension> quicExtensions = new ArrayList<>();
-        quicExtensions.add(new QuicTransportParametersExtension(quicVersion, transportParams));
-        quicExtensions.add(new ApplicationLayerProtocolNegotiationExtension(alpnProtocol));
-        if (useEarlyData) {
-            quicExtensions.add(new EarlyDataExtension());
-        }
-
-        if (sessionTicket != null) {
-            quicExtensions.add(new ClientHelloPreSharedKeyExtension(tlsState, sessionTicket));
-        }
-
-        ClientHello clientHello = new ClientHello(host, publicKey, compatibilityMode, supportedCiphers, quicExtensions);
-        connectionSecrets.setClientRandom(clientHello.getClientRandom());
-        return clientHello.getBytes();
     }
 
     @Override

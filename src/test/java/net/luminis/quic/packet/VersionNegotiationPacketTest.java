@@ -20,7 +20,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.InvalidPacketException;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

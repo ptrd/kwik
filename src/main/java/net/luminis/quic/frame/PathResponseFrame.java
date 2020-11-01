@@ -20,7 +20,7 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
 

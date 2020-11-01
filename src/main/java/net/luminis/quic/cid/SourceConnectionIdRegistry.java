@@ -19,7 +19,7 @@
 package net.luminis.quic.cid;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 
 import java.util.Arrays;
 

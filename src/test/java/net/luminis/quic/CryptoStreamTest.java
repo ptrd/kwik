@@ -20,8 +20,8 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.Message;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.*;
+import net.luminis.tls.handshake.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Function;
 
+import static net.luminis.tls.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -47,7 +48,8 @@ class CryptoStreamTest {
 
     @BeforeEach
     void prepareObjectUnderTest() throws Exception {
-        cryptoStream = new CryptoStream(QUIC_VERSION, null, EncryptionLevel.Handshake, null, new TlsState(), mock(Logger.class));
+        cryptoStream = new CryptoStream(QUIC_VERSION, null, EncryptionLevel.Handshake, null,
+                new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class));
         messageParser = mock(TlsMessageParser.class);
         FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
@@ -69,7 +71,7 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages())
                 .isNotEmpty()
                 .contains(new MockTlsMessage("first crypto frame"));
-        assertThat(((MockTlsMessage) cryptoStream.getTlsMessages().get(0)).getType()).isEqualTo(13);
+        assertThat(((MockTlsMessage) cryptoStream.getTlsMessages().get(0)).getType()).isEqualTo(certificate_request);
     }
 
     @Test
@@ -184,7 +186,7 @@ class CryptoStreamTest {
     }
 
     private void setParseFunction(Function<ByteBuffer, Message> parseFunction) throws Exception {
-        when(messageParser.parse(any(ByteBuffer.class), any(TlsState.class))).thenAnswer(new Answer<Message>() {
+        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class))).thenAnswer(new Answer<Message>() {
             @Override
             public Message answer(InvocationOnMock invocation) throws Throwable {
                 ByteBuffer buffer = invocation.getArgument(0);
@@ -207,7 +209,7 @@ class CryptoStreamTest {
         return bytes;
     }
 
-    static class MockTlsMessage extends Message {
+    static class MockTlsMessage extends HandshakeMessage {
         private final int type;
         private final String contents;
 
@@ -239,8 +241,14 @@ class CryptoStreamTest {
             return "Message: " + contents;
         }
 
-        public int getType() {
-            return type;
+        @Override
+        public TlsConstants.HandshakeType getType() {
+            return Arrays.stream(TlsConstants.HandshakeType.values()).filter(v -> v.value == this.type).findFirst().get();
+        }
+
+        @Override
+        public byte[] getBytes() {
+            return new byte[0];
         }
     }
 

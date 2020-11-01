@@ -24,11 +24,10 @@ import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.ByteUtils;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.*;

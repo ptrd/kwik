@@ -24,7 +24,11 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.stream.BaseStream;
 import net.luminis.tls.*;
 import net.luminis.tls.extension.Extension;
+import net.luminis.tls.handshake.HandshakeMessage;
+import net.luminis.tls.handshake.TlsClientEngine;
+import net.luminis.tls.handshake.TlsMessageParser;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,24 +40,24 @@ public class CryptoStream extends BaseStream {
     private final QuicConnectionImpl connection;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
-    private TlsState tlsState;
+    private final TlsClientEngine tlsEngine;
     private final Logger log;
-    private List<Message> messages;
-    private TlsMessageParser tlsMessageParser;
+    private final List<Message> messages;
+    private final TlsMessageParser tlsMessageParser;
     private boolean msgSizeRead = false;
     private int msgSize;
     private byte msgType;
 
-    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsState tlsState, Logger log) {
+    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log) {
         this.quicVersion = quicVersion;
         this.connection = connection;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
-        this.tlsState = tlsState;
+        this.tlsEngine = tlsEngine;
         this.log = log;
 
         messages = new ArrayList<>();
-        tlsMessageParser = new TlsMessageParser();
+        tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
     }
 
     public void add(CryptoFrame cryptoFrame) {
@@ -87,13 +91,12 @@ public class CryptoStream extends BaseStream {
                         msgSizeRead = false;
 
                         msgBuffer.flip();
-                        Message tlsMessage = tlsMessageParser.parse(msgBuffer, tlsState);
+                        HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, tlsEngine);
 
                         if (msgBuffer.hasRemaining()) {
                             throw new RuntimeException();  // Must be programming error
                         }
                         messages.add(tlsMessage);
-                        processMessage(tlsMessage);
                     }
                 }
             } else {
@@ -103,52 +106,25 @@ public class CryptoStream extends BaseStream {
         catch (TlsProtocolException tlsError) {
             log.error("Parsing TLS message failed", tlsError);
             throw new ProtocolError("TLS error");
+        } catch (IOException e) {
+            // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
+            throw new RuntimeException();
         }
     }
 
-    private void processMessage(Message msg) throws TlsProtocolException {
-        log.debug(this + " Detected " + msg.getClass().getSimpleName());
-        if (msg instanceof ServerHello) {
-            // Server Hello provides a new secret, so
-            TlsConstants.CipherSuite selectedCipherSuite = ((ServerHello) msg).getCipherSuite();
-            connectionSecrets.computeHandshakeSecrets(tlsState, selectedCipherSuite);
-            connection.hasHandshakeKeys();
-        } else if (msg instanceof EncryptedExtensions) {
-            for (Extension ex : ((EncryptedExtensions) msg).getExtensions()) {
-                if (ex instanceof EarlyDataExtension) {
-                    connection.setEarlyDataStatus(EarlyDataStatus.Accepted);
-                    log.info("Server has accepted early data.");
-                }
-                else if (ex instanceof UnknownExtension) {
-                    parseExtension((UnknownExtension) ex);
-                }
-            }
-        } else if (msg instanceof FinishedMessage) {
-            if (tlsState.isServerFinished()) {
-                connection.finishHandshake(tlsState);
-            }
-        } else if (msg instanceof NewSessionTicketMessage) {
-            connection.addNewSessionTicket(new NewSessionTicket(tlsState, (NewSessionTicketMessage) msg));
-        } else {
-            log.debug(this + " Ignoring " + msg.getClass().getSimpleName());
-        }
-    }
-
-    private void parseExtension(UnknownExtension extension) throws TlsProtocolException {
-        ByteBuffer buffer = ByteBuffer.wrap(extension.getData());
+    Extension quicExtensionsParser(ByteBuffer buffer, TlsConstants.HandshakeType context) throws TlsProtocolException {
+        buffer.mark();
         int extensionType = buffer.getShort();
-        buffer.rewind();
+        buffer.reset();
         if ((extensionType & 0xffff) == 0xffa5) {
-            QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(quicVersion);
             try {
-                transportParametersExtension.parse(buffer, log);
+                return new QuicTransportParametersExtension(quicVersion).parse(buffer, log);
             } catch (InvalidIntegerEncodingException e) {
                 throw new TlsProtocolException("Invalid transport parameter extension");
             }
-            connection.setPeerTransportParameters(transportParametersExtension.getTransportParameters());
         }
         else {
-            log.debug("Crypto stream: unsupported extension " + extensionType);
+            return null;
         }
     }
 
@@ -164,5 +140,4 @@ public class CryptoStream extends BaseStream {
     public List<Message> getTlsMessages() {
         return messages;
     }
-
 }

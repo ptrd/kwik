@@ -30,8 +30,7 @@ import net.luminis.quic.packet.*;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.QuicStream;
-import net.luminis.tls.ByteUtils;
-import net.luminis.tls.TlsState;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -659,20 +658,6 @@ class QuicConnectionImplTest {
         }).start();
 
         connection.setPeerTransportParameters(new TransportParameters(idleTimeoutInSeconds, 1_000_000, 10, 10));
-        connection.finishHandshake(new MockTlsState());
-    }
-
-    static class MockTlsState extends TlsState {
-        @Override
-        protected byte[] computeHandshakeFinishedHmac(boolean b) {
-            return new byte[32];
-        }
-        @Override
-        public boolean isServerFinished() {
-            return true;
-        }
-        @Override
-        public void computeApplicationSecrets() {
-        }
+        connection.handshakeFinished();
     }
 }
