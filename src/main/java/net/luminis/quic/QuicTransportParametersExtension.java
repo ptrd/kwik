@@ -34,6 +34,7 @@ public class QuicTransportParametersExtension extends Extension {
     private final Version quicVersion;
     private byte[] data;
     private TransportParameters params;
+    private Integer discardTransportParameterSize;
 
     public QuicTransportParametersExtension() {
         this(Version.getDefault());
@@ -50,8 +51,24 @@ public class QuicTransportParametersExtension extends Extension {
      */
     public QuicTransportParametersExtension(Version quicVersion, TransportParameters params) {
         this.quicVersion = quicVersion;
+        this.params = params;
+    }
 
-        ByteBuffer buffer = ByteBuffer.allocate(1500);
+    @Override
+    public byte[] getBytes() {
+        if (data == null) {
+            serialize();
+        }
+        return data;
+    }
+
+    public void addDiscardTransportParameter(int parameterSize) {
+        // https://github.com/quicwg/base-drafts/wiki/Quantum-Readiness-test
+        discardTransportParameterSize = parameterSize;
+    }
+
+    private void serialize() {
+        ByteBuffer buffer = ByteBuffer.allocate(100 + discardTransportParameterSize);
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
         // "quic_transport_parameters(0xffa5)"
@@ -133,6 +150,11 @@ public class QuicTransportParametersExtension extends Extension {
             addTransportParameter(buffer, retry_source_connection_id, params.getRetrySourceConnectionId());
         }
 
+        if (discardTransportParameterSize != null) {
+            // See https://github.com/quicwg/base-drafts/wiki/Quantum-Readiness-test
+            addTransportParameter(buffer, (short) 0x173e, new byte[discardTransportParameterSize]);
+        }
+
         int length = buffer.position();
         buffer.limit(length);
 
@@ -142,11 +164,6 @@ public class QuicTransportParametersExtension extends Extension {
         data = new byte[length];
         buffer.flip();
         buffer.get(data);
-    }
-
-    @Override
-    public byte[] getBytes() {
-        return data;
     }
 
     // Assuming Handshake message type encrypted_extensions
@@ -322,7 +339,11 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
-        VariableLengthInteger.encode(id.value, buffer);
+        addTransportParameter(buffer, id.value, value);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, short id, long value) {
+        VariableLengthInteger.encode(id, buffer);
         buffer.mark();
         int encodedValueLength = VariableLengthInteger.encode(value, buffer);
         buffer.reset();
@@ -331,7 +352,11 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, byte[] value) {
-        VariableLengthInteger.encode(id.value, buffer);
+        addTransportParameter(buffer, id.value, value);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, short id, byte[] value) {
+        VariableLengthInteger.encode(id, buffer);
         VariableLengthInteger.encode(value.length, buffer);
         buffer.put(value);
     }
