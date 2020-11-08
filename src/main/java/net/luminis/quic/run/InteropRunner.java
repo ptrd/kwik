@@ -91,6 +91,7 @@ public class InteropRunner extends KwikCli {
             }
 
             QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+            builder.noServerCertificateCheck();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
