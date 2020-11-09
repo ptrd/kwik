@@ -648,7 +648,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                startHandshake(applicationProtocol, false);
+                try {
+                    tlsEngine.startHandshake();
+                } catch (IOException e) {
+                    // Will not happen, as our ClientMessageSender implementation will not throw.
+                }
             } else {
                 log.error("Ignoring RetryPacket, because already processed one.");
             }
