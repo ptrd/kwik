@@ -148,7 +148,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
-                sender.sendInitial(new CryptoFrame(quicVersion, clientHello.getBytes()), token);
+                getCryptoStream(Initial).write(clientHello.getBytes());
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
             }
@@ -325,7 +325,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         tlsEngine.addSupportedCiphers(cipherSuites);
 
         QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams);
-        tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
+        if (clientHelloEnlargement != null) {
+            tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
+        }
         tlsEngine.add(tpExtension);
         tlsEngine.add(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol));
         if (withEarlyData) {
@@ -571,7 +573,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         //   encryption level"
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsEngine, log));
+                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsEngine, log, sender));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
@@ -639,6 +641,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 processedRetryPacket = true;
 
                 token = packet.getRetryToken();
+                sender.setInitialToken(token);
+                getCryptoStream(Initial).reset();  // Stream offset should restart from 0.
                 byte[] destConnectionId = packet.getSourceConnectionId();
                 destConnectionIds.replaceInitialConnectionId(destConnectionId);
                 destConnectionIds.setRetrySourceConnectionId(destConnectionId);

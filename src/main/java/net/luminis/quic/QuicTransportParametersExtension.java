@@ -68,7 +68,7 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     private void serialize() {
-        ByteBuffer buffer = ByteBuffer.allocate(100 + discardTransportParameterSize);
+        ByteBuffer buffer = ByteBuffer.allocate(100 + (discardTransportParameterSize != null? discardTransportParameterSize: 0));
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
         // "quic_transport_parameters(0xffa5)"

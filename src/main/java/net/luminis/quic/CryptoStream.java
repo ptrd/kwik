@@ -20,7 +20,9 @@ package net.luminis.quic;
 
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.send.Sender;
 import net.luminis.quic.stream.BaseStream;
 import net.luminis.tls.*;
 import net.luminis.tls.extension.Extension;
@@ -42,22 +44,29 @@ public class CryptoStream extends BaseStream {
     private final ConnectionSecrets connectionSecrets;
     private final TlsClientEngine tlsEngine;
     private final Logger log;
+    private final Sender sender;
     private final List<Message> messages;
     private final TlsMessageParser tlsMessageParser;
     private boolean msgSizeRead = false;
     private int msgSize;
     private byte msgType;
+    private List<ByteBuffer> dataToSend;
+    private int dataToSendOffset;
+    private int sendStreamSize;
 
-    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log) {
+
+    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.connection = connection;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
         this.tlsEngine = tlsEngine;
         this.log = log;
+        this.sender = sender;
 
         messages = new ArrayList<>();
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
+        dataToSend = new ArrayList<>();
     }
 
     public void add(CryptoFrame cryptoFrame) {
@@ -139,5 +148,42 @@ public class CryptoStream extends BaseStream {
 
     public List<Message> getTlsMessages() {
         return messages;
+    }
+
+    public void write(byte[] data) {
+        dataToSend.add(ByteBuffer.wrap(data));
+        sendStreamSize += data.length;
+        sender.send(this::sendFrame, 10, encryptionLevel, f -> {});
+        sender.flush();
+    }
+
+    private QuicFrame sendFrame(int maxSize) {
+        int leftToSend = sendStreamSize - dataToSendOffset;
+        int bytesToSend = Integer.min(leftToSend, maxSize - 10);
+        if (bytesToSend < leftToSend) {
+            // Need (at least) another frame to send all data.
+            sender.send(this::sendFrame, 10, encryptionLevel, f -> {});
+        }
+
+        byte[] frameData = new byte[bytesToSend];
+        int frameDataOffset = 0;
+        while (frameDataOffset < bytesToSend) {
+            int bytesToCopy = Integer.min(bytesToSend - frameDataOffset, dataToSend.get(0).remaining());
+            dataToSend.get(0).get(frameData, frameDataOffset, bytesToCopy);
+            if (dataToSend.get(0).remaining() == 0) {
+                dataToSend.remove(0);
+            }
+            frameDataOffset += bytesToCopy;
+        }
+
+        CryptoFrame frame = new CryptoFrame(quicVersion, dataToSendOffset, frameData);
+        dataToSendOffset += bytesToSend;
+        return frame;
+    }
+
+    public void reset() {
+        dataToSendOffset = 0;
+        sendStreamSize = 0;
+        dataToSend.clear();
     }
 }

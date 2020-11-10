@@ -139,12 +139,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     @Override
-    public void sendInitial(QuicFrame frame, byte[] token) {
+    public void setInitialToken(byte[] token) {
         if (token != null) {
             packetAssembler.setInitialToken(token);
         }
-        send(frame, EncryptionLevel.Initial);
-        wakeUpSenderLoop();
     }
 
     @Override
