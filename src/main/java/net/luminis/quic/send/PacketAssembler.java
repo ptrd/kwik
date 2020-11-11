@@ -147,25 +147,25 @@ public class PacketAssembler {
                     break;
                 }
                 QuicFrame nextFrame = next.get().getFrameSupplier().apply(proposedSize);
-                if (nextFrame == null) {
-                    throw new RuntimeException("supplier does not produce frame");
-                } else if (nextFrame.getBytes().length > proposedSize) {
-                    throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (proposedSize) + " frame: " + nextFrame);
-                }
+                if (nextFrame != null) {
+                    if (nextFrame.getBytes().length > proposedSize) {
+                        throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (proposedSize) + " frame: " + nextFrame);
+                    }
 
-                estimatedSize += nextFrame.getBytes().length;
-                packet.get().addFrame(nextFrame);
-                callbacks.add(next.get().getLostCallback());
+                    estimatedSize += nextFrame.getBytes().length;
+                    packet.get().addFrame(nextFrame);
+                    callbacks.add(next.get().getLostCallback());
 
-                // If there was an optional ack (which was not added yet)...
-                if (optionalAckSize > 0 && estimatedSize + optionalAckSize < available) {
-                    // ..., add it now (now that it is sure there will be at least one non-ack frame)
-                    packet.get().addFrame(ackFrame);
-                    callbacks.add(EMPTY_CALLBACK);
-                    ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
-                    estimatedSize += ackFrame.getBytes().length;
-                    // Adding once will do ;-)
-                    optionalAckSize = 0;
+                    // If there was an optional ack (which was not added yet)...
+                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize < available) {
+                        // ..., add it now (now that it is sure there will be at least one non-ack frame)
+                        packet.get().addFrame(ackFrame);
+                        callbacks.add(EMPTY_CALLBACK);
+                        ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
+                        estimatedSize += ackFrame.getBytes().length;
+                        // Adding once will do ;-)
+                        optionalAckSize = 0;
+                    }
                 }
             }
             if (packet.get().getFrames().isEmpty()) {
