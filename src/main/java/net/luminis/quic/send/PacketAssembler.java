@@ -73,7 +73,7 @@ public class PacketAssembler {
      * @return
      */
     Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        int remaining = Integer.min(remainingCwndSize, maxPacketSize);
+        final int available = Integer.min(remainingCwndSize, maxPacketSize);
 
         Optional<QuicPacket> packet = Optional.empty();
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
@@ -103,13 +103,15 @@ public class PacketAssembler {
             }
         }
 
-        boolean optionalAckPending = false;
+        int optionalAckSize = 0;
         if (ackFrame == null && requestQueue.hasRequests()) {
             // If there is no explicit ack, but there is something to send, ack should be included if possible
             if (ackGenerator.hasAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
                 ackFrame = ackGenerator.generateAck().orElse(null);
-                optionalAckPending = (ackFrame != null);
+                if (ackFrame != null) {
+                    optionalAckSize = ackFrame.getBytes().length;
+                }
             }
         }
 
@@ -130,37 +132,41 @@ public class PacketAssembler {
             // Must create packet here, to have an initial estimate of packet header overhead
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             int estimatedSize = packet.get().estimateLength();
-            Optional<SendRequest> next;
 
-            if (optionalAckPending) {
-                // First try to add a frame taking into account space for optional ack
-                next = requestQueue.next(remaining - estimatedSize - ackFrame.getBytes().length);
-                if (next.isPresent()) {
-                    // Optional ack fits, so add it
+            while (estimatedSize < available) {
+                // First try to find a frame that will leave space for optional frame (if any)
+                int proposedSize = available - estimatedSize - optionalAckSize;
+                Optional<SendRequest> next = requestQueue.next(proposedSize);
+                if (next.isEmpty() && optionalAckSize > 0) {
+                    // The optional ack does not fit, try without
+                    proposedSize = available - estimatedSize;
+                    next = requestQueue.next(proposedSize);
+                }
+                if (next.isEmpty()) {
+                    // Nothing fits within available space
+                    break;
+                }
+                QuicFrame nextFrame = next.get().getFrameSupplier().apply(proposedSize);
+                if (nextFrame == null) {
+                    throw new RuntimeException("supplier does not produce frame");
+                } else if (nextFrame.getBytes().length > proposedSize) {
+                    throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (proposedSize) + " frame: " + nextFrame);
+                }
+
+                estimatedSize += nextFrame.getBytes().length;
+                packet.get().addFrame(nextFrame);
+                callbacks.add(next.get().getLostCallback());
+
+                // If there was an optional ack (which was not added yet)...
+                if (optionalAckSize > 0 && estimatedSize + optionalAckSize < available) {
+                    // ..., add it now (now that it is sure there will be at least one non-ack frame)
                     packet.get().addFrame(ackFrame);
                     callbacks.add(EMPTY_CALLBACK);
                     ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
                     estimatedSize += ackFrame.getBytes().length;
+                    // Adding once will do ;-)
+                    optionalAckSize = 0;
                 }
-                else {
-                    // Will not fit, try to fit a frame without the ack
-                    next = requestQueue.next(remaining - estimatedSize);
-                }
-            }
-            else {
-                next = requestQueue.next(remaining - estimatedSize);
-            }
-            while (next.isPresent()) {
-                QuicFrame nextFrame = next.get().getFrameSupplier().apply(remaining - estimatedSize);
-                if (nextFrame == null) {
-                    throw new RuntimeException("supplier does not produce frame");
-                } else if (nextFrame.getBytes().length > remaining - estimatedSize) {
-                    throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (remaining - estimatedSize) + " frame: " + nextFrame);
-                }
-                estimatedSize += nextFrame.getBytes().length;
-                packet.get().addFrame(nextFrame);
-                callbacks.add(next.get().getLostCallback());
-                next = requestQueue.next(remaining - estimatedSize);
             }
             if (packet.get().getFrames().isEmpty()) {
                 // Nothing could be added, discard packet and mark packet number as not used
