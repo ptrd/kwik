@@ -583,4 +583,57 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(PingFrame.class);
     }
 
+    @Test
+    void whenSupplierReturnsNothingAssembleDoesNotReturnFrames() {
+        // Given
+        sendRequestQueue.addRequest(size -> null, 20, f -> {});
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isEmpty();
+    }
+
+    @Test
+    void whenSupplierReturnsNothingNextInQueueIsUseds() {
+        // Given
+        sendRequestQueue.addRequest(size -> null, 20, f -> {});
+        sendRequestQueue.addRequest(new PingFrame(), f -> {});
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(PingFrame.class);
+    }
+
+    @Test
+    void whenSupplierReturnsNothingButThereIsAckToSendAssembleReturnsPacket() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addRequest(size -> null, 20, f -> {});
+        sendRequestQueue.addAckRequest();
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(AckFrame.class);
+    }
+
+    @Test
+    void whenSupplierReturnsNothingButThereIsOptionalAckToSendAssembleReturnsNothing() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addRequest(size -> null, 20, f -> {});
+
+        // When
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        // Then
+        assertThat(optionalSendItem).isEmpty();
+    }
 }
