@@ -271,8 +271,10 @@ class CryptoStreamTest {
 
             frameGeneratorFunctions.stream().forEach(f -> {
                 QuicFrame frameToSend = f.apply(1000);
-                assertThat(frameToSend).isInstanceOf(CryptoFrame.class);
-                dataReceived.put(((CryptoFrame) frameToSend).getStreamData());
+                if (frameToSend != null) {
+                    assertThat(frameToSend).isInstanceOf(CryptoFrame.class);
+                    dataReceived.put(((CryptoFrame) frameToSend).getStreamData());
+                }
             });
         }
 

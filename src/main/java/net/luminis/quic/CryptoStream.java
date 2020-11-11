@@ -160,6 +160,9 @@ public class CryptoStream extends BaseStream {
     private QuicFrame sendFrame(int maxSize) {
         int leftToSend = sendStreamSize - dataToSendOffset;
         int bytesToSend = Integer.min(leftToSend, maxSize - 10);
+        if (bytesToSend == 0) {
+            return null;
+        }
         if (bytesToSend < leftToSend) {
             // Need (at least) another frame to send all data.
             sender.send(this::sendFrame, 10, encryptionLevel, f -> {});
