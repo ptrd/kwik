@@ -72,7 +72,7 @@ public interface Sender {
      *                         maximum size the frame may have
      * @param minimumSize      the minimum size the frame supplier function can produce
      * @param level
-     * @param lostCalSlback
+     * @param lostCallback
      */
     void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback);
 

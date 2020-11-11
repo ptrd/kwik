@@ -153,7 +153,7 @@ public class CryptoStream extends BaseStream {
     public void write(byte[] data) {
         dataToSend.add(ByteBuffer.wrap(data));
         sendStreamSize += data.length;
-        sender.send(this::sendFrame, 10, encryptionLevel, f -> {});
+        sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
         sender.flush();
     }
 
@@ -165,7 +165,7 @@ public class CryptoStream extends BaseStream {
         }
         if (bytesToSend < leftToSend) {
             // Need (at least) another frame to send all data.
-            sender.send(this::sendFrame, 10, encryptionLevel, f -> {});
+            sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
         }
 
         byte[] frameData = new byte[bytesToSend];
@@ -182,6 +182,11 @@ public class CryptoStream extends BaseStream {
         CryptoFrame frame = new CryptoFrame(quicVersion, dataToSendOffset, frameData);
         dataToSendOffset += bytesToSend;
         return frame;
+    }
+
+    private void retransmitCrypto(QuicFrame cryptoFrame) {
+        log.recovery("Retransmitting " + cryptoFrame);
+        sender.send(cryptoFrame, EncryptionLevel.Initial, this::retransmitCrypto);
     }
 
     public void reset() {
