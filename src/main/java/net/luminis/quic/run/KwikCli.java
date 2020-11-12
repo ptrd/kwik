@@ -78,6 +78,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
         cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
         cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
+        cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -341,6 +342,15 @@ public class KwikCli {
         if (useZeroRtt && sessionTicket == null) {
             System.err.println("Using 0-RTT requires a session ticket");
             System.exit(1);
+        }
+
+        if (cmd.hasOption("quantumReadinessTest")) {
+            try {
+                builder.quantumReadinessTest(Integer.parseInt(cmd.getOptionValue("quantumReadinessTest")));
+            } catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
         }
 
         if (cmd.hasOption("T")) {

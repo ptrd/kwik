@@ -19,25 +19,30 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.send.Sender;
 import net.luminis.tls.*;
 import net.luminis.tls.handshake.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
+import java.util.Random;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static net.luminis.tls.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class CryptoStreamTest {
 
@@ -45,11 +50,13 @@ class CryptoStreamTest {
 
     private CryptoStream cryptoStream;
     private TlsMessageParser messageParser;
+    private Sender sender;
 
     @BeforeEach
     void prepareObjectUnderTest() throws Exception {
+        sender = mock(Sender.class);
         cryptoStream = new CryptoStream(QUIC_VERSION, null, EncryptionLevel.Handshake, null,
-                new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class));
+                new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
@@ -183,6 +190,96 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages().size()).isEqualTo(2);
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("abcde"));
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("12345"));
+    }
+
+    @Test
+    void writingDataToStreamLeadsToCallingSenderWithSendFrameCallback() {
+        // Given
+        byte[] dataToSend = new byte[120];
+
+        // When
+        cryptoStream.write(dataToSend);
+
+        // Then
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(sender).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        Function<Integer, QuicFrame> frameGeneratorFunction = captor.getValue();
+
+        QuicFrame frameToSend = frameGeneratorFunction.apply(1000);
+        assertThat(frameToSend).isInstanceOf(CryptoFrame.class);
+        assertThat(((CryptoFrame) frameToSend).getStreamData()).hasSize(120);
+        assertThat(((CryptoFrame) frameToSend).getOffset()).isEqualTo(0);
+    }
+
+    @Test
+    void writingDataThatDoesNotFitInFrameLeadsToMultipleCallbacks() {
+        // Given
+        byte[] dataToSend = new byte[1800];
+        new Random().nextBytes(dataToSend);
+
+        // When
+        cryptoStream.write(dataToSend);
+
+        // Then
+        ByteBuffer dataReceived = ByteBuffer.allocate(1800);
+        while (true) {
+            ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+            verify(sender, atMost(99)).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+            List<Function<Integer, QuicFrame>> frameGeneratorFunctions = captor.getAllValues();
+            clearInvocations(sender);
+
+            if (frameGeneratorFunctions.size() == 0) {
+                break;
+            }
+
+            frameGeneratorFunctions.stream().forEach(f -> {
+                QuicFrame frameToSend = f.apply(1000);
+                assertThat(frameToSend).isInstanceOf(CryptoFrame.class);
+                assertThat(((CryptoFrame) frameToSend).getBytes().length).isLessThanOrEqualTo(1000);
+                dataReceived.put(((CryptoFrame) frameToSend).getStreamData());
+            });
+        }
+
+        assertThat(dataReceived.array()).isEqualTo(dataToSend);
+    }
+
+    @Test
+    void dataInMultipleWritesIsConcatenatedIntoStream() {
+        // Given
+        byte[] dataToSend = new byte[1800];
+        new Random().nextBytes(dataToSend);
+
+        // When
+        cryptoStream.write(Arrays.copyOfRange(dataToSend, 0, 200));
+        cryptoStream.write(Arrays.copyOfRange(dataToSend, 200, 1413));
+        cryptoStream.write(Arrays.copyOfRange(dataToSend, 1413, 1509));
+        cryptoStream.write(Arrays.copyOfRange(dataToSend, 1509, 1628));
+        cryptoStream.write(Arrays.copyOfRange(dataToSend, 1628, 1800));
+
+
+        // Then
+        ByteBuffer dataReceived = ByteBuffer.allocate(1800);
+        while (true) {
+            ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+            verify(sender, atMost(99)).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+            List<Function<Integer, QuicFrame>> frameGeneratorFunctions = captor.getAllValues();
+            clearInvocations(sender);
+
+            if (frameGeneratorFunctions.size() == 0) {
+                break;
+            }
+
+            frameGeneratorFunctions.stream().forEach(f -> {
+                QuicFrame frameToSend = f.apply(1000);
+                if (frameToSend != null) {
+                    assertThat(frameToSend).isInstanceOf(CryptoFrame.class);
+                    dataReceived.put(((CryptoFrame) frameToSend).getStreamData());
+                }
+            });
+        }
+
+        assertThat(dataReceived.array()).isEqualTo(dataToSend);
+
     }
 
     private void setParseFunction(Function<ByteBuffer, Message> parseFunction) throws Exception {

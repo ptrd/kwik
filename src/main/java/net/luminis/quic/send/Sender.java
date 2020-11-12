@@ -77,14 +77,10 @@ public interface Sender {
     void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback);
 
     /**
-     * Sends a (fixed) frame in an initial packet, including the initial token (if there is one).
-     * Should not be used to send data that is subject to change (e.g. a flow control level),
-     * as the frame might stay queued for some time when conditions are bad.
-     * The given frame will only be transmitted once; this method does not provide retransmission.
-     * @param frame
+     * Set the initial token that should be used for all initial packets.
      * @param token
      */
-    void sendInitial(QuicFrame frame, byte[] token);
+    void setInitialToken(byte[] token);
 
     /**
      * Ensures an Ack is sent within the given time.

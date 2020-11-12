@@ -112,6 +112,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final GlobalAckGenerator ackGenerator;
     private final List<Runnable> postProcessingActions = new ArrayList<>();
+    private Integer clientHelloEnlargement;
 
 
     private QuicConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
@@ -147,7 +148,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
-                sender.sendInitial(new CryptoFrame(quicVersion, clientHello.getBytes()), token);
+                getCryptoStream(Initial).write(clientHello.getBytes());
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
             }
@@ -323,7 +324,11 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
 
-        tlsEngine.add(new QuicTransportParametersExtension(quicVersion, transportParams));
+        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams);
+        if (clientHelloEnlargement != null) {
+            tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
+        }
+        tlsEngine.add(tpExtension);
         tlsEngine.add(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol));
         if (withEarlyData) {
             tlsEngine.add(new EarlyDataExtension());
@@ -568,7 +573,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         //   encryption level"
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsEngine, log));
+                cryptoStreams.add(new CryptoStream(quicVersion, this, encryptionLevel, connectionSecrets, tlsEngine, log, sender));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
@@ -636,6 +641,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
                 processedRetryPacket = true;
 
                 token = packet.getRetryToken();
+                sender.setInitialToken(token);
+                getCryptoStream(Initial).reset();  // Stream offset should restart from 0.
                 byte[] destConnectionId = packet.getSourceConnectionId();
                 destConnectionIds.replaceInitialConnectionId(destConnectionId);
                 destConnectionIds.setRetrySourceConnectionId(destConnectionId);
@@ -1211,6 +1218,10 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         tlsEngine.setTrustManager(trustAllCerts);
     }
 
+    private void enableQuantumReadinessTest(int nrDummyBytes) {
+        clientHelloEnlargement = nrDummyBytes;
+    }
+
     public static Builder newBuilder() {
         return new BuilderImpl();
     }
@@ -1239,6 +1250,8 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
 
         Builder noServerCertificateCheck();
+
+        Builder quantumReadinessTest(int nrOfDummyBytes);
     }
 
     private static class BuilderImpl implements Builder {
@@ -1253,6 +1266,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         private Integer connectionIdLength;
         private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
         private boolean omitCertificateCheck;
+        private Integer quantumReadinessTest;
 
         @Override
         public QuicConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1272,6 +1286,9 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
             QuicConnectionImpl quicConnection = new QuicConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
             if (omitCertificateCheck) {
                 quicConnection.trustAll();
+            }
+            if (quantumReadinessTest != null) {
+                quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
             }
 
             return quicConnection;
@@ -1343,6 +1360,12 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         @Override
         public Builder noServerCertificateCheck() {
             omitCertificateCheck = true;
+            return this;
+        }
+
+        @Override
+        public Builder quantumReadinessTest(int nrOfDummyBytes) {
+            this.quantumReadinessTest = nrOfDummyBytes;
             return this;
         }
     }
