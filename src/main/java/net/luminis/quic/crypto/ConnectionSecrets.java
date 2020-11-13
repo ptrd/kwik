@@ -51,6 +51,7 @@ public class ConnectionSecrets {
             (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
 
     private final Version quicVersion;
+    private final Role ownRole;
     private Logger log;
     private byte[] clientRandom;
     private Keys[] clientSecrets = new Keys[EncryptionLevel.values().length];
@@ -59,8 +60,9 @@ public class ConnectionSecrets {
     private Path wiresharkSecretsFile;
 
 
-    public ConnectionSecrets(Version quicVersion, Path wiresharksecrets, Logger log) {
+    public ConnectionSecrets(Version quicVersion, Role role, Path wiresharksecrets, Logger log) {
         this.quicVersion = quicVersion;
+        this.ownRole = role;
         this.log = log;
 
         if (wiresharksecrets != null) {
@@ -170,4 +172,14 @@ public class ConnectionSecrets {
     public synchronized Keys getServerSecrets(EncryptionLevel encryptionLevel) {
         return serverSecrets[encryptionLevel.ordinal()];
     }
+
+    public synchronized Keys getPeerSecrets(EncryptionLevel encryptionLevel) {
+        return (ownRole == Role.Client)? serverSecrets[encryptionLevel.ordinal()]: clientSecrets[encryptionLevel.ordinal()];
+    }
+
+    public synchronized Keys getOwnSecrets(EncryptionLevel encryptionLevel) {
+        return (ownRole == Role.Client)? clientSecrets[encryptionLevel.ordinal()]: serverSecrets[encryptionLevel.ordinal()];
+    }
+
+
 }

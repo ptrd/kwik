@@ -136,7 +136,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
 
         receiver = new Receiver(this, socket, 1500, log);
         streamManager = new StreamManager(this, log);
-        connectionSecrets = new ConnectionSecrets(quicVersion, secretsFile, log);
+        connectionSecrets = new ConnectionSecrets(quicVersion, Role.Client, secretsFile, log);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
         transportParams = new TransportParameters(60, 250_000, 3 , 3);
@@ -481,7 +481,7 @@ public class QuicConnectionImpl implements QuicConnection, PacketProcessor, Fram
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Keys keys = connectionSecrets.getServerSecrets(packet.getEncryptionLevel());
+            Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
             if (keys == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7

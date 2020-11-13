@@ -52,7 +52,7 @@ class SenderImplTest extends AbstractSenderTest {
 
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
         Keys keys = createKeys();
-        when(connectionSecrets.getClientSecrets(any(EncryptionLevel.class))).thenReturn(keys);
+        when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
         sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, mock(Logger.class));
         sender.start(connectionSecrets);

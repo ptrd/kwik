@@ -331,7 +331,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         itemsToSend.stream()
                 .map(item -> item.getPacket())
                 .forEach(packet -> {
-                    Keys keys = connectionSecrets.getClientSecrets(packet.getEncryptionLevel());  // Assuming client role!
+                    Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
                     byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
                     buffer.put(packetData);
                     log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
