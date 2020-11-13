@@ -20,6 +20,7 @@ package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
@@ -36,11 +37,6 @@ import java.util.List;
 public class ConnectionSecrets {
 
     private TlsConstants.CipherSuite selectedCipherSuite;
-
-    enum NodeRole {
-        Client,
-        Server
-    }
 
     // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-5.2
     public static final byte[] STATIC_SALT_DRAFT_23 = new byte[] {
@@ -95,12 +91,12 @@ public class ConnectionSecrets {
 
         log.secret("Initial secret", initialSecret);
 
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, NodeRole.Server, log);
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Server, log);
     }
 
     public synchronized void computeEarlySecrets(TrafficSecrets secrets) {
-        Keys zeroRttSecrets = new Keys(quicVersion, NodeRole.Client, log);
+        Keys zeroRttSecrets = new Keys(quicVersion, Role.Client, log);
         zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
@@ -109,12 +105,12 @@ public class ConnectionSecrets {
         Keys clientHandshakeSecrets;
         Keys serverHandshakeSecrets;
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Keys(quicVersion, NodeRole.Client, log);
-            serverHandshakeSecrets = new Keys(quicVersion, NodeRole.Server, log);
+            clientHandshakeSecrets = new Keys(quicVersion, Role.Client, log);
+            serverHandshakeSecrets = new Keys(quicVersion, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Client, log);
-            serverHandshakeSecrets = new Chacha20Keys(quicVersion, NodeRole.Server, log);
+            clientHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Client, log);
+            serverHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Server, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);

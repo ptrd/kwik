@@ -21,6 +21,7 @@ package net.luminis.quic.crypto;
 import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.DecryptionException;
 import net.luminis.quic.QuicRuntimeException;
+import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.TrafficSecrets;
@@ -35,14 +36,14 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
-import static net.luminis.quic.crypto.ConnectionSecrets.NodeRole.Client;
-import static net.luminis.quic.crypto.ConnectionSecrets.NodeRole.Server;
+import static net.luminis.quic.Role.Client;
+import static net.luminis.quic.Role.Server;
 
 public class Keys {
 
     public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
-    private final ConnectionSecrets.NodeRole nodeRole;
+    private final Role nodeRole;
     private final Logger log;
     private final Version quicVersion;
 
@@ -60,13 +61,13 @@ public class Keys {
     private int keyUpdateCounter = 0;
     private boolean possibleKeyUpdateInProgresss = false;
 
-    public Keys(Version quicVersion, ConnectionSecrets.NodeRole nodeRole, Logger log) {
+    public Keys(Version quicVersion, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
     }
 
-    public Keys(Version quicVersion, byte[] initialSecret, ConnectionSecrets.NodeRole nodeRole, Logger log) {
+    public Keys(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;

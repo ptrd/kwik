@@ -20,6 +20,7 @@ package net.luminis.quic.crypto;
 
 import net.luminis.quic.DecryptionException;
 import net.luminis.quic.QuicRuntimeException;
+import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 
@@ -37,7 +38,7 @@ import java.util.Arrays;
 
 public class Chacha20Keys extends Keys {
 
-    public Chacha20Keys(Version quicVersion, ConnectionSecrets.NodeRole server, Logger log) {
+    public Chacha20Keys(Version quicVersion, Role server, Logger log) {
         super(quicVersion, server, log);
     }
 
