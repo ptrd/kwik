@@ -373,10 +373,10 @@ public class KwikCli {
             }
             else {
                 QuicStream httpStream = null;
-                QuicConnection quicConnection = builder.build();
+                QuicClientConnection quicConnection = builder.build();
                 if (useZeroRtt && httpRequestPath != null) {
                     String http09Request = "GET " + httpRequestPath + "\r\n";
-                    QuicConnection.StreamEarlyData earlyData = new QuicConnection.StreamEarlyData(http09Request.getBytes(), true);
+                    QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(http09Request.getBytes(), true);
                     httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, List.of(earlyData)).get(0);
                 }
                 else {
@@ -431,7 +431,7 @@ public class KwikCli {
         }
     }
 
-    private static void storeServerCertificates(QuicConnection quicConnection, String serverCertificatesFile) throws IOException {
+    private static void storeServerCertificates(QuicClientConnection quicConnection, String serverCertificatesFile) throws IOException {
         List<X509Certificate> serverCertificateChain = quicConnection.getServerCertificateChain();
         if (! serverCertificatesFile.endsWith(".pem")) {
             serverCertificatesFile += ".pem";
@@ -450,7 +450,7 @@ public class KwikCli {
         out.close();
     }
 
-    private static void storeNewSessionTickets(QuicConnection quicConnection, String baseFilename) {
+    private static void storeNewSessionTickets(QuicClientConnection quicConnection, String baseFilename) {
         if (quicConnection.getNewSessionTickets().isEmpty()) {
             // Wait a little, receiver thread might still be busy processing messages.
             try {

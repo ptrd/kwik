@@ -18,12 +18,9 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.QuicSessionTicket;
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicClientConnectionImpl;
+import net.luminis.quic.*;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.Version;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.*;
@@ -124,7 +121,7 @@ public class InteropRunner extends KwikCli {
         logger.logCongestionControl(true);
         logger.logRecovery(true);
 
-        QuicConnection connection = builder.build();
+        QuicClientConnection connection = builder.build();
         connection.connect(5_000);
 
         ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
@@ -158,7 +155,7 @@ public class InteropRunner extends KwikCli {
         URL url1 = downloadUrls.get(0);
         URL url2 = downloadUrls.get(1);
 
-        QuicConnection connection = builder.build();
+        QuicClientConnection connection = builder.build();
         connection.connect(5_000);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
@@ -177,7 +174,7 @@ public class InteropRunner extends KwikCli {
         builder.uri(url2.toURI());
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
-        QuicConnection connection2 = builder.build();
+        QuicClientConnection connection2 = builder.build();
         connection2.connect(5_000);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
         logger.info("Downloaded " + url2);
@@ -194,7 +191,7 @@ public class InteropRunner extends KwikCli {
             try {
                 logger.info("Starting download at " + timeNow());
 
-                QuicConnection connection = builder.build();
+                QuicClientConnection connection = builder.build();
                 connection.connect(275_000);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
@@ -213,7 +210,7 @@ public class InteropRunner extends KwikCli {
         logger.logRecovery(true);
         logger.info("Starting first download at " + timeNow());
 
-        QuicConnection connection = builder.build();
+        QuicClientConnection connection = builder.build();
         connection.connect(15_000);
 
         doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
@@ -230,12 +227,12 @@ public class InteropRunner extends KwikCli {
         logger.info("Connection closed; starting second connection with 0-rtt");
 
         builder.sessionTicket(newSessionTickets.get(0));
-        QuicConnection connection2 = builder.build();
+        QuicClientConnection connection2 = builder.build();
 
-        List<QuicConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();
+        List<QuicClientConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();
         for (int i = 1; i < downloadUrls.size(); i++) {
             String httpRequest = "GET " + downloadUrls.get(i).getPath() + "\r\n";
-            earlyDataRequests.add(new QuicConnection.StreamEarlyData(httpRequest.getBytes(), true));
+            earlyDataRequests.add(new QuicClientConnection.StreamEarlyData(httpRequest.getBytes(), true));
         }
         Version quicVersion = Version.getDefault();
         String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
@@ -258,7 +255,7 @@ public class InteropRunner extends KwikCli {
         logger.logPackets(true);
         logger.info("Starting download at " + timeNow());
 
-        QuicConnection connection = builder.build();
+        QuicClientConnection connection = builder.build();
         connection.connect(5_000);
 
         String requestPath = downloadUrls.get(0).getPath();

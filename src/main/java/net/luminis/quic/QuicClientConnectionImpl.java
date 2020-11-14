@@ -58,7 +58,7 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
+public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
     private final List<TlsConstants.CipherSuite> cipherSuites;
 
@@ -394,7 +394,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.discard(pnSpace, reason);
     }
 
-        @Override
+    @Override
     public void process(InitialPacket packet, Instant time) {
         destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);

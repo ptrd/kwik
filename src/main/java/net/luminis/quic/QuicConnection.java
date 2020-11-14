@@ -37,34 +37,11 @@ public interface QuicConnection {
 
     void setDefaultStreamReceiveBufferSize(long size);
 
-    void connect(int connectionTimeout) throws IOException;
-
-    void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException;
-
-    List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
-
-    void keepAlive(int seconds);
-
     QuicStream createStream(boolean bidirectional);
-
-    List<QuicSessionTicket> getNewSessionTickets();
 
     void close();
 
     Statistics getStats();
 
-    InetSocketAddress getLocalAddress();
-
-    List<X509Certificate> getServerCertificateChain();
-
-    class StreamEarlyData {
-        byte[] data;
-        boolean closeOutput;
-
-        public StreamEarlyData(byte[] data, boolean closeImmediately) {
-            this.data = data;
-            closeOutput = closeImmediately;
-        }
-    }
 }
 
