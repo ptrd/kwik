@@ -102,7 +102,7 @@ public class KwikCli {
             return;
         }
 
-        QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         String httpRequestPath = null;
         if (args.size() == 1) {
             String arg = args.get(0);

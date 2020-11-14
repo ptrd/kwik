@@ -20,7 +20,7 @@ package net.luminis.quic.run;
 
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
@@ -90,7 +90,7 @@ public class InteropRunner extends KwikCli {
                 downloadUrls.add(new URL(args[i]));
             }
 
-            QuicConnectionImpl.Builder builder = QuicConnectionImpl.newBuilder();
+            QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
             builder.noServerCertificateCheck();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
@@ -118,7 +118,7 @@ public class InteropRunner extends KwikCli {
         }
     }
 
-    private static void testTransfer(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
+    private static void testTransfer(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         URL url1 = downloadUrls.get(0);
         // logger.logPackets(true);
         logger.logCongestionControl(true);
@@ -151,7 +151,7 @@ public class InteropRunner extends KwikCli {
         connection.close();
     }
 
-    private static void testResumption(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException, URISyntaxException {
+    private static void testResumption(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         if (downloadUrls.size() != 2) {
             throw new IllegalArgumentException("expected 2 download URLs");
         }
@@ -173,7 +173,7 @@ public class InteropRunner extends KwikCli {
             System.exit(1);
         }
 
-        builder = QuicConnectionImpl.newBuilder();
+        builder = QuicClientConnectionImpl.newBuilder();
         builder.uri(url2.toURI());
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
@@ -184,7 +184,7 @@ public class InteropRunner extends KwikCli {
         connection2.close();
     }
 
-    private static void testMultiConnect(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws URISyntaxException {
+    private static void testMultiConnect(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws URISyntaxException {
         logger.useRelativeTime(true);
         logger.logRecovery(true);
         logger.logCongestionControl(true);
@@ -208,7 +208,7 @@ public class InteropRunner extends KwikCli {
         }
     }
 
-    private static void testZeroRtt(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+    private static void testZeroRtt(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException {
         logger.logPackets(true);
         logger.logRecovery(true);
         logger.info("Starting first download at " + timeNow());
@@ -254,7 +254,7 @@ public class InteropRunner extends KwikCli {
         connection.close();
     }
 
-    private static void testKeyUpdate(List<URL> downloadUrls, QuicConnectionImpl.Builder builder) throws IOException {
+    private static void testKeyUpdate(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException {
         logger.logPackets(true);
         logger.info("Starting download at " + timeNow());
 
@@ -274,7 +274,7 @@ public class InteropRunner extends KwikCli {
         transfer(httpStream.getInputStream(), out, 100 * 1024);
         // Initiate the key update; test specification requires the update to take place before 1MB is downloaded.
         logger.info("Initiating key update");
-        ((QuicConnectionImpl) connection).updateKeys();
+        ((QuicClientConnectionImpl) connection).updateKeys();
         // And download the rest.
         httpStream.getInputStream().transferTo(out);
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());

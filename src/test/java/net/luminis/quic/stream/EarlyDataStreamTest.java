@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -39,13 +39,12 @@ import static org.mockito.Mockito.*;
 class EarlyDataStreamTest {
 
     private EarlyDataStream stream;
-    private QuicConnectionImpl connection;
+    private QuicClientConnectionImpl connection;
     private Logger logger;
 
     @BeforeEach
     void initObjectUnderTest() {
-        connection = mock(QuicConnectionImpl.class);
-        when(connection.getMaxPacketSize()).thenReturn(1232);
+        connection = mock(QuicClientConnectionImpl.class);
         when(connection.getMaxShortHeaderPacketOverhead()).thenReturn(29);
         int maxData = 5000;
         FlowControl flowController = new FlowControl(maxData, maxData, maxData, maxData);

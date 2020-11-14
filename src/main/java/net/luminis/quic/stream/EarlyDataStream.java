@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -39,7 +39,7 @@ public class EarlyDataStream extends QuicStream {
     private byte[] earlyData = new byte[0];
     private byte[] remainingData = new byte[0];
 
-    public EarlyDataStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+    public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, FlowControl flowController, Logger log) {
         super(quicVersion, streamId, connection, flowController, log);
     }
 
@@ -88,7 +88,7 @@ public class EarlyDataStream extends QuicStream {
     @Override
     protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
         if (sendingEarlyData) {
-            connection.sendZeroRtt(frame, lostFrameCallback);
+            ((QuicClientConnectionImpl) connection).sendZeroRtt(frame, lostFrameCallback);
         }
         else {
             connection.send(frame, lostFrameCallback, flush);

@@ -70,7 +70,6 @@ class QuicStreamTest {
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
         connection = Mockito.mock(QuicConnectionImpl.class);
-        when(connection.getMaxPacketSize()).thenReturn(1232);
         logger = Mockito.mock(Logger.class);
 
         quicStream = new QuicStream(0, connection, new FlowControl(9999, 9999, 9999, 9999), logger);

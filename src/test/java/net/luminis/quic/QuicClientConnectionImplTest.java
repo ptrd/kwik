@@ -55,12 +55,12 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-class QuicConnectionImplTest {
+class QuicClientConnectionImplTest {
 
     private static Logger logger;
     private final byte[] destinationConnectionId = { 0x00, 0x01, 0x02, 0x03 };
 
-    private QuicConnectionImpl connection;
+    private QuicClientConnectionImpl connection;
     private byte[] originalDestinationId;
     private SenderImpl sender;
 
@@ -72,7 +72,7 @@ class QuicConnectionImplTest {
 
     @BeforeEach
     void initConnectionUnderTest() throws Exception {
-        connection = QuicConnectionImpl.newBuilder().uri(new URI("//localhost:443")).logger(logger).build();
+        connection = QuicClientConnectionImpl.newBuilder().uri(new URI("//localhost:443")).logger(logger).build();
         sender = Mockito.mock(SenderImpl.class);
     }
 
@@ -308,7 +308,7 @@ class QuicConnectionImplTest {
     @Test
     void testConnectionFlowControl() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getDeclaredField("flowControlIncrement")).read();
+        long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getSuperclass().getDeclaredField("flowControlIncrement")).read();
 
         connection.updateConnectionFlowControl(10);
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));  // No initial update, value is advertised in transport parameters.
@@ -326,7 +326,7 @@ class QuicConnectionImplTest {
     @Test
     void testMinimumQuicVersionIs23() {
         assertThatThrownBy(
-                () -> QuicConnectionImpl.newBuilder()
+                () -> QuicClientConnectionImpl.newBuilder()
                         .version(Version.IETF_draft_19)
                         .uri(new URI("//localhost:443"))
                         .logger(logger).build())
@@ -335,7 +335,7 @@ class QuicConnectionImplTest {
 
     @Test
     void testQuicVersion23IsSupported() throws Exception {
-        assertThat(QuicConnectionImpl.newBuilder()
+        assertThat(QuicClientConnectionImpl.newBuilder()
                 .version(Version.IETF_draft_23)
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build())
@@ -398,7 +398,7 @@ class QuicConnectionImplTest {
     @Test
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionClose() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -410,7 +410,7 @@ class QuicConnectionImplTest {
     @Test
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionCloseOnce() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -428,7 +428,7 @@ class QuicConnectionImplTest {
     @Test
     void closingConnectedConnectionTriggersConnectionClose() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.close();
 
@@ -538,7 +538,7 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
 
         // When
@@ -566,7 +566,7 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }));
         clearInvocations(sender);
 

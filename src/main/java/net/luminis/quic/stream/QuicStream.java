@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.stream.QuicStream;
@@ -39,12 +39,12 @@ public class InteractiveShell {
     private final Map<String, Consumer<String>> commands;
     private boolean running;
     private Map<String, String> history;
-    private final QuicConnectionImpl.Builder builder;
+    private final QuicClientConnectionImpl.Builder builder;
     private final String alpn;
-    private QuicConnectionImpl quicConnection;
+    private QuicClientConnectionImpl quicConnection;
     private TransportParameters params;
 
-    public InteractiveShell(QuicConnectionImpl.Builder builder, String alpn) {
+    public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn) {
         this.builder = builder;
         this.alpn = alpn;
 

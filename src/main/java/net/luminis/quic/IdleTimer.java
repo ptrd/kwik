@@ -20,9 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.send.SenderImpl;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Timer;
 import java.util.TimerTask;

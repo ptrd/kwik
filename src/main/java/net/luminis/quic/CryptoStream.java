@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 public class CryptoStream extends BaseStream {
 
     private final Version quicVersion;
-    private final QuicConnectionImpl connection;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
     private final TlsClientEngine tlsEngine;
@@ -55,9 +54,8 @@ public class CryptoStream extends BaseStream {
     private int sendStreamSize;
 
 
-    public CryptoStream(Version quicVersion, QuicConnectionImpl connection, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
-        this.connection = connection;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
         this.tlsEngine = tlsEngine;

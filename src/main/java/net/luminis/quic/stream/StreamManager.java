@@ -31,7 +31,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 
 public class StreamManager implements FrameProcessor {
@@ -103,7 +102,7 @@ public class StreamManager implements FrameProcessor {
     public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
         try {
             return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS,
-                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, connection, flowController, logger));
+                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, flowController, logger));
         } catch (TimeoutException e) {
             return null;
         }
