@@ -19,6 +19,10 @@
 package net.luminis.quic.frame;
 
 
+import net.luminis.quic.packet.QuicPacket;
+
+import java.time.Instant;
+
 public abstract class QuicFrame {
 
     public abstract byte[] getBytes();
@@ -26,4 +30,7 @@ public abstract class QuicFrame {
     public boolean isAckEliciting() {
         return true;
     }
+
+    public abstract void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived);
+
 }

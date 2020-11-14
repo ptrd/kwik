@@ -20,9 +20,11 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.17
 // "Endpoints can use PATH_CHALLENGE frames (type=0x1a) to check
@@ -61,7 +63,11 @@ public class PathChallengeFrame extends QuicFrame {
     @Override
     public String toString() {
         return "PathChallengeFrame[" + ByteUtils.bytesToHex(data) + "]";
+    }
 
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }
 

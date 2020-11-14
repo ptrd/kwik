@@ -20,8 +20,10 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 /**
  * https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.20
@@ -48,6 +50,10 @@ public class HandshakeDoneFrame extends QuicFrame {
     @Override
     public String toString() {
         return "HandshakeDoneFrame[]";
+    }
+
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }
 

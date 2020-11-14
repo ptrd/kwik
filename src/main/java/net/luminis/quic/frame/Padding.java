@@ -19,8 +19,10 @@
 package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-19.1
 // The PADDING frame (type=0x00) has no semantic value.
@@ -73,5 +75,10 @@ public class Padding extends QuicFrame {
 
     public int getLength() {
         return length;
+    }
+
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }

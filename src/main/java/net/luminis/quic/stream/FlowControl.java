@@ -32,7 +32,7 @@ import java.util.Map;
 /**
  * Keeps track of connection and stream flow control limits.
  */
-public class FlowControl implements FrameProcessor {
+public class FlowControl {
 
     // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-18.2
 
@@ -238,32 +238,17 @@ public class FlowControl implements FrameProcessor {
     }
 
 
-    @Override
-    public void process(QuicFrame frame, PnSpace pnSpace, Instant time) {
-        if (frame instanceof MaxDataFrame) {
-            process((MaxDataFrame) frame);
-        }
-        else if (frame instanceof MaxStreamDataFrame) {
-            process((MaxStreamDataFrame) frame);
-        }
-        else {
-            throw new ImplementationError();
-        }
-        synchronized (this) {
-            this.notifyAll();
-        }
-    }
-
-    private void process(MaxDataFrame frame) {
+    public void process(MaxDataFrame frame) {
         synchronized (this) {
             // If frames are received out of order, the new max can be smaller than the current value.
             if (frame.getMaxData() > maxDataAllowed) {
                 maxDataAllowed = frame.getMaxData();
             }
+            this.notifyAll();
         }
     }
 
-    private void process(MaxStreamDataFrame frame) {
+    public void process(MaxStreamDataFrame frame) {
         synchronized (this) {
             int streamId = frame.getStreamId();
             long maxStreamData = frame.getMaxData();
@@ -271,6 +256,7 @@ public class FlowControl implements FrameProcessor {
             if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
                 maxStreamDataAllowed.put(streamId, maxStreamData);
             }
+            this.notifyAll();
         }
     }
 }

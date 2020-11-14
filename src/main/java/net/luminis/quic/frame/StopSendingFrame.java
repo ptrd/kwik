@@ -22,8 +22,10 @@ import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.5
 public class StopSendingFrame extends QuicFrame {
@@ -53,4 +55,8 @@ public class StopSendingFrame extends QuicFrame {
         return "StopSendingFrame[" + streamId + ":" + errorCode + "]";
     }
 
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
+    }
 }

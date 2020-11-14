@@ -21,8 +21,10 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 public class PingFrame extends QuicFrame {
 
@@ -45,5 +47,10 @@ public class PingFrame extends QuicFrame {
     @Override
     public String toString() {
         return "PingFrame[]";
+    }
+
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }

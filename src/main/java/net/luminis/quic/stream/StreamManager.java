@@ -33,7 +33,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 
-public class StreamManager implements FrameProcessor {
+public class StreamManager {
 
     private final Map<Integer, QuicStream> streams;
     private final Version quicVersion;
@@ -125,20 +125,7 @@ public class StreamManager implements FrameProcessor {
         this.flowController = flowController;
     }
 
-    @Override
-    public void process(QuicFrame frame, PnSpace pnSpace, Instant timeReceived) {
-        if (frame instanceof StreamFrame) {
-            process((StreamFrame) frame, pnSpace, timeReceived);
-        }
-        else if (frame instanceof MaxStreamsFrame) {
-            process((MaxStreamsFrame) frame, pnSpace, timeReceived);
-        }
-        else {
-            throw new IllegalArgumentException();  // Programming error
-        }
-    }
-
-    public void process(StreamFrame frame, PnSpace pnSpace, Instant timeReceived) {
+    public void process(StreamFrame frame) {
         int streamId = frame.getStreamId();
         QuicStream stream = streams.get(streamId);
         if (stream != null) {
@@ -151,7 +138,7 @@ public class StreamManager implements FrameProcessor {
                 log.info("Receiving data for server-initiated stream " + streamId);
                 stream = new QuicStream(quicVersion, streamId, connection, null, log);
                 streams.put(streamId, stream);
-                stream.add((StreamFrame) frame);
+                stream.add(frame);
                 if (serverStreamCallback != null) {
                     serverStreamCallback.accept(stream);
                 }

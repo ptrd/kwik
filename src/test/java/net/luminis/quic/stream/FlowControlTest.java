@@ -118,10 +118,10 @@ class FlowControlTest {
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        fc.process(new MaxDataFrame(300), PnSpace.App, null);
+        fc.process(new MaxDataFrame(300));
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(300);
 
-        fc.process(new MaxDataFrame(400), PnSpace.App, null);
+        fc.process(new MaxDataFrame(400));
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(400);
     }
 
@@ -139,7 +139,7 @@ class FlowControlTest {
         assertThat(fc.increaseFlowControlLimit(stream1, 200)).isEqualTo(200);
         assertThat(fc.increaseFlowControlLimit(stream2, 200)).isEqualTo(100);
 
-        fc.process(new MaxDataFrame(600), PnSpace.App, null);
+        fc.process(new MaxDataFrame(600));
         assertThat(fc.increaseFlowControlLimit(stream1, 400)).isEqualTo(400);
         assertThat(fc.increaseFlowControlLimit(stream2, 400)).isEqualTo(200);
     }
@@ -155,7 +155,7 @@ class FlowControlTest {
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        fc.process(new MaxStreamDataFrame(streamId, 300), PnSpace.App, null);
+        fc.process(new MaxStreamDataFrame(streamId, 300));
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(300);
     }
 
@@ -174,7 +174,7 @@ class FlowControlTest {
         Instant start = Instant.now();
         executeAsyncWithDelay(() -> {
             // Receive MaxDataFrame that increments max data to 200
-            fc.process(new MaxDataFrame(200), PnSpace.App, null);
+            fc.process(new MaxDataFrame(200));
         }, timeUntilMaxDataFrameIsReceived);
 
         fc.waitForFlowControlCredits(stream);
@@ -199,7 +199,7 @@ class FlowControlTest {
         Instant start = Instant.now();
         executeAsyncWithDelay(() -> {
             // Receive MaxStreamDataFrame that increments max data to 200
-            fc.process(new MaxStreamDataFrame(streamId, 300), PnSpace.App, null);
+            fc.process(new MaxStreamDataFrame(streamId, 300));
         }, timeUntilMaxDataFrameIsReceived);
 
         fc.waitForFlowControlCredits(stream);
@@ -233,8 +233,8 @@ class FlowControlTest {
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
-        fc.process(new MaxDataFrame(1500), PnSpace.App, null);
-        fc.process(new MaxDataFrame(1000), PnSpace.App, null);
+        fc.process(new MaxDataFrame(1500));
+        fc.process(new MaxDataFrame(1000));
 
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
     }
@@ -249,8 +249,8 @@ class FlowControlTest {
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
-        fc.process(new MaxStreamDataFrame(1, 1500), PnSpace.App, null);
-        fc.process(new MaxStreamDataFrame(1, 1000), PnSpace.App, null);
+        fc.process(new MaxStreamDataFrame(1, 1500));
+        fc.process(new MaxStreamDataFrame(1, 1000));
 
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
     }
@@ -284,7 +284,7 @@ class FlowControlTest {
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
-        fc.process(new MaxDataFrame(1500), PnSpace.App, null);
+        fc.process(new MaxDataFrame(1500));
 
         TransportParameters updateTransportParameters = new TransportParameters();
         updateTransportParameters.setInitialMaxData(1000);   // This is the update
@@ -343,7 +343,7 @@ class FlowControlTest {
         FlowControl fc = new FlowControl(initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
-        fc.process(new MaxStreamDataFrame(1, 1500), PnSpace.App, null);
+        fc.process(new MaxStreamDataFrame(1, 1500));
 
         TransportParameters updateTransportParameters = new TransportParameters();
         updateTransportParameters.setInitialMaxData(initialMaxData);

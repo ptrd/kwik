@@ -22,8 +22,10 @@ import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 
 public class RetireConnectionIdFrame extends QuicFrame {
@@ -68,5 +70,10 @@ public class RetireConnectionIdFrame extends QuicFrame {
 
     public int getSequenceNr() {
         return sequenceNr;
+    }
+
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }

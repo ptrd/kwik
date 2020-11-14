@@ -20,9 +20,11 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.18
 // "The PATH_RESPONSE frame (type=0x1b) is sent in response to a
@@ -65,5 +67,8 @@ public class PathResponseFrame extends QuicFrame {
         return "PathResponseFrame[" + ByteUtils.bytesToHex(data) + "]";
     }
 
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
+    }
 }
-

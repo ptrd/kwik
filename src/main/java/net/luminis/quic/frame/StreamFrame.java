@@ -22,9 +22,11 @@ import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.stream.StreamElement;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -179,5 +181,10 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         + 4 // offset
         + 4 // length
         ;
+    }
+
+    @Override
+    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+        frameProcessor.process(this, packet, timeReceived);
     }
 }

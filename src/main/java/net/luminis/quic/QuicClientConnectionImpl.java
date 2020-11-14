@@ -58,7 +58,7 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler {
+public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
     private final List<TlsConstants.CipherSuite> cipherSuites;
 
@@ -486,61 +486,86 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     void processFrames(QuicPacket packet, Instant timeReceived) {
         for (QuicFrame frame: packet.getFrames()) {
-            if (frame instanceof CryptoFrame) {
-                getCryptoStream(packet.getEncryptionLevel()).add((CryptoFrame) frame);
-                log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
-            }
-            else if (frame instanceof AckFrame) {
-                if (peerTransportParams != null) {
-                    ((AckFrame) frame).setDelayExponent(peerTransportParams.getAckDelayExponent());
-                }
-                ackProcessors.forEach(p -> p.process((AckFrame) frame, packet.getPnSpace(), timeReceived));
-            }
-            else if (frame instanceof StreamFrame) {
-                streamManager.process(frame, packet.getPnSpace(), timeReceived);
-            }
-            else if (frame instanceof MaxStreamDataFrame) {
-                flowController.process(frame, packet.getPnSpace(), timeReceived);
-            }
-            else if (frame instanceof MaxDataFrame) {
-                flowController.process(frame, packet.getPnSpace(), timeReceived);
-            }
-            else if (frame instanceof MaxStreamsFrame) {
-                streamManager.process(frame, packet.getPnSpace(), timeReceived);
-            }
-            else if (frame instanceof NewConnectionIdFrame) {
-                registerNewDestinationConnectionId((NewConnectionIdFrame) frame);
-            }
-            else if (frame instanceof RetireConnectionIdFrame) {
-                retireSourceConnectionId((RetireConnectionIdFrame) frame);
-            }
-            else if (frame instanceof ConnectionCloseFrame) {
-                ConnectionCloseFrame close = (ConnectionCloseFrame) frame;
-                handlePeerClosing(close);
-            }
-            else if (frame instanceof PathChallengeFrame) {
-                PathResponseFrame response = new PathResponseFrame(quicVersion, ((PathChallengeFrame) frame).getData());
-                send(response, f -> {});
-            }
-            else if (frame instanceof HandshakeDoneFrame) {
-                sender.discard(PnSpace.Handshake, "HandshakeDone is received");
-                synchronized (handshakeState) {
-                    if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
-                        handshakeState = HandshakeState.Confirmed;
-                        handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
-                    } else {
-                        log.debug("Handshake state cannot be set to Confirmed");
-                    }
-                }
-                // TODO: discard handshake keys:
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
-                // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
-            }
-            else {
-                log.debug("Ignoring " + frame);
-            }
+            frame.accept(this, packet, timeReceived);
         }
     }
+
+    @Override
+    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+        if (peerTransportParams != null) {
+            ackFrame.setDelayExponent(peerTransportParams.getAckDelayExponent());
+        }
+        ackProcessors.forEach(p -> p.process(ackFrame, packet.getPnSpace(), timeReceived));
+    }
+
+    @Override
+    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
+        handlePeerClosing(connectionCloseFrame);
+    }
+
+    @Override
+    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+        getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+        log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+    }
+
+    @Override
+    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+        sender.discard(PnSpace.Handshake, "HandshakeDone is received");
+        synchronized (handshakeState) {
+            if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
+                handshakeState = HandshakeState.Confirmed;
+                handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+            } else {
+                log.debug("Handshake state cannot be set to Confirmed");
+            }
+        }
+        // TODO: discard handshake keys:
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
+        // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
+    }
+
+    @Override
+    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
+        flowController.process(maxDataFrame);
+    }
+
+    @Override
+    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
+        flowController.process(maxStreamDataFrame);
+    }
+
+    @Override
+    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
+        streamManager.process(maxStreamsFrame, packet.getPnSpace(), timeReceived);
+    }
+
+    @Override
+    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        registerNewDestinationConnectionId((newConnectionIdFrame));
+    }
+
+    @Override
+    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
+        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
+        send(response, f -> {});
+    }
+
+    @Override
+    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        retireSourceConnectionId(retireConnectionIdFrame);
+    }
+
+    @Override
+    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
+        streamManager.process(streamFrame);
+    }
+
+    @Override
+    public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
+        log.warn("Unhandled frame type: " + frame);
+    }
+
 
     private void handleIOError(IOException e) {
         System.out.println("Fatal: IO error " + e);
