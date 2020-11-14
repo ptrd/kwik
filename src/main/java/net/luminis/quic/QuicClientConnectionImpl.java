@@ -119,7 +119,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
 
-        receiver = new Receiver(this, socket, 1500, log);
+        receiver = new Receiver(socket, 1500, log, this::abortConnection);
         streamManager = new StreamManager(this, log);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);

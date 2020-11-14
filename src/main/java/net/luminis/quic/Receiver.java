@@ -29,26 +29,27 @@ import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
  */
 public class Receiver {
 
-    private final QuicClientConnectionImpl connection;
     private volatile DatagramSocket socket;
     private final int maxPacketSize;
     private final Logger log;
+    private final Consumer<Throwable> abortCallback;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
-    public Receiver(QuicClientConnectionImpl connection, DatagramSocket socket, int initialMaxPacketSize, Logger log) {
-        this.connection = connection;
+    public Receiver(DatagramSocket socket, int initialMaxPacketSize, Logger log, Consumer<Throwable> abortCallback) {
         this.socket = socket;
         this.maxPacketSize = initialMaxPacketSize;
         this.log = log;
+        this.abortCallback = abortCallback;
 
         receiverThread = new Thread(() -> run(), "receiver");
         receiverThread.setDaemon(true);
@@ -123,7 +124,7 @@ public class Receiver {
             if (! isClosing) {
                 // This is probably fatal
                 log.error("IOException while receiving datagrams", e);
-                connection.abortConnection(e);
+                abortCallback.accept(e);
             }
             else {
                 log.debug("closing receiver");
@@ -131,7 +132,7 @@ public class Receiver {
         }
         catch (Throwable fatal) {
             log.error("IOException while receiving datagrams", fatal);
-            connection.abortConnection(fatal);
+            abortCallback.accept(fatal);
         }
     }
 
