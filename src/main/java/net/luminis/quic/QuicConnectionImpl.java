@@ -182,6 +182,12 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         return packet;
     }
 
+    protected void processFrames(QuicPacket packet, Instant timeReceived) {
+        for (QuicFrame frame: packet.getFrames()) {
+            frame.accept(this, packet, timeReceived);
+        }
+    }
+
     protected abstract int getSourceConnectionIdLength();
 
     /**

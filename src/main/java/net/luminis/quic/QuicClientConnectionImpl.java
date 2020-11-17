@@ -484,12 +484,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    void processFrames(QuicPacket packet, Instant timeReceived) {
-        for (QuicFrame frame: packet.getFrames()) {
-            frame.accept(this, packet, timeReceived);
-        }
-    }
-
     @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         if (peerTransportParams != null) {
