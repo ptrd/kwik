@@ -102,7 +102,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
-        super(quicVersion, secretsFile, log);
+        super(quicVersion, Role.Client, secretsFile, log);
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;

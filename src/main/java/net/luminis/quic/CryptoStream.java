@@ -28,6 +28,7 @@ import net.luminis.tls.*;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.HandshakeMessage;
 import net.luminis.tls.handshake.TlsClientEngine;
+import net.luminis.tls.handshake.TlsEngine;
 import net.luminis.tls.handshake.TlsMessageParser;
 
 import java.io.IOException;
@@ -41,7 +42,7 @@ public class CryptoStream extends BaseStream {
     private final Version quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
-    private final TlsClientEngine tlsEngine;
+    private final TlsEngine tlsEngine;
     private final Logger log;
     private final Sender sender;
     private final List<Message> messages;
@@ -54,7 +55,7 @@ public class CryptoStream extends BaseStream {
     private int sendStreamSize;
 
 
-    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;

@@ -1,13 +1,16 @@
 package net.luminis.quic.server;
 
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.InvalidPacketException;
-import net.luminis.quic.RawPacket;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.tls.handshake.ClientHello;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -15,6 +18,14 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.ECKey;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -122,14 +133,40 @@ class ServerTest {
             VersionNegotiationPacket vn = new VersionNegotiationPacket();
             try {
                 vn.parse(ByteBuffer.wrap(returnedPacket.getData()), null, 0, mock(Logger.class), 0);
-                return Arrays.equals(vn.getDcid(), new byte[]{ 11, 12, 13, 14 })
+                return Arrays.equals(vn.getDcid(), new byte[] { 11, 12, 13, 14 })
                         &&
-                        Arrays.equals(vn.getScid(), new byte[]{ 1, 2, 3, 4, 5, 6, 7, 8 });
+                        Arrays.equals(vn.getScid(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
             }
             catch (Exception e) {
                 return false;
             }
         }));
+    }
+
+    @Test
+    void serverReceivingValidInitialShouldCreateNewConnection() throws Exception {
+        // Given
+        ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
+        ServerConnection connection = mock(ServerConnection.class);
+        when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class)))
+                .thenReturn(connection); // new ServerConnection(Version.getDefault(), serverSocket, null, new byte[8], null, 100, mock(Logger.class)));
+        FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
+
+        ByteBuffer buffer = ByteBuffer.allocate(1200);
+        buffer.put((byte) 0b1100_0000);
+        buffer.putInt(Version.getDefault().getId());
+        buffer.put((byte) 8);
+        buffer.put(new byte[8]);
+        buffer.put((byte) 0);  // source connection id length
+
+        // When
+        server.process(createPacket(buffer));
+
+        // Then
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class));
+        // And
+        verify(connection).parsePackets(anyInt(), any(Instant.class), argThat(data -> data.limit() == 1200));
     }
 
     private RawPacket createPacket(ByteBuffer buffer) {
@@ -147,4 +184,5 @@ class ServerTest {
             return false;
         }
     }
+
 }

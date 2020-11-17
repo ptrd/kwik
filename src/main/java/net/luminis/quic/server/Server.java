@@ -20,10 +20,12 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.RawPacket;
 import net.luminis.quic.Receiver;
+import net.luminis.quic.UnknownVersionException;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.tls.handshake.TlsServerEngineFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -34,6 +36,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +49,7 @@ import java.util.stream.Collectors;
 public class Server {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
+    private static final int CONNECTION_ID_LENGTH = 4;
 
     private final Receiver receiver;
     private final Logger log;
@@ -54,6 +58,8 @@ public class Server {
     private final DatagramSocket serverSocket;
     private Integer initalRtt = 100;
     private Map<ConnectionSource, ServerConnection> currentConnections;
+    private TlsServerEngineFactory tlsEngineFactory;
+    private final ServerConnectionFactory serverConnectionFactory;
 
 
     public static void main(String[] args) throws Exception {
@@ -87,6 +93,9 @@ public class Server {
         log.logWarning(true);
         log.logPackets(true);
         log.logInfo(true);
+
+        tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
+        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory, initalRtt, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         currentConnections = new HashMap<>();
@@ -133,6 +142,9 @@ public class Server {
 
     private void processLongHeaderPacket(InetSocketAddress clientAddress, int flags, ByteBuffer data) {
         if (data.remaining() >= MINIMUM_LONG_HEADER_LENGTH) {
+            data.position(1);
+            int version = data.getInt();
+
             data.position(5);
             int dcidLength = data.get() & 0xff;
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
@@ -140,7 +152,7 @@ public class Server {
             //  value larger than 20 MUST drop the packet. In order to properly form a Version Negotiation packet,
             //  servers SHOULD be able to read longer connection IDs from other QUIC versions."
             if (dcidLength > 20) {
-                if (initialWithUnspportedVersion(data)) {
+                if (initialWithUnspportedVersion(data, version)) {
                     // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
                     // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
                     sendVersionNegotiationPacket(clientAddress, data, dcidLength);
@@ -154,14 +166,15 @@ public class Server {
 
                 Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
                 if (connection.isEmpty()) {
-                    if (mightStartNewConnection(data, dcid)) {
-                        connection = Optional.of(createNewConnection(clientAddress, dcid));
-                    } else if (initialWithUnspportedVersion(data)) {
+                    if (mightStartNewConnection(data, version, dcid)) {
+                        connection = Optional.of(createNewConnection(version, clientAddress, dcid));
+                    } else if (initialWithUnspportedVersion(data, version)) {
                         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
-                        // " A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
+                        // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
                         sendVersionNegotiationPacket(clientAddress, data, dcidLength);
                     }
                 }
+                connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
             }
         }
     }
@@ -170,19 +183,17 @@ public class Server {
         System.out.println("Receiving short header packet (" + data.remaining() + " bytes)");
     }
 
-    private boolean mightStartNewConnection(ByteBuffer packetBytes, byte[] dcid) {
+    private boolean mightStartNewConnection(ByteBuffer packetBytes, int version, byte[] dcid) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.2
         // "This Destination Connection ID MUST be at least 8 bytes in length."
         if (dcid.length >= 8) {
-            packetBytes.position(1);
-            int version = packetBytes.getInt();
-            return supportedVersions.contains(version);
+            return supportedVersionIds.contains(version);
         } else {
             return false;
         }
     }
 
-    private boolean initialWithUnspportedVersion(ByteBuffer packetBytes) {
+    private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
         packetBytes.rewind();
         int flags = packetBytes.get() & 0xff;
         if ((flags & 0b1111_0000) == 0b1100_0000) {
@@ -191,22 +202,28 @@ public class Server {
             //   datagram with a payload that is smaller than the smallest allowed
             //   maximum datagram size of 1200 bytes. "
             if (packetBytes.limit() >= 1200) {
-                packetBytes.position(1);
-                int version = packetBytes.getInt();
                 return !supportedVersions.contains(version);
             }
         }
         return false;
     }
 
-    private ServerConnection createNewConnection(InetSocketAddress clientAddress, byte[] dcid) {
-        return null;
+    private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] dcid) {
+        try {
+            Version version = Version.parse(versionValue);
+            ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, dcid);
+            currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnection);
+            return newConnection;
+        } catch (UnknownVersionException e) {
+            // Impossible, as it only gets here if the given version is supported, so it is a known version.
+            throw new RuntimeException();
+        }
     }
 
     private Optional<ServerConnection> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
-        return Optional.empty();
+        return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
     }
-
+    
     private void sendVersionNegotiationPacket(InetSocketAddress clientAddress, ByteBuffer data, int dcidLength) {
         data.rewind();
         if (data.remaining() >= 1 + 4 + 1 + dcidLength + 1) {
@@ -232,4 +249,5 @@ public class Server {
             }
         }
     }
+
 }

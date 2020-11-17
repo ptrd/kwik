@@ -21,13 +21,14 @@ package net.luminis.quic;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.FrameProcessor3;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.Sender;
-import net.luminis.tls.handshake.TlsClientEngine;
+import net.luminis.tls.handshake.TlsEngine;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -41,7 +42,7 @@ import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFrame>, PacketProcessor {
+public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
 
     protected final Version quicVersion;
     protected final Logger log;
@@ -59,11 +60,11 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
     protected long largestPacketNumber;
 
 
-    protected QuicConnectionImpl(Version quicVersion, Path secretsFile, Logger log) {
+    protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
         this.quicVersion = quicVersion;
         this.log = log;
 
-        connectionSecrets = new ConnectionSecrets(quicVersion, Role.Client, secretsFile, log);
+        connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
         transportParams = new TransportParameters(60, 250_000, 3 , 3);
         flowControlMax = transportParams.getInitialMaxData();
@@ -94,7 +95,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         }
     }
 
-    void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
+    public void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
         while (data.remaining() > 0) {
             try {
                 QuicPacket packet = parsePacket(data);
@@ -288,7 +289,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
 
     protected abstract Sender getSender();
 
-    protected abstract TlsClientEngine getTlsEngine();
+    protected abstract TlsEngine getTlsEngine();
 
     protected abstract GlobalAckGenerator getAckGenerator();
 
