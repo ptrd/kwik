@@ -26,6 +26,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
+import net.luminis.tls.util.ByteUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -211,6 +212,7 @@ public class Server {
     private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
+            log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid));
             ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, dcid);
             currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnection);
             return newConnection;

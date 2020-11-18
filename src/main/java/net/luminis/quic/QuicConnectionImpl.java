@@ -20,14 +20,13 @@ package net.luminis.quic;
 
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.frame.FrameProcessor3;
-import net.luminis.quic.frame.MaxDataFrame;
-import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
-import net.luminis.quic.send.Sender;
+import net.luminis.quic.send.SenderImpl;
+import net.luminis.tls.TlsProtocolException;
+import net.luminis.tls.alert.ErrorAlert;
 import net.luminis.tls.handshake.TlsEngine;
 
 import java.nio.ByteBuffer;
@@ -39,10 +38,22 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
+import static net.luminis.quic.EncryptionLevel.Initial;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
 public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
+
+    protected enum Status {
+        Idle,
+        Handshaking,
+        HandshakeError,
+        Connected,
+        Closing,
+        Draining,
+        Closed,
+        Error
+    }
 
     protected final Version quicVersion;
     protected final Logger log;
@@ -59,6 +70,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
     protected long flowControlIncrement;
     protected long largestPacketNumber;
 
+    protected volatile Status connectionState;
 
     protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
         this.quicVersion = quicVersion;
@@ -278,6 +290,48 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         abortConnection(null);
     }
 
+    /**
+     * Closes the connection when a protocol error has occured. Connection close frame with indicated error is send
+     * to peer and the draining period is entered. When the draining period has finished, the connection is terminated.
+     * @param level
+     * @param error
+     */
+    protected void closeWithError(EncryptionLevel level, int error, String errorReason) {
+        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+            log.debug("Already closing");
+            return;
+        }
+        getSender().stop();
+        connectionState = Status.Closing;
+        // TODO streamManager.abortAll();
+        getSender().send(new ConnectionCloseFrame(quicVersion, error, errorReason), level);
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.3
+        // "An endpoint that has not established state, such as a server that
+        //   detects an error in an Initial packet, does not enter the closing
+        //   state.  An endpoint that has no state for the connection does not
+        //   enter a closing or draining period on sending a CONNECTION_CLOSE
+        //   frame."
+        if (level == Initial) {
+            postProcessingActions.add(() -> terminate());
+        }
+    }
+
+    protected void terminate() {
+        idleTimer.shutdown();
+        getSender().shutdown();
+        connectionState = Status.Closed;
+    }
+
+    protected int quicError(TlsProtocolException tlsError) {
+        if (tlsError instanceof ErrorAlert) {
+            return 0x100 + ((ErrorAlert) tlsError).alertDescription().value;
+        }
+        else {
+            return 0x100 + 255;
+        }
+    }
+
     public abstract void abortConnection(Throwable error);
 
     public static int getMaxPacketSize() {
@@ -293,7 +347,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         return 1232;
     }
 
-    protected abstract Sender getSender();
+    protected abstract SenderImpl getSender();
 
     protected abstract TlsEngine getTlsEngine();
 

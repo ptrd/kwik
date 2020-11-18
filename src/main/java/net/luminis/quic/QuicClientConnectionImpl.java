@@ -60,17 +60,6 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
-    private final List<TlsConstants.CipherSuite> cipherSuites;
-
-    enum Status {
-        Idle,
-        Handshaking,
-        HandshakeError,
-        Connected,
-        Closing,
-        Draining,
-        Error
-    }
 
     private final String host;
     private final int port;
@@ -82,7 +71,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final Receiver receiver;
     private final StreamManager streamManager;
     private volatile byte[] token;
-    private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -96,6 +84,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private final List<TlsConstants.CipherSuite> cipherSuites;
 
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
@@ -499,8 +488,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
-        getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-        log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+        try {
+            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+        }
+        catch (TlsProtocolException tlsError) {
+            log.error("Parsing TLS message failed", tlsError);
+            throw new ProtocolError("TLS error");
+        }
     }
 
     @Override
@@ -647,7 +642,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private void terminate() {
+    @Override
+    protected void terminate() {
         idleTimer.shutdown();
         sender.shutdown();
         receiver.shutdown();
@@ -895,7 +891,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    protected Sender getSender() {
+    protected SenderImpl getSender() {
         return sender;
     }
 

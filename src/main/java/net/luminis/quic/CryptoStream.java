@@ -68,7 +68,7 @@ public class CryptoStream extends BaseStream {
         dataToSend = new ArrayList<>();
     }
 
-    public void add(CryptoFrame cryptoFrame) {
+    public void add(CryptoFrame cryptoFrame) throws TlsProtocolException {
         try {
             if (super.add(cryptoFrame)) {
                 int availableBytes = bytesAvailable();
@@ -111,10 +111,7 @@ public class CryptoStream extends BaseStream {
                 log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + readOffset());
             }
         }
-        catch (TlsProtocolException tlsError) {
-            log.error("Parsing TLS message failed", tlsError);
-            throw new ProtocolError("TLS error");
-        } catch (IOException e) {
+        catch (IOException e) {
             // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
             throw new RuntimeException();
         }

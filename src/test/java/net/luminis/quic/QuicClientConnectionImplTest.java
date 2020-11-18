@@ -398,7 +398,7 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionClose() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -410,7 +410,7 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionCloseOnce() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
@@ -428,7 +428,7 @@ class QuicClientConnectionImplTest {
     @Test
     void closingConnectedConnectionTriggersConnectionClose() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.close();
 
@@ -538,7 +538,7 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
 
         // When
@@ -566,7 +566,7 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
 
         // Given
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }));
         clearInvocations(sender);
 

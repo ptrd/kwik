@@ -34,6 +34,7 @@ public class ServerConnectionFactory {
     private final TlsServerEngineFactory tlsServerEngineFactory;
     private DatagramSocket serverSocket;
     private int initalRtt;
+    private SecureRandom randomGenerator;
 
     public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory, int initalRtt, Logger log) {
         if (connectionIdLength > 20 || connectionIdLength < 0) {
@@ -46,6 +47,8 @@ public class ServerConnectionFactory {
         this.log = log;
         this.serverSocket = serverSocket;
         this.initalRtt = initalRtt;
+
+        randomGenerator = new SecureRandom();
     }
 
     public ServerConnection createNewConnection(Version version, InetSocketAddress clientAddress, byte[] dcid) {
@@ -56,7 +59,6 @@ public class ServerConnectionFactory {
     }
 
     private byte[] generateNewConnectionId() {
-        SecureRandom randomGenerator = new SecureRandom();
         byte[] connectionId = new byte[connectionIdLength];
         randomGenerator.nextBytes(connectionId);
         return connectionId;

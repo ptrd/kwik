@@ -24,7 +24,13 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsProtocolException;
+import net.luminis.tls.alert.HandshakeFailureAlert;
+import net.luminis.tls.alert.MissingExtensionAlert;
+import net.luminis.tls.alert.NoApplicationProtocolAlert;
+import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
 
@@ -32,9 +38,12 @@ import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 
 public class ServerConnection extends QuicConnectionImpl implements TlsStatusEventHandler {
@@ -45,7 +54,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final GlobalAckGenerator ackGenerator;
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
-
+    private final List<String> supportedApplicationLayerProtocols;
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, TlsServerEngineFactory tlsServerEngineFactory, Integer initialRtt, Logger log) {
@@ -53,6 +62,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         this.scid = scid;
         this.dcid = dcid;
 
+        String supportedProtocol = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);   // Assuming draft version with 2 digits ;-)
+        supportedApplicationLayerProtocols = List.of(supportedProtocol);
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
 
         idleTimer = new IdleTimer(this, log);
@@ -71,7 +82,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
-    protected Sender getSender() {
+    protected SenderImpl getSender() {
         return sender;
     }
 
@@ -135,11 +146,23 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
-    public void extensionsReceived(List<Extension> extensions) {
+    public void extensionsReceived(List<Extension> extensions) throws TlsProtocolException {
+        Optional<Extension> alpnExtension = extensions.stream()
+                .filter(ext -> ext instanceof ApplicationLayerProtocolNegotiationExtension)
+                .findFirst();
+        if (alpnExtension.isEmpty()) {
+            throw new MissingExtensionAlert();
+        }
+        else {
+            if (! applicationProtocolSupported(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols())) {
+                throw new NoApplicationProtocolAlert();
+            }
+        }
     }
 
     @Override
     public void process(InitialPacket packet, Instant time) {
+        processFrames(packet, time);
     }
 
     @Override
@@ -184,6 +207,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+        try {
+            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+        } catch (TlsProtocolException e) {
+            closeWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
+        }
     }
 
     @Override
@@ -225,6 +253,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
 
     }
+
+    private boolean applicationProtocolSupported(List<String> protocols) {
+        Set<String> intersection = new HashSet<String>(supportedApplicationLayerProtocols);
+        intersection.retainAll(protocols);
+        return !intersection.isEmpty();
+    }
+
 
     private class TlsMessageSender implements ServerMessageSender {
         @Override
