@@ -2,14 +2,18 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.tls.KeyUtils;
+import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
+import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.io.InputStream;
@@ -18,18 +22,11 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.ECKey;
-import java.security.interfaces.ECPrivateKey;
-import java.security.interfaces.ECPublicKey;
-import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -149,7 +146,7 @@ class ServerTest {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
         ServerConnection connection = mock(ServerConnection.class);
         when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
-        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class)))
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection); // new ServerConnection(Version.getDefault(), serverSocket, null, new byte[8], null, 100, mock(Logger.class)));
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
 
@@ -164,9 +161,37 @@ class ServerTest {
         server.process(createPacket(buffer));
 
         // Then
-        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class));
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         // And
         verify(connection).parsePackets(anyInt(), any(Instant.class), argThat(data -> data.limit() == 1200));
+    }
+
+    @Test
+    void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
+        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"));
+
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
+        byte[] dcid = new byte[] { 11, 12, 13, 14, 15, 16, 17, 18 };
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
+        connectionSecrets.computeInitialKeys(dcid);
+        byte[] packetBytes = initialPacket.generatePacketBytes(0, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
+        server.process(createPacket(ByteBuffer.wrap(packetBytes)));
+
+        // Then
+        ArgumentCaptor<DatagramPacket> captor = ArgumentCaptor.forClass(DatagramPacket.class);
+        verify(serverSocket).send(captor.capture());
+        DatagramPacket packetSent = captor.getValue();
+        int dcidLength = packetSent.getData()[5];
+        byte[] responseDcid = Arrays.copyOfRange(packetSent.getData(), 6, 6 + dcidLength);
+
+        assertThat(responseDcid).isEqualTo(scid);
+
+        int scidLength = packetSent.getData()[6 + dcidLength];
+        byte[] responseScid = Arrays.copyOfRange(packetSent.getData(), 6 + dcidLength + 1, 6 + dcidLength + 1 + scidLength);
+        assertThat(responseScid).isNotEqualTo(dcid);
     }
 
     private RawPacket createPacket(ByteBuffer buffer) {

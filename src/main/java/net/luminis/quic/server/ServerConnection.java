@@ -22,12 +22,9 @@ import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
-import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsProtocolException;
-import net.luminis.tls.alert.HandshakeFailureAlert;
 import net.luminis.tls.alert.MissingExtensionAlert;
 import net.luminis.tls.alert.NoApplicationProtocolAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
@@ -43,7 +40,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 
 
 public class ServerConnection extends QuicConnectionImpl implements TlsStatusEventHandler {
@@ -57,7 +53,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final List<String> supportedApplicationLayerProtocols;
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                               byte[] scid, byte[] dcid, TlsServerEngineFactory tlsServerEngineFactory, Integer initialRtt, Logger log) {
+                               byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory, Integer initialRtt, Logger log) {
         super(quicVersion, Role.Server, null, log);
         this.scid = scid;
         this.dcid = dcid;
@@ -73,7 +69,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
 
-        connectionSecrets.computeInitialKeys(dcid);
+        connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
     }
 
@@ -263,7 +259,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     private class TlsMessageSender implements ServerMessageSender {
         @Override
-        public void send(ServerHello sh) throws IOException {
+        public void send(ServerHello sh) {
+            getCryptoStream(EncryptionLevel.Initial).write(sh.getBytes());
         }
 
         @Override

@@ -9,7 +9,6 @@ import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.tls.KeyUtils;
 import net.luminis.tls.TlsConstants;
-import net.luminis.tls.alert.HandshakeFailureAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
@@ -77,9 +76,11 @@ class ServerConnectionTest {
                 eq(EncryptionLevel.Initial));
     }
 
+
+
     private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory) throws Exception {
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
-                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8],
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], new byte[8],
                 tlsServerEngineFactory, 100, mock(Logger.class));
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

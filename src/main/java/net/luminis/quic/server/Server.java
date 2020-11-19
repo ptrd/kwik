@@ -163,12 +163,15 @@ public class Server {
             if (data.remaining() >= dcidLength) {
                 byte[] dcid = new byte[dcidLength];
                 data.get(dcid);
+                int scidLength = data.get() & 0xff;
+                byte[] scid = new byte[scidLength];
+                data.get(scid);
                 data.rewind();
 
                 Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
                 if (connection.isEmpty()) {
                     if (mightStartNewConnection(data, version, dcid)) {
-                        connection = Optional.of(createNewConnection(version, clientAddress, dcid));
+                        connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
                     } else if (initialWithUnspportedVersion(data, version)) {
                         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
                         // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
@@ -209,11 +212,11 @@ public class Server {
         return false;
     }
 
-    private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] dcid) {
+    private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
             log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid));
-            ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, dcid);
+            ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
             currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnection);
             return newConnection;
         } catch (UnknownVersionException e) {
