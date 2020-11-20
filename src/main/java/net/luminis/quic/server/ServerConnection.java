@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 
 public class ServerConnection extends QuicConnectionImpl implements TlsStatusEventHandler {
@@ -51,12 +52,15 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
     private final List<String> supportedApplicationLayerProtocols;
+    private final Consumer<byte[]> closeCallback;
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                               byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory, Integer initialRtt, Logger log) {
+                               byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                               Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, log);
         this.scid = scid;
         this.dcid = dcid;
+        this.closeCallback = closeCallback;
 
         String supportedProtocol = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);   // Assuming draft version with 2 digits ;-)
         supportedApplicationLayerProtocols = List.of(supportedProtocol);
@@ -250,12 +254,17 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     }
 
+    @Override
+    protected void terminate() {
+        super.terminate();
+        closeCallback.accept(scid);
+    }
+
     private boolean applicationProtocolSupported(List<String> protocols) {
         Set<String> intersection = new HashSet<String>(supportedApplicationLayerProtocols);
         intersection.retainAll(protocols);
         return !intersection.isEmpty();
     }
-
 
     private class TlsMessageSender implements ServerMessageSender {
         @Override
@@ -282,4 +291,9 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
         }
     }
+
+    public boolean isClosed() {
+        return connectionState == Status.Closed;
+    }
+
 }

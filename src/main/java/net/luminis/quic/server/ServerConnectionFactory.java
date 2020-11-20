@@ -25,6 +25,7 @@ import net.luminis.tls.handshake.TlsServerEngineFactory;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
+import java.util.function.Consumer;
 
 
 public class ServerConnectionFactory {
@@ -35,8 +36,10 @@ public class ServerConnectionFactory {
     private DatagramSocket serverSocket;
     private int initalRtt;
     private SecureRandom randomGenerator;
+    private final Consumer<byte[]> closeCallback;
 
-    public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory, int initalRtt, Logger log) {
+    public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
+                                   int initalRtt, Consumer<byte[]> closeCallback, Logger log) {
         if (connectionIdLength > 20 || connectionIdLength < 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
             // "In QUIC version 1, this value MUST NOT exceed 20 bytes"
@@ -44,6 +47,7 @@ public class ServerConnectionFactory {
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
         this.connectionIdLength = connectionIdLength;
+        this.closeCallback = closeCallback;
         this.log = log;
         this.serverSocket = serverSocket;
         this.initalRtt = initalRtt;
@@ -56,7 +60,7 @@ public class ServerConnectionFactory {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.2
         // "A server MUST set the Destination Connection ID it uses for sending packets based on the first received Initial packet."
         byte[] dcid = originalScid;
-        return new ServerConnection(version, serverSocket, clientAddress, scid, dcid, originalDcid, tlsServerEngineFactory, initalRtt, log);
+        return new ServerConnection(version, serverSocket, clientAddress, scid, dcid, originalDcid, tlsServerEngineFactory, initalRtt, closeCallback, log);
     }
 
     private byte[] generateNewConnectionId() {

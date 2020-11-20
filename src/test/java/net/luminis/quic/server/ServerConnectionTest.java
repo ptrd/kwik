@@ -81,7 +81,7 @@ class ServerConnectionTest {
     private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory) throws Exception {
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], new byte[8],
-                tlsServerEngineFactory, 100, mock(Logger.class));
+                tlsServerEngineFactory, 100, cid -> {}, mock(Logger.class));
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         return connection;

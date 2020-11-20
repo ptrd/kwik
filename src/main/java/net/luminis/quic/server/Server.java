@@ -96,7 +96,7 @@ public class Server {
         log.logInfo(true);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
-        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory, initalRtt, log);
+        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         currentConnections = new HashMap<>();
@@ -222,6 +222,16 @@ public class Server {
         } catch (UnknownVersionException e) {
             // Impossible, as it only gets here if the given version is supported, so it is a known version.
             throw new RuntimeException();
+        }
+    }
+
+    private void removeConnection(byte[] cid) {
+        ServerConnection removed = currentConnections.remove(new ConnectionSource(cid));
+        if (removed == null) {
+            log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));
+        }
+        else if (! removed.isClosed()) {
+            log.error("Removed connection with cid " + ByteUtils.bytesToHex(cid) + " that is not closed...");
         }
     }
 
