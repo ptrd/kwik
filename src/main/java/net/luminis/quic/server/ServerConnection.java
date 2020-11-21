@@ -35,10 +35,7 @@ import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -132,7 +129,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void handshakeSecretsKnown() {
-
+        connectionSecrets.computeHandshakeSecrets(tlsEngine, tlsEngine.getSelectedCipher());
     }
 
     @Override
@@ -154,9 +151,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             throw new MissingExtensionAlert();
         }
         else {
-            if (! applicationProtocolSupported(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols())) {
-                throw new NoApplicationProtocolAlert();
-            }
+            Optional<String> applicationProtocol = selectSupportedApplicationProtocol(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols());
+            applicationProtocol.map(protocol -> {
+                tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
+                return protocol;
+            }).orElseThrow(() -> new NoApplicationProtocolAlert());
         }
     }
 
@@ -260,10 +259,10 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         closeCallback.accept(scid);
     }
 
-    private boolean applicationProtocolSupported(List<String> protocols) {
+    private Optional<String> selectSupportedApplicationProtocol(List<String> protocols) {
         Set<String> intersection = new HashSet<String>(supportedApplicationLayerProtocols);
         intersection.retainAll(protocols);
-        return !intersection.isEmpty();
+        return intersection.stream().findFirst();
     }
 
     private class TlsMessageSender implements ServerMessageSender {
@@ -273,7 +272,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         }
 
         @Override
-        public void send(EncryptedExtensions ee) throws IOException {
+        public void send(EncryptedExtensions ee) {
+            getCryptoStream(EncryptionLevel.Handshake).write(ee.getBytes());
         }
 
         @Override
