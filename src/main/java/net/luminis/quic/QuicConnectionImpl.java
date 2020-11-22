@@ -39,6 +39,8 @@ import java.util.function.Consumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.quic.EncryptionLevel.Initial;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
@@ -327,8 +329,14 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         if (tlsError instanceof ErrorAlert) {
             return 0x100 + ((ErrorAlert) tlsError).alertDescription().value;
         }
+        else if (tlsError.getCause() instanceof TransportError) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
+            return ((TransportError) tlsError.getCause()).getTransportErrorCode().value;
+        }
         else {
-            return 0x100 + 255;
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
+            // "INTERNAL_ERROR (0x1):  The endpoint encountered an internal error and cannot continue with the connection."
+            return INTERNAL_ERROR.value;
         }
     }
 

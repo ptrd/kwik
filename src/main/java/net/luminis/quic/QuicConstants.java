@@ -87,24 +87,28 @@ public class QuicConstants {
         }
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-20
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
     public enum TransportErrorCode {
         NO_ERROR (0x0),
         INTERNAL_ERROR (0x1),
-        SERVER_BUSY (0x2),
+        CONNECTION_REFUSED (0x2),
         FLOW_CONTROL_ERROR (0x3),
         STREAM_LIMIT_ERROR (0x4),
         STREAM_STATE_ERROR (0x5),
         FINAL_SIZE_ERROR (0x6),
         FRAME_ENCODING_ERROR (0x7),
         TRANSPORT_PARAMETER_ERROR (0x8),
-        VERSION_NEGOTIATION_ERROR (0x9),
-        PROTOCOL_VIOLATION (0xA),
-        INVALID_MIGRATION (0xC),
+        CONNECTION_ID_LIMIT_ERROR (0x9),
+        PROTOCOL_VIOLATION (0xa),
+        INVALID_TOKEN (0xb),
+        APPLICATION_ERROR (0xc),
+        CRYPTO_BUFFER_EXCEEDED (0xd),
+        KEY_UPDATE_ERROR (0xe),
+        AEAD_LIMIT_REACHED (0xf),
         CRYPTO_ERROR (0x100),
         ;
 
-        private final short value;
+        public final short value;
 
         TransportErrorCode(int value) {
             this.value = (short) value;
