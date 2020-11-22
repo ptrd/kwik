@@ -166,7 +166,6 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.get(data);
     }
 
-    // Assuming Handshake message type encrypted_extensions
     public QuicTransportParametersExtension parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         int extensionType = buffer.getShort() & 0xffff;
         if (extensionType != 0xffa5) {
@@ -176,13 +175,13 @@ public class QuicTransportParametersExtension extends Extension {
         int startPosition = buffer.position();
 
         log.debug("Transport parameters: ");
-        while (buffer.remaining() > 0) {
+        while (buffer.position() - startPosition < extensionLength) {
             parseTransportParameter(buffer, log);
         }
 
         int realSize = buffer.position() - startPosition;
         if (realSize != extensionLength) {
-            throw new ProtocolError("inconsistent size in transport parameter" + "  should be: " + realSize);
+            throw new ProtocolError("inconsistent size in transport parameter");
         }
         return this;
     }
@@ -190,6 +189,9 @@ public class QuicTransportParametersExtension extends Extension {
     void parseTransportParameter(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         long parameterId = VariableLengthInteger.parseLong(buffer);
         int size = VariableLengthInteger.parse(buffer);
+        if (buffer.remaining() < size) {
+            throw new ProtocolError("Invalid transport parameter extension");
+        }
         int startPosition = buffer.position();
 
         if (parameterId == original_destination_connection_id.value) {
@@ -299,7 +301,7 @@ public class QuicTransportParametersExtension extends Extension {
 
         int realSize = buffer.position() - startPosition;
         if (realSize != size) {
-            throw new ProtocolError("inconsistent size in transport parameter" + "   moet zijn: " + realSize);
+            throw new ProtocolError("inconsistent size in transport parameter");
         }
     }
 
