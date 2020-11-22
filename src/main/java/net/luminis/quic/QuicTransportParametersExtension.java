@@ -88,6 +88,14 @@ public class QuicTransportParametersExtension extends Extension {
         //      that is encoded as an integer, see (Section 10.2)."
         addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout());
 
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+        // "The maximum UDP payload size parameter
+        //      is an integer value that limits the size of UDP payloads that the
+        //      endpoint is willing to receive.  UDP datagrams with payloads
+        //      larger than this limit are not likely to be processed by the
+        //      receiver."
+        addTransportParameter(buffer, max_udp_payload_size, params.getMaxUdpPayloadSize());
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
         // "The initial maximum data parameter is an
         //      integer value that contains the initial value for the maximum
@@ -135,6 +143,16 @@ public class QuicTransportParametersExtension extends Extension {
         //      If this parameter is absent or zero, the peer cannot open
         //      unidirectional streams until a MAX_STREAMS frame is sent."
         addTransportParameter(buffer, initial_max_streams_uni, params.getInitialMaxStreamsUni());
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+        // "The acknowledgement delay exponent is an integer value indicating an exponent used to decode the ACK Delay
+        // field in the ACK frame"
+        addTransportParameter(buffer, ack_delay_exponent, params.getAckDelayExponent());
+
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+        // "The maximum acknowledgement delay is an integer value indicating the maximum amount of time in milliseconds
+        //  by which the endpoint will delay sending acknowledgments."
+        addTransportParameter(buffer, max_ack_delay, params.getMaxAckDelay());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-18.2
         // "The maximum number of connection IDs from the peer that an endpoint is willing to store."
@@ -223,9 +241,10 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == preferred_address.value) {
             parsePreferredAddress(buffer, log);
         }
-        else if (parameterId == max_packet_size.value) {
+        else if (parameterId == max_udp_payload_size.value) {
             int maxPacketSize = VariableLengthInteger.parse(buffer);
-            log.debug("- max packet size: " + maxPacketSize);
+            log.debug("- max udp payload size: " + maxPacketSize);
+            params.setMaxUdpPayloadSize(maxPacketSize);
         }
         else if (parameterId == stateless_reset_token.value) {
             byte[] resetToken = new byte[16];

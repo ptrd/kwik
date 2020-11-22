@@ -56,7 +56,7 @@ public class QuicSessionTicket extends NewSessionTicket {
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
         wrappedTicket = tlsTicket;
         maxIdleTimeout = serverParameters.getMaxIdleTimeout();
-        maxPacketSize = serverParameters.getMaxPacketSize();
+        maxPacketSize = serverParameters.getMaxUdpPayloadSize();
         initialMaxData = serverParameters.getInitialMaxData();
         initialMaxStreamDataBidiLocal = serverParameters.getInitialMaxStreamDataBidiLocal();
         initialMaxStreamDataBidiRemote = serverParameters.getInitialMaxStreamDataBidiRemote();
@@ -148,7 +148,7 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     public void copyTo(TransportParameters tp) {
         tp.setMaxIdleTimeout(maxIdleTimeout);
-        tp.setMaxPacketSize(maxPacketSize);
+        tp.setMaxUdpPayloadSize(maxPacketSize);
         tp.setInitialMaxData(initialMaxData);
         tp.setInitialMaxStreamDataBidiLocal(initialMaxStreamDataBidiLocal);
         tp.setInitialMaxStreamDataBidiRemote(initialMaxStreamDataBidiRemote);

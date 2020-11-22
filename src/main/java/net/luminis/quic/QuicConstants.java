@@ -26,7 +26,7 @@ public class QuicConstants {
         original_destination_connection_id (0),
         idle_timeout(1),
         stateless_reset_token(2),
-        max_packet_size(3),
+        max_udp_payload_size(3),
         initial_max_data(4),
         initial_max_stream_data_bidi_local(5),
         initial_max_stream_data_bidi_remote(6),

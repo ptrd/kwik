@@ -40,13 +40,13 @@ public class TransportParameters {
     private int activeConnectionIdLimit;
     private byte[] initialSourceConnectionId;
     private byte[] retrySourceConnectionId;
+    private int maxUdpPayloadSize;
 
     public TransportParameters() {
         setDefaults();
     }
 
     public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
-        setDefaults();
         this.maxIdleTimeout = maxIdleTimeoutInSeconds * 1000;
         setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
@@ -65,6 +65,9 @@ public class TransportParameters {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.2
         // "If this transport parameter is absent, a default of 2 is assumed."
         activeConnectionIdLimit = 2;
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+        // "The default for this parameter is the maximum permitted UDP payload of 65527"
+        maxUdpPayloadSize = 65527;
     }
 
     public byte[] getOriginalDestinationConnectionId() {
@@ -198,11 +201,19 @@ public class TransportParameters {
         this.retrySourceConnectionId = retrySourceConnectionId;
     }
 
+    public int getMaxUdpPayloadSize() {
+        return maxUdpPayloadSize;
+    }
+
+    public void setMaxUdpPayloadSize(int maxUdpPayloadSize) {
+        this.maxUdpPayloadSize = maxUdpPayloadSize;
+    }
+
     @Override
     public String toString() {
         return "\n- original destination connection id\t" + formatCid(originalDestinationConnectionId) +
                 "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
-                // "\n- max packet size\t" +
+                "\n- max udp payload size\t" + maxUdpPayloadSize +
                 "\n- initial max data\t\t\t" + initialMaxData +
                 "\n- initial max stream data bidi local\t" + initialMaxStreamDataBidiLocal +
                 "\n- initial max stream data bidi remote\t" + initialMaxStreamDataBidiRemote +
@@ -224,14 +235,6 @@ public class TransportParameters {
         else {
             return "null";
         }
-    }
-
-    public int getMaxPacketSize() {
-        return maxPacketSize;
-    }
-
-    public void setMaxPacketSize(int maxPacketSize) {
-        this.maxPacketSize = maxPacketSize;
     }
 
     public static class PreferredAddress {

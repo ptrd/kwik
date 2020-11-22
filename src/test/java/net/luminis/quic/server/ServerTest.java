@@ -168,11 +168,14 @@ class ServerTest {
 
     @Test
     void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
-        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"));
+        byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
+        TransportParameters clientTransportParams = new TransportParameters();
+        clientTransportParams.setInitialSourceConnectionId(scid);
+        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"),
+                new QuicTransportParametersExtension(Version.getDefault(), clientTransportParams));
 
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
         byte[] dcid = new byte[] { 11, 12, 13, 14, 15, 16, 17, 18 };
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));

@@ -39,6 +39,8 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+
 
 public class ServerConnection extends QuicConnectionImpl implements TlsStatusEventHandler {
 
@@ -144,18 +146,38 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void extensionsReceived(List<Extension> extensions) throws TlsProtocolException {
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.1
+        // "Unless another mechanism is used for agreeing on an application protocol, endpoints MUST use ALPN for this purpose."
         Optional<Extension> alpnExtension = extensions.stream()
                 .filter(ext -> ext instanceof ApplicationLayerProtocolNegotiationExtension)
                 .findFirst();
         if (alpnExtension.isEmpty()) {
-            throw new MissingExtensionAlert();
+            throw new MissingExtensionAlert("missing application layer protocol negotiation extension");
         }
         else {
+            // "When using ALPN, endpoints MUST immediately close a connection (...) if an application protocol is not negotiated."
             Optional<String> applicationProtocol = selectSupportedApplicationProtocol(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols());
             applicationProtocol.map(protocol -> {
                 tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
                 return protocol;
             }).orElseThrow(() -> new NoApplicationProtocolAlert());
+        }
+
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
+        // "endpoints that receive ClientHello or EncryptedExtensions messages without the quic_transport_parameters extension
+        //  MUST close the connection with an error of type 0x16d (equivalent to a fatal TLS missing_extension alert"
+        Optional<Extension> tpExtension = extensions.stream()
+                .filter(ext -> ext instanceof QuicTransportParametersExtension)
+                .findFirst();
+        if (tpExtension.isEmpty()) {
+            throw new MissingExtensionAlert("missing quic transport parameters extension");
+        }
+        else {
+            try {
+                validateAndProcess(((QuicTransportParametersExtension) tpExtension.get()).getTransportParameters());
+            } catch (TransportError transportParameterError) {
+                throw new TlsProtocolException("transport parameter error", transportParameterError);
+            }
         }
     }
 
@@ -263,6 +285,33 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         Set<String> intersection = new HashSet<String>(supportedApplicationLayerProtocols);
         intersection.retainAll(protocols);
         return intersection.stream().findFirst();
+    }
+
+    private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
+        if (transportParameters.getInitialMaxStreamsBidi() > 0x1000000000000000l) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+        if (transportParameters.getMaxUdpPayloadSize() < 1200) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+        if (transportParameters.getAckDelayExponent() > 20) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+        if (transportParameters.getMaxAckDelay() > 16384) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+        if (transportParameters.getActiveConnectionIdLimit() < 2) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), dcid)) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
+            // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
+            //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or
+            //  PROTOCOL_VIOLATION: a mismatch between values received from a peer in these transport parameters and the
+            //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
     }
 
     private class TlsMessageSender implements ServerMessageSender {
