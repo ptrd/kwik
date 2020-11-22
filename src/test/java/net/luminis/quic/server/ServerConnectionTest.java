@@ -29,12 +29,19 @@ import static org.mockito.Mockito.*;
 
 class ServerConnectionTest {
 
+    public static final String DEFAULT_APPLICATION_PROTOCOL = "hq-29";
+    private ServerConnection connection;
+    private ApplicationLayerProtocolNegotiationExtension alpn = new ApplicationLayerProtocolNegotiationExtension(DEFAULT_APPLICATION_PROTOCOL);
+;
+
+    @BeforeEach
+    void setupObjectUnderTest() throws Exception {
+        TlsServerEngineFactory tlsServerEngineFactory = createTlsServerEngine();
+        connection = createServerConnection(tlsServerEngineFactory);
+    }
+
     @Test
     void whenParsingClientHelloLeadsToTlsErrorConnectionIsClosed() throws Exception {
-        // Given
-        TlsServerEngineFactory tlsServerEngineFactory = createTlsServerEngine();
-        ServerConnection connection = createServerConnection(tlsServerEngineFactory);
-
         // When
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame(Version.getDefault(), new byte[123])), Instant.now());
 
@@ -44,10 +51,6 @@ class ServerConnectionTest {
 
     @Test
     void engineNotBeingAbleToNegotiateCipherShouldCloseConnection() throws Exception {
-        // Given
-        TlsServerEngineFactory tlsServerEngineFactory = createTlsServerEngine();
-        ServerConnection connection = createServerConnection(tlsServerEngineFactory);
-
         // When
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
                 List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), Collections.emptyList());
@@ -60,12 +63,8 @@ class ServerConnectionTest {
 
     @Test
     void failingAlpnNegotiationLeadsToCloseConnection() throws Exception {
-        // Given
-        TlsServerEngineFactory tlsServerEngineFactory = createTlsServerEngine();
-        ServerConnection connection = createServerConnection(tlsServerEngineFactory);
-
         // When
-        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("h2"));
+        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("h2"), createTransportParametersExtension());
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
