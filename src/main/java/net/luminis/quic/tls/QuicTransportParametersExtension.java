@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.tls;
 
+import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.extension.Extension;
@@ -331,25 +332,23 @@ public class QuicTransportParametersExtension extends Extension {
             byte[] ip4 = new byte[4];
             buffer.get(ip4);
             if (!Bytes.allZero(ip4)) {
-                preferredAddress.ip4 = InetAddress.getByAddress(ip4);
+                preferredAddress.setIp4(InetAddress.getByAddress(ip4));
             }
-            preferredAddress.ip4Port = (buffer.get() << 8) | buffer.get();
+            preferredAddress.setIp4Port((buffer.get() << 8) | buffer.get());
             byte[] ip6 = new byte[16];
             buffer.get(ip6);
             if (!Bytes.allZero(ip6)) {
-                preferredAddress.ip6 = InetAddress.getByAddress(ip6);
+                preferredAddress.setIp6(InetAddress.getByAddress(ip6));
             }
-            preferredAddress.ip6Port = (buffer.get() << 8) | buffer.get();
+            preferredAddress.setIp6Port((buffer.get() << 8) | buffer.get());
 
-            if (preferredAddress.ip4 == null && preferredAddress.ip6 == null) {
+            if (preferredAddress.getIp4() == null && preferredAddress.getIp6() == null) {
                 throw new ProtocolError("Preferred address: no valid IP address");
             }
 
             int connectionIdSize = buffer.get();
-            preferredAddress.connectionId = new byte[connectionIdSize];
-            buffer.get(preferredAddress.connectionId);
-            preferredAddress.statelessResetToken = new byte[16];
-            buffer.get(preferredAddress.statelessResetToken);
+            preferredAddress.setConnectionId(buffer, connectionIdSize);
+            preferredAddress.setStatelessResetToken(buffer, 16); //
 
             params.setPreferredAddress(preferredAddress);
         }

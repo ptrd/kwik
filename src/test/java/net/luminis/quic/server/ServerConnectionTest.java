@@ -1,7 +1,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.QuicTransportParametersExtension;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.ConnectionCloseFrame;

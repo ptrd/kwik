@@ -23,6 +23,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.MissingExtensionAlert;

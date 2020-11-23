@@ -21,12 +21,12 @@ package net.luminis.quic;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 
 public class TransportParameters {
 
     private byte[] originalDestinationConnectionId;
     private long maxIdleTimeout;
-    private int maxPacketSize;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -244,5 +244,55 @@ public class TransportParameters {
         int ip6Port;
         byte[] connectionId;
         byte[] statelessResetToken;
+
+        public InetAddress getIp4() {
+            return ip4;
+        }
+
+        public void setIp4(InetAddress ip4) {
+            this.ip4 = ip4;
+        }
+
+        public int getIp4Port() {
+            return ip4Port;
+        }
+
+        public void setIp4Port(int ip4Port) {
+            this.ip4Port = ip4Port;
+        }
+
+        public InetAddress getIp6() {
+            return ip6;
+        }
+
+        public void setIp6(InetAddress ip6) {
+            this.ip6 = ip6;
+        }
+
+        public int getIp6Port() {
+            return ip6Port;
+        }
+
+        public void setIp6Port(int ip6Port) {
+            this.ip6Port = ip6Port;
+        }
+
+        public byte[] getConnectionId() {
+            return connectionId;
+        }
+
+        public byte[] getStatelessResetToken() {
+            return statelessResetToken;
+        }
+
+        public void setConnectionId(ByteBuffer buffer, int connectionIdSize) {
+             connectionId = new byte[connectionIdSize];
+             buffer.get(connectionId);
+        }
+
+        public void setStatelessResetToken(ByteBuffer buffer, int size) {
+            statelessResetToken = new byte[size];
+            buffer.get(statelessResetToken);
+        }
     }
 }

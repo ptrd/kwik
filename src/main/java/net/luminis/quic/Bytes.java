@@ -20,7 +20,7 @@ package net.luminis.quic;
 
 public class Bytes {
 
-    static boolean allZero(byte[] data) {
+    public static boolean allZero(byte[] data) {
         for (int i = 0; i < data.length; i++) {
             if (data[i] != 0) {
                 return false;

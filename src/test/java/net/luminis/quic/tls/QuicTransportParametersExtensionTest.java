@@ -16,9 +16,14 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.tls;
 
+import net.luminis.quic.InvalidIntegerEncodingException;
+import net.luminis.quic.ProtocolError;
+import net.luminis.quic.TransportParameters;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
 
@@ -51,12 +56,12 @@ class QuicTransportParametersExtensionTest {
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
 
         assertThat(preferredAddress).isNotNull();
-        assertThat(preferredAddress.ip4).isEqualTo(InetAddress.getByAddress(new byte[] { 4, 31, (byte) 198, 62 } ));
-        assertThat(preferredAddress.ip4Port).isEqualTo(4433);
-        assertThat(preferredAddress.ip6).isEqualTo(InetAddress.getByAddress(new byte[] { 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a }));
-        assertThat(preferredAddress.ip6Port).isEqualTo(4433);
-        assertThat(preferredAddress.connectionId).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
-        assertThat(preferredAddress.statelessResetToken).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
+        assertThat(preferredAddress.getIp4()).isEqualTo(InetAddress.getByAddress(new byte[] { 4, 31, (byte) 198, 62 } ));
+        assertThat(preferredAddress.getIp4Port()).isEqualTo(4433);
+        assertThat(preferredAddress.getIp6()).isEqualTo(InetAddress.getByAddress(new byte[] { 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a }));
+        assertThat(preferredAddress.getIp6Port()).isEqualTo(4433);
+        assertThat(preferredAddress.getConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
+        assertThat(preferredAddress.getStatelessResetToken()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
     }
 
     @Test
@@ -76,7 +81,7 @@ class QuicTransportParametersExtensionTest {
         params.parseTransportParameter(buffer, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
-        assertThat(preferredAddress.ip4).isNull();
+        assertThat(preferredAddress.getIp4()).isNull();
     }
 
     @Test
@@ -96,7 +101,7 @@ class QuicTransportParametersExtensionTest {
         params.parseTransportParameter(buffer, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
-        assertThat(preferredAddress.ip6).isNull();
+        assertThat(preferredAddress.getIp6()).isNull();
     }
 
     @Test
