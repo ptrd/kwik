@@ -42,6 +42,7 @@ public class CryptoStream extends BaseStream {
     private final Version quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
+    private final Role peerRole;
     private final TlsEngine tlsEngine;
     private final Logger log;
     private final Sender sender;
@@ -55,10 +56,11 @@ public class CryptoStream extends BaseStream {
     private int sendStreamSize;
 
 
-    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
+        peerRole = role.other();
         this.tlsEngine = tlsEngine;
         this.log = log;
         this.sender = sender;
@@ -122,11 +124,7 @@ public class CryptoStream extends BaseStream {
         int extensionType = buffer.getShort();
         buffer.reset();
         if ((extensionType & 0xffff) == 0xffa5) {
-            try {
-                return new QuicTransportParametersExtension(quicVersion).parse(buffer, log);
-            } catch (InvalidIntegerEncodingException e) {
-                throw new TlsProtocolException("Invalid transport parameter extension");
-            }
+            return new QuicTransportParametersExtension(quicVersion).parse(buffer, peerRole, log);
         }
         else {
             return null;

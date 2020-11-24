@@ -24,7 +24,7 @@ public class QuicConstants {
     // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18
     public enum TransportParameterId {
         original_destination_connection_id (0),
-        idle_timeout(1),
+        max_idle_timeout(1),
         stateless_reset_token(2),
         max_udp_payload_size(3),
         initial_max_data(4),

@@ -293,7 +293,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
 
-        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams);
+        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams, Role.Client);
         if (clientHelloEnlargement != null) {
             tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
         }

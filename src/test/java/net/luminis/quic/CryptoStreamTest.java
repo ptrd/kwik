@@ -56,7 +56,7 @@ class CryptoStreamTest {
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
         cryptoStream = new CryptoStream(QUIC_VERSION, EncryptionLevel.Handshake, null,
-                new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
+                Role.Client, new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 

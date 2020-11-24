@@ -20,6 +20,7 @@ package net.luminis.quic.tls;
 
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.extension.Extension;
 
@@ -28,11 +29,17 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
+import static net.luminis.quic.Role.Server;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18
+/**
+ * Quic transport parameter TLS extension.
+ * see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+ */
 public class QuicTransportParametersExtension extends Extension {
 
+    private static final int MINIMUM_EXTENSION_LENGTH = 2;
     private final Version quicVersion;
+    private Role senderRole;
     private byte[] data;
     private TransportParameters params;
     private Integer discardTransportParameterSize;
@@ -49,10 +56,12 @@ public class QuicTransportParametersExtension extends Extension {
     /**
      * Creates a Quic Transport Parameters Extension for use in a Client Hello.
      * @param quicVersion
+     * @param senderRole
      */
-    public QuicTransportParametersExtension(Version quicVersion, TransportParameters params) {
+    public QuicTransportParametersExtension(Version quicVersion, TransportParameters params, Role senderRole) {
         this.quicVersion = quicVersion;
         this.params = params;
+        this.senderRole = senderRole;
     }
 
     @Override
@@ -71,102 +80,94 @@ public class QuicTransportParametersExtension extends Extension {
     private void serialize() {
         ByteBuffer buffer = ByteBuffer.allocate(100 + (discardTransportParameterSize != null? discardTransportParameterSize: 0));
 
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
         // "quic_transport_parameters(0xffa5)"
         buffer.putShort((short) 0xffa5);
 
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "Those
-        //   transport parameters that are identified as integers use a variable-
-        //   length integer encoding (see Section 16) and have a default value of
-        //   0 if the transport parameter is absent, unless otherwise stated."
-
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.1
-        // "The max idle timeout is a value in milliseconds
-        //      that is encoded as an integer, see (Section 10.2)."
-        addTransportParameter(buffer, idle_timeout, params.getMaxIdleTimeout());
-
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
-        // "The maximum UDP payload size parameter
-        //      is an integer value that limits the size of UDP payloads that the
-        //      endpoint is willing to receive.  UDP datagrams with payloads
-        //      larger than this limit are not likely to be processed by the
-        //      receiver."
+        // "Those transport parameters that are identified as integers use a variable-length integer encoding (...) and
+        //  have a default value of 0 if the transport parameter is absent, unless otherwise stated."
+
+        if (senderRole == Server) {
+            // "The value of the Destination Connection ID field from the first Initial packet sent by the client (...)
+            // This transport parameter is only sent by a server."
+            addTransportParameter(buffer, original_destination_connection_id, params.getOriginalDestinationConnectionId());
+        }
+
+        // "The max idle timeout is a value in milliseconds that is encoded as an integer"
+        addTransportParameter(buffer, max_idle_timeout, params.getMaxIdleTimeout());
+
+        if (senderRole == Server && params.getStatelessResetToken() != null) {
+            // "A stateless reset token is used in verifying a stateless reset (...). This parameter is a sequence of 16
+            //  bytes. This transport parameter MUST NOT be sent by a client, but MAY be sent by a server."
+            addTransportParameter(buffer, stateless_reset_token, params.getStatelessResetToken());
+        }
+
+        // "The maximum UDP payload size parameter is an integer value that limits the size of UDP payloads that the
+        //  endpoint is willing to receive.  UDP datagrams with payloads larger than this limit are not likely to be
+        //  processed by the receiver."
         addTransportParameter(buffer, max_udp_payload_size, params.getMaxUdpPayloadSize());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "The initial maximum data parameter is an
-        //      integer value that contains the initial value for the maximum
-        //      amount of data that can be sent on the connection.  This is
-        //      equivalent to sending a MAX_DATA (Section 19.9) for the connection
-        //      immediately after completing the handshake."
+        // "The initial maximum data parameter is an integer value that contains the initial value for the maximum
+        //  amount of data that can be sent on the connection.  This is equivalent to sending a MAX_DATA for the
+        //  connection immediately after completing the handshake."
         addTransportParameter(buffer, initial_max_data, params.getInitialMaxData());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "This parameter is an
-        //      integer value specifying the initial flow control limit for
-        //      locally-initiated bidirectional streams.  This limit applies to
-        //      newly created bidirectional streams opened by the endpoint that
-        //      sends the transport parameter."
+        // "This parameter is an integer value specifying the initial flow control limit for locally-initiated
+        //  bidirectional streams. This limit applies to newly created bidirectional streams opened by the endpoint that
+        //  sends the transport parameter."
         addTransportParameter(buffer, initial_max_stream_data_bidi_local, params.getInitialMaxStreamDataBidiLocal());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "This parameter is an
-        //      integer value specifying the initial flow control limit for peer-
-        //      initiated bidirectional streams.  This limit applies to newly
-        //      created bidirectional streams opened by the endpoint that receives
-        //      the transport parameter."
+        // "This parameter is an integer value specifying the initial flow control limit for peer-initiated bidirectional
+        //  streams. This limit applies to newly created bidirectional streams opened by the endpoint that receives
+        //  the transport parameter."
         addTransportParameter(buffer, initial_max_stream_data_bidi_remote, params.getInitialMaxStreamDataBidiRemote());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "This parameter is an integer
-        //      value specifying the initial flow control limit for unidirectional
-        //      streams.  This limit applies to newly created bidirectional
-        //      streams opened by the endpoint that receives the transport
-        //      parameter."
+        // "This parameter is an integer value specifying the initial flow control limit for unidirectional streams.
+        //  This limit applies to newly created bidirectional streams opened by the endpoint that receives the transport
+        //  parameter."
         addTransportParameter(buffer, initial_max_stream_data_uni, params.getInitialMaxStreamDataUni());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // " The initial maximum bidirectional
-        //      streams parameter is an integer value that contains the initial
-        //      maximum number of bidirectional streams the peer may initiate.  If
-        //      this parameter is absent or zero, the peer cannot open
-        //      bidirectional streams until a MAX_STREAMS frame is sent."
+        // "The initial maximum bidirectional streams parameter is an integer value that contains the initial maximum
+        //  number of bidirectional streams the peer may initiate.  If this parameter is absent or zero, the peer cannot
+        //  open bidirectional streams until a MAX_STREAMS frame is sent."
         addTransportParameter(buffer, initial_max_streams_bidi, params.getInitialMaxStreamsBidi());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18.1:
-        // "The initial maximum unidirectional
-        //      streams parameter is an integer value that contains the initial
-        //      maximum number of unidirectional streams the peer may initiate.
-        //      If this parameter is absent or zero, the peer cannot open
-        //      unidirectional streams until a MAX_STREAMS frame is sent."
+        // "The initial maximum unidirectional streams parameter is an integer value that contains the initial maximum
+        //  number of unidirectional streams the peer may initiate. If this parameter is absent or zero, the peer cannot
+        //  open unidirectional streams until a MAX_STREAMS frame is sent."
         addTransportParameter(buffer, initial_max_streams_uni, params.getInitialMaxStreamsUni());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
         // "The acknowledgement delay exponent is an integer value indicating an exponent used to decode the ACK Delay
         // field in the ACK frame"
         addTransportParameter(buffer, ack_delay_exponent, params.getAckDelayExponent());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
         // "The maximum acknowledgement delay is an integer value indicating the maximum amount of time in milliseconds
         //  by which the endpoint will delay sending acknowledgments."
         addTransportParameter(buffer, max_ack_delay, params.getMaxAckDelay());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-18.2
+        // Intentionally omitted (kwik server supports active migration)
+        // disable_active_migration
+
+        // Intentionally omitted (kwik server does not support preferred address)
+        // preferred_address
+
         // "The maximum number of connection IDs from the peer that an endpoint is willing to store."
         addTransportParameter(buffer, active_connection_id_limit, params.getActiveConnectionIdLimit());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-18.2
         // "The value that the endpoint included in the Source Connection ID field of the first Initial packet it
-        // sends for the connection"
+        //  sends for the connection"
         addTransportParameter(buffer, initial_source_connection_id, params.getInitialSourceConnectionId());
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-28#section-18.2
-        // "The value that the the server included in the Source Connection ID field of a Retry packet"
-        if (params.getRetrySourceConnectionId() != null) {
-            addTransportParameter(buffer, retry_source_connection_id, params.getRetrySourceConnectionId());
+
+        if (senderRole == Server) {
+            // "The value that the the server included in the Source Connection ID field of a Retry packet"
+            // "This transport parameter is only sent by a server."
+            if (params.getRetrySourceConnectionId() != null) {
+                addTransportParameter(buffer, retry_source_connection_id, params.getRetrySourceConnectionId());
+            }
         }
 
         if (discardTransportParameterSize != null) {
@@ -185,86 +186,72 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.get(data);
     }
 
-    public QuicTransportParametersExtension parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
-        int extensionType = buffer.getShort() & 0xffff;
-        if (extensionType != 0xffa5) {
-            throw new RuntimeException();  // Must be programming error
-        }
-        int extensionLength = buffer.getShort();
-        int startPosition = buffer.position();
+    public QuicTransportParametersExtension parse(ByteBuffer buffer, Role senderRole, Logger log) throws DecodeErrorException {
+        int extensionLength = parseExtensionHeader(buffer, 0xffa5, MINIMUM_EXTENSION_LENGTH);
 
+        int startPosition = buffer.position();
         log.debug("Transport parameters: ");
         while (buffer.position() - startPosition < extensionLength) {
-            parseTransportParameter(buffer, log);
+            try {
+                parseTransportParameter(buffer, senderRole, log);
+            } catch (InvalidIntegerEncodingException e) {
+                throw new DecodeErrorException("invalid integer encoding in transport parameter extension");
+            }
         }
 
         int realSize = buffer.position() - startPosition;
         if (realSize != extensionLength) {
-            throw new ProtocolError("inconsistent size in transport parameter");
+            throw new DecodeErrorException("inconsistent size in transport parameter extension");
         }
         return this;
     }
 
-    void parseTransportParameter(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    void parseTransportParameter(ByteBuffer buffer, Role senderRol, Logger log) throws DecodeErrorException, InvalidIntegerEncodingException {
         long parameterId = VariableLengthInteger.parseLong(buffer);
         int size = VariableLengthInteger.parse(buffer);
         if (buffer.remaining() < size) {
-            throw new ProtocolError("Invalid transport parameter extension");
+            throw new DecodeErrorException("Invalid transport parameter extension");
         }
         int startPosition = buffer.position();
 
         if (parameterId == original_destination_connection_id.value) {
+            // "This transport parameter is only sent by a server."
+            if (senderRol != Server) {
+                throw new DecodeErrorException("server only parameter in transport parameter extension");
+            }
             byte[] destinationCid = new byte[size];
             buffer.get(destinationCid);
             log.debug("- original destination connection id: ", destinationCid);
             params.setOriginalDestinationConnectionId(destinationCid);
         }
-        else if (parameterId == initial_max_stream_data_bidi_local.value) {
-            int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
-            log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
-            params.setInitialMaxStreamDataBidiLocal(maxStreamDataBidiLocal);
-        }
-        else if (parameterId == initial_max_data.value) {
-            long maxData = VariableLengthInteger.parseLong(buffer);
-            log.debug("- initial max data: " + maxData);
-            params.setInitialMaxData(maxData);
-        }
-        else if (parameterId == initial_max_streams_bidi.value) {
-            long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
-            log.debug("- initial max bidi streams: " + maxBidiStreams);
-            params.setInitialMaxStreamsBidi(maxBidiStreams);
-        }
-        else if (parameterId == idle_timeout.value) {
+        else if (parameterId == max_idle_timeout.value) {
             long idleTimeout = VariableLengthInteger.parseLong(buffer);
             log.debug("- max idle timeout: " + idleTimeout);
             params.setMaxIdleTimeout(idleTimeout);
         }
-        else if (parameterId == preferred_address.value) {
-            parsePreferredAddress(buffer, log);
+        else if (parameterId == stateless_reset_token.value) {
+            // "This transport parameter MUST NOT be sent by a client, but MAY be sent by a server. "
+            if (senderRol != Server) {
+                throw new DecodeErrorException("server only parameter in transport parameter extension");
+            }
+            byte[] resetToken = new byte[16];
+            buffer.get(resetToken);
+            log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
         }
         else if (parameterId == max_udp_payload_size.value) {
             int maxPacketSize = VariableLengthInteger.parse(buffer);
             log.debug("- max udp payload size: " + maxPacketSize);
             params.setMaxUdpPayloadSize(maxPacketSize);
         }
-        else if (parameterId == stateless_reset_token.value) {
-            byte[] resetToken = new byte[16];
-            buffer.get(resetToken);
-            log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
+        else if (parameterId == initial_max_data.value) {
+            long maxData = VariableLengthInteger.parseLong(buffer);
+            log.debug("- initial max data: " + maxData);
+            params.setInitialMaxData(maxData);
         }
-        else if (parameterId == ack_delay_exponent.value) {
-            int ackDelayExponent = VariableLengthInteger.parse(buffer);
-            log.debug("- ack delay exponent: " + ackDelayExponent);
-            params.setAckDelayExponent(ackDelayExponent);
-        }
-        else if (parameterId == initial_max_streams_uni.value) {
-            long maxUniStreams = VariableLengthInteger.parseLong(buffer);
-            log.debug("- max uni streams: " + maxUniStreams);
-            params.setInitialMaxStreamsUni(maxUniStreams);
-        }
-        else if (parameterId == disable_active_migration.value) {
-            log.debug("- disable migration");
-            params.setDisableMigration(true);
+        else if (parameterId == initial_max_stream_data_bidi_local.value) {
+            int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
+            log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
+            params.setInitialMaxStreamDataBidiLocal(maxStreamDataBidiLocal);
         }
         else if (parameterId == initial_max_stream_data_bidi_remote.value) {
             long maxStreamDataBidiRemote = VariableLengthInteger.parseLong(buffer);
@@ -276,6 +263,21 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- initial max stream data uni: " + maxStreamDataUni);
             params.setInitialMaxStreamDataUni(maxStreamDataUni);
         }
+        else if (parameterId == initial_max_streams_bidi.value) {
+            long maxBidiStreams = VariableLengthInteger.parseLong(buffer);
+            log.debug("- initial max bidi streams: " + maxBidiStreams);
+            params.setInitialMaxStreamsBidi(maxBidiStreams);
+        }
+        else if (parameterId == initial_max_streams_uni.value) {
+            long maxUniStreams = VariableLengthInteger.parseLong(buffer);
+            log.debug("- max uni streams: " + maxUniStreams);
+            params.setInitialMaxStreamsUni(maxUniStreams);
+        }
+        else if (parameterId == ack_delay_exponent.value) {
+            int ackDelayExponent = VariableLengthInteger.parse(buffer);
+            log.debug("- ack delay exponent: " + ackDelayExponent);
+            params.setAckDelayExponent(ackDelayExponent);
+        }
         else if (parameterId == max_ack_delay.value) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-30#section-18.2
             // "The maximum acknowledgement delay is an integer value indicating the maximum amount of time in
@@ -283,6 +285,17 @@ public class QuicTransportParametersExtension extends Extension {
             int maxAckDelay = VariableLengthInteger.parse(buffer);
             log.debug("- max ack delay: " + maxAckDelay);
             params.setMaxAckDelay(maxAckDelay);
+        }
+        else if (parameterId == disable_active_migration.value) {
+            log.debug("- disable migration");
+            params.setDisableMigration(true);
+        }
+        else if (parameterId == preferred_address.value) {
+            // "This transport parameter is only sent by a server."
+            if (senderRol != Server) {
+                throw new DecodeErrorException("server only parameter in transport parameter extension");
+            }
+            parsePreferredAddress(buffer, log);
         }
         else if (parameterId == active_connection_id_limit.value) {
             int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
@@ -296,6 +309,10 @@ public class QuicTransportParametersExtension extends Extension {
             params.setInitialSourceConnectionId(initialSourceCid);
         }
         else if (parameterId == retry_source_connection_id.value) {
+            // "This transport parameter is only sent by a server."
+            if (senderRol != Server) {
+                throw new DecodeErrorException("server only parameter in transport parameter extension");
+            }
             byte[] retrySourceCid = new byte[size];
             buffer.get(retrySourceCid);
             log.debug("- retry source connection id: " + retrySourceCid);
@@ -321,7 +338,7 @@ public class QuicTransportParametersExtension extends Extension {
 
         int realSize = buffer.position() - startPosition;
         if (realSize != size) {
-            throw new ProtocolError("inconsistent size in transport parameter");
+            throw new DecodeErrorException("inconsistent size in transport parameter");
         }
     }
 

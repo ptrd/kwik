@@ -1,6 +1,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.Role;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.Version;
@@ -119,7 +120,7 @@ class ServerConnectionTest {
     @MethodSource("provideTransportParametersWithInvalidValue")
     void whenTransportParametersContainsInvalidValueServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault(), tp);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client);
         List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
@@ -182,7 +183,7 @@ class ServerConnectionTest {
     }
 
     private QuicTransportParametersExtension createTransportParametersExtension() {
-        return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters());
+        return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters(), Role.Client);
     }
 
 }

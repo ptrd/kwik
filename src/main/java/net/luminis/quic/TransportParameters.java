@@ -41,12 +41,14 @@ public class TransportParameters {
     private byte[] initialSourceConnectionId;
     private byte[] retrySourceConnectionId;
     private int maxUdpPayloadSize;
+    private byte[] statelessResetToken;
 
     public TransportParameters() {
         setDefaults();
     }
 
     public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
+        setDefaults();
         this.maxIdleTimeout = maxIdleTimeoutInSeconds * 1000;
         setInitialMaxStreamData(initialMaxStreamData);
         initialMaxData = 10 * initialMaxStreamData;
@@ -56,18 +58,15 @@ public class TransportParameters {
     }
 
     private void setDefaults() {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
-        // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
-        ackDelayExponent = 3;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
-        // "If this value is absent, a default of 25 milliseconds is assumed."
-        maxAckDelay = 25;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.2
-        // "If this transport parameter is absent, a default of 2 is assumed."
-        activeConnectionIdLimit = 2;
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
         // "The default for this parameter is the maximum permitted UDP payload of 65527"
         maxUdpPayloadSize = 65527;
+        // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
+        ackDelayExponent = 3;
+        // "If this value is absent, a default of 25 milliseconds is assumed."
+        maxAckDelay = 25;
+        // "If this transport parameter is absent, a default of 2 is assumed."
+        activeConnectionIdLimit = 2;
     }
 
     public byte[] getOriginalDestinationConnectionId() {
@@ -207,6 +206,14 @@ public class TransportParameters {
 
     public void setMaxUdpPayloadSize(int maxUdpPayloadSize) {
         this.maxUdpPayloadSize = maxUdpPayloadSize;
+    }
+
+    public byte[] getStatelessResetToken() {
+        return statelessResetToken;
+    }
+
+    public void setStatelessResetToken(byte[] statelessResetToken) {
+        this.statelessResetToken = statelessResetToken;
     }
 
     @Override

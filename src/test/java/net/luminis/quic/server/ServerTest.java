@@ -172,7 +172,7 @@ class ServerTest {
         TransportParameters clientTransportParams = new TransportParameters();
         clientTransportParams.setInitialSourceConnectionId(scid);
         List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"),
-                new QuicTransportParametersExtension(Version.getDefault(), clientTransportParams));
+                new QuicTransportParametersExtension(Version.getDefault(), clientTransportParams, Role.Client));
 
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());

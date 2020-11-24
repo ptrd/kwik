@@ -40,7 +40,6 @@ import java.util.function.Consumer;
 import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.quic.EncryptionLevel.Initial;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
-import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
@@ -58,6 +57,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
     }
 
     protected final Version quicVersion;
+    private final Role role;
     protected final Logger log;
 
     protected final ConnectionSecrets connectionSecrets;
@@ -76,6 +76,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
 
     protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
         this.quicVersion = quicVersion;
+        this.role = role;
         this.log = log;
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
@@ -276,7 +277,7 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         //   encryption level"
         if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
             for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, getTlsEngine(), log, getSender()));
+                cryptoStreams.add(new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, role, getTlsEngine(), log, getSender()));
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
