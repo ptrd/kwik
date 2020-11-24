@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -130,6 +131,20 @@ class ServerConnectionTest {
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
                 && ((ConnectionCloseFrame) frame).getErrorCode() == 0x08),
                 eq(EncryptionLevel.Initial));
+    }
+
+    @Test
+    void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(ApplicationLayerProtocolNegotiationExtension.class);
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
     }
 
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {

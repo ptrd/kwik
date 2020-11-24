@@ -52,6 +52,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
     private final List<String> supportedApplicationLayerProtocols;
+    private final byte[] originalDcid;
     private final Consumer<byte[]> closeCallback;
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
@@ -60,6 +61,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         super(quicVersion, Role.Server, null, log);
         this.scid = scid;
         this.dcid = dcid;
+        this.originalDcid = originalDcid;
         this.closeCallback = closeCallback;
 
         String supportedProtocol = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);   // Assuming draft version with 2 digits ;-)
@@ -159,6 +161,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             // "When using ALPN, endpoints MUST immediately close a connection (...) if an application protocol is not negotiated."
             Optional<String> applicationProtocol = selectSupportedApplicationProtocol(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols());
             applicationProtocol.map(protocol -> {
+                // Add negotiated protocol to TLS response (Encrypted Extensions message)
                 tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
                 return protocol;
             }).orElseThrow(() -> new NoApplicationProtocolAlert());
@@ -180,6 +183,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
                 throw new TlsProtocolException("transport parameter error", transportParameterError);
             }
         }
+
+        TransportParameters serverTransportParams = new TransportParameters();
+        serverTransportParams.setInitialSourceConnectionId(scid);
+        serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
+        tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
     }
 
     @Override
