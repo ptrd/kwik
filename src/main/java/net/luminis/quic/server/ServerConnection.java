@@ -213,7 +213,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(HandshakePacket packet, Instant time) {
-
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
+        // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
+        sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
+        processFrames(packet, time);
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
+        // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
+        // TODO: discard keys too
     }
 
     @Override
