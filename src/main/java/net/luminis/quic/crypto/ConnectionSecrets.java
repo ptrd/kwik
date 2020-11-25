@@ -133,11 +133,11 @@ public class ConnectionSecrets {
         }
     }
 
-    public synchronized void computeApplicationSecrets(TlsClientEngine engine) {
+    public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
         createKeys(EncryptionLevel.App, selectedCipherSuite);
 
-        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
+        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);

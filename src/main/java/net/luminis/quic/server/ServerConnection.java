@@ -130,7 +130,6 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void earlySecretsKnown() {
-
     }
 
     @Override
@@ -140,12 +139,24 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void handshakeFinished() {
+        connectionSecrets.computeApplicationSecrets(tlsEngine);
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
+        // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.1.2
+        // "the TLS handshake is considered confirmed at the server when the handshake completes"
+        getSender().discard(PnSpace.Handshake, "tls handshake confirmed");
+        // TODO: discard keys too
+        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
+        // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
+        sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
+    }
 
+    private void sendHandshakeDone(QuicFrame frame) {
+        send(frame, this::sendHandshakeDone);
     }
 
     @Override
     public void newSessionTicketReceived(NewSessionTicket ticket) {
-
     }
 
     @Override
