@@ -125,6 +125,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
+        ackProcessors.add(ackProcessor);
     }
 
     @Override
@@ -227,6 +228,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+        ackProcessors.forEach(processor -> processor.process(ackFrame, packet.getPnSpace(), timeReceived));
 
     }
 
