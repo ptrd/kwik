@@ -344,17 +344,17 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
         @Override
         public void send(CertificateMessage cm) throws IOException {
-
+            getCryptoStream(EncryptionLevel.Handshake).write(cm.getBytes());
         }
 
         @Override
         public void send(CertificateVerifyMessage cv) throws IOException {
-
+            getCryptoStream(EncryptionLevel.Handshake).write(cv.getBytes());
         }
 
         @Override
         public void send(FinishedMessage finished) throws IOException {
-
+            getCryptoStream(EncryptionLevel.Handshake).write(finished.getBytes());
         }
     }
 
