@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -108,7 +109,7 @@ public class Server {
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
-        currentConnections = new HashMap<>();
+        currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, MAX_DATAGRAM_SIZE, log, exception -> System.exit(9));
     }
 
@@ -179,12 +180,14 @@ public class Server {
 
                 Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
                 if (connection.isEmpty()) {
-                    if (mightStartNewConnection(data, version, dcid)) {
-                        connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
-                    } else if (initialWithUnspportedVersion(data, version)) {
-                        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
-                        // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
-                        sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+                    synchronized (this) {
+                        if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
+                            connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
+                        } else if (initialWithUnspportedVersion(data, version)) {
+                            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
+                            // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
+                            sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+                        }
                     }
                 }
                 connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
@@ -226,7 +229,10 @@ public class Server {
             Version version = Version.parse(versionValue);
             log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid));
             ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
+            // Register new connection with both the new connection id, and the original (as retransmitted initial packets
+            // with the same original dcid might be received, which should _not_ lead to another connection)
             currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnection);
+            currentConnections.put(new ConnectionSource(newConnection.getOriginalDestinationConnectionId()), newConnection);
             return newConnection;
         } catch (UnknownVersionException e) {
             // Impossible, as it only gets here if the given version is supported, so it is a known version.

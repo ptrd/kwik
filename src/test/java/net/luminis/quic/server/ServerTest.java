@@ -11,6 +11,7 @@ import net.luminis.tls.KeyUtils;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -196,6 +197,36 @@ class ServerTest {
         byte[] responseScid = Arrays.copyOfRange(packetSent.getData(), 6 + dcidLength + 1, 6 + dcidLength + 1 + scidLength);
         assertThat(responseScid).isNotEqualTo(dcid);
     }
+
+    @Test
+    void receivingDuplicateInitialShouldNotCreateNewConnection() throws Exception {
+        // Given
+        byte[] orginalDcid = ByteUtils.hexToBytes("f8e39b14d954c988");
+        ServerConnection connection = mock(ServerConnection.class);
+        when(connection.getSourceConnectionId()).thenReturn(ByteUtils.hexToBytes("cafebabe"));
+        when(connection.getOriginalDestinationConnectionId()).thenReturn(orginalDcid);
+
+        ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
+                .thenReturn(connection);
+        FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
+
+        ByteBuffer buffer = ByteBuffer.allocate(1200);
+        buffer.put((byte) 0b1100_0000);
+        buffer.putInt(Version.getDefault().getId());
+        buffer.put((byte) orginalDcid.length);
+        buffer.put(orginalDcid);
+        buffer.put((byte) 0);  // source connection id length
+
+        server.process(createPacket(buffer));
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
+        clearInvocations(connectionFactory);
+
+        // When
+        server.process(createPacket(buffer));
+        verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
+    }
+
 
     private RawPacket createPacket(ByteBuffer buffer) {
         DatagramPacket datagram = new DatagramPacket(buffer.array(), 0, buffer.limit(), new InetSocketAddress(InetAddress.getLoopbackAddress(), 38675));

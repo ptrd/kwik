@@ -196,7 +196,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters();
+        TransportParameters serverTransportParams = new TransportParameters(30, 1_000_000, 3, 3);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -373,4 +373,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         return connectionState == Status.Closed;
     }
 
+    public byte[] getOriginalDestinationConnectionId() {
+        return originalDcid;
+    }
 }
