@@ -45,9 +45,9 @@ public class Receiver {
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
-    public Receiver(DatagramSocket socket, int initialMaxPacketSize, Logger log, Consumer<Throwable> abortCallback) {
+    public Receiver(DatagramSocket socket, int maxPacketSize, Logger log, Consumer<Throwable> abortCallback) {
         this.socket = socket;
-        this.maxPacketSize = initialMaxPacketSize;
+        this.maxPacketSize = maxPacketSize;
         this.log = log;
         this.abortCallback = abortCallback;
 

@@ -51,6 +51,7 @@ public class Server {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
     private static final int CONNECTION_ID_LENGTH = 4;
+    public static final int MAX_DATAGRAM_SIZE = 1500;
 
     private final Receiver receiver;
     private final Logger log;
@@ -100,7 +101,7 @@ public class Server {
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         currentConnections = new HashMap<>();
-        receiver = new Receiver(serverSocket, 1200, log, exception -> System.exit(9));
+        receiver = new Receiver(serverSocket, MAX_DATAGRAM_SIZE, log, exception -> System.exit(9));
     }
 
     private void start() {
