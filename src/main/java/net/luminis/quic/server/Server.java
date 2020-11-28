@@ -22,6 +22,7 @@ import net.luminis.quic.RawPacket;
 import net.luminis.quic.Receiver;
 import net.luminis.quic.UnknownVersionException;
 import net.luminis.quic.Version;
+import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
@@ -91,7 +92,14 @@ public class Server {
     public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
-        log = new SysOutLogger();
+
+        File logDir = new File("/logs");
+        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite()) {
+            log = new FileLogger(new File(logDir, "kwikserver.log"));
+        }
+        else {
+            log = new SysOutLogger();
+        }
         log.logWarning(true);
         log.logPackets(true);
         log.logInfo(true);
