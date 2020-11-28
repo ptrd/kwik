@@ -77,7 +77,7 @@ class ServerConnectionTest {
         // When
         List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
-                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), clientExtensions);
+                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), TlsConstants.NamedGroup.secp256r1, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
