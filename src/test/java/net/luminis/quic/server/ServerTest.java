@@ -185,7 +185,7 @@ class ServerTest {
 
         // Then
         ArgumentCaptor<DatagramPacket> captor = ArgumentCaptor.forClass(DatagramPacket.class);
-        verify(serverSocket).send(captor.capture());
+        verify(serverSocket, atLeast(1)).send(captor.capture());
         DatagramPacket packetSent = captor.getValue();
         int dcidLength = packetSent.getData()[5];
         byte[] responseDcid = Arrays.copyOfRange(packetSent.getData(), 6, 6 + dcidLength);

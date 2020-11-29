@@ -1,5 +1,6 @@
 package net.luminis.quic.server;
 
+import jdk.jshell.spi.ExecutionControlProvider;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Role;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
@@ -11,8 +12,8 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
-import net.luminis.tls.KeyUtils;
-import net.luminis.tls.TlsConstants;
+import net.luminis.tls.*;
+import net.luminis.tls.alert.HandshakeFailureAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
@@ -26,26 +27,32 @@ import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.awt.image.ImageProducer;
+import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+
 class ServerConnectionTest {
 
     public static final String DEFAULT_APPLICATION_PROTOCOL = "hq-29";
     private ServerConnection connection;
     private ApplicationLayerProtocolNegotiationExtension alpn = new ApplicationLayerProtocolNegotiationExtension(DEFAULT_APPLICATION_PROTOCOL);
-;
+    private TlsServerEngine tlsServerEngine;
 
     @BeforeEach
     void setupObjectUnderTest() throws Exception {
@@ -64,9 +71,13 @@ class ServerConnectionTest {
 
     @Test
     void engineNotBeingAbleToNegotiateCipherShouldCloseConnection() throws Exception {
+        // Given
+        ((MockTlsServerEngine) tlsServerEngine).injectErrorInReceivingClientHello(() -> new HandshakeFailureAlert(""));
+
         // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
-                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), Collections.emptyList());
+                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
@@ -111,10 +122,8 @@ class ServerConnectionTest {
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
         // Then
-        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
-        verify(connection.getSender()).send(captor.capture(), anyInt(), eq(EncryptionLevel.Initial), any(Consumer.class));
-        Function<Integer, QuicFrame> frameFunction = captor.getValue();
-        assertThat(frameFunction.apply(1000)).isInstanceOf(CryptoFrame.class);
+        List<Extension> serverExtensions = tlsServerEngine.getServerExtensions();
+        assertThat(serverExtensions).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
     }
 
     @ParameterizedTest
@@ -185,7 +194,8 @@ class ServerConnectionTest {
         when(tlsServerEngineFactory.createServerEngine(any(ServerMessageSender.class), any(TlsStatusEventHandler.class))).then(new Answer<TlsServerEngine>() {
             @Override
             public TlsServerEngine answer(InvocationOnMock invocation) throws Throwable {
-                return new TlsServerEngine(null, null, invocation.getArgument(0), invocation.getArgument(1));
+                tlsServerEngine = new MockTlsServerEngine(null, null, invocation.getArgument(0), invocation.getArgument(1));
+                return tlsServerEngine;
             }
         });
         return tlsServerEngineFactory;
@@ -201,4 +211,24 @@ class ServerConnectionTest {
         return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters(), Role.Client);
     }
 
+    static class MockTlsServerEngine extends TlsServerEngine {
+
+        private Supplier<TlsProtocolException> exceptionSupplier;
+
+        public MockTlsServerEngine(X509Certificate serverCertificate, PrivateKey certificateKey, ServerMessageSender serverMessageSender, TlsStatusEventHandler tlsStatusHandler) {
+            super(serverCertificate, certificateKey, serverMessageSender, tlsStatusHandler);
+        }
+
+        @Override
+        public void received(ClientHello clientHello) throws TlsProtocolException, IOException {
+            if (exceptionSupplier != null) {
+                throw exceptionSupplier.get();
+            }
+            statusHandler.extensionsReceived(clientHello.getExtensions());
+        }
+
+        public void injectErrorInReceivingClientHello(Supplier<TlsProtocolException> exceptionSupplier) {
+            this.exceptionSupplier = exceptionSupplier;
+        }
+    }
 }
