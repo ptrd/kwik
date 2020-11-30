@@ -1,11 +1,11 @@
 package net.luminis.quic.server;
 
 import jdk.jshell.spi.ExecutionControlProvider;
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Role;
-import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.quic.TransportParameters;
+import net.luminis.quic.*;
 import net.luminis.quic.Version;
+import net.luminis.quic.frame.FrameProcessor3;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -156,6 +156,20 @@ class ServerConnectionTest {
         assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
     }
 
+    @Test
+    void messageWithOriginalDestinationCidIsProcessedOnlyOnce() throws Exception {
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        CryptoFrame firstFrame = mock(CryptoFrame.class);
+        CryptoFrame secondFrame = mock(CryptoFrame.class);
+        InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
+        InitialPacket packet2 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, secondFrame);
+        connection.process(packet1, Instant.now());
+        connection.process(packet2, Instant.now());
+
+        verify(firstFrame).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
+        verify(secondFrame, never()).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
@@ -180,8 +194,9 @@ class ServerConnectionTest {
     }
 
     private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory) throws Exception {
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
-                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], new byte[8],
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
                 tlsServerEngineFactory, 100, cid -> {}, mock(Logger.class));
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

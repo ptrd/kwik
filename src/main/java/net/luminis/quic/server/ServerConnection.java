@@ -54,6 +54,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final List<String> supportedApplicationLayerProtocols;
     private final byte[] originalDcid;
     private final Consumer<byte[]> closeCallback;
+    private volatile boolean firstInitialPacketProcessed = false;
+
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
@@ -204,7 +206,20 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(InitialPacket packet, Instant time) {
-        processFrames(packet, time);
+        if (Arrays.equals(packet.getDestinationConnectionId(), scid) || !firstInitialPacketProcessed) {
+            firstInitialPacketProcessed = true;
+            processFrames(packet, time);
+        }
+        else if (Arrays.equals(packet.getDestinationConnectionId(), originalDcid)) {
+            // From the specification, it is not clear what to do with packets using the original destination id.
+            // It might be that the client did not receive responses, but it might as well be an opportunistic client
+            // sending multiple initials at once. Just ignore them; retransmitting will be triggered by detecting lost packets.
+            log.debug("Ignoring initial packet with original destination connection id");
+        }
+        else {
+            // Must be programming error
+            throw new RuntimeException();
+        }
     }
 
     @Override
