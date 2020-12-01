@@ -223,18 +223,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
-    public void process(LongHeaderPacket packet, Instant time) {
-
-    }
-
-    @Override
     public void process(ShortHeaderPacket packet, Instant time) {
-
+        processFrames(packet, time);
     }
 
     @Override
     public void process(VersionNegotiationPacket packet, Instant time) {
-
+        // Intentionally discarding packet without any action (clients should not send Version Negotiation packets).
     }
 
     @Override
@@ -250,7 +245,12 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(RetryPacket packet, Instant time) {
+        // Intentionally discarding packet without any action (clients should not send Retry packets).
+    }
 
+    @Override
+    public void process(ZeroRttPacket packet, Instant time) {
+        // TODO
     }
 
     @Override

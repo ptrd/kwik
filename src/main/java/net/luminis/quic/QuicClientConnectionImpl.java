@@ -396,11 +396,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(LongHeaderPacket packet, Instant time) {
-        processFrames(packet, time);
-    }
-
-    @Override
     public void process(ShortHeaderPacket packet, Instant time) {
         if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
             // New connection id, not used before.
@@ -471,6 +466,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             log.error("Discarding Retry packet, because integrity tag is invalid.");
         }
+    }
+
+    @Override
+    public void process(ZeroRttPacket packet, Instant time) {
+        // Intentionally discarding packet without any action (servers should not send 0-RTT packets).
     }
 
     @Override

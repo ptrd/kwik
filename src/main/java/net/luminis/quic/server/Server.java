@@ -137,11 +137,11 @@ public class Server {
         if ((flags & 0b1100_0000) == 0b1100_0000) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
             // "Header Form:  The most significant bit (0x80) of byte 0 (the first byte) is set to 1 for long headers."
-            processLongHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), flags, data);
+            processLongHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
         } else if ((flags & 0b1100_0000) == 0b0100_0000) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.3
             // "Header Form:  The most significant bit (0x80) of byte 0 is set to 0 for the short header.
-            processShortHeaderPacket(data);
+            processShortHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
         } else {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.3
@@ -151,7 +151,7 @@ public class Server {
         }
     }
 
-    private void processLongHeaderPacket(InetSocketAddress clientAddress, int flags, ByteBuffer data) {
+    private void processLongHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
         if (data.remaining() >= MINIMUM_LONG_HEADER_LENGTH) {
             data.position(1);
             int version = data.getInt();
@@ -195,8 +195,14 @@ public class Server {
         }
     }
 
-    private void processShortHeaderPacket(ByteBuffer data) {
-        System.out.println("Receiving short header packet (" + data.remaining() + " bytes)");
+    private void processShortHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
+        byte[] dcid = new byte[CONNECTION_ID_LENGTH];
+        data.position(1);
+        data.get(dcid);
+        data.rewind();
+        Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
+        connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data),
+                () -> log.warn("Discarding short header packet addressing non existent connection " + ByteUtils.bytesToHex(dcid)));
     }
 
     private boolean mightStartNewConnection(ByteBuffer packetBytes, int version, byte[] dcid) {

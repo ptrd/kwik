@@ -26,8 +26,6 @@ public interface PacketProcessor {
 
     void process(InitialPacket packet, Instant time);
 
-    void process(LongHeaderPacket packet, Instant time);
-
     void process(ShortHeaderPacket packet, Instant time);
 
     void process(VersionNegotiationPacket packet, Instant time);
@@ -35,4 +33,6 @@ public interface PacketProcessor {
     void process(HandshakePacket packet, Instant time);
 
     void process(RetryPacket packet, Instant time);
+
+    void process(ZeroRttPacket packet, Instant time);
 }
