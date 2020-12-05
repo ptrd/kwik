@@ -40,6 +40,8 @@ import java.util.function.Function;
  */
 public interface Sender {
 
+    Consumer<QuicFrame> NO_RETRANSMIT = f -> {};
+
     /**
      * Sends a (fixed) frame. Should not be used to send data that is subject to change (e.g. a flow control level),
      * as the frame might stay queued for some time when conditions are bad.

@@ -248,6 +248,7 @@ public class Server {
 
     private void removeConnection(byte[] cid) {
         ServerConnection removed = currentConnections.remove(new ConnectionSource(cid));
+        currentConnections.remove(new ConnectionSource(removed.getOriginalDestinationConnectionId()));
         if (removed == null) {
             log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));
         }

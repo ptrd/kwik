@@ -40,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 
@@ -151,6 +152,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
+        connectionState = Connected;
     }
 
     private void sendHandshakeDone(QuicFrame frame) {
@@ -266,7 +268,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-
+        handlePeerClosing(connectionCloseFrame);
     }
 
     @Override
@@ -274,7 +276,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         try {
             getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
         } catch (TlsProtocolException e) {
-            closeWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
+            immediateCloseWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
         }
     }
 

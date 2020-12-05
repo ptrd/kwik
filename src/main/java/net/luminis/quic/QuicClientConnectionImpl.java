@@ -589,7 +589,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         terminate();
     }
 
-    private void handlePeerClosing(ConnectionCloseFrame closing) {
+    protected void handlePeerClosing(ConnectionCloseFrame closing) {
         if (connectionState != Status.Closing) {
             if (closing.hasError()) {
                 log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));
@@ -625,7 +625,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private String determineClosingErrorMessage(ConnectionCloseFrame closing) {
+    protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {
                 return "TLS error " + closing.getTlsError() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");

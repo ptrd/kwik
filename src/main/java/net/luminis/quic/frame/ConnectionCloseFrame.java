@@ -54,7 +54,7 @@ public class ConnectionCloseFrame extends QuicFrame {
     public ConnectionCloseFrame(Version quicVersion, int error, String reason) {
         frameType = 0x1c;
         errorCode = error;
-        if (reason != null) {
+        if (reason != null && !reason.isBlank()) {
             reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
         }
     }
