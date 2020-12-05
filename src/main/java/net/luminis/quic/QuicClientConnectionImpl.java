@@ -109,7 +109,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         registerProcessor(ackGenerator);
 
         receiver = new Receiver(socket, 1500, log, this::abortConnection);
-        streamManager = new StreamManager(this, log);
+        streamManager = new StreamManager(this, Role.Client, log);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
 
@@ -928,7 +928,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
-        streamManager.setServerStreamCallback(streamProcessor);
+        streamManager.setPeerInitiatedStreamCallback(streamProcessor);
     }
 
     // For internal use only.

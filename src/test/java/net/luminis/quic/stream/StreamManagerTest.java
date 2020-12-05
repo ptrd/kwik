@@ -20,16 +20,18 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.Role;
 import net.luminis.quic.frame.MaxStreamsFrame;
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.util.Date;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,7 +44,7 @@ class StreamManagerTest {
 
     @BeforeEach
     void init() {
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), mock(Logger.class));
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Client, mock(Logger.class));
     }
 
     @Test
@@ -245,5 +247,35 @@ class StreamManagerTest {
 
         // Then
         assertThat(earlyDataStream).isNull();
+    }
+
+    @Test
+    void serverInitiatedStreamShouldHaveOddId() {
+        // Given
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class));
+        streamManager.setInitialMaxStreamsUni(1);
+
+        // When
+        QuicStream stream = streamManager.createStream(false);
+
+        // Then
+        assertThat(stream.getStreamId() % 4).isEqualTo(3);   // 0x3  | Server-Initiated, Unidirectional
+        assertThat(stream.getStreamId() % 2).isEqualTo(1);
+    }
+
+    @Test
+    void inServerRoleClientInitiatedStreamCausesCallback() {
+        // Given
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class));
+        streamManager.setInitialMaxStreamsBidi(1);
+        List<QuicStream> openedStreams = new ArrayList<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> openedStreams.add(stream));
+
+        // When
+        streamManager.process(new StreamFrame(0, new byte[100], true));
+
+        // Then
+        assertThat(openedStreams).hasSize(1);
+        assertThat(openedStreams.get(0).getStreamId()).isEqualTo(0);
     }
 }
