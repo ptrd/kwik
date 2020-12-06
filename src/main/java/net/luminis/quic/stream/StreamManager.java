@@ -138,7 +138,7 @@ public class StreamManager {
         else {
             if (isPeerInitiated(streamId)) {
                 log.info("Receiving data for peer-initiated stream " + streamId);
-                stream = new QuicStream(quicVersion, streamId, connection, null, log);
+                stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
                 streams.put(streamId, stream);
                 stream.add(frame);
                 if (peerInitiatedStreamCallback != null) {

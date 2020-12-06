@@ -709,7 +709,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
         peerTransportParams = transportParameters;
         if (flowController == null) {
-            flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
+            flowController = new FlowControl(Role.Client, peerTransportParams.getInitialMaxData(),
                     peerTransportParams.getInitialMaxStreamDataBidiLocal(),
                     peerTransportParams.getInitialMaxStreamDataBidiRemote(),
                     peerTransportParams.getInitialMaxStreamDataUni(),

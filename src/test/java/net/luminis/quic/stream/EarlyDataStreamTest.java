@@ -19,6 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicClientConnectionImpl;
+import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -47,7 +48,7 @@ class EarlyDataStreamTest {
         connection = mock(QuicClientConnectionImpl.class);
         when(connection.getMaxShortHeaderPacketOverhead()).thenReturn(29);
         int maxData = 5000;
-        FlowControl flowController = new FlowControl(maxData, maxData, maxData, maxData);
+        FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
         logger = new NullLogger();
         stream = new EarlyDataStream(Version.getDefault(), 0, connection, flowController, logger);
     }
@@ -92,7 +93,7 @@ class EarlyDataStreamTest {
     void earlyDataShouldBeLimitedToFlowControlLimit() throws Exception {
         // Given
         int maxData = 1000;
-        FlowControl flowController = new FlowControl(maxData, maxData, maxData, maxData);
+        FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
         stream = new EarlyDataStream(Version.getDefault(), 0, connection, flowController, logger);
 
         // When

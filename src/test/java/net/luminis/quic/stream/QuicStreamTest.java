@@ -19,14 +19,12 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.InvalidPacketException;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.Role;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +38,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -72,7 +69,7 @@ class QuicStreamTest {
         connection = Mockito.mock(QuicConnectionImpl.class);
         logger = Mockito.mock(Logger.class);
 
-        quicStream = new QuicStream(0, connection, new FlowControl(9999, 9999, 9999, 9999), logger);
+        quicStream = new QuicStream(0, connection, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
     }
 
     @Test

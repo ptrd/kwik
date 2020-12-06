@@ -21,20 +21,20 @@ package net.luminis.quic.stream;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Keeps track of connection and stream flow control limits.
+ * Keeps track of connection and stream flow control limits imposed by the peer.
  */
 public class FlowControl {
 
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-18.2
+    private final Role role;
+
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
 
     // "The initial maximum data parameter is an integer value that contains the initial value for the maximum
     //  amount of data that can be sent on the connection."
@@ -52,18 +52,21 @@ public class FlowControl {
     //  streams."
     private final long initialMaxStreamDataUni;
 
+    // The maximum amount of data that can be sent (to the peer) on the connection as a whole
     private long maxDataAllowed;
+    // The maximum amount of data that can be sent on the connection, that is already assigned to a particular stream
     private long maxDataAssigned;
     private Map<Integer, Long> maxStreamDataAllowed;
     private Map<Integer, Long> maxStreamDataAssigned;
     private final Logger log;
 
 
-    public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
-        this(initialMaxData, initialMaxStreamDataBidiLocal, initialMaxStreamDataBidiRemote, initialMaxStreamDataUni, new NullLogger());
+    public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
+        this(role, initialMaxData, initialMaxStreamDataBidiLocal, initialMaxStreamDataBidiRemote, initialMaxStreamDataUni, new NullLogger());
     }
 
-    public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni, Logger log) {
+    public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni, Logger log) {
+        this.role = role;
         this.initialMaxData = initialMaxData;
         this.initialMaxStreamDataBidiLocal = initialMaxStreamDataBidiLocal;
         this.initialMaxStreamDataBidiRemote = initialMaxStreamDataBidiRemote;
@@ -141,60 +144,70 @@ public class FlowControl {
         }
     }
 
-    public synchronized void updateInitialValues(TransportParameters transportParameters) {
-        if (transportParameters.getInitialMaxData() > initialMaxData) {
-            log.info("Increasing initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
-            if (transportParameters.getInitialMaxData() > maxDataAllowed) {
-                maxDataAllowed = transportParameters.getInitialMaxData();
-            }
-        }
-        else if (transportParameters.getInitialMaxData() < initialMaxData) {
-            log.error("Ignoring attempt to reduce initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
+    /**
+     * Update initial values. This can happen in a client that has sent 0-RTT data, for which it has used remembered
+     * values and that updates the values when the ServerHello message is received.
+     * Hence: only called by a client.
+     * @param peerTransportParameters
+     */
+    public synchronized void updateInitialValues(TransportParameters peerTransportParameters) {
+        if (role == Role.Server) {
+            throw new ImplementationError();
         }
 
-        if (transportParameters.getInitialMaxStreamDataBidiLocal() > initialMaxStreamDataBidiLocal) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+        if (peerTransportParameters.getInitialMaxData() > initialMaxData) {
+            log.info("Increasing initial max data from " + initialMaxData + " to " + peerTransportParameters.getInitialMaxData());
+            if (peerTransportParameters.getInitialMaxData() > maxDataAllowed) {
+                maxDataAllowed = peerTransportParameters.getInitialMaxData();
+            }
+        }
+        else if (peerTransportParameters.getInitialMaxData() < initialMaxData) {
+            log.error("Ignoring attempt to reduce initial max data from " + initialMaxData + " to " + peerTransportParameters.getInitialMaxData());
+        }
+
+        if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() > initialMaxStreamDataBidiLocal) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiLocal + " to " + peerTransportParameters.getInitialMaxStreamDataBidiLocal());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all server initiated bidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 1)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataBidiLocal() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiLocal());
+                        if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataBidiLocal());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataBidiLocal() < initialMaxStreamDataBidiLocal) {
-            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+        else if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() < initialMaxStreamDataBidiLocal) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiLocal + " to " + peerTransportParameters.getInitialMaxStreamDataBidiLocal());
         }
 
-        if (transportParameters.getInitialMaxStreamDataBidiRemote() > initialMaxStreamDataBidiRemote) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+        if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() > initialMaxStreamDataBidiRemote) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiRemote + " to " + peerTransportParameters.getInitialMaxStreamDataBidiRemote());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all client initiated bidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 0)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataBidiRemote() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiRemote());
+                        if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataBidiRemote());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataBidiRemote() < initialMaxStreamDataBidiRemote) {
-            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+        else if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() < initialMaxStreamDataBidiRemote) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiRemote + " to " + peerTransportParameters.getInitialMaxStreamDataBidiRemote());
         }
 
-        if (transportParameters.getInitialMaxStreamDataUni() > initialMaxStreamDataUni) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+        if (peerTransportParameters.getInitialMaxStreamDataUni() > initialMaxStreamDataUni) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataUni + " to " + peerTransportParameters.getInitialMaxStreamDataUni());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all client initiated unidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 2)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataUni() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataUni());
+                        if (peerTransportParameters.getInitialMaxStreamDataUni() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataUni());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataUni() < initialMaxStreamDataUni) {
-            log.error("Ignoring attempt tomax data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+        else if (peerTransportParameters.getInitialMaxStreamDataUni() < initialMaxStreamDataUni) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataUni + " to " + peerTransportParameters.getInitialMaxStreamDataUni());
         }
     }
 
@@ -202,18 +215,18 @@ public class FlowControl {
         if (stream.isUnidirectional()) {
             return initialMaxStreamDataUni;
         }
-        else if (stream.isClientInitiatedBidirectional()) {
-            // Assuming client role, so for the receiver (imposing the limit) the stream is peer-initiated (remote).
+        else if (role == Role.Client && stream.isClientInitiatedBidirectional()
+                || role == Role.Server && stream.isServerInitiatedBidirectional()) {
+            // For the receiver (imposing the limit) the stream is peer-initiated (remote).
             // "This limit applies to newly created bidirectional streams opened by the endpoint that receives
             // the transport parameter."
-            // The client has received this transport parameter, so it applies to stream opened by the client.
             return initialMaxStreamDataBidiRemote;
         }
-        else if (stream.isServerInitiatedBidirectional()) {
-            // Assuming client role, so for the receiver (imposing the limit), the stream is locally-initiated
+        else if (role == Role.Client && stream.isServerInitiatedBidirectional()
+                || role == Role.Server && stream.isClientInitiatedBidirectional()) {
+            // For the receiver (imposing the limit), the stream is locally-initiated
             // "This limit applies to newly created bidirectional streams opened by the endpoint that sends the
             // transport parameter."
-            // The server has send this transport parameter, so it applies to streams opened by the server.
             return initialMaxStreamDataBidiLocal;
         }
         else {
