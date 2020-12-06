@@ -22,10 +22,18 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
+import java.io.File;
+
 public class Http09ApplicationProtocolFactory extends ApplicationProtocolConnectionFactory {
+
+    private File wwwDir;
+
+    public Http09ApplicationProtocolFactory(File wwwDir) {
+        this.wwwDir = wwwDir;
+    }
 
     @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-        return new Http09Connection(quicConnection);
+        return new Http09Connection(quicConnection, wwwDir);
     }
 }

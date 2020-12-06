@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldSetter;
 
+import java.io.File;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -41,7 +42,7 @@ class ServerTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()));
+        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()), new File("."));
     }
 
     @Test

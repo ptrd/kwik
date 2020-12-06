@@ -68,8 +68,8 @@ public class Server {
 
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
-            System.err.println("Usage: cert file, cert key file, port number");
+        if (args.length < 3) {
+            System.err.println("Usage: cert file, cert key file, port number [www dir]");
             System.exit(1);
         }
         File certificateFile = new File(args[0]);
@@ -84,14 +84,23 @@ public class Server {
         }
         int port = Integer.parseInt(args[2]);
 
-        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), List.of(Version.getDefault())).start();
+        File wwwDir = null;
+        if (args.length == 4) {
+            wwwDir = new File(args[3]);
+            if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
+                System.err.println("Cannot read www dir '" + wwwDir + "'");
+                System.exit(1);
+            }
+        }
+
+        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), List.of(Version.getDefault()), wwwDir).start();
     }
 
-    public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions) throws Exception {
-        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions);
+    public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, File dir) throws Exception {
+        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, dir);
     }
 
-    public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions) throws Exception {
+    public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, File dir) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
 
@@ -112,7 +121,7 @@ public class Server {
                 applicationProtocolRegistry, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
-        registerApplicationLayerProtocols();
+        registerApplicationLayerProtocols(dir);
 
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, MAX_DATAGRAM_SIZE, log, exception -> System.exit(9));
@@ -124,8 +133,8 @@ public class Server {
         new Thread(this::receiveLoop, "server receive loop").start();
     }
 
-    private void registerApplicationLayerProtocols() {
-        Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory();
+    private void registerApplicationLayerProtocols(File wwwDir) {
+        Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory(wwwDir);
         supportedVersions.forEach(version -> {
             String protocol = "hq";
             String versionSuffix = version.getDraftVersion();
