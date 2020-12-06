@@ -33,8 +33,6 @@ public interface QuicConnection {
 
     void setMaxAllowedUnidirectionalStreams(int max);
 
-    void setServerStreamCallback(Consumer<QuicStream> streamProcessor);
-
     void setDefaultStreamReceiveBufferSize(long size);
 
     QuicStream createStream(boolean bidirectional);

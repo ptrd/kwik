@@ -23,6 +23,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsProtocolException;
@@ -393,4 +394,26 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     public byte[] getOriginalDestinationConnectionId() {
         return originalDcid;
     }
+
+
+    @Override
+    public void setMaxAllowedBidirectionalStreams(int max) {
+
+    }
+
+    @Override
+    public void setMaxAllowedUnidirectionalStreams(int max) {
+
+    }
+
+    @Override
+    public void setDefaultStreamReceiveBufferSize(long size) {
+
+    }
+
+    @Override
+    public QuicStream createStream(boolean bidirectional) {
+        return null;
+    }
+
 }

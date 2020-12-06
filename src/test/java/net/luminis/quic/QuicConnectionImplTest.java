@@ -4,6 +4,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -258,6 +259,23 @@ class QuicConnectionImplTest {
         @Override
         public byte[] getDestinationConnectionId() {
             return new byte[0];
+        }
+
+        @Override
+        public void setMaxAllowedBidirectionalStreams(int max) {
+        }
+
+        @Override
+        public void setMaxAllowedUnidirectionalStreams(int max) {
+        }
+
+        @Override
+        public void setDefaultStreamReceiveBufferSize(long size) {
+        }
+
+        @Override
+        public QuicStream createStream(boolean bidirectional) {
+            return null;
         }
     }
 }

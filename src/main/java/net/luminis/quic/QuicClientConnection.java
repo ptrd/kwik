@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.function.Consumer;
 
 
 public interface QuicClientConnection extends QuicConnection {
@@ -23,6 +24,8 @@ public interface QuicClientConnection extends QuicConnection {
     InetSocketAddress getLocalAddress();
 
     List<X509Certificate> getServerCertificateChain();
+
+    void setServerStreamCallback(Consumer<QuicStream> streamProcessor);
 
     class StreamEarlyData {
         byte[] data;

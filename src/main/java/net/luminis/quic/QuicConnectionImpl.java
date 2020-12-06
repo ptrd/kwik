@@ -49,7 +49,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
+public abstract class QuicConnectionImpl implements QuicConnection, FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
 
     public enum Status {
         Idle,
@@ -466,6 +466,16 @@ public abstract class QuicConnectionImpl implements FrameProcessorRegistry<AckFr
         //   1252 bytes for IPv4."
         // As it is not know (yet) whether running over IP4 or IP6, take the smallest of the two:
         return 1232;
+    }
+
+    @Override
+    public void close() {
+        immediateClose(App);
+    }
+
+    @Override
+    public Statistics getStats() {
+        return new Statistics(getSender().getStatistics());
     }
 
     protected abstract SenderImpl getSender();

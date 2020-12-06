@@ -907,10 +907,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return sourceConnectionIds.getConnectionIdlength();
     }
 
-    public Statistics getStats() {
-        return new Statistics(sender.getStatistics());
-    }
-
     public byte[] getSourceConnectionId() {
         return sourceConnectionIds.getCurrent();
     }
