@@ -23,7 +23,9 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsProtocolException;
@@ -57,6 +59,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final byte[] originalDcid;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<byte[]> closeCallback;
+    private final StreamManager streamManager;
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
 
@@ -83,6 +86,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
+
+        streamManager = new StreamManager(this, Role.Server, log);
     }
 
     @Override
@@ -111,7 +116,10 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public int getMaxShortHeaderPacketOverhead() {
-        return 0;
+        return 1  // flag byte
+                + dcid.length
+                + 4  // max packet number size, in practice this will be mostly 1
+                + 16; // encryption overhead
     }
 
     @Override
@@ -325,7 +333,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-
+        streamManager.process(streamFrame);
     }
 
     @Override
@@ -359,6 +367,10 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
+
+        streamManager.setFlowController(new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
+                transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),
+                transportParameters.getInitialMaxStreamDataUni(), log));
     }
 
     private class TlsMessageSender implements ServerMessageSender {
@@ -414,7 +426,12 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public QuicStream createStream(boolean bidirectional) {
-        return null;
+        return streamManager.createStream(bidirectional);
+    }
+
+    @Override
+    public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer) {
+        streamManager.setPeerInitiatedStreamCallback(streamConsumer);
     }
 
 }

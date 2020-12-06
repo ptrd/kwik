@@ -277,5 +277,9 @@ class QuicConnectionImplTest {
         public QuicStream createStream(boolean bidirectional) {
             return null;
         }
+
+        @Override
+        public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer) {
+        }
     }
 }

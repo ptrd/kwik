@@ -25,8 +25,6 @@ public interface QuicClientConnection extends QuicConnection {
 
     List<X509Certificate> getServerCertificateChain();
 
-    void setServerStreamCallback(Consumer<QuicStream> streamProcessor);
-
     class StreamEarlyData {
         byte[] data;
         boolean closeOutput;

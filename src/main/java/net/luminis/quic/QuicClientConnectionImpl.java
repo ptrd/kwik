@@ -923,7 +923,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return destConnectionIds.getAll();
     }
 
-    public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
+    @Override
+    public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamProcessor) {
         streamManager.setPeerInitiatedStreamCallback(streamProcessor);
     }
 

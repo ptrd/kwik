@@ -37,6 +37,8 @@ public interface QuicConnection {
 
     QuicStream createStream(boolean bidirectional);
 
+    void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
+
     void close();
 
     Statistics getStats();
