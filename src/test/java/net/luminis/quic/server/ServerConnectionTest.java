@@ -1,6 +1,5 @@
 package net.luminis.quic.server;
 
-import jdk.jshell.spi.ExecutionControlProvider;
 import net.luminis.quic.*;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.FrameProcessor3;
@@ -8,7 +7,6 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
@@ -21,13 +19,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import java.awt.image.ImageProducer;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -35,10 +31,8 @@ import java.net.InetSocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -194,10 +188,14 @@ class ServerConnectionTest {
     }
 
     private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory) throws Exception {
+        ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
+        applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
+
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
-                tlsServerEngineFactory, 100, cid -> {}, mock(Logger.class));
+                tlsServerEngineFactory, applicationProtocolRegistry, 100, cid -> {}, mock(Logger.class));
+
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         return connection;

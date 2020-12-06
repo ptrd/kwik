@@ -105,6 +105,15 @@ public enum Version {
         return this.equals(reserved_1);
     }
 
+    public String getDraftVersion() {
+        if (this.name().startsWith("IETF_draft_")) {
+            return this.name().substring("IETF_draft_".length());
+        }
+        else {
+            return "";
+        }
+    }
+
     private boolean isIetfDraft(Version version) {
         return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_32.versionId;
     }

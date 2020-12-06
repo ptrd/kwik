@@ -100,4 +100,9 @@ class VersionTest {
         assertThat(version).isEqualTo(Version.IETF_draft_29);
     }
 
+    @Test
+    void testGetDraftSuffix() {
+        assertThat(Version.IETF_draft_29.getDraftVersion()).isEqualTo("29");
+    }
+
 }

@@ -26,6 +26,7 @@ import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
 
@@ -39,7 +40,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,6 +64,7 @@ public class Server {
     private Map<ConnectionSource, ServerConnection> currentConnections;
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
+    private ApplicationProtocolRegistry applicationProtocolRegistry;
 
 
     public static void main(String[] args) throws Exception {
@@ -106,9 +107,13 @@ public class Server {
         log.logInfo(true);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
-        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory, initalRtt, this::removeConnection, log);
+        applicationProtocolRegistry = new ApplicationProtocolRegistry();
+        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
+                applicationProtocolRegistry, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
+        registerApplicationLayerProtocols();
+
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, MAX_DATAGRAM_SIZE, log, exception -> System.exit(9));
     }
@@ -117,6 +122,19 @@ public class Server {
         receiver.start();
 
         new Thread(this::receiveLoop, "server receive loop").start();
+    }
+
+    private void registerApplicationLayerProtocols() {
+        Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory();
+        supportedVersions.forEach(version -> {
+            String protocol = "hq";
+            String versionSuffix = version.getDraftVersion();
+            if (! versionSuffix.isBlank()) {
+                protocol += "-" + versionSuffix;
+            }
+            applicationProtocolRegistry.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
+        });
+
     }
 
     private void receiveLoop() {

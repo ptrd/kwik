@@ -51,21 +51,23 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final byte[] scid;
     private final byte[] dcid;
     private final GlobalAckGenerator ackGenerator;
-    private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
     private final List<String> supportedApplicationLayerProtocols;
     private final byte[] originalDcid;
+    private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<byte[]> closeCallback;
     private volatile boolean firstInitialPacketProcessed = false;
-
+    private volatile String negotiatedApplicationProtocol;
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
-                               Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
+                               ApplicationProtocolRegistry applicationProtocolRegistry, Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, log);
         this.scid = scid;
         this.dcid = dcid;
         this.originalDcid = originalDcid;
+        this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
 
         String supportedProtocol = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);   // Assuming draft version with 2 digits ;-)
@@ -154,6 +156,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
         connectionState = Connected;
+
+        applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
     }
 
     private void sendHandshakeDone(QuicFrame frame) {
@@ -176,12 +180,15 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         }
         else {
             // "When using ALPN, endpoints MUST immediately close a connection (...) if an application protocol is not negotiated."
-            Optional<String> applicationProtocol = selectSupportedApplicationProtocol(((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols());
-            applicationProtocol.map(protocol -> {
-                // Add negotiated protocol to TLS response (Encrypted Extensions message)
-                tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
-                return protocol;
-            }).orElseThrow(() -> new NoApplicationProtocolAlert());
+            List<String> requestedProtocols = ((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols();
+            Optional<String> applicationProtocol = applicationProtocolRegistry.selectSupportedApplicationProtocol(requestedProtocols);
+            applicationProtocol
+                    .map(protocol -> {
+                        // Add negotiated protocol to TLS response (Encrypted Extensions message)
+                        tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
+                        return protocol; })
+                    .map(selectedProtocol -> negotiatedApplicationProtocol = selectedProtocol)
+                    .orElseThrow(() -> new NoApplicationProtocolAlert());
         }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
@@ -325,12 +332,6 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     protected void terminate() {
         super.terminate();
         closeCallback.accept(scid);
-    }
-
-    private Optional<String> selectSupportedApplicationProtocol(List<String> protocols) {
-        Set<String> intersection = new HashSet<String>(supportedApplicationLayerProtocols);
-        intersection.retainAll(protocols);
-        return intersection.stream().findFirst();
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
