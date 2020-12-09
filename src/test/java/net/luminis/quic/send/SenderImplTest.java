@@ -23,6 +23,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,13 +49,13 @@ class SenderImplTest extends AbstractSenderTest {
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
-        when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, mock(Logger.class)));
+        when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
 
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, mock(Logger.class));
+        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
         sender.start(connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);

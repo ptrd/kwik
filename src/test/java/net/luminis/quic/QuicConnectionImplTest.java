@@ -2,6 +2,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.QuicStream;
@@ -130,7 +131,7 @@ class QuicConnectionImplTest {
         public boolean terminated;
 
         NonAbstractQuicConnection() {
-            super(Version.getDefault(), Role.Server, null, mock(Logger.class));
+            super(Version.getDefault(), Role.Server, null, new NullLogger());
             idleTimer = new IdleTimer(this, log);
         }
 

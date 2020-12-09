@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
@@ -66,7 +67,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
                                ApplicationProtocolRegistry applicationProtocolRegistry, Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
-        super(quicVersion, Role.Server, null, log);
+        super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.scid = scid;
         this.dcid = dcid;
         this.originalDcid = originalDcid;
@@ -78,7 +79,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
         idleTimer.setPtoSupplier(sender::getPto);
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -88,6 +89,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         sender.start(connectionSecrets);
 
         streamManager = new StreamManager(this, Role.Server, log);
+
+        this.log.getQLog().emitConnectionCreatedEvent();
     }
 
     @Override
@@ -339,6 +342,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     @Override
     protected void terminate() {
         super.terminate();
+        log.getQLog().emitConnectionTerminatedEvent();
         closeCallback.accept(scid);
     }
 
