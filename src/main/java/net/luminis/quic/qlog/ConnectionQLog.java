@@ -23,13 +23,17 @@ import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
+import javax.json.Json;
+import javax.json.stream.JsonGenerator;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.stream.Collectors;
+import java.util.Map;
 
+import static java.util.Collections.emptyMap;
+import static javax.json.stream.JsonGenerator.PRETTY_PRINTING;
 import static net.luminis.quic.qlog.QLogEvent.Type.PacketReceived;
 
 
@@ -41,12 +45,17 @@ public class ConnectionQLog {
 
     private final byte[] cid;
     private Instant startTime;
-    private PrintWriter printWriter;
+    private final JsonGenerator jsonGenerator;
 
     public ConnectionQLog(byte[] cid) throws IOException {
         this.cid = cid;
         this.startTime = Instant.now();
-        printWriter = new PrintWriter(new FileOutputStream(format(cid) + ".qlog"));
+        // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
+        OutputStream output = new FileOutputStream(format(cid) + ".qlog");
+
+        boolean prettyPrinting = false;
+        Map<String, ?> configuration = prettyPrinting ? Map.of(PRETTY_PRINTING, "whatever") : emptyMap();
+        jsonGenerator = Json.createGeneratorFactory(configuration).createGenerator(output);
         writeHeader();
     }
 
@@ -67,32 +76,52 @@ public class ConnectionQLog {
     }
 
     private void writeHeader() {
-        printWriter.println("{\"qlog_version\": \"draft-01\", "
-                + "\"traces\": [{\"vantage_point\": { \"name\": \"kwik\", \"type\": \"server\" }, \"configuration\": {\"time_units\": \"ms\"}, \"common_fields\": {\"ODCID\": \"" + ByteUtils.bytesToHex(cid)
-                + "\", \"reference_time\": \"" + startTime.toEpochMilli() + "\"}, \"event_fields\": [\"relative_time\", \"category\", \"event_type\", \"data\"], \"events\": [");
+        jsonGenerator.writeStartObject()
+                .write("qlog_version", "draft-01")
+                .writeStartArray("traces")
+                .writeStartObject()
+                .writeStartObject("vantage_point")
+                .write("name", "kwik")
+                .write("type", "server")
+                .writeEnd()
+                .writeStartObject("configuration")
+                .write("time_units", "ms")
+                .writeEnd()
+                .writeStartObject("common_fields")
+                .write("ODCID", ByteUtils.bytesToHex(cid))
+                .write("reference_time", startTime.toEpochMilli())
+                .writeEnd()
+                .writeStartArray("event_fields")
+                .write("relative_time")
+                .write("category")
+                .write("event_type")
+                .write("data")
+                .writeEnd()
+                .writeStartArray("events");
     }
 
     private void writePacketEvent(QLogEvent event) {
-        long relativeTime = Duration.between(startTime, event.getTime()).toMillis();
         QuicPacket packet = event.getPacket();
-            if (!first) {
-                printWriter.println(",");
-            }
-            else {
-                first = false;
-            }
+        jsonGenerator.writeStartArray()
+                .write(Duration.between(startTime, event.getTime()).toMillis())
+                .write("transport")
+                .write(event.getType() == PacketReceived? "packet_received": "packet_sent")
+                .writeStartObject()
+                .write("packet_type", formatPacketType(packet))
+                .writeStartObject("header")
+                .write("packet_number", packet.getPacketNumber())
+                .write("packet_size", packet.getSize())
+                .write("dcid", format(packet.getDestinationConnectionId()))
+                .writeEnd();
 
-            printWriter.println("[\"" + relativeTime + "\", \"transport\", \""
-                    + (event.getType() == PacketReceived? "packet_received": "packet_sent") + "\", "
-                    + "{\"packet_type\": \"" + formatPacketType(packet)  + "\", "
-                    + "\"header\": {\"packet_number\": \"" + packet.getPacketNumber() + "\", \"packet_size\": " + packet.getSize()
-                    + ", \"dcid\": \"" + format(packet.getDestinationConnectionId()) + "\""
-                    + (packet instanceof LongHeaderPacket? ", \"scid\": \"" + format(((LongHeaderPacket) packet).getSourceConnectionId()) + "\"": "")
-                    + "}, "
-                    + "\"frames\": [");
-
-            printWriter.println(packet.getFrames().stream().map(f -> formatFrame(f)).collect(Collectors.joining(",")));
-            printWriter.println("]}]");
+        if (packet instanceof LongHeaderPacket) {
+            jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId()));
+        }
+        jsonGenerator.writeStartArray("frames");
+        packet.getFrames().stream().forEach(frame -> jsonGenerator.writeStartObject().write("frame_type", formatFrame(frame)).writeEnd());
+        jsonGenerator.writeEnd()
+                .writeEnd()
+                .writeEnd();
     }
 
     private String formatPacketType(QuicPacket packet) {
@@ -103,22 +132,21 @@ public class ConnectionQLog {
             return "1RTT";
         }
     }
+
     private String formatFrame(QuicFrame f) {
-        return "{\"frame_type\": \"" +
-                f.getClass().getSimpleName().replace("Frame", "").toLowerCase()
-                + "\" }";
+        return f.getClass().getSimpleName().replace("Frame", "").toLowerCase();
     }
 
     private String format(byte[] data) {
         return ByteUtils.bytesToHex(data);
     }
 
-    boolean first = true;
-
     private void writeFooter() {
-        printWriter.println("]}]}");
-        printWriter.flush();
-        printWriter.close();
+        jsonGenerator.writeEnd()
+                .writeEnd()
+                .writeEnd()
+                .writeEnd();
+        jsonGenerator.close();
         System.out.println("QLog: done with " + format(cid) + ".qlog");
     }
 
