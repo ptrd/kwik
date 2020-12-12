@@ -63,6 +63,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final int initialMaxStreamData;
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
+    private volatile FlowControl flowController;
+
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
@@ -305,17 +307,16 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
-
+        flowController.process(maxDataFrame);
     }
 
     @Override
     public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-
+        flowController.process(maxStreamDataFrame);
     }
 
     @Override
     public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
@@ -370,9 +371,10 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
 
-        streamManager.setFlowController(new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
+        flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),
-                transportParameters.getInitialMaxStreamDataUni(), log));
+                transportParameters.getInitialMaxStreamDataUni(), log);
+        streamManager.setFlowController(flowController);
     }
 
     private class TlsMessageSender implements ServerMessageSender {
