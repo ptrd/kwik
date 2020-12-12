@@ -60,6 +60,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<byte[]> closeCallback;
     private final StreamManager streamManager;
+    private final int initialMaxStreamData;
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
 
@@ -87,6 +88,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
+        initialMaxStreamData = 1_000_000;
         streamManager = new StreamManager(this, Role.Server, log);
     }
 
@@ -111,7 +113,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public long getInitialMaxStreamData() {
-        return 0;
+        return initialMaxStreamData;
     }
 
     @Override
@@ -216,7 +218,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters(30, 1_000_000, 3, 3);
+        TransportParameters serverTransportParams = new TransportParameters(30, initialMaxStreamData, 3, 3);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
