@@ -55,7 +55,6 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
-    private final List<String> supportedApplicationLayerProtocols;
     private final byte[] originalDcid;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<byte[]> closeCallback;
@@ -76,8 +75,6 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
 
-        String supportedProtocol = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);   // Assuming draft version with 2 digits ;-)
-        supportedApplicationLayerProtocols = List.of(supportedProtocol);
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
 
         idleTimer = new IdleTimer(this, log);
