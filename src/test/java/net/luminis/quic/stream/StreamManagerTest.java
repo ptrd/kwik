@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.PnSpace;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Role;
 import net.luminis.quic.frame.MaxStreamsFrame;
@@ -27,7 +26,6 @@ import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -116,7 +114,7 @@ class StreamManagerTest {
         QuicStream stream1 = streamManager.createStream(true);
 
         // When
-        streamManager.process(new MaxStreamsFrame(8, true), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(8, true));
         QuicStream stream2 = streamManager.createStream(true);
 
         // Then
@@ -131,7 +129,7 @@ class StreamManagerTest {
         QuicStream stream1 = streamManager.createStream(false);
 
         // When
-        streamManager.process(new MaxStreamsFrame(8, false), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(8, false));
         QuicStream stream2 = streamManager.createStream(false);
 
         // Then
@@ -143,10 +141,10 @@ class StreamManagerTest {
     void maxBidiStreamsCanNeverDecrease() {
         // Given
         streamManager.setInitialMaxStreamsBidi(1);
-        streamManager.process(new MaxStreamsFrame(8, true), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(8, true));
 
         // When
-        streamManager.process(new MaxStreamsFrame(5, true), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(5, true));
 
         // Then
         assertThat(streamManager.getMaxBidirectionalStreams()).isGreaterThanOrEqualTo(8);
@@ -156,10 +154,10 @@ class StreamManagerTest {
     void maxUniStreamsCanNeverDecrease() {
         // Given
         streamManager.setInitialMaxStreamsUni(1);
-        streamManager.process(new MaxStreamsFrame(8, false), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(8, false));
 
         // When
-        streamManager.process(new MaxStreamsFrame(5, false), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(5, false));
 
         // Then
         assertThat(streamManager.getMaxUnirectionalStreams()).isGreaterThanOrEqualTo(8);
@@ -205,7 +203,7 @@ class StreamManagerTest {
         assertThat(streamReference.get()).isNull();  // This should more or less prove the thread is blocking
 
         // When
-        streamManager.process(new MaxStreamsFrame(2, true), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(2, true));
         Thread.sleep(50);  // Give parallel thread a little time to finish
         // Then
         assertThat(streamReference.get()).isNotNull();
@@ -229,7 +227,7 @@ class StreamManagerTest {
         assertThat(streamReference.get()).isNull();  // This should more or less prove the thread is blocking
 
         // When
-        streamManager.process(new MaxStreamsFrame(2, false), PnSpace.App, Instant.now());
+        streamManager.process(new MaxStreamsFrame(2, false));
         Thread.sleep(50);  // Give parallel thread a little time to finish
         // Then
         assertThat(streamReference.get()).isNotNull();

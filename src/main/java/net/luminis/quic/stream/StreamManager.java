@@ -23,7 +23,6 @@ import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -155,7 +154,7 @@ public class StreamManager {
         return streamId % 2 == (role == Role.Client? 1 : 0);
     }
 
-    public synchronized void process(MaxStreamsFrame frame, PnSpace pnSpace, Instant timeReceived) {
+    public synchronized void process(MaxStreamsFrame frame) {
         if (frame.isAppliesToBidirectional()) {
             if (frame.getMaxStreams() > maxStreamsBidi) {
                 int increment = (int) (frame.getMaxStreams() - maxStreamsBidi);

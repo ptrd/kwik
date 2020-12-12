@@ -526,7 +526,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(maxStreamsFrame, packet.getPnSpace(), timeReceived);
+        streamManager.process(maxStreamsFrame);
     }
 
     @Override
