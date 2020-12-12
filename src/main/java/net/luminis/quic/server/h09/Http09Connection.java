@@ -23,11 +23,14 @@ import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Http09Connection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
+
+    private static AtomicInteger threadCount = new AtomicInteger();
 
     private File wwwDir;
 
@@ -38,7 +41,9 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
 
     @Override
     public void accept(QuicStream quicStream) {
-        new Thread(() -> handleRequest(quicStream)).start();
+        Thread thread = new Thread(() -> handleRequest(quicStream));
+        thread.setName("http-" + threadCount.getAndIncrement());
+        thread.start();
     }
 
     void handleRequest(QuicStream quicStream) {
