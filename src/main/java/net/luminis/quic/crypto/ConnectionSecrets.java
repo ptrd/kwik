@@ -38,17 +38,16 @@ public class ConnectionSecrets {
 
     private TlsConstants.CipherSuite selectedCipherSuite;
 
-    // https://tools.ietf.org/html/draft-ietf-quic-tls-23#section-5.2
-    public static final byte[] STATIC_SALT_DRAFT_23 = new byte[] {
-            (byte) 0xc3, (byte) 0xee, (byte) 0xf7, (byte) 0x12, (byte) 0xc7, (byte) 0x2e, (byte) 0xbb, (byte) 0x5a,
-            (byte) 0x11, (byte) 0xa7, (byte) 0xd2, (byte) 0x43, (byte) 0x2b, (byte) 0xb4, (byte) 0x63, (byte) 0x65,
-            (byte) 0xbe, (byte) 0xf9, (byte) 0xf5, (byte) 0x02 };
-
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.2
     public static final byte[] STATIC_SALT_DRAFT_29 = new byte[] {
             (byte) 0xaf, (byte) 0xbf, (byte) 0xec, (byte) 0x28, (byte) 0x99, (byte) 0x93, (byte) 0xd2, (byte) 0x4c,
             (byte) 0x9e, (byte) 0x97, (byte) 0x86, (byte) 0xf1, (byte) 0x9c, (byte) 0x61, (byte) 0x11, (byte) 0xe0,
             (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
+
+    public static final byte[] STATIC_SALT_V1 = new byte[] {
+            (byte) 0x38, (byte) 0x76, (byte) 0x2c, (byte) 0xf7, (byte) 0xf5, (byte) 0x59, (byte) 0x34, (byte) 0xb3,
+            (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad,
+            (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a };
 
     private final Version quicVersion;
     private final Role ownRole;
@@ -88,7 +87,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion.before(Version.IETF_draft_29)? STATIC_SALT_DRAFT_23: STATIC_SALT_DRAFT_29;
+        byte[] initialSalt = quicVersion == Version.QUIC_version_1? STATIC_SALT_V1: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);

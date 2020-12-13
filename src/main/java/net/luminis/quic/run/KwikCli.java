@@ -60,6 +60,7 @@ public class KwikCli {
         cmdLineOptions.addOption("30", "use Quic version IETF_draft_30");
         cmdLineOptions.addOption("31", "use Quic version IETF_draft_31");
         cmdLineOptions.addOption("32", "use Quic version IETF_draft_32");
+        cmdLineOptions.addOption("v1", "use Quic version 1");
         cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
@@ -213,7 +214,10 @@ public class KwikCli {
 
         Version quicVersion = Version.getDefault();
 
-        if (cmd.hasOption("32")) {
+        if (cmd.hasOption("v1")) {
+            quicVersion = Version.QUIC_version_1;
+        }
+        else if (cmd.hasOption("32")) {
             quicVersion = Version.IETF_draft_32;
         }
         else if (cmd.hasOption("31")) {

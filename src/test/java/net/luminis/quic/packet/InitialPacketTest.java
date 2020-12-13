@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
+import static net.luminis.quic.Version.IETF_draft_29;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
@@ -44,27 +45,27 @@ class InitialPacketTest {
 
     @Test
     void parseValidInitial() throws Exception {
-        // Sample data: a Server Hello in a CryptoFrame and an AckFrame
-        String data = "c8ff00001b08636130b594bd05140866f9c144c8450e3f00409794dd70c9438b56fc420920469d1eb0c76e7e69ce3d2e19811936a8804e94d6176c62903e25c422291b4427d00e5e169b10a9997513814a229b66fcba1d36385be2002d82ba9c97af81286ab3135becb6607a8a231fb1de77be0e55776d0c9c92dc1cb2a447b2d67bb2c528f7045816ec4c251e3fddc855d2feb3c22c1b03b8826dc94e9308da90653e905eb6be3408d3335408f32307c2";
+        // Sample data: just an AckFrame
+        String data = "c1ff00001d08dcd29c5480f39a24000016c5c0fd62ee66cef81ed15b2867db463f62c7ce62e9de";
 
-        InitialPacket initialPacket = new InitialPacket(Version.IETF_draft_27);
+        InitialPacket initialPacket = new InitialPacket(Version.IETF_draft_29);
 
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.IETF_draft_27, Role.Client, null, logger);
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.IETF_draft_29, Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
         Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
         initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0);
 
         assertThat(initialPacket.getToken()).isNullOrEmpty();
-        assertThat(initialPacket.getFrames()).hasOnlyElementsOfTypes(CryptoFrame.class, AckFrame.class);
+        assertThat(initialPacket.getFrames()).hasOnlyElementsOfTypes(AckFrame.class);
     }
 
     @Test
     void parseInitialWithTwoByteTokenLength() throws Exception {
-        // Sample data: a Server Hello in a CryptoFrame and an AckFrame; the token length is artificially extended, so the packet won't decrypt
-        String data = "c8ff00001b08636130b594bd05140866f9c144c8450e3f" + "4000" + "409794dd70c9438b56fc420920469d1eb0c76e7e69ce3d2e19811936a8804e94d6176c62903e25c422291b4427d00e5e169b10a9997513814a229b66fcba1d36385be2002d82ba9c97af81286ab3135becb6607a8a231fb1de77be0e55776d0c9c92dc1cb2a447b2d67bb2c528f7045816ec4c251e3fddc855d2feb3c22c1b03b8826dc94e9308da90653e905eb6be3408d3335408f32307c2";
+        // Sample data: just an AckFrame; the token length is artificially extended, so the packet won't decrypt
+        String data = "c1ff00001d08dcd29c5480f39a2400" + "4000" + "16c5c0fd62ee66cef81ed15b2867db463f62c7ce62e9de";
 
-        InitialPacket initialPacket = new InitialPacket(Version.IETF_draft_27);
+        InitialPacket initialPacket = new InitialPacket(Version.IETF_draft_29);
 
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
@@ -80,12 +81,12 @@ class InitialPacketTest {
 
     @Test
     void parseInitialWithInvalidTokenLength() throws Exception {
-        // Sample data: a Server Hello in a CryptoFrame and an AckFrame
-        String data = "c8ff00001b08636130b594bd05140866f9c144c8450e3f" + "40df" + "409794dd70c9438b56fc420920469d1eb0c76e7e69ce3d2e19811936a8804e94d6176c62903e25c422291b4427d00e5e169b10a9997513814a229b66fcba1d36385be2002d82ba9c97af81286ab3135becb6607a8a231fb1de77be0e55776d0c9c92dc1cb2a447b2d67bb2c528f7045816ec4c251e3fddc855d2feb3c22c1b03b8826dc94e9308da90653e905eb6be3408d3335408f32307c2";
+        // Sample data: just an AckFrame; the token length is artificially extended, so the packet won't decrypt
+        String data = "c1ff00001d08dcd29c5480f39a2400" + "40df" + "16c5c0fd62ee66cef81ed15b2867db463f62c7ce62e9de";
 
         InitialPacket initialPacket = new InitialPacket(Version.getDefault());
 
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, logger);
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.IETF_draft_29, Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
         Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
@@ -98,11 +99,11 @@ class InitialPacketTest {
     @Test
     void decrypt() throws Exception {
         String data = "ccff00001d08375e1a9f9d7e49bd14e8ebf718bfe9d10f558ae55ed56b1ef95f013d8c0041210b832235e803ddc629f3e614d6168361e7b1f48b0ec251ba4f1039c4d1c3d397733eab73515b95f76274b1240ba93f8858ac365a61d41894884f15c87e74a9e87c149f48fa6b07f0d2a52e7fef829ea8a35815771a70db0b11458dfc0f56c9b89a3cd205b52898b64a92e9a2880a571d2af24d978b2110d74a6f8a993442073ece74c626755df1165cd1fc89cca4f0bdfa965eec62557145a63ee0a05fe372e2fcaba92c25c9de1dbfdcad3e29fd19c39fcab47fbeb8588411566a047de41b5a304ebd0e79bd803288127d6e7490fdd31fd6aa04a01d91875d0fd0126e1ddb4b2ccff51fe0dc65a711147fe6450c751e5a66cf2ed2bebccc9986c8797f1179b34383c934cadaa2a035c1eca267d050fdecc3b9f5af46a677f5fb130c10bb757ba4";
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(IETF_draft_29, Role.Client, null, mock(Logger.class));
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("1bc4ad22be1868b2"));
         Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
 
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault());
+        InitialPacket initialPacket = new InitialPacket(IETF_draft_29);
         initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0);
 
         assertThat(initialPacket.packetNumber).isEqualTo(321);
@@ -111,4 +112,15 @@ class InitialPacketTest {
                 .hasAtLeastOneElementOfType(CryptoFrame.class);
     }
 
+    // Used to generate bytes for a valid initial packet, used in the parse packet tests above.
+    void generateValidInitial() {
+        InitialPacket initialPacket = new InitialPacket(IETF_draft_29, new byte[0], ByteUtils.hexToBytes("dcd29c5480f39a24"), new byte[0], new AckFrame(0));
+
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.IETF_draft_29, Role.Server, null, logger);
+        connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
+
+        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
+        byte[] bytes = initialPacket.generatePacketBytes(0L, keys);
+        System.out.println(ByteUtils.bytesToHex(bytes));
+    }
 }
