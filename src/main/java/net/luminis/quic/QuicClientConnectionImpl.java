@@ -1079,7 +1079,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
-            if (! quicVersion.atLeast(Version.IETF_draft_23)) {
+            if (! quicVersion.atLeast(Version.IETF_draft_29)) {
                 throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
             }
             if (host == null) {
