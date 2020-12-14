@@ -137,7 +137,7 @@ public class VariableLengthInteger {
         return value;
     }
 
-    public static int bytesNeeded(int value) {
+    public static int bytesNeeded(long value) {
         if (value <= 63) {
             return 1;
         }

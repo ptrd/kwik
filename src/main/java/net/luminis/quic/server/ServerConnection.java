@@ -60,6 +60,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final Consumer<byte[]> closeCallback;
     private final StreamManager streamManager;
     private final int initialMaxStreamData;
+    private final int maxOpenStreamsUni;
+    private final int maxOpenStreamsBidi;
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
@@ -88,7 +90,9 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         sender.start(connectionSecrets);
 
         initialMaxStreamData = 1_000_000;
-        streamManager = new StreamManager(this, Role.Server, log);
+        maxOpenStreamsUni = 10;
+        maxOpenStreamsBidi = 100;
+        streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi);
     }
 
     @Override
@@ -217,7 +221,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters(30, initialMaxStreamData, 3, 3);
+        TransportParameters serverTransportParams = new TransportParameters(30, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -333,7 +337,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(streamFrame);
+        try {
+            streamManager.process(streamFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override

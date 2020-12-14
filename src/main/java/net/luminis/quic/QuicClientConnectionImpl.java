@@ -109,7 +109,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         registerProcessor(ackGenerator);
 
         receiver = new Receiver(socket, 1500, log, this::abortConnection);
-        streamManager = new StreamManager(this, Role.Client, log);
+        streamManager = new StreamManager(this, Role.Client, log, 10, 10);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
 
@@ -547,7 +547,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(streamFrame);
+        try {
+            streamManager.process(streamFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override

@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Role;
+import net.luminis.quic.TransportError;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
@@ -31,18 +32,24 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class StreamManagerTest {
 
     private StreamManager streamManager;
+    private QuicConnectionImpl quicConnection;
 
     @BeforeEach
     void init() {
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Client, mock(Logger.class));
+        quicConnection = mock(QuicConnectionImpl.class);
+        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10);
     }
 
     @Test
@@ -250,7 +257,7 @@ class StreamManagerTest {
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class));
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
         streamManager.setInitialMaxStreamsUni(1);
 
         // When
@@ -262,9 +269,9 @@ class StreamManagerTest {
     }
 
     @Test
-    void inServerRoleClientInitiatedStreamCausesCallback() {
+    void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class));
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
         streamManager.setPeerInitiatedStreamCallback(stream -> openedStreams.add(stream));
@@ -275,5 +282,68 @@ class StreamManagerTest {
         // Then
         assertThat(openedStreams).hasSize(1);
         assertThat(openedStreams.get(0).getStreamId()).isEqualTo(0);
+    }
+
+    @Test
+    void whenStreamLimitIsReachedCreateStreamLeadsToTransportErrorException() throws Exception {
+        // Given
+        int i;
+        for (i = 0; i < 10; i++) {
+            streamManager.process(new StreamFrame(i * 4 + 1, new byte[0], false));
+        }
+
+        int next = i;
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(next * 4 + 1, new byte[0], false)))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void whenStreamLimitIsReachedImplicitlyCreateStreamLeadsToTransportErrorException() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(9 * 4 + 1, new byte[0], false));
+
+        int next = 10;
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(next * 4 + 1, new byte[0], false)))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void whenStreamIsClosedOneMoreCanBeOpened() throws Exception {
+        // Given
+        int streamId = 9 * 4 + 1;
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+
+        // When
+        StreamFrame closeFrame = new StreamFrame(streamId, new byte[0], true);
+        streamManager.process(closeFrame);
+
+        // Then
+        int nextStreamId = 10 * 4 + 1;
+        // Assert that the next line does not throw
+        streamManager.process(new StreamFrame(nextStreamId, new byte[0], false));
+        // And
+        verify(quicConnection).send(argThat(frame -> frame instanceof MaxStreamsFrame && ((MaxStreamsFrame) frame).getMaxStreams() == 11), any(Consumer.class));
+    }
+
+    @Test
+    void whenStreamIsClosedInSameFrameOneMoreCanBeOpened() throws Exception {
+        // Given
+        int streamId = 9 * 4 + 1;
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], true));
+
+        // Then
+        int nextStreamId = 10 * 4 + 1;
+        // Assert that the next line does not throw
+        streamManager.process(new StreamFrame(nextStreamId, new byte[0], false));
+        // And
+        verify(quicConnection).send(argThat(frame -> frame instanceof MaxStreamsFrame && ((MaxStreamsFrame) frame).getMaxStreams() == 11), any(Consumer.class));
     }
 }
