@@ -18,14 +18,17 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Role;
 import net.luminis.quic.TransportError;
 import net.luminis.quic.frame.MaxStreamsFrame;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,11 +36,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -328,7 +331,7 @@ class StreamManagerTest {
         // Assert that the next line does not throw
         streamManager.process(new StreamFrame(nextStreamId, new byte[0], false));
         // And
-        verify(quicConnection).send(argThat(frame -> frame instanceof MaxStreamsFrame && ((MaxStreamsFrame) frame).getMaxStreams() == 11), any(Consumer.class));
+        verifyMaxStreamsFrameIsToBeSent(11);
     }
 
     @Test
@@ -344,6 +347,14 @@ class StreamManagerTest {
         // Assert that the next line does not throw
         streamManager.process(new StreamFrame(nextStreamId, new byte[0], false));
         // And
-        verify(quicConnection).send(argThat(frame -> frame instanceof MaxStreamsFrame && ((MaxStreamsFrame) frame).getMaxStreams() == 11), any(Consumer.class));
+        verifyMaxStreamsFrameIsToBeSent(11);
+    }
+
+    void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(quicConnection).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        QuicFrame frame = captor.getValue().apply(9);
+        assertThat(frame).isInstanceOf(MaxStreamsFrame.class);
+        assertThat(((MaxStreamsFrame) frame).getMaxStreams()).isEqualTo(expectedMaxStreams);
     }
 }

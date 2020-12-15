@@ -40,6 +40,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.quic.EncryptionLevel.Initial;
@@ -128,6 +129,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (flush) {
             getSender().flush();
         }
+    }
+
+    public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
+        getSender().send(frameSupplier, minimumSize, level, lostCallback);
     }
 
     public void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {

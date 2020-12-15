@@ -200,26 +200,40 @@ public class StreamManager {
         synchronized (this) {
             if (isUni(streamId)) {
                 maxOpenStreamIdUni += 4;
-                transmitMaxStreams(new MaxStreamsFrame(-1, false));
-            } else {
+                connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+            }
+            else {
                 maxOpenStreamIdBidi += 4;
-                transmitMaxStreams(new MaxStreamsFrame(-1, true));
+                connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);
             }
         }
     }
 
-    void transmitMaxStreams(QuicFrame frame) {
-        MaxStreamsFrame maxStreamsFrame = ((MaxStreamsFrame) frame);
-        long maxStreams;
-        if (maxStreamsFrame.isAppliesToBidirectional()) {
-            // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
-            maxStreams = maxOpenStreamIdBidi / 4;
+    private QuicFrame createMaxStreamsUpdateUni(int maxSize) {
+        if (maxSize < 9) {
+            throw new ImplementationError();
+        }
+
+        // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
+        return new MaxStreamsFrame(maxOpenStreamIdUni / 4, false);
+    }
+
+    private QuicFrame createMaxStreamsUpdateBidi(int maxSize) {
+        if (maxSize < 9) {
+            throw new ImplementationError();
+        }
+        // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
+        return new MaxStreamsFrame(maxOpenStreamIdBidi / 4, true);
+    }
+
+    void retransmitMaxStreams(QuicFrame frame) {
+        MaxStreamsFrame lostFrame = ((MaxStreamsFrame) frame);
+        if (lostFrame.isAppliesToBidirectional()) {
+            connection.send(createMaxStreamsUpdateBidi(Integer.MAX_VALUE), this::retransmitMaxStreams);
         }
         else {
-            // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
-            maxStreams = maxOpenStreamIdUni / 4;
+            connection.send(createMaxStreamsUpdateUni(Integer.MAX_VALUE), this::retransmitMaxStreams);
         }
-        connection.send(new MaxStreamsFrame(maxStreams, maxStreamsFrame.isAppliesToBidirectional()), this::transmitMaxStreams);
     }
 
     private boolean isPeerInitiated(int streamId) {
