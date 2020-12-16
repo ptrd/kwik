@@ -35,6 +35,7 @@ public class NewConnectionIdFrame extends QuicFrame {
     private int retirePriorTo;
     private byte[] connectionId;
     private static Random random = new Random();
+    private byte[] statelessResetToken;
 
     public NewConnectionIdFrame(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -72,7 +73,7 @@ public class NewConnectionIdFrame extends QuicFrame {
         connectionId = new byte[connectionIdLength];
         buffer.get(connectionId);
 
-        byte[] statelessResetToken = new byte[128 / 8];
+        statelessResetToken = new byte[128 / 8];
         buffer.get(statelessResetToken);
 
         return this;
@@ -93,6 +94,10 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     public int getRetirePriorTo() {
         return retirePriorTo;
+    }
+
+    public byte[] getStatelessResetToken() {
+        return statelessResetToken;
     }
 
     @Override

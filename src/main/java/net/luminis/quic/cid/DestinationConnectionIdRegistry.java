@@ -51,15 +51,16 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     /**
      * @param sequenceNr
      * @param connectionId
+     * @param statelessResetToken
      * @return  whether the connection id could be added as new; when its sequence number implies that it as retired already, false is returned.
      */
-    public boolean registerNewConnectionId(int sequenceNr, byte[] connectionId) {
+    public boolean registerNewConnectionId(int sequenceNr, byte[] connectionId, byte[] statelessResetToken) {
         if (sequenceNr >= notRetiredThreshold) {
-            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.NEW));
+            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.NEW, statelessResetToken));
             return true;
         }
         else {
-            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.RETIRED));
+            connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.RETIRED, statelessResetToken));
             return false;
         }
     }
@@ -112,6 +113,22 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
         this.retrySourceConnectionId = retrySourceConnectionId;
+    }
+
+    public void setInitialStatelessResetToken(byte[] statelessResetToken) {
+        connectionIds.put(0, connectionIds.get(0).addStatelessResetToken(statelessResetToken));
+    }
+
+    /**
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-detecting-a-stateless-reset
+     * "... but excludes stateless reset tokens associated with connection IDs that are either unused or retired."
+     * @param tokenCandidate
+     * @return
+     */
+    public boolean isStatelessResetToken(byte[] tokenCandidate) {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().notUnusedOrRetired())
+                .anyMatch(cid -> Arrays.equals(cid.getStatelessResetToken(), tokenCandidate));
     }
 }
 

@@ -184,7 +184,18 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                     // Nothing could be made out of it, so the whole datagram will be discarded
                     nrOfPacketBytes = data.remaining();
                 }
-                log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
+                if (checkForStatelessResetToken(data)) {
+                    if (enterDrainingState()) {
+                        log.info("Entering draining state because stateless reset was received");
+                    }
+                    else {
+                        log.debug("Received stateless reset");
+                    }
+                    break;
+                }
+                else {
+                    log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
+                }
             }
             catch (InvalidPacketException invalidPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
@@ -209,6 +220,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // Finally, execute actions that need to be executed after all responses and acks are sent.
         postProcessingActions.forEach(action -> action.run());
         postProcessingActions.clear();
+    }
+
+    protected boolean checkForStatelessResetToken(ByteBuffer data) {
+        return false;
     }
 
     protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
@@ -554,13 +569,28 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             //  An endpoint MUST NOT send further packets."
             send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);
 
-            connectionState = Status.Draining;
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
-            // "The closing and draining connection states exist to ensure that connections close cleanly and that
-            //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
-            //  times the current Probe Timeout (PTO) interval"
-            int pto = getSender().getPto();
-            schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
+            drain();
+        }
+    }
+
+    private void drain() {
+        connectionState = Status.Draining;
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
+        // "The closing and draining connection states exist to ensure that connections close cleanly and that
+        //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
+        //  times the current Probe Timeout (PTO) interval"
+        int pto = getSender().getPto();
+        schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
+    }
+
+    protected boolean enterDrainingState() {
+        if (!connectionState.closingOrDraining()) {
+            getSender().stop();
+            drain();
+            return true;
+        }
+        else {
+            return false;
         }
     }
 

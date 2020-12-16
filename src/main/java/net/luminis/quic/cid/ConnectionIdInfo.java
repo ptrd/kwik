@@ -24,12 +24,25 @@ public class ConnectionIdInfo {
     final private int sequenceNumber;
     final private byte[] connectionId;
     private ConnectionIdStatus connectionIdStatus;
+    private final byte[] statelessResetToken;
 
 
     ConnectionIdInfo(int sequenceNumber, byte[] connectionId, ConnectionIdStatus status) {
         this.sequenceNumber = sequenceNumber;
         this.connectionId = connectionId;
         connectionIdStatus = status;
+        this.statelessResetToken = null;
+    }
+
+    ConnectionIdInfo(int sequenceNumber, byte[] connectionId, ConnectionIdStatus status, byte[] statelessResetToken) {
+        this.sequenceNumber = sequenceNumber;
+        this.connectionId = connectionId;
+        connectionIdStatus = status;
+        this.statelessResetToken = statelessResetToken;
+    }
+
+    public ConnectionIdInfo addStatelessResetToken(byte[] statelessResetToken) {
+        return new ConnectionIdInfo(sequenceNumber, connectionId, connectionIdStatus, statelessResetToken);
     }
 
     public int getSequenceNumber() {
@@ -42,6 +55,10 @@ public class ConnectionIdInfo {
 
     public ConnectionIdStatus getConnectionIdStatus() {
         return connectionIdStatus;
+    }
+
+    public byte[] getStatelessResetToken() {
+        return statelessResetToken;
     }
 
     public void setStatus(ConnectionIdStatus newStatus) {

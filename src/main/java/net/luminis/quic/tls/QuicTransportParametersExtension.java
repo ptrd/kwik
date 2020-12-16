@@ -253,6 +253,7 @@ public class QuicTransportParametersExtension extends Extension {
             byte[] resetToken = new byte[16];
             buffer.get(resetToken);
             log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
+            params.setStatelessResetToken(resetToken);
         }
         else if (parameterId == max_udp_payload_size.value) {
             int maxPacketSize = VariableLengthInteger.parse(buffer);

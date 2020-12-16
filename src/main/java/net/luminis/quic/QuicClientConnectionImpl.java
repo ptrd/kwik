@@ -36,10 +36,12 @@ import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
+import net.luminis.tls.util.ByteUtils;
 
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -672,6 +674,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
 
+        destConnectionIds.setInitialStatelessResetToken(peerTransportParams.getStatelessResetToken());
+
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), peerTransportParams.getRetrySourceConnectionId())) {
@@ -737,7 +741,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
-        boolean addedNew = destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId());
+        boolean addedNew = destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId(), frame.getStatelessResetToken());
         if (! addedNew) {
             // Already retired, notify peer
             retireDestinationConnectionId(frame.getSequenceNr());
@@ -762,6 +766,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         byte[] newConnectionId = destConnectionIds.useNext();
         log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
         return newConnectionId;
+    }
+
+    @Override
+    protected boolean checkForStatelessResetToken(ByteBuffer data) {
+        byte[] tokenCandidate = new byte[16];
+        data.position(data.limit() - 16);
+        data.get(tokenCandidate);
+        boolean isStatelessReset = destConnectionIds.isStatelessResetToken(tokenCandidate);
+        return isStatelessReset;
     }
 
     public byte[][] newConnectionIds(int count, int retirePriorTo) {
