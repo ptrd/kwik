@@ -50,6 +50,8 @@ public class StreamManager {
     private Long maxStreamsAcceptedByPeerUni;
     private final Semaphore openBidirectionalStreams;
     private final Semaphore openUnidirectionalStreams;
+    private boolean maxOpenStreamsUniUpdateQueued;
+    private boolean maxOpenStreamsBidiUpdateQueued;
 
 
     public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi) {
@@ -200,11 +202,16 @@ public class StreamManager {
         synchronized (this) {
             if (isUni(streamId)) {
                 maxOpenStreamIdUni += 4;
-                connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);
-            }
-            else {
+                if (! maxOpenStreamsUniUpdateQueued) {
+                    connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    maxOpenStreamsUniUpdateQueued = true;
+                }
+            } else {
                 maxOpenStreamIdBidi += 4;
-                connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                if (! maxOpenStreamsBidiUpdateQueued) {
+                    connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    maxOpenStreamsBidiUpdateQueued = true;
+                }
             }
         }
     }
@@ -212,6 +219,9 @@ public class StreamManager {
     private QuicFrame createMaxStreamsUpdateUni(int maxSize) {
         if (maxSize < 9) {
             throw new ImplementationError();
+        }
+        synchronized (this) {
+            maxOpenStreamsUniUpdateQueued = false;
         }
 
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
@@ -222,6 +232,10 @@ public class StreamManager {
         if (maxSize < 9) {
             throw new ImplementationError();
         }
+        synchronized (this) {
+            maxOpenStreamsBidiUpdateQueued = false;
+        }
+
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
         return new MaxStreamsFrame(maxOpenStreamIdBidi / 4, true);
     }

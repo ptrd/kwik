@@ -350,6 +350,16 @@ class StreamManagerTest {
         verifyMaxStreamsFrameIsToBeSent(11);
     }
 
+    @Test
+    void whenMultipleStreamsAreClosedOnlyOneMaxStreamsFrameIsSent() throws Exception {
+        // When
+        for (int i = 0; i < 10; i++) {
+            streamManager.process(new StreamFrame(i * 4 + 1, new byte[0], true));
+        }
+
+        verifyMaxStreamsFrameIsToBeSent(20);
+    }
+
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
         verify(quicConnection).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
