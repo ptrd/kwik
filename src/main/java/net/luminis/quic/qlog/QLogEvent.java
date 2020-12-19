@@ -19,56 +19,26 @@
 package net.luminis.quic.qlog;
 
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.event.QLogEventProcessor;
 
 import java.time.Instant;
 
 
-public class QLogEvent {
-
-    public enum Type {
-        StartConnection,
-        PacketSent,
-        PacketReceived,
-        EndConnection
-    }
+public abstract class QLogEvent {
 
     private final byte[] cid;
-    private final Type type;
-    private final QuicPacket packet;
     private final Instant time;
 
 
-    public QLogEvent(byte[] originalDestinationConnectionId) {
-        cid = originalDestinationConnectionId;
-        type = Type.StartConnection;
-        packet = null;
-        time = null;
-    }
-
-    public QLogEvent(byte[] cid, Type type, QuicPacket packet, Instant time) {
+    public QLogEvent(byte[] cid, Instant time) {
         this.cid = cid;
-        this.type = type;
-        this.packet = packet;
         this.time = time;
     }
 
-    public QLogEvent(byte[] cid, Type type) {
-        this.cid = cid;
-        this.type = type;
-        packet = null;
-        time = null;
-    }
-
-    public Type getType() {
-        return type;
-    }
+    public abstract void accept(QLogEventProcessor processor);
 
     public byte[] getCid() {
         return cid;
-    }
-
-    public QuicPacket getPacket() {
-        return packet;
     }
 
     public Instant getTime() {

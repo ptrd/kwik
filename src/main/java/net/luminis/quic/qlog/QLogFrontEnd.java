@@ -19,6 +19,10 @@
 package net.luminis.quic.qlog;
 
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.event.ConnectionCreatedEvent;
+import net.luminis.quic.qlog.event.ConnectionTerminatedEvent;
+import net.luminis.quic.qlog.event.PacketReceivedEvent;
+import net.luminis.quic.qlog.event.PacketSentEvent;
 
 import java.time.Instant;
 
@@ -35,22 +39,22 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
-    public void emitConnectionCreatedEvent() {
-        qlogBackEnd.getQueue().add(new QLogEvent(originalDcid));
+    public void emitConnectionCreatedEvent(Instant created) {
+        qlogBackEnd.getQueue().add(new ConnectionCreatedEvent(originalDcid, created));
     }
 
     @Override
     public void emitPacketSentEvent(QuicPacket packet, Instant sent) {
-        qlogBackEnd.getQueue().add(new QLogEvent(originalDcid, QLogEvent.Type.PacketSent, packet, sent));
+        qlogBackEnd.getQueue().add(new PacketSentEvent(originalDcid, packet, sent));
     }
 
     @Override
     public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {
-        qlogBackEnd.getQueue().add(new QLogEvent(originalDcid, QLogEvent.Type.PacketReceived, packet, received));
+        qlogBackEnd.getQueue().add(new PacketReceivedEvent(originalDcid, packet, received));
     }
 
     @Override
     public void emitConnectionTerminatedEvent() {
-        qlogBackEnd.getQueue().add(new QLogEvent(originalDcid, QLogEvent.Type.EndConnection));
+        qlogBackEnd.getQueue().add(new ConnectionTerminatedEvent(originalDcid));
     }
 }

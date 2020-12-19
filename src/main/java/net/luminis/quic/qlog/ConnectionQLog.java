@@ -21,6 +21,7 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.event.*;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
@@ -34,22 +35,21 @@ import java.util.Map;
 
 import static java.util.Collections.emptyMap;
 import static javax.json.stream.JsonGenerator.PRETTY_PRINTING;
-import static net.luminis.quic.qlog.QLogEvent.Type.PacketReceived;
 
 
 /**
  * Manages (collects and stores) the qlog file for exactly one quic connection.
  * The log is identified by the original destination connection id.
  */
-public class ConnectionQLog {
+public class ConnectionQLog implements QLogEventProcessor {
 
     private final byte[] cid;
     private Instant startTime;
     private final JsonGenerator jsonGenerator;
 
-    public ConnectionQLog(byte[] cid) throws IOException {
-        this.cid = cid;
-        this.startTime = Instant.now();
+    public ConnectionQLog(QLogEvent event) throws IOException {
+        this.cid = event.getCid();
+        this.startTime = event.getTime();
         // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
         OutputStream output = new FileOutputStream(format(cid) + ".qlog");
 
@@ -59,16 +59,21 @@ public class ConnectionQLog {
         writeHeader();
     }
 
-    public void process(QLogEvent event) {
-        if (event.getType() == QLogEvent.Type.PacketSent) {
-            writePacketEvent(event);
-        }
-        else if (event.getType() == PacketReceived) {
-            writePacketEvent(event);
-        }
-        else if (event.getType() == QLogEvent.Type.EndConnection) {
-            close();
-        }
+    public void process(PacketSentEvent event) {
+        writePacketEvent(event);
+    }
+
+    @Override
+    public void process(ConnectionCreatedEvent event) {
+        // Not used
+    }
+
+    public void process(PacketReceivedEvent event) {
+        writePacketEvent(event);
+    }
+
+    public void process(ConnectionTerminatedEvent event) {
+        close();
     }
 
     public void close() {
@@ -100,12 +105,12 @@ public class ConnectionQLog {
                 .writeStartArray("events");
     }
 
-    private void writePacketEvent(QLogEvent event) {
+    private void writePacketEvent(PacketEvent event) {
         QuicPacket packet = event.getPacket();
         jsonGenerator.writeStartArray()
                 .write(Duration.between(startTime, event.getTime()).toMillis())
                 .write("transport")
-                .write(event.getType() == PacketReceived? "packet_received": "packet_sent")
+                .write(event instanceof PacketReceivedEvent? "packet_received": "packet_sent")
                 .writeStartObject()
                 .write("packet_type", formatPacketType(packet))
                 .writeStartObject("header")

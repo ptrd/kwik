@@ -189,7 +189,7 @@ public class NullLogger implements Logger {
     public QLog getQLog() {
         return new QLog() {
             @Override
-            public void emitConnectionCreatedEvent() {}
+            public void emitConnectionCreatedEvent(Instant created) {}
 
             @Override
             public void emitPacketSentEvent(QuicPacket packet, Instant sent) {}

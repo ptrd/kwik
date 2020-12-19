@@ -90,7 +90,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
         streamManager = new StreamManager(this, Role.Server, log);
 
-        this.log.getQLog().emitConnectionCreatedEvent();
+        this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
 
     @Override

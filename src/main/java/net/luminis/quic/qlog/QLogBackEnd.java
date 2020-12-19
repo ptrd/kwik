@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.qlog;
 
+import net.luminis.quic.qlog.event.*;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.Queue;
@@ -25,9 +27,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
-import static net.luminis.quic.qlog.QLogEvent.Type.EndConnection;
-import static net.luminis.quic.qlog.QLogEvent.Type.StartConnection;
 
 
 public class QLogBackEnd {
@@ -54,29 +53,30 @@ public class QLogBackEnd {
         while (true) {
             try {
                 QLogEvent event = queue.poll(10_000, TimeUnit.MILLISECONDS);
-                if (event == null) {
-                    connections.values().stream().forEach(log -> log.close());
-                    connections.clear();
-                } else {
-                    if (event.getType() == StartConnection) {
-                        connections.put(event.getCid(), new ConnectionQLog(event.getCid()));
+                if (event != null) {
+                    if (event instanceof ConnectionCreatedEvent) {
+                        connections.put(event.getCid(), new ConnectionQLog(event));
                     }
-                    else if (event.getType() == EndConnection) {
-                        connections.get(event.getCid()).process(event);
-                        connections.remove(event.getCid());
+
+                    ConnectionQLog connectionQLog = connections.get(event.getCid());
+                    if (connectionQLog != null) {
+                        event.accept(connectionQLog);
                     }
                     else {
-                        connections.get(event.getCid()).process(event);
+                        continue;
                     }
+
+                    if (event instanceof ConnectionTerminatedEvent) {
+                        connections.remove(event.getCid());
+                    }
+                }
+                else {
+                    connections.values().stream().forEach(log -> log.close());
+                    connections.clear();
                 }
             }
             catch (IOException | InterruptedException e) {
             }
         }
-
     }
-
-
-
-
 }

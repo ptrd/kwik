@@ -16,26 +16,21 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.qlog;
+package net.luminis.quic.qlog.event;
 
 import net.luminis.quic.packet.QuicPacket;
 
+
 import java.time.Instant;
 
+public class PacketSentEvent extends PacketEvent {
 
-/**
- * See
- * https://tools.ietf.org/html/draft-marx-qlog-main-schema-01
- * and
- * https://tools.ietf.org/html/draft-marx-qlog-event-definitions-quic-h3-01
- */
-public interface QLog {
+    public PacketSentEvent(byte[] cid, QuicPacket packet, Instant time) {
+        super(cid, packet, time);
+    }
 
-    void emitConnectionCreatedEvent(Instant created);
+    public void accept(QLogEventProcessor processor) {
+        processor.process(this);
+    }
 
-    void emitPacketSentEvent(QuicPacket packet, Instant sent);
-
-    void emitPacketReceivedEvent(QuicPacket packet, Instant received);
-
-    void emitConnectionTerminatedEvent();
 }
