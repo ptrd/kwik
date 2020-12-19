@@ -199,6 +199,9 @@ public class NullLogger implements Logger {
 
             @Override
             public void emitConnectionTerminatedEvent() {}
+
+            @Override
+            public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {}
         };
     }
 }

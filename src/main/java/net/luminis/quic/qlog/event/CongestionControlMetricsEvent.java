@@ -16,28 +16,33 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.qlog;
+package net.luminis.quic.qlog.event;
 
-import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.QLogEvent;
 
 import java.time.Instant;
 
+public class CongestionControlMetricsEvent extends QLogEvent {
 
-/**
- * See
- * https://tools.ietf.org/html/draft-marx-qlog-main-schema-01
- * and
- * https://tools.ietf.org/html/draft-marx-qlog-event-definitions-quic-h3-01
- */
-public interface QLog {
+    private final long congestionWindow;
+    private final long bytesInFlight;
 
-    void emitConnectionCreatedEvent(Instant created);
+    public CongestionControlMetricsEvent(byte[] originalDcid, long congestionWindow, long bytesInFlight, Instant eventTime) {
+        super(originalDcid, eventTime);
+        this.congestionWindow = congestionWindow;
+        this.bytesInFlight = bytesInFlight;
+    }
 
-    void emitPacketSentEvent(QuicPacket packet, Instant sent);
+    @Override
+    public void accept(QLogEventProcessor processor) {
+        processor.process(this);
+    }
 
-    void emitPacketReceivedEvent(QuicPacket packet, Instant received);
+    public long getCongestionWindow() {
+        return congestionWindow;
+    }
 
-    void emitConnectionTerminatedEvent();
-
-    void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight);
+    public long getBytesInFlight() {
+        return bytesInFlight;
+    }
 }

@@ -54,6 +54,12 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     }
 
     @Override
+    public synchronized void registerInFlight(QuicPacket sentPacket) {
+        super.registerInFlight(sentPacket);
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
+    }
+
+    @Override
     public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
         super.registerAcked(acknowlegdedPackets);
 
@@ -76,6 +82,7 @@ public class NewRenoCongestionController extends AbstractCongestionController im
         if (congestionWindow != previousCwnd) {
             log.cc("Cwnd(+): " + congestionWindow + " (" + getMode() + "); inflight: " + bytesInFlight);
         }
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
     }
 
     @Override
@@ -86,6 +93,7 @@ public class NewRenoCongestionController extends AbstractCongestionController im
             PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet().getPacketNumber().compareTo(p2.packet().getPacketNumber())).get();
             fireCongestionEvent(largest.timeSent());
         }
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
     }
 
     private void fireCongestionEvent(Instant timeSent) {

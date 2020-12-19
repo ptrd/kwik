@@ -27,6 +27,7 @@ import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -402,7 +403,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 
@@ -420,7 +421,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 

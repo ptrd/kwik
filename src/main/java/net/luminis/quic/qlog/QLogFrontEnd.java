@@ -19,10 +19,7 @@
 package net.luminis.quic.qlog;
 
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.qlog.event.ConnectionCreatedEvent;
-import net.luminis.quic.qlog.event.ConnectionTerminatedEvent;
-import net.luminis.quic.qlog.event.PacketReceivedEvent;
-import net.luminis.quic.qlog.event.PacketSentEvent;
+import net.luminis.quic.qlog.event.*;
 
 import java.time.Instant;
 
@@ -57,4 +54,10 @@ public class QLogFrontEnd implements QLog {
     public void emitConnectionTerminatedEvent() {
         qlogBackEnd.getQueue().add(new ConnectionTerminatedEvent(originalDcid));
     }
+
+    @Override
+    public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {
+        qlogBackEnd.getQueue().add(new CongestionControlMetricsEvent(originalDcid, congestionWindow, bytesInFlight, Instant.now()));
+    }
+
 }

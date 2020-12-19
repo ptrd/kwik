@@ -27,4 +27,6 @@ public interface QLogEventProcessor {
     void process(PacketReceivedEvent event);
 
     void process(ConnectionTerminatedEvent event);
+
+    void process(CongestionControlMetricsEvent event);
 }

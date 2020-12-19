@@ -61,6 +61,7 @@ public class ConnectionQLog implements QLogEventProcessor {
         writeHeader();
     }
 
+    @Override
     public void process(PacketSentEvent event) {
         writePacketEvent(event);
     }
@@ -70,12 +71,19 @@ public class ConnectionQLog implements QLogEventProcessor {
         // Not used
     }
 
+    @Override
     public void process(PacketReceivedEvent event) {
         writePacketEvent(event);
     }
 
+    @Override
     public void process(ConnectionTerminatedEvent event) {
         close();
+    }
+
+    @Override
+    public void process(CongestionControlMetricsEvent event) {
+        emitMetrics(event);
     }
 
     public void close() {
@@ -127,6 +135,18 @@ public class ConnectionQLog implements QLogEventProcessor {
         jsonGenerator.writeStartArray("frames");
         packet.getFrames().stream().forEach(frame -> jsonGenerator.writeStartObject().write("frame_type", formatFrame(frame)).writeEnd());
         jsonGenerator.writeEnd()
+                .writeEnd()
+                .writeEnd();
+    }
+
+    private void emitMetrics(CongestionControlMetricsEvent event) {
+        jsonGenerator.writeStartArray()
+                .write(Duration.between(startTime, event.getTime()).toMillis())
+                .write("recovery")
+                .write("metrics_updated")
+                .writeStartObject()
+                .write("bytes_in_flight", event.getBytesInFlight())
+                .write("congestion_window", event.getCongestionWindow())
                 .writeEnd()
                 .writeEnd();
     }
