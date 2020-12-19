@@ -26,6 +26,7 @@ import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
 import javax.json.stream.JsonGenerator;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -51,7 +52,8 @@ public class ConnectionQLog implements QLogEventProcessor {
         this.cid = event.getCid();
         this.startTime = event.getTime();
         // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
-        OutputStream output = new FileOutputStream(format(cid) + ".qlog");
+        String qlogDir = System.getenv("QLOGDIR");
+        OutputStream output = new FileOutputStream(new File(qlogDir, format(cid) + ".qlog"));
 
         boolean prettyPrinting = false;
         Map<String, ?> configuration = prettyPrinting ? Map.of(PRETTY_PRINTING, "whatever") : emptyMap();
