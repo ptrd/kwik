@@ -50,9 +50,9 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
         try {
             String fileName = extractPathFromRequest(quicStream.getInputStream());
             if (fileName != null) {
-                File file = new File(wwwDir, fileName);
+                File file = getFileInWwwDir(fileName);
                 OutputStream outputStream = quicStream.getOutputStream();
-                if (file.exists() && file.isFile() && file.canRead()) {
+                if (file != null && file.exists() && file.isFile() && file.canRead()) {
                     FileInputStream fileInputStream = new FileInputStream(file);
                     fileInputStream.transferTo(outputStream);
                     fileInputStream.close();
@@ -73,6 +73,23 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
         }
 
     }
+
+    /**
+     * Check that file specified by argument is actually in the www dir (to prevent file traversal).
+     * @param fileName
+     * @return
+     * @throws IOException
+     */
+    private File getFileInWwwDir(String fileName) throws IOException {
+        String requestedFilePath = new File(wwwDir, fileName).getCanonicalPath();
+        if (requestedFilePath.startsWith(wwwDir.getCanonicalPath())) {
+            return new File(requestedFilePath);
+        }
+        else {
+            return null;
+        }
+    }
+
     String extractPathFromRequest(InputStream input) throws IOException {
         BufferedReader inputReader = new BufferedReader(new InputStreamReader(input));
         String line = inputReader.readLine();
