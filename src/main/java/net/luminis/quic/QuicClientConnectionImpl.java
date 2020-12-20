@@ -499,6 +499,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
         sender.discard(PnSpace.Handshake, "HandshakeDone is received");
         synchronized (handshakeState) {
@@ -535,9 +540,34 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
         PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
         send(response, f -> {});
+    }
+
+    @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
@@ -546,8 +576,23 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
         streamManager.process(streamFrame);
+    }
+
+    @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override

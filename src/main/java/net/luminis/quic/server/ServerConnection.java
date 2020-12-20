@@ -300,6 +300,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
 
     }
@@ -325,7 +330,32 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
 
     }
 
@@ -335,8 +365,23 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
         streamManager.process(streamFrame);
+    }
+
+    @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
