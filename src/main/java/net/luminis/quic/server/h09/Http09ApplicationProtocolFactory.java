@@ -29,6 +29,9 @@ public class Http09ApplicationProtocolFactory extends ApplicationProtocolConnect
     private File wwwDir;
 
     public Http09ApplicationProtocolFactory(File wwwDir) {
+        if (wwwDir == null) {
+            throw new IllegalArgumentException();
+        }
         this.wwwDir = wwwDir;
     }
 

@@ -121,7 +121,9 @@ public class Server {
                 applicationProtocolRegistry, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
-        registerApplicationLayerProtocols(dir);
+        if (dir != null) {
+            registerApplicationLayerProtocols(dir);
+        }
 
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, MAX_DATAGRAM_SIZE, log, exception -> System.exit(9));
