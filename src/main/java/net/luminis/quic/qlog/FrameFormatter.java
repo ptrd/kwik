@@ -22,11 +22,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
-import javax.json.Json;
-import javax.json.JsonArray;
-import javax.json.JsonReader;
 import javax.json.stream.JsonGenerator;
-import java.io.StringReader;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -95,7 +91,7 @@ public class FrameFormatter implements FrameProcessor3 {
 
     @Override
     public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject().write("frame_type", "data_blocked").writeEnd();
     }
 
     @Override
@@ -141,12 +137,15 @@ public class FrameFormatter implements FrameProcessor3 {
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "new_token")
+                .write("token", format(newTokenFrame.getToken()))
+                .writeEnd();
     }
 
     @Override
     public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject().write("frame_type", "padding").writeEnd();
     }
 
     @Override
@@ -156,17 +155,22 @@ public class FrameFormatter implements FrameProcessor3 {
 
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject().write("frame_type", "path_response").writeEnd();
     }
 
     @Override
     public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject().write("frame_type", "ping").writeEnd();
     }
 
     @Override
     public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "reset_stream")
+                .write("stream_id", resetStreamFrame.getStreamId())
+                .write("error_code", resetStreamFrame.getErrorCode())
+                .write("final_size", resetStreamFrame.getFinalSize())
+                .writeEnd();
     }
 
     @Override
@@ -179,7 +183,11 @@ public class FrameFormatter implements FrameProcessor3 {
 
     @Override
     public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "stop_sending")
+                .write("stream_id", stopSendingFrame.getStreamId())
+                .write("error_code", stopSendingFrame.getErrorCode())
+                .writeEnd();
     }
 
     @Override
@@ -195,12 +203,20 @@ public class FrameFormatter implements FrameProcessor3 {
 
     @Override
     public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "stream_data_blocked")
+                .write("stream_id", streamDataBlockedFrame.getStreamId())
+                .write("limit", streamDataBlockedFrame.getStreamDataLimit())
+                .writeEnd();
     }
 
     @Override
     public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "streams_blocked")
+                .write("stream_type", streamsBlockedFrame.isBidirectional()? "bidirectional": "unidirectional")
+                .write("limit", streamsBlockedFrame.getStreamLimit())
+                .writeEnd();
     }
 
     private String format(byte[] data) {

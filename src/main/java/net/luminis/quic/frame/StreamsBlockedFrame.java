@@ -55,4 +55,12 @@ public class StreamsBlockedFrame extends QuicFrame {
     public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
     }
+
+    public boolean isBidirectional() {
+        return bidirectional;
+    }
+
+    public int getStreamLimit() {
+        return streamLimit;
+    }
 }

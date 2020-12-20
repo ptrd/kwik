@@ -55,4 +55,16 @@ public class ResetStreamFrame extends QuicFrame {
     public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
     }
+
+    public int getStreamId() {
+        return streamId;
+    }
+
+    public int getErrorCode() {
+        return errorCode;
+    }
+
+    public int getFinalSize() {
+        return finalSize;
+    }
 }
