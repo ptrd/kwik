@@ -22,42 +22,142 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Queue;
 
 
 public class QLogFrontEnd implements QLog {
 
-    private final QLogBackEnd qlogBackEnd;
     private final byte[] originalDcid;
+    private final Queue<QLogEvent> eventQueue;
 
 
     public QLogFrontEnd(byte[] originalDestinationConnectionId) {
         originalDcid = originalDestinationConnectionId;
-        qlogBackEnd = new QLogBackEnd();
+        String qlogdirEnvVar = System.getenv("QLOGDIR");
+        if (qlogdirEnvVar != null && !qlogdirEnvVar.isBlank()) {
+            eventQueue = new QLogBackEnd().getQueue();
+        }
+        else {
+            eventQueue = new NullQueue();
+        }
     }
 
     @Override
     public void emitConnectionCreatedEvent(Instant created) {
-        qlogBackEnd.getQueue().add(new ConnectionCreatedEvent(originalDcid, created));
+        eventQueue.add(new ConnectionCreatedEvent(originalDcid, created));
     }
 
     @Override
     public void emitPacketSentEvent(QuicPacket packet, Instant sent) {
-        qlogBackEnd.getQueue().add(new PacketSentEvent(originalDcid, packet, sent));
+        eventQueue.add(new PacketSentEvent(originalDcid, packet, sent));
     }
 
     @Override
     public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {
-        qlogBackEnd.getQueue().add(new PacketReceivedEvent(originalDcid, packet, received));
+        eventQueue.add(new PacketReceivedEvent(originalDcid, packet, received));
     }
 
     @Override
     public void emitConnectionTerminatedEvent() {
-        qlogBackEnd.getQueue().add(new ConnectionTerminatedEvent(originalDcid));
+        eventQueue.add(new ConnectionTerminatedEvent(originalDcid));
     }
 
     @Override
     public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {
-        qlogBackEnd.getQueue().add(new CongestionControlMetricsEvent(originalDcid, congestionWindow, bytesInFlight, Instant.now()));
+        eventQueue.add(new CongestionControlMetricsEvent(originalDcid, congestionWindow, bytesInFlight, Instant.now()));
     }
 
+    private static class NullQueue implements Queue<QLogEvent> {
+        @Override
+        public int size() {
+            return 0;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            return false;
+        }
+
+        @Override
+        public Iterator<QLogEvent> iterator() {
+            return null;
+        }
+
+        @Override
+        public Object[] toArray() {
+            return new Object[0];
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            return null;
+        }
+
+        @Override
+        public boolean add(QLogEvent qLogEvent) {
+            return false;
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            return false;
+        }
+
+        @Override
+        public boolean containsAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public boolean addAll(Collection<? extends QLogEvent> c) {
+            return false;
+        }
+
+        @Override
+        public boolean removeAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public boolean retainAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public void clear() {
+
+        }
+
+        @Override
+        public boolean offer(QLogEvent qLogEvent) {
+            return false;
+        }
+
+        @Override
+        public QLogEvent remove() {
+            return null;
+        }
+
+        @Override
+        public QLogEvent poll() {
+            return null;
+        }
+
+        @Override
+        public QLogEvent element() {
+            return null;
+        }
+
+        @Override
+        public QLogEvent peek() {
+            return null;
+        }
+    }
 }
