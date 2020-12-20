@@ -262,7 +262,7 @@ public class Server {
     private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
-            log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid));
+            log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid) + " with " + clientAddress.getAddress().getHostAddress());
             ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
             // Register new connection with both the new connection id, and the original (as retransmitted initial packets
             // with the same original dcid might be received, which should _not_ lead to another connection)
