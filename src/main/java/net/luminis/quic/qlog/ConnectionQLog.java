@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.qlog;
 
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
@@ -47,6 +46,7 @@ public class ConnectionQLog implements QLogEventProcessor {
     private final byte[] cid;
     private Instant startTime;
     private final JsonGenerator jsonGenerator;
+    private final FrameFormatter frameFormatter;
 
     public ConnectionQLog(QLogEvent event) throws IOException {
         this.cid = event.getCid();
@@ -58,6 +58,9 @@ public class ConnectionQLog implements QLogEventProcessor {
         boolean prettyPrinting = false;
         Map<String, ?> configuration = prettyPrinting ? Map.of(PRETTY_PRINTING, "whatever") : emptyMap();
         jsonGenerator = Json.createGeneratorFactory(configuration).createGenerator(output);
+
+        frameFormatter = new FrameFormatter(jsonGenerator);
+
         writeHeader();
     }
 
@@ -133,7 +136,7 @@ public class ConnectionQLog implements QLogEventProcessor {
             jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId()));
         }
         jsonGenerator.writeStartArray("frames");
-        packet.getFrames().stream().forEach(frame -> jsonGenerator.writeStartObject().write("frame_type", formatFrame(frame)).writeEnd());
+        packet.getFrames().stream().forEach(frame -> frame.accept(frameFormatter, null, null));
         jsonGenerator.writeEnd()
                 .writeEnd()
                 .writeEnd();
@@ -158,10 +161,6 @@ public class ConnectionQLog implements QLogEventProcessor {
         else {
             return "1RTT";
         }
-    }
-
-    private String formatFrame(QuicFrame f) {
-        return f.getClass().getSimpleName().replace("Frame", "").toLowerCase();
     }
 
     private String format(byte[] data) {
