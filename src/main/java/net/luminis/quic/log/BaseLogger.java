@@ -19,6 +19,7 @@
 package net.luminis.quic.log;
 
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.NullQLog;
 import net.luminis.quic.qlog.QLog;
 import net.luminis.tls.util.ByteUtils;
 
@@ -354,7 +355,7 @@ public abstract class BaseLogger implements Logger {
 
     @Override
     public QLog getQLog() {
-        return null;
+        return new NullQLog();
     }
 
     abstract protected void log(String message);

@@ -20,6 +20,7 @@ package net.luminis.quic.log;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.NullQLog;
 import net.luminis.quic.qlog.QLog;
 
 import java.nio.ByteBuffer;
@@ -187,22 +188,7 @@ public class NullLogger implements Logger {
 
     @Override
     public QLog getQLog() {
-        return new QLog() {
-            @Override
-            public void emitConnectionCreatedEvent(Instant created) {}
-
-            @Override
-            public void emitPacketSentEvent(QuicPacket packet, Instant sent) {}
-
-            @Override
-            public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {}
-
-            @Override
-            public void emitConnectionTerminatedEvent() {}
-
-            @Override
-            public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {}
-        };
+        return new NullQLog();
     }
 }
 
