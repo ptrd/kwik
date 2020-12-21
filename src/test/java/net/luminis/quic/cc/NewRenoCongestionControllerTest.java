@@ -24,6 +24,7 @@ import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +45,7 @@ class NewRenoCongestionControllerTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
     }
 
     @Test

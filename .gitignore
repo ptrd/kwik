@@ -13,3 +13,4 @@ sessionTickets
 .idea/modules.xml
 .idea/modules/*.iml
 .idea/libraries/*.xml
+qlog

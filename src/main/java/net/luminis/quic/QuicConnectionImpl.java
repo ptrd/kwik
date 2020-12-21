@@ -285,6 +285,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     protected void processPacket(Instant timeReceived, QuicPacket packet) {
+        log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
+
         if (! connectionState.closingOrDraining()) {
             packet.accept(this, timeReceived);
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.1
