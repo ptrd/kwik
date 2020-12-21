@@ -76,7 +76,7 @@ public class FrameFormatter implements FrameProcessor3 {
     public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "connection_close")
-                .write("raw_error_code", connectionCloseFrame.getErrorCode())
+                .write("error_code", connectionCloseFrame.getErrorCode())
                 .writeEnd();
     }
 
