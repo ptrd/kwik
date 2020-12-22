@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Role;
@@ -40,6 +41,7 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.*;
@@ -237,59 +239,86 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputWithByteArray() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testStreamOutputWithByteArrayFragment() throws IOException {
+        // Given
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testStreamOutputWithSingleByte() throws IOException {
+        // Given
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("#".getBytes());
     }
 
     @Test
     void testStreamOutputMultipleFrames() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())), any(Consumer.class), anyBoolean());
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testCloseSendsFinalFrame() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world!".getBytes());
+        assertThat(((StreamFrame) streamFrame).isFinal()).isTrue();
     }
 
     @Test
     void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws IOException {
-        byte[] data = generateByteArray(1400);
+        byte[] data = generateByteArray(1700);
         quicStream.getOutputStream().write(data);
 
-        ArgumentCaptor<StreamFrame> captor = ArgumentCaptor.forClass(StreamFrame.class);
-        verify(connection, times(2)).send(captor.capture(), any(Consumer.class), anyBoolean());
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+
+        StreamFrame firstFrame = (StreamFrame) captor.getAllValues().get(0).apply(1200);
+        verify(connection, times(2)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        StreamFrame secondFrame = (StreamFrame) captor.getAllValues().get(1).apply(1200);
+
         // This is what the test is about: the first frame should be less than max packet size.
-        int lengthFirstFrame = captor.getAllValues().get(0).getLength();
-        assertThat(lengthFirstFrame).isLessThan(1300);
+        assertThat(firstFrame.getBytes().length).isLessThanOrEqualTo(1200);
         // And of course, the remaining bytes should be in the second frame.
-        int totalFrameLength = captor.getAllValues().stream().mapToInt(f -> f.getLength()).sum();
-        assertThat(totalFrameLength).isEqualTo(1400);
+        int totalFrameLength = firstFrame.getLength() + secondFrame.getLength();
+        assertThat(totalFrameLength).isEqualTo(data.length);
 
         // Also, the content should be copied correctly over the two frames:
-        StreamFrame firstFrame = resurrect(captor.getAllValues().get(0));
-        StreamFrame secondFrame = resurrect(captor.getAllValues().get(1));
         byte[] reconstructedContent = new byte[firstFrame.getStreamData().length + secondFrame.getStreamData().length];
         System.arraycopy(firstFrame.getStreamData(), 0, reconstructedContent, 0, firstFrame.getStreamData().length);
         System.arraycopy(secondFrame.getStreamData(), 0, reconstructedContent, firstFrame.getStreamData().length, secondFrame.getStreamData().length);
@@ -330,12 +359,12 @@ class QuicStreamTest {
     @Test
     void lostStreamFrameShouldBeRetransmitted() throws IOException {
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
-        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
         quicStream.getOutputStream().write("this frame might get lost".getBytes());
-        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
 
-        QuicFrame lostFrame = sendFrameCaptor.getValue();
+        QuicFrame lostFrame = sendFunctionCaptor.getValue().apply(1500);
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
@@ -344,7 +373,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(2)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, atLeastOnce()).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -385,16 +414,21 @@ class QuicStreamTest {
 
     @Test
     void lostFinalFrameShouldBeRetransmitted() throws IOException {
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+
         quicStream.getOutputStream().write("just a stream frame".getBytes());
-        verify(connection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // Simulate data is sent
+        QuicFrame frame = sendFunctionCaptor.getValue().apply(1500);
 
         quicStream.getOutputStream().close();  // Close will send an empty final frame.
 
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor2 = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
-        ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(2)).send(resendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor2.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
+        // Simulate close frame is sent (and lost)
+        QuicFrame lostFrame = sendFunctionCaptor2.getValue().apply(1500);
 
-        QuicFrame lostFrame = resendFrameCaptor.getValue();
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
@@ -403,7 +437,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(3)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -573,6 +607,11 @@ class QuicStreamTest {
         }
     }
 
+    private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        return captor.getValue();
+    }
 
     /**
      * Mockito Argumentmatcher for checking StreamFrame arguments.
