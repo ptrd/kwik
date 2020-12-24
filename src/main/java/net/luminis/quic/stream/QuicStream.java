@@ -19,7 +19,6 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
@@ -30,7 +29,6 @@ import net.luminis.quic.log.NullLogger;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
@@ -38,10 +36,8 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.function.Consumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
 
@@ -84,6 +80,7 @@ public class QuicStream extends BaseStream {
         inputStream = new StreamInputStream();
         outputStream = createStreamOutputStream();
 
+        flowController.streamOpened(this);
         receiverFlowControlLimit = connection.getInitialMaxStreamData();
         lastCommunicatedMaxData = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
@@ -149,7 +146,7 @@ public class QuicStream extends BaseStream {
         return new StreamOutputStream();
     }
 
-    private class StreamInputStream extends InputStream {
+    protected class StreamInputStream extends InputStream {
 
         @Override
         public int available() throws IOException {
@@ -231,7 +228,7 @@ public class QuicStream extends BaseStream {
         }
 
         private void updateAllowedFlowControl(int bytesRead) {
-            // Slide flow control window forward (which as much bytes as are read)
+            // Slide flow control window forward (with as much bytes as are read)
             receiverFlowControlLimit += bytesRead;
             connection.updateConnectionFlowControl(bytesRead);
             // Avoid sending flow control updates with every single read; check diff with last send max data
@@ -247,7 +244,7 @@ public class QuicStream extends BaseStream {
         }
     }
 
-    protected class StreamOutputStream extends OutputStream {
+    protected class StreamOutputStream extends OutputStream implements FlowControlUpdateListener {
 
         // Minimum stream frame size: frame type (1), stream id (1..8), offset (1..8), length (1..2), data (1...)
         // Note that in practice stream id and offset will seldom / never occupy 8 bytes, so the minimum leaves more room for data.
@@ -268,6 +265,9 @@ public class QuicStream extends BaseStream {
         // Thread safety: read/set by caller and by sender thread, so must be synchronized; guarded by lock
         private volatile boolean sendRequestQueued;
 
+        StreamOutputStream() {
+            flowController.register(QuicStream.this, this);
+        }
 
         @Override
         public void write(byte[] data) throws IOException {
@@ -295,7 +295,7 @@ public class QuicStream extends BaseStream {
                 throw new IOException("already closed");
             }
 
-            // Terrible for performance of course, but that this calling this method anyway.
+            // Terrible for performance of course, but that is calling this method anyway.
             byte[] data = new byte[] { (byte) dataByte };
             sendQueue.add(ByteBuffer.wrap(data));
             synchronized (lock) {
@@ -319,15 +319,22 @@ public class QuicStream extends BaseStream {
         public void close() throws IOException {
             if (! closed) {
                 sendQueue.add(END_OF_STREAM_MARKER);
+                closed = true;
             }
-            closed = true;
         }
 
         QuicFrame sendFrame(int maxFrameSize) {
-            if (!sendQueue.isEmpty()) {
+            int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
+            assert(flowControlLimit >= currentOffset);
+
+            if (!sendQueue.isEmpty() && flowControlLimit > currentOffset) {
                 int nrOfBytes = 0;
                 StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
                 int maxBytesToSend = maxFrameSize - dummy.getBytes().length - 1;  // Take one byte extra for length field var int
+                // Use max to reserve flow control limits; might reserve to much, should be returned when stream closed.
+                int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
+                maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
+
                 byte[] dataToSend = new byte[maxBytesToSend];
                 boolean finalFrame = false;
                 while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
@@ -357,6 +364,7 @@ public class QuicStream extends BaseStream {
                 currentOffset += nrOfBytes;
 
                 if (sendQueue.isEmpty()) {
+                    // There is a race condition with the write method, but it does not harm: incorrectly setting flag to false just adds an extra send request which does not hurt.
                     synchronized (lock) {
                         sendRequestQueued = false;
                     }
@@ -366,11 +374,26 @@ public class QuicStream extends BaseStream {
                     connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
                 }
 
+                if (streamFrame.isFinal()) {
+                    // Done! Retransmissions may follow, but don't need flow control.
+                    flowController.unregister(QuicStream.this);
+                    flowController.streamClosed(QuicStream.this);
+                }
                 return streamFrame;
             }
             else {
+                if (!sendQueue.isEmpty() && flowControlLimit <= currentOffset) {
+                    // TODO: Should send DATA_BLOCKED or STREAM_DATA_BLOCKED.
+                    log.info("Stream " + streamId + " is blocked by flow control (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
+                }
                 return null;
             }
+        }
+
+        public void streamNotBlocked(int streamId) {
+            // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
+            // and let sendFrame method determine whether there is more to send or not.
+            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {

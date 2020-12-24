@@ -331,7 +331,7 @@ class QuicStreamTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStream(0, connection, null, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStream(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
         InputStream inputStream = quicStream.getInputStream();
@@ -387,7 +387,7 @@ class QuicStreamTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStream(0, connection, null, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStream(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
 
         InputStream inputStream = quicStream.getInputStream();
@@ -447,82 +447,59 @@ class QuicStreamTest {
 
     @Test
     void isUnidirectional() {
-        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), null);
+        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), null);
+        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), null);
+        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), null);
+        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
 
     @Test
-    void writingLessThanFlowControlLimitWillNotBlock() throws Exception {
+    void writeDataWillNotSendMoreThenFlowControlsAllows() throws Exception {
+        // Given
         FlowControl flowController = mock(FlowControl.class);
+        when(flowController.getFlowControlLimit(any(QuicStream.class))).thenReturn(100L);
         when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong())).thenReturn(100L);
-        doThrow(new RuntimeException("would block forever")).when(flowController).waitForFlowControlCredits(any(QuicStream.class));
 
         QuicStream stream = new QuicStream(1, connection, flowController);
         stream.getOutputStream().write(new byte[100]);
 
-        verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
-        verify(flowController, never()).waitForFlowControlCredits(any(QuicStream.class));
+        StreamFrame frame = (StreamFrame) captureSendFunction(connection).apply(1500);
+        assertThat(frame.getLength()).isLessThanOrEqualTo(100);
     }
 
     @Test
-    void writingMoreThanFlowControlLimitBlocks() throws Exception {
-        FlowControl flowController = mock(FlowControl.class);
-        when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong()))
-                .thenReturn(100L)
-                .thenReturn(500L);
+    void whenFlowControlLimitIsIncreasedMoreDataWillBeSent() throws Exception {
+        // Given
+        FlowControl flowController = new FlowControl(Role.Client, 100000, 100, 100, 100);
+        ArgumentCaptor<FlowControlUpdateListener> fcUpdateListenerCaptor = ArgumentCaptor.forClass(FlowControlUpdateListener.class);
 
         QuicStream stream = new QuicStream(1, connection, flowController);
-        stream.getOutputStream().write(new byte[500], 0, 500);
 
-        verify(flowController, times(1)).waitForFlowControlCredits(any(QuicStream.class));
-        verify(flowController, times(2)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
+        stream.getOutputStream().write(new byte[1024]);
 
-        InOrder inOrder = inOrder(connection);
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(400)), any(), anyBoolean());
-    }
+        StreamFrame frame1 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        assertThat(frame1.getLength()).isLessThanOrEqualTo(100);
+        StreamFrame noFrame = (StreamFrame) captureSendFunction(connection).apply(1000);
 
-    @Test
-    void writeArrayInFragmentsDueToFlowControl() throws Exception {
-        FlowControl flowController = mock(FlowControl.class);
-        when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong()))
-                .thenReturn(9L)
-                .thenReturn(22L)
-                .thenReturn(31L)
-                .thenReturn(38L)
-                .thenReturn(50L)
-                .thenReturn(60L);
+        // When
+        flowController.process(new MaxStreamDataFrame(1, 233));
 
-        QuicStream stream = new QuicStream(1, connection, flowController);
-        byte[] data = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".getBytes();
-        stream.getOutputStream().write(data);
-
-        verify(flowController, times(5)).waitForFlowControlCredits(any(QuicStream.class));
-        verify(flowController, times(6)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
-
-        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(6)).send(sendFrameCaptor.capture(), any(Consumer.class), anyBoolean());
-
-        String sentData = sendFrameCaptor.getAllValues().stream()
-                .map(frame -> new String(((StreamFrame) frame).getStreamData()))
-                .collect(Collectors.joining());
-
-        assertThat(sentData).isEqualTo("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        // Then
+        StreamFrame frame2 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        assertThat(frame2.getLength()).isLessThanOrEqualTo(233);
     }
 
     @Test
@@ -610,6 +587,7 @@ class QuicStreamTest {
     private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
         verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        clearInvocations(connection);
         return captor.getValue();
     }
 

@@ -26,6 +26,7 @@ import net.luminis.quic.log.NullLogger;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Keeps track of connection and stream flow control limits imposed by the peer.
@@ -59,6 +60,7 @@ public class FlowControl {
     private Map<Integer, Long> maxStreamDataAllowed;
     private Map<Integer, Long> maxStreamDataAssigned;
     private final Logger log;
+    private final Map<Integer, FlowControlUpdateListener> streamListeners;
 
 
     public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
@@ -72,6 +74,7 @@ public class FlowControl {
         this.initialMaxStreamDataBidiRemote = initialMaxStreamDataBidiRemote;
         this.initialMaxStreamDataUni = initialMaxStreamDataUni;
         this.log = log;
+        this.streamListeners = new ConcurrentHashMap<>();
 
         maxDataAllowed = initialMaxData;
         maxDataAssigned = 0;
@@ -106,41 +109,15 @@ public class FlowControl {
         }
     }
 
+    /**
+     * Returns the maximum flow control limit for the given stream, if it was requested now. Note that this limit
+     * cannot be used to send data on the stream, as the flow control credits are not yet reserved.
+     * @param stream
+     * @return
+     */
     public long getFlowControlLimit(QuicStream stream) {
         synchronized (this) {
-            return currentStreamCredits(stream);
-        }
-    }
-
-    /**
-     * Waits for flow control credits. Returns immediately when credits are available for the given
-     * stream, blocks until credits become available otherwise.
-     * @param stream
-     * @throws InterruptedException
-     */
-    public void waitForFlowControlCredits(QuicStream stream) throws InterruptedException {
-        if (log.logFlowControl()) {
-            // This piece of code can be part of a race condition, but for logging this is less problematic; logging from a synchronized block is worse.
-            if (currentStreamCredits(stream) == 0) {
-                log.fc("Flow control: stream " + stream.getStreamId() + " blocked");
-                // Note that with the current (Sender) implementation, blocking might be caused by congestion control all well.
-                // That's why no (stream) data blocked frame should be sent at this point.
-            }
-        }
-
-        boolean wasBlocked = false;
-        synchronized (this) {
-            while (true) {
-                if (currentStreamCredits(stream) > 0) {
-                    break;
-                }
-                wasBlocked = true;
-                this.wait();
-            }
-        }
-
-        if (wasBlocked && log.logFlowControl()) {
-            log.fc("Flow control: stream " + stream.getStreamId() + " not blocked anymore");
+            return maxStreamDataAssigned.get(stream.getStreamId()) + currentStreamCredits(stream);
         }
     }
 
@@ -211,6 +188,29 @@ public class FlowControl {
         }
     }
 
+    public void register(QuicStream stream, FlowControlUpdateListener listener) {
+        streamListeners.put(stream.getStreamId(), listener);
+    }
+
+    public void unregister(QuicStream stream) {
+        streamListeners.remove(stream.getStreamId());
+    }
+
+
+    public void streamOpened(QuicStream stream) {
+        int streamId = stream.getStreamId();
+        if (!maxStreamDataAllowed.containsKey(streamId)) {
+            maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
+            maxStreamDataAssigned.put(streamId, 0L);
+        }
+    }
+
+    public void streamClosed(QuicStream stream) {
+        int streamId = stream.getStreamId();
+        maxStreamDataAssigned.remove(streamId);
+        maxStreamDataAllowed.remove(streamId);
+    }
+
     private long determineInitialMaxStreamData(QuicStream stream) {
         if (stream.isUnidirectional()) {
             return initialMaxStreamDataUni;
@@ -234,13 +234,14 @@ public class FlowControl {
         }
     }
 
+    /**
+     * Returns the maximum possible flow control limit for the given stream, taking into account both stream and connection
+     * flow control limits. Note that the returned limit is not yet reserved for use by this stream!
+     * @param stream
+     * @return
+     */
     private long currentStreamCredits(QuicStream stream) {
         int streamId = stream.getStreamId();
-        if (!maxStreamDataAllowed.containsKey(streamId)) {
-            maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
-            maxStreamDataAssigned.put(streamId, 0L);
-        }
-
         long allowedByStream = maxStreamDataAllowed.get(streamId);
         long maxStreamIncrement = allowedByStream - maxStreamDataAssigned.get(streamId);
         long maxPossibleDataIncrement = maxDataAllowed - maxDataAssigned;
@@ -250,14 +251,21 @@ public class FlowControl {
         return maxStreamIncrement;
     }
 
-
     public void process(MaxDataFrame frame) {
         synchronized (this) {
             // If frames are received out of order, the new max can be smaller than the current value.
             if (frame.getMaxData() > maxDataAllowed) {
+                boolean maxDataWasReached = maxDataAllowed == maxDataAssigned;
                 maxDataAllowed = frame.getMaxData();
+                if (maxDataWasReached) {
+                    streamListeners.forEach((streamId, listener) -> {
+                        boolean streamWasBlockedByMaxDataOnly = maxStreamDataAssigned.get(streamId) != maxStreamDataAllowed.get(streamId);
+                        if (streamWasBlockedByMaxDataOnly) {
+                            listener.streamNotBlocked(streamId);
+                        }
+                    });
+                }
             }
-            this.notifyAll();
         }
     }
 
@@ -267,10 +275,13 @@ public class FlowControl {
             long maxStreamData = frame.getMaxData();
             // If frames are received out of order, the new max can be smaller than the current value.
             if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
+                boolean streamWasBlocked = maxStreamDataAssigned.get(streamId).longValue() ==  maxStreamDataAllowed.get(streamId).longValue()
+                        && maxDataAssigned != maxDataAllowed;
                 maxStreamDataAllowed.put(streamId, maxStreamData);
+                if (streamWasBlocked) {
+                    streamListeners.get(streamId).streamNotBlocked(streamId);
+                }
             }
-            this.notifyAll();
         }
     }
 }
-

@@ -101,7 +101,7 @@ public class StreamManager {
                 (quicVersion, streamId, connection, flowController, logger) -> new QuicStream(quicVersion, streamId, connection, flowController, logger));
     }
 
-    private  QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
+    private QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
         try {
             boolean acquired;
             if (bidirectional) {

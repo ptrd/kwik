@@ -25,15 +25,12 @@ import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 class FlowControlTest {
 
@@ -42,7 +39,7 @@ class FlowControlTest {
 
     @BeforeEach
     void initMockConnection() {
-        conn = Mockito.mock(QuicConnectionImpl.class);
+        conn = mock(QuicConnectionImpl.class);
     }
 
     @Test
@@ -50,7 +47,7 @@ class FlowControlTest {
         int initialMaxData = 1000;
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, 9999, 9999, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(1, conn, null), Long.MAX_VALUE)).isEqualTo(initialMaxData);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(1, conn, fc), Long.MAX_VALUE)).isEqualTo(initialMaxData);
     }
 
     @Test
@@ -62,7 +59,7 @@ class FlowControlTest {
         // A client initiated stream is limited by the server's initial remote (initiated) limit
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, 9999, initialServerMaxStreamData, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, fc), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
@@ -74,7 +71,7 @@ class FlowControlTest {
         // A server initiated stream is limited by the server's initial local (-ly initiated) limit
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, 9999, 9999);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, fc), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
@@ -86,19 +83,19 @@ class FlowControlTest {
         // A client initiated stream is limited by the server's initial remote
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, 9999, 9999, initialServerMaxStreamData);
 
-        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, null), Long.MAX_VALUE)).isEqualTo(500);
+        assertThat(fc.increaseFlowControlLimit(new QuicStream(streamId, conn, fc), Long.MAX_VALUE)).isEqualTo(500);
     }
 
     @Test
     void streamsAreAllLimitedByTheSharedMaxData() {
         int initialMaxData = 900;
         int initialServerMaxStreamData = 500;
-        int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream1 = new QuicStream(streamId1, conn, null);
-        int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream2 = new QuicStream(streamId2, conn, null);
-
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream1 = new QuicStream(streamId1, conn, fc);
+        int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream2 = new QuicStream(streamId2, conn, fc);
+
 
         assertThat(fc.increaseFlowControlLimit(stream1, 500)).isEqualTo(500);
         assertThat(fc.increaseFlowControlLimit(stream2, 500)).isEqualTo(400);
@@ -110,10 +107,9 @@ class FlowControlTest {
     void maxDataIncreasesStreamLimit() {
         int initialMaxData = 100;
         int initialServerMaxStreamData = 500;
-        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
-
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, fc);
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
@@ -128,12 +124,12 @@ class FlowControlTest {
     void maxDataIncreaseIsSharedBetweenStreams() {
         int initialMaxData = 300;
         int initialServerMaxStreamData = 1000;
-        int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream1 = new QuicStream(streamId1, conn, null);
-        int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream2 = new QuicStream(streamId2, conn, null);
-
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        int streamId1 = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream1 = new QuicStream(streamId1, conn, fc);
+        int streamId2 = 0;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream2 = new QuicStream(streamId2, conn, fc);
+
 
         assertThat(fc.increaseFlowControlLimit(stream1, 200)).isEqualTo(200);
         assertThat(fc.increaseFlowControlLimit(stream2, 200)).isEqualTo(100);
@@ -147,10 +143,10 @@ class FlowControlTest {
     void maxStreamDataIncreasesStreamLimit() {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
-        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
-
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+        QuicStream stream = new QuicStream(streamId, conn, fc);
+
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
@@ -159,67 +155,47 @@ class FlowControlTest {
     }
 
     @Test
-    void waitForCreditsReturnsWhenMaxDataIsIncreased() throws InterruptedException {
+    void streamUnblocksWhenMaxDataIsIncreased() throws InterruptedException {
         int initialMaxData = 100;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
+        FlowControlUpdateListener listener = mock(FlowControlUpdateListener.class);
+        fc.register(stream, listener);
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        int timeUntilMaxDataFrameIsReceived = 100;
-        Instant start = Instant.now();
-        executeAsyncWithDelay(() -> {
-            // Receive MaxDataFrame that increments max data to 200
-            fc.process(new MaxDataFrame(200));
-        }, timeUntilMaxDataFrameIsReceived);
+        // When
+        fc.process(new MaxDataFrame(200));
 
-        fc.waitForFlowControlCredits(stream);
-        Instant endWait = Instant.now();
+        // Then
+        verify(listener).streamNotBlocked(anyInt());
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(200);
-        assertThat(Duration.between(start, endWait).toMillis()).isGreaterThan((long) (timeUntilMaxDataFrameIsReceived * 0.9));
     }
 
     @Test
-    void waitForCreditsReturnsWhenMaxStreamDataIsIncreased() throws InterruptedException {
+    void streamUnblocksWhenMaxStreamDataIsIncreased() throws InterruptedException {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
+        // Given
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
+        FlowControlUpdateListener listener = mock(FlowControlUpdateListener.class);
+        fc.register(stream, listener);
 
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(100);
 
-        int timeUntilMaxDataFrameIsReceived = 100;
-        Instant start = Instant.now();
-        executeAsyncWithDelay(() -> {
-            // Receive MaxStreamDataFrame that increments max data to 200
-            fc.process(new MaxStreamDataFrame(streamId, 300));
-        }, timeUntilMaxDataFrameIsReceived);
+        // When
+        fc.process(new MaxStreamDataFrame(streamId, 300));
 
-        fc.waitForFlowControlCredits(stream);
-        Instant endWait = Instant.now();
-
+        // Then
+        verify(listener, times(1)).streamNotBlocked(anyInt());
         assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(300);
-        assertThat(Duration.between(start, endWait).toMillis()).isGreaterThan((long) (timeUntilMaxDataFrameIsReceived * 0.9));
-    }
-
-    @Test
-    void waitForCreditsReturnsImmediatelyWhenCreditsAvailable() throws InterruptedException {
-        int initialMaxData = 1000;
-        int initialServerMaxStreamData = 500;
-        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
-
-        FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
-        assertThat(fc.increaseFlowControlLimit(stream, 100)).isEqualTo(100);
-
-        fc.waitForFlowControlCredits(stream);
-        assertThat(fc.increaseFlowControlLimit(stream, 200)).isEqualTo(200);
     }
 
     @Test
@@ -227,9 +203,9 @@ class FlowControlTest {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 2000;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         fc.process(new MaxDataFrame(1500));
@@ -243,9 +219,9 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         fc.process(new MaxStreamDataFrame(1, 1500));
@@ -259,9 +235,9 @@ class FlowControlTest {
         int initialMaxData = 1000;
         int initialServerMaxStreamData = 1500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1000);
 
         TransportParameters updateTransportParameters = new TransportParameters();
@@ -278,9 +254,9 @@ class FlowControlTest {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 2000;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         fc.process(new MaxDataFrame(1500));
@@ -299,9 +275,9 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 0;  // Client initiated bi-di
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         TransportParameters updateTransportParameters = new TransportParameters();
@@ -318,9 +294,9 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // Server initiated bi-di
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         TransportParameters updateTransportParameters = new TransportParameters();
@@ -337,9 +313,9 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // Server initiated bi-di
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         fc.process(new MaxStreamDataFrame(1, 1500));
@@ -358,9 +334,9 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 2;  // Client initiated uni
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(500);
 
         TransportParameters updateTransportParameters = new TransportParameters();
@@ -377,10 +353,10 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialClientMaxStreamData = 500;
         int streamId = 2;  // Client initiated uni
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         // When used in server, a client initiated stream is initially limited by (the client's TP) initial_max_stream_data_uni
         FlowControl fc = new FlowControl(Role.Server, initialMaxData, 0, 0, initialClientMaxStreamData);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         long newLimit = fc.increaseFlowControlLimit(stream, 1000);
 
         assertThat(newLimit).isEqualTo(500);
@@ -391,10 +367,10 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialClientMaxStreamData = 500;
         int streamId = 0;  // Client initiated bidi.
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         // When used in server, a client initiated stream is initially limited by (the client's TP) initial_max_stream_data_bidi_local
         FlowControl fc = new FlowControl(Role.Server, initialMaxData, initialClientMaxStreamData, 0, 0);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         long newLimit = fc.increaseFlowControlLimit(stream, 1000);
 
         assertThat(newLimit).isEqualTo(500);
@@ -405,16 +381,62 @@ class FlowControlTest {
         int initialMaxData = 5000;
         int initialClientMaxStreamData = 500;
         int streamId = 1;  // Server initiated bidi
-        QuicStream stream = new QuicStream(streamId, conn, null);
 
         // When used in server, a server initiated stream is initially limited by (the client's TP) initial_max_stream_data_bidi_remote
         FlowControl fc = new FlowControl(Role.Server, initialMaxData, 0, initialClientMaxStreamData, 0);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
         long newLimit = fc.increaseFlowControlLimit(stream, 1000);
 
         assertThat(newLimit).isEqualTo(500);
     }
 
-    private void executeAsyncWithDelay(Runnable task, int delay) {
-        executor.schedule(task, delay, TimeUnit.MILLISECONDS);
+    @Test
+    void whenLimitIncreasedStreamNotBlockedIsNotUnblocked() {
+        int streamId = 1;
+        FlowControl fc = new FlowControl(Role.Client, 100000, 100, 100, 100);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
+        FlowControlUpdateListener listener = mock(FlowControlUpdateListener.class);
+        fc.register(stream, listener);
+
+        fc.increaseFlowControlLimit(stream, 99);  // So: not blocked (yet)
+
+        fc.process(new MaxStreamDataFrame(1, 999));
+
+        verify(listener, never()).streamNotBlocked(anyInt());
+    }
+
+    @Test
+    void whenLimitIncreasedBlockedStreamIsUnblocked() {
+        int streamId = 1;
+        FlowControl fc = new FlowControl(Role.Client, 100000, 100, 100, 100);
+        QuicStream stream = new QuicStream(streamId, conn, fc);
+        FlowControlUpdateListener listener = mock(FlowControlUpdateListener.class);
+        fc.register(stream, listener);
+
+        fc.increaseFlowControlLimit(stream, 101);  // So: blocked
+
+        fc.process(new MaxStreamDataFrame(1, 999));
+
+        verify(listener, times(1)).streamNotBlocked(anyInt());
+    }
+
+    @Test
+    void whenDataLimitIncreasedOnlyBlockedStreamsAreUnblocked() {
+        FlowControl fc = new FlowControl(Role.Client, 100, 100, 100, 100);
+        QuicStream stream1 = new QuicStream(1, conn, fc);
+        FlowControlUpdateListener listener1 = mock(FlowControlUpdateListener.class);
+        fc.register(stream1, listener1);
+
+        QuicStream stream2 = new QuicStream(2, conn, fc);
+        FlowControlUpdateListener listener2 = mock(FlowControlUpdateListener.class);
+        fc.register(stream2, listener2);
+
+        fc.increaseFlowControlLimit(stream1, 100);  // So: blocked (by both data and stream limit)
+        fc.increaseFlowControlLimit(stream2, 50);
+
+        fc.process(new MaxDataFrame(999));
+
+        verify(listener1, never()).streamNotBlocked(anyInt());
+        verify(listener2, times(1)).streamNotBlocked(anyInt());
     }
 }

@@ -53,6 +53,7 @@ class StreamManagerTest {
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
         streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10);
+        streamManager.setFlowController(mock(FlowControl.class));
     }
 
     @Test
@@ -261,6 +262,7 @@ class StreamManagerTest {
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
         streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
+        streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsUni(1);
 
         // When
@@ -275,6 +277,7 @@ class StreamManagerTest {
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
         streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
+        streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
         streamManager.setPeerInitiatedStreamCallback(stream -> openedStreams.add(stream));
