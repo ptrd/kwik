@@ -526,7 +526,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxStreamDataFrame);
+        try {
+            flowController.process(maxStreamDataFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override

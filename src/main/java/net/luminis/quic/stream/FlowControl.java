@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_STATE_ERROR;
+
 /**
  * Keeps track of connection and stream flow control limits imposed by the peer.
  */
@@ -61,6 +63,7 @@ public class FlowControl {
     private Map<Integer, Long> maxStreamDataAssigned;
     private final Logger log;
     private final Map<Integer, FlowControlUpdateListener> streamListeners;
+    private int maxOpenedStreamId;
 
 
     public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
@@ -203,6 +206,11 @@ public class FlowControl {
             maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
             maxStreamDataAssigned.put(streamId, 0L);
         }
+        synchronized (this) {
+            if (streamId > maxOpenedStreamId) {
+                maxOpenedStreamId = streamId;
+            }
+        }
     }
 
     public void streamClosed(QuicStream stream) {
@@ -269,19 +277,38 @@ public class FlowControl {
         }
     }
 
-    public void process(MaxStreamDataFrame frame) {
+    public void process(MaxStreamDataFrame frame) throws TransportError {
         synchronized (this) {
             int streamId = frame.getStreamId();
             long maxStreamData = frame.getMaxData();
-            // If frames are received out of order, the new max can be smaller than the current value.
-            if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
-                boolean streamWasBlocked = maxStreamDataAssigned.get(streamId).longValue() ==  maxStreamDataAllowed.get(streamId).longValue()
-                        && maxDataAssigned != maxDataAllowed;
-                maxStreamDataAllowed.put(streamId, maxStreamData);
-                if (streamWasBlocked) {
-                    streamListeners.get(streamId).streamNotBlocked(streamId);
+            if (maxStreamDataAllowed.containsKey(streamId)) {
+                // If frames are received out of order, the new max can be smaller than the current value.
+                if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
+                    boolean streamWasBlocked = maxStreamDataAssigned.get(streamId).longValue() == maxStreamDataAllowed.get(streamId).longValue()
+                            && maxDataAssigned != maxDataAllowed;
+                    maxStreamDataAllowed.put(streamId, maxStreamData);
+                    if (streamWasBlocked) {
+                        streamListeners.get(streamId).streamNotBlocked(streamId);
+                    }
                 }
             }
+            else {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-19.10
+                // "Receiving a MAX_STREAM_DATA frame for a locally-initiated stream that has not yet been created MUST
+                //  be treated as a connection error of type STREAM_STATE_ERROR."
+                if (locallyInitiated(streamId) && streamId > maxOpenedStreamId) {
+                    throw new TransportError(STREAM_STATE_ERROR);
+                }
+            }
+        }
+    }
+
+    private boolean locallyInitiated(int streamId) {
+        if (role == Role.Client) {
+            return streamId % 2 == 0;
+        }
+        else {
+            return streamId % 2 == 1;
         }
     }
 }

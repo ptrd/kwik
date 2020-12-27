@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Role;
+import net.luminis.quic.TransportError;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class FlowControlTest {
@@ -140,7 +142,7 @@ class FlowControlTest {
     }
 
     @Test
-    void maxStreamDataIncreasesStreamLimit() {
+    void maxStreamDataIncreasesStreamLimit() throws Exception {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
         FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
@@ -177,7 +179,7 @@ class FlowControlTest {
     }
 
     @Test
-    void streamUnblocksWhenMaxStreamDataIsIncreased() throws InterruptedException {
+    void streamUnblocksWhenMaxStreamDataIsIncreased() throws Exception {
         int initialMaxData = 500;
         int initialServerMaxStreamData = 100;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
@@ -215,7 +217,7 @@ class FlowControlTest {
     }
 
     @Test
-    void whenOutOfOrderMaxStreamDataIsReceivedCurrentMaxDataIsNotReduced() {
+    void whenOutOfOrderMaxStreamDataIsReceivedCurrentMaxDataIsNotReduced() throws Exception {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
@@ -228,6 +230,45 @@ class FlowControlTest {
         fc.process(new MaxStreamDataFrame(1, 1000));
 
         assertThat(fc.increaseFlowControlLimit(stream, 1500)).isEqualTo(1500);
+    }
+
+    @Test
+    void maxStreamDataFrameForClosedStreamIsIgnored() throws Exception {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 100, 100, 100, 100);
+        QuicStream stream = new QuicStream(1, conn, fc);
+        fc.streamOpened(stream);
+
+        // When
+        fc.streamClosed(stream);
+
+        // Then
+        // processing should not throw an exception
+        fc.process(new MaxStreamDataFrame(1, 1500));
+    }
+
+    @Test
+    void maxStreamDataFrameForNeverOpenedStreamMustLeadToStreamStateError() throws Exception {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 100, 100, 100, 100);
+        QuicStream stream = new QuicStream(0, conn, fc);
+        fc.streamOpened(stream);
+
+        assertThatThrownBy(() ->
+                // When
+                fc.process(new MaxStreamDataFrame(4, 1500))   // Client role, so 4 is locally initiated
+                // Then
+        ).isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void maxStreamDataFrameForNeverOpenedRemoteInitiaedStreamIsIgnored() throws Exception {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 100, 100, 100, 100);
+
+        // Then
+        // processing should not throw an exception
+        fc.process(new MaxStreamDataFrame(1, 1500));   // 1 = server initiated bidirectional
     }
 
     @Test
@@ -309,7 +350,7 @@ class FlowControlTest {
     }
 
     @Test
-    void updateInitialMaxStreamDataServerInitiatedBidirectionalStreamWithSmallerValueThanActual() {
+    void updateInitialMaxStreamDataServerInitiatedBidirectionalStreamWithSmallerValueThanActual() throws Exception {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 1;  // Server initiated bi-di
@@ -330,7 +371,7 @@ class FlowControlTest {
     }
 
     @Test
-    void updateInitialMaxStreamDataUnidirectionalStream() {
+    void updateInitialMaxStreamDataUnidirectionalStream() throws Exception {
         int initialMaxData = 5000;
         int initialServerMaxStreamData = 500;
         int streamId = 2;  // Client initiated uni
@@ -391,7 +432,7 @@ class FlowControlTest {
     }
 
     @Test
-    void whenLimitIncreasedStreamNotBlockedIsNotUnblocked() {
+    void whenLimitIncreasedStreamNotBlockedIsNotUnblocked() throws Exception {
         int streamId = 1;
         FlowControl fc = new FlowControl(Role.Client, 100000, 100, 100, 100);
         QuicStream stream = new QuicStream(streamId, conn, fc);
@@ -406,7 +447,7 @@ class FlowControlTest {
     }
 
     @Test
-    void whenLimitIncreasedBlockedStreamIsUnblocked() {
+    void whenLimitIncreasedBlockedStreamIsUnblocked() throws Exception {
         int streamId = 1;
         FlowControl fc = new FlowControl(Role.Client, 100000, 100, 100, 100);
         QuicStream stream = new QuicStream(streamId, conn, fc);
