@@ -65,8 +65,9 @@ public class QuicStream extends BaseStream {
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
     private volatile int lastOffset = -1;
+    private int sendBufferSize = 50 * 1024;
 
-
+    
     public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
@@ -76,11 +77,19 @@ public class QuicStream extends BaseStream {
     }
 
     public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+        this(quicVersion, streamId, connection, flowController, log, null);
+    }
+
+    QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
         this.flowController = flowController;
+        if (sendBufferSize != null && sendBufferSize > 0) {
+            this.sendBufferSize = sendBufferSize;
+        }
         this.log = log;
+
         inputStream = new StreamInputStream();
         outputStream = createStreamOutputStream();
 
@@ -89,6 +98,7 @@ public class QuicStream extends BaseStream {
         lastCommunicatedMaxData = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
+
 
     public InputStream getInputStream() {
         return inputStream;
@@ -274,7 +284,7 @@ public class QuicStream extends BaseStream {
         private volatile boolean sendRequestQueued;
 
         StreamOutputStream() {
-            maxBufferSize = 50 * 1024;
+            maxBufferSize = sendBufferSize;
             bufferedBytes = new AtomicInteger();
             bufferLock = new ReentrantLock();
             notFull = bufferLock.newCondition();
@@ -294,9 +304,22 @@ public class QuicStream extends BaseStream {
             }
 
             if (len > maxBufferSize) {
-                // Implementation choice is not to copy part of the data, because this would lead to fragmentation of
-                // buffer elements, as each send would free about only 1100 ~ 1200 bytes.
-                throw new IllegalArgumentException("quic stream send buffer size is too small");
+                // Buffering all would break the contract (because this method copies _all_ data) but splitting and
+                // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
+                int halfBuffersize = maxBufferSize / 2;
+                int times = len / halfBuffersize;
+                for (int i = 0; i < times; i++) {
+                    // Each individual write will probably block, but by splitting the writes in half buffer sizes
+                    // avoids that the buffer needs to be emptied completely before a new block can be added (which
+                    // could have severed negative impact on performance as the sender might have to wait for the caller
+                    // to fill the buffer again).
+                    write(data, off + i * halfBuffersize, halfBuffersize);
+                }
+                int rest = len % halfBuffersize;
+                if (rest > 0) {
+                    write(data, off + times * halfBuffersize, rest);
+                }
+                return;
             }
 
             int availableBufferSpace = maxBufferSize - bufferedBytes.get();

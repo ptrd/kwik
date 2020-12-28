@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.QuicConnectionImpl;
-import net.luminis.quic.Role;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -37,9 +34,14 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -55,6 +57,7 @@ class QuicStreamTest {
     private QuicConnectionImpl connection;
     private QuicStream quicStream;
     private Logger logger;
+    private Random randomGenerator = new Random();
 
     @BeforeAll
     static void setFiniteWaitForNextFrameTimeout() {
@@ -492,6 +495,69 @@ class QuicStreamTest {
 
         assertThat(writeSucceeded.get()).isFalse();
         assertThat(exception.get()).isInstanceOf(InterruptedIOException.class);
+    }
+
+    @Test
+    void writingMoreThanSendBufferSizeAtOnceShouldBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[66 * 1024]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);  // Wait for thread to complete (which it won't ;-))
+        asyncWriter.interrupt();      // Make sure thread ends
+        asyncWriter.join(500);  // And wait for thread finish
+
+        assertThat(writeSucceeded.get()).isFalse();
+        assertThat(exception.get()).isInstanceOf(InterruptedIOException.class);
+    }
+
+    @Test
+    void testWritingMoreThanSendBufferSize() throws Exception {
+        // Given
+        quicStream = new QuicStream(Version.getDefault(), 0, connection,
+                new FlowControl(Role.Client, 9999, 9999, 9999, 9999),
+                logger, 77);
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        byte[] data = new byte[1000];
+        randomGenerator.nextBytes(data);
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(data);
+                outputStream.close();
+            } catch (IOException e) {
+            }
+        });
+        asyncWriter.start();
+
+        ByteBuffer dataSent = ByteBuffer.allocate(1000);
+        StreamFrame lastFrame = null;
+        do {
+            ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+            verify(connection, atLeastOnce()).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+            for (Function<Integer, QuicFrame> f: sendFunctionCaptor.getAllValues()) {
+                QuicFrame frame = f.apply(1200);
+                if (frame != null) {
+                    lastFrame = (StreamFrame) frame;
+                    dataSent.put(((StreamFrame) frame).getStreamData());
+                }
+            }
+        }
+        while (!lastFrame.isFinal());
+
+        assertThat(dataSent.array()).isEqualTo(data);
     }
 
     @Test
