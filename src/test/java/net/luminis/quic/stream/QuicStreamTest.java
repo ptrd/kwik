@@ -446,6 +446,55 @@ class QuicStreamTest {
     }
 
     @Test
+    void writingLessThanSendBufferSizeDoesNotBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[50 * 1024]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);
+        asyncWriter.interrupt();
+
+        assertThat(writeSucceeded.get()).isTrue();
+    }
+
+    @Test
+    void writingMoreThanSendBufferSizeShouldBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+        outputStream.write(new byte[50 * 1024]);
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[10]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);  // Wait for thread to complete (which it won't ;-))
+        asyncWriter.interrupt();      // Make sure thread ends
+        asyncWriter.join(500);  // And wait for thread finish
+
+        assertThat(writeSucceeded.get()).isFalse();
+        assertThat(exception.get()).isInstanceOf(InterruptedIOException.class);
+    }
+
+    @Test
     void isUnidirectional() {
         QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();

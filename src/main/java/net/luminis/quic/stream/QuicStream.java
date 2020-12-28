@@ -29,6 +29,7 @@ import net.luminis.quic.log.NullLogger;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
@@ -38,6 +39,9 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static net.luminis.quic.EncryptionLevel.App;
 
@@ -255,6 +259,10 @@ public class QuicStream extends BaseStream {
 
         // Send queue contains stream bytes to send in order. The position of the first byte buffer in the queue determines the next byte(s) to send.
         private Queue<ByteBuffer> sendQueue = new ConcurrentLinkedDeque<>();
+        private final int maxBufferSize;
+        private final AtomicInteger bufferedBytes;
+        private final ReentrantLock bufferLock;
+        private final Condition notFull;
         // Current offset is the offset of the next byte in the stream that will be sent.
         // Thread safety: only used by sender thread, so no synchronization needed.
         private int currentOffset;
@@ -266,6 +274,11 @@ public class QuicStream extends BaseStream {
         private volatile boolean sendRequestQueued;
 
         StreamOutputStream() {
+            maxBufferSize = 50 * 1024;
+            bufferedBytes = new AtomicInteger();
+            bufferLock = new ReentrantLock();
+            notFull = bufferLock.newCondition();
+
             flowController.register(QuicStream.this, this);
         }
 
@@ -280,7 +293,32 @@ public class QuicStream extends BaseStream {
                 throw new IOException("already closed");
             }
 
+            if (len > maxBufferSize) {
+                // Implementation choice is not to copy part of the data, because this would lead to fragmentation of
+                // buffer elements, as each send would free about only 1100 ~ 1200 bytes.
+                throw new IllegalArgumentException("quic stream send buffer size is too small");
+            }
+
+            int availableBufferSpace = maxBufferSize - bufferedBytes.get();
+            if (len > availableBufferSpace) {
+                // Wait for enough buffer space to become available
+                bufferLock.lock();
+                try {
+                    while (maxBufferSize - bufferedBytes.get() < len) {
+                        try {
+                            notFull.await();
+                        } catch (InterruptedException e) {
+                            throw new InterruptedIOException();
+                        }
+                    }
+                }
+                finally {
+                    bufferLock.unlock();
+                }
+            }
+
             sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
+            bufferedBytes.getAndAdd(len);
             synchronized (lock) {
                 if (! sendRequestQueued) {
                     sendRequestQueued = true;
@@ -291,19 +329,9 @@ public class QuicStream extends BaseStream {
 
         @Override
         public void write(int dataByte) throws IOException {
-            if (closed) {
-                throw new IOException("already closed");
-            }
-
             // Terrible for performance of course, but that is calling this method anyway.
             byte[] data = new byte[] { (byte) dataByte };
-            sendQueue.add(ByteBuffer.wrap(data));
-            synchronized (lock) {
-                if (! sendRequestQueued) {
-                    connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
-                    sendRequestQueued = true;
-                }
-            }
+            write(data, 0, 1);
         }
 
         @Override
@@ -356,6 +384,16 @@ public class QuicStream extends BaseStream {
                         nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
                     }
                 }
+
+                bufferedBytes.getAndAdd(-1 * nrOfBytes);
+                bufferLock.lock();
+                try {
+                    notFull.signal();
+                }
+                finally {
+                    bufferLock.unlock();
+                }
+
                 if (nrOfBytes < maxBytesToSend) {
                     // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
                     dataToSend = Arrays.copyOfRange(dataToSend, 0, nrOfBytes);
