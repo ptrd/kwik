@@ -352,80 +352,81 @@ public class QuicStream extends BaseStream {
         }
 
         QuicFrame sendFrame(int maxFrameSize) {
-            int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
-            assert(flowControlLimit >= currentOffset);
+            if (!sendQueue.isEmpty()) {
+                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
+                assert (flowControlLimit >= currentOffset);
 
-            if (!sendQueue.isEmpty() && flowControlLimit > currentOffset) {
-                int nrOfBytes = 0;
-                StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
-                int maxBytesToSend = maxFrameSize - dummy.getBytes().length - 1;  // Take one byte extra for length field var int
-                // Use max to reserve flow control limits; might reserve to much, should be returned when stream closed.
-                int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
-                maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
+                if (flowControlLimit > currentOffset) {
+                    int nrOfBytes = 0;
+                    StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
+                    int maxBytesToSend = maxFrameSize - dummy.getBytes().length - 1;  // Take one byte extra for length field var int
+                    // Use max to reserve flow control limits; might reserve to much, should be returned when stream closed.
+                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
+                    maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
-                byte[] dataToSend = new byte[maxBytesToSend];
-                boolean finalFrame = false;
-                while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
-                    ByteBuffer buffer = sendQueue.peek();
-                    if (buffer == END_OF_STREAM_MARKER) {
-                        finalFrame = true;
-                        sendQueue.poll();
-                        break;
+                    byte[] dataToSend = new byte[maxBytesToSend];
+                    boolean finalFrame = false;
+                    while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
+                        ByteBuffer buffer = sendQueue.peek();
+                        if (buffer == END_OF_STREAM_MARKER) {
+                            finalFrame = true;
+                            sendQueue.poll();
+                            break;
+                        }
+                        int position = nrOfBytes;
+                        if (buffer.remaining() <= maxBytesToSend - nrOfBytes) {
+                            // All bytes remaining in buffer will fit in stream frame
+                            nrOfBytes += buffer.remaining();
+                            buffer.get(dataToSend, position, buffer.remaining());
+                            sendQueue.poll();
+                        }
+                        else {
+                            // Just part of the buffer will fit in (and will fill up) the stream frame
+                            buffer.get(dataToSend, position, maxBytesToSend - nrOfBytes);
+                            nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
+                        }
                     }
-                    int position = nrOfBytes;
-                    if (buffer.remaining() <= maxBytesToSend - nrOfBytes) {
-                        // All bytes remaining in buffer will fit in stream frame
-                        nrOfBytes += buffer.remaining();
-                        buffer.get(dataToSend, position, buffer.remaining());
-                        sendQueue.poll();
-                    } else {
-                        // Just part of the buffer will fit in (and will fill up) the stream frame
-                        buffer.get(dataToSend, position, maxBytesToSend - nrOfBytes);
-                        nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
+
+                    bufferedBytes.getAndAdd(-1 * nrOfBytes);
+                    bufferLock.lock();
+                    try {
+                        notFull.signal();
+                    } finally {
+                        bufferLock.unlock();
                     }
-                }
 
-                bufferedBytes.getAndAdd(-1 * nrOfBytes);
-                bufferLock.lock();
-                try {
-                    notFull.signal();
-                }
-                finally {
-                    bufferLock.unlock();
-                }
-
-                if (nrOfBytes < maxBytesToSend) {
-                    // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
-                    dataToSend = Arrays.copyOfRange(dataToSend, 0, nrOfBytes);
-                }
-                StreamFrame streamFrame = new StreamFrame(quicVersion, streamId, currentOffset, dataToSend, finalFrame);
-                currentOffset += nrOfBytes;
-
-                if (sendQueue.isEmpty()) {
-                    // There is a race condition with the write method, but it does not harm: incorrectly setting flag to false just adds an extra send request which does not hurt.
-                    synchronized (lock) {
-                        sendRequestQueued = false;
+                    if (nrOfBytes < maxBytesToSend) {
+                        // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
+                        dataToSend = Arrays.copyOfRange(dataToSend, 0, nrOfBytes);
                     }
+                    StreamFrame streamFrame = new StreamFrame(quicVersion, streamId, currentOffset, dataToSend, finalFrame);
+                    currentOffset += nrOfBytes;
+
+                    if (sendQueue.isEmpty()) {
+                        // There is a race condition with the write method, but it does not harm: incorrectly setting flag to false just adds an extra send request which does not hurt.
+                        synchronized (lock) {
+                            sendRequestQueued = false;
+                        }
+                    }
+                    else {
+                        // There is more to send, so queue a new send request.
+                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                    }
+
+                    if (streamFrame.isFinal()) {
+                        // Done! Retransmissions may follow, but don't need flow control.
+                        flowController.unregister(QuicStream.this);
+                        flowController.streamClosed(QuicStream.this);
+                    }
+                    return streamFrame;
                 }
                 else {
-                    // There is more to send, so queue a new send request.
-                    connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
-                }
-
-                if (streamFrame.isFinal()) {
-                    // Done! Retransmissions may follow, but don't need flow control.
-                    flowController.unregister(QuicStream.this);
-                    flowController.streamClosed(QuicStream.this);
-                }
-                return streamFrame;
-            }
-            else {
-                if (!sendQueue.isEmpty() && flowControlLimit <= currentOffset) {
+                    // So flowControlLimit <= currentOffset
                     // TODO: Should send DATA_BLOCKED or STREAM_DATA_BLOCKED.
                     log.info("Stream " + streamId + " is blocked by flow control (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
                 }
-                return null;
             }
+            return null;
         }
 
         public void streamNotBlocked(int streamId) {
