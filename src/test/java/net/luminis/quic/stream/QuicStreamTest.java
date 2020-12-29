@@ -18,9 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.QuicConnectionImpl;
-import net.luminis.quic.Role;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -36,10 +34,16 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.*;
@@ -53,6 +57,7 @@ class QuicStreamTest {
     private QuicConnectionImpl connection;
     private QuicStream quicStream;
     private Logger logger;
+    private Random randomGenerator = new Random();
 
     @BeforeAll
     static void setFiniteWaitForNextFrameTimeout() {
@@ -237,59 +242,86 @@ class QuicStreamTest {
 
     @Test
     void testStreamOutputWithByteArray() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testStreamOutputWithByteArrayFragment() throws IOException {
+        // Given
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello world".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testStreamOutputWithSingleByte() throws IOException {
+        // Given
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("#".getBytes())), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("#".getBytes());
     }
 
     @Test
     void testStreamOutputMultipleFrames() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("hello ".getBytes())), any(Consumer.class), anyBoolean());
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher("world".getBytes(), 6)), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world".getBytes());
     }
 
     @Test
     void testCloseSendsFinalFrame() throws IOException {
+        // Given
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
 
-        verify(connection, times(1)).send(argThat(new StreamFrameMatcher(new byte[0], 12, true)), any(Consumer.class), anyBoolean());
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        // Then
+        assertThat(((StreamFrame) streamFrame).getStreamData()).isEqualTo("hello world!".getBytes());
+        assertThat(((StreamFrame) streamFrame).isFinal()).isTrue();
     }
 
     @Test
     void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws IOException {
-        byte[] data = generateByteArray(1400);
+        byte[] data = generateByteArray(1700);
         quicStream.getOutputStream().write(data);
 
-        ArgumentCaptor<StreamFrame> captor = ArgumentCaptor.forClass(StreamFrame.class);
-        verify(connection, times(2)).send(captor.capture(), any(Consumer.class), anyBoolean());
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+
+        StreamFrame firstFrame = (StreamFrame) captor.getAllValues().get(0).apply(1200);
+        verify(connection, times(2)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        StreamFrame secondFrame = (StreamFrame) captor.getAllValues().get(1).apply(1200);
+
         // This is what the test is about: the first frame should be less than max packet size.
-        int lengthFirstFrame = captor.getAllValues().get(0).getLength();
-        assertThat(lengthFirstFrame).isLessThan(1300);
+        assertThat(firstFrame.getBytes().length).isLessThanOrEqualTo(1200);
         // And of course, the remaining bytes should be in the second frame.
-        int totalFrameLength = captor.getAllValues().stream().mapToInt(f -> f.getLength()).sum();
-        assertThat(totalFrameLength).isEqualTo(1400);
+        int totalFrameLength = firstFrame.getLength() + secondFrame.getLength();
+        assertThat(totalFrameLength).isEqualTo(data.length);
 
         // Also, the content should be copied correctly over the two frames:
-        StreamFrame firstFrame = resurrect(captor.getAllValues().get(0));
-        StreamFrame secondFrame = resurrect(captor.getAllValues().get(1));
         byte[] reconstructedContent = new byte[firstFrame.getStreamData().length + secondFrame.getStreamData().length];
         System.arraycopy(firstFrame.getStreamData(), 0, reconstructedContent, 0, firstFrame.getStreamData().length);
         System.arraycopy(secondFrame.getStreamData(), 0, reconstructedContent, firstFrame.getStreamData().length, secondFrame.getStreamData().length);
@@ -302,7 +334,7 @@ class QuicStreamTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStream(0, connection, null, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStream(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
         InputStream inputStream = quicStream.getInputStream();
@@ -330,12 +362,12 @@ class QuicStreamTest {
     @Test
     void lostStreamFrameShouldBeRetransmitted() throws IOException {
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
-        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
         quicStream.getOutputStream().write("this frame might get lost".getBytes());
-        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
 
-        QuicFrame lostFrame = sendFrameCaptor.getValue();
+        QuicFrame lostFrame = sendFunctionCaptor.getValue().apply(1500);
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
@@ -344,7 +376,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(2)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, atLeastOnce()).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -358,7 +390,7 @@ class QuicStreamTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStream(0, connection, null, logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStream(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
 
         InputStream inputStream = quicStream.getInputStream();
@@ -385,16 +417,21 @@ class QuicStreamTest {
 
     @Test
     void lostFinalFrameShouldBeRetransmitted() throws IOException {
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+
         quicStream.getOutputStream().write("just a stream frame".getBytes());
-        verify(connection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // Simulate data is sent
+        QuicFrame frame = sendFunctionCaptor.getValue().apply(1500);
 
         quicStream.getOutputStream().close();  // Close will send an empty final frame.
 
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor2 = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
-        ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(2)).send(resendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(sendFunctionCaptor2.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
+        // Simulate close frame is sent (and lost)
+        QuicFrame lostFrame = sendFunctionCaptor2.getValue().apply(1500);
 
-        QuicFrame lostFrame = resendFrameCaptor.getValue();
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
@@ -403,7 +440,7 @@ class QuicStreamTest {
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-        verify(connection, times(3)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
+        verify(connection, times(1)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
 
@@ -412,83 +449,172 @@ class QuicStreamTest {
     }
 
     @Test
+    void writingLessThanSendBufferSizeDoesNotBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[50 * 1024]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);
+        asyncWriter.interrupt();
+
+        assertThat(writeSucceeded.get()).isTrue();
+    }
+
+    @Test
+    void writingMoreThanSendBufferSizeShouldBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+        outputStream.write(new byte[50 * 1024]);
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[10]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);  // Wait for thread to complete (which it won't ;-))
+        asyncWriter.interrupt();      // Make sure thread ends
+        asyncWriter.join(500);  // And wait for thread finish
+
+        assertThat(writeSucceeded.get()).isFalse();
+        assertThat(exception.get()).isInstanceOf(InterruptedIOException.class);
+    }
+
+    @Test
+    void writingMoreThanSendBufferSizeAtOnceShouldBlock() throws Exception {
+        // Given
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        AtomicReference<Exception> exception = new AtomicReference<>();
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[66 * 1024]);
+                writeSucceeded.set(true);
+            } catch (IOException e) {
+                exception.set(e);
+            }
+        });
+        asyncWriter.start();
+        asyncWriter.join(500);  // Wait for thread to complete (which it won't ;-))
+        asyncWriter.interrupt();      // Make sure thread ends
+        asyncWriter.join(500);  // And wait for thread finish
+
+        assertThat(writeSucceeded.get()).isFalse();
+        assertThat(exception.get()).isInstanceOf(InterruptedIOException.class);
+    }
+
+    @Test
+    void testWritingMoreThanSendBufferSize() throws Exception {
+        // Given
+        quicStream = new QuicStream(Version.getDefault(), 0, connection,
+                new FlowControl(Role.Client, 9999, 9999, 9999, 9999),
+                logger, 77);
+        OutputStream outputStream = quicStream.getOutputStream();
+
+        // When
+        byte[] data = new byte[1000];
+        randomGenerator.nextBytes(data);
+        Thread asyncWriter = new Thread(() -> {
+            try {
+                outputStream.write(data);
+                outputStream.close();
+            } catch (IOException e) {
+            }
+        });
+        asyncWriter.start();
+
+        ByteBuffer dataSent = ByteBuffer.allocate(1000);
+        StreamFrame lastFrame = null;
+        do {
+            ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+            verify(connection, atLeastOnce()).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+            for (Function<Integer, QuicFrame> f: sendFunctionCaptor.getAllValues()) {
+                QuicFrame frame = f.apply(1200);
+                if (frame != null) {
+                    lastFrame = (StreamFrame) frame;
+                    dataSent.put(((StreamFrame) frame).getStreamData());
+                }
+            }
+        }
+        while (!lastFrame.isFinal());
+
+        assertThat(dataSent.array()).isEqualTo(data);
+    }
+
+    @Test
     void isUnidirectional() {
-        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), null);
+        QuicStream clientInitiatedStream = new QuicStream(2, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), null);
+        QuicStream serverInitiatedStream = new QuicStream(3, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), null);
+        QuicStream stream = new QuicStream(0, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), null);
+        QuicStream stream = new QuicStream(1, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
 
     @Test
-    void writingLessThanFlowControlLimitWillNotBlock() throws Exception {
+    void writeDataWillNotSendMoreThenFlowControlsAllows() throws Exception {
+        // Given
         FlowControl flowController = mock(FlowControl.class);
+        when(flowController.getFlowControlLimit(any(QuicStream.class))).thenReturn(100L);
         when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong())).thenReturn(100L);
-        doThrow(new RuntimeException("would block forever")).when(flowController).waitForFlowControlCredits(any(QuicStream.class));
 
         QuicStream stream = new QuicStream(1, connection, flowController);
         stream.getOutputStream().write(new byte[100]);
 
-        verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
-        verify(flowController, never()).waitForFlowControlCredits(any(QuicStream.class));
+        StreamFrame frame = (StreamFrame) captureSendFunction(connection).apply(1500);
+        assertThat(frame.getLength()).isLessThanOrEqualTo(100);
     }
 
     @Test
-    void writingMoreThanFlowControlLimitBlocks() throws Exception {
-        FlowControl flowController = mock(FlowControl.class);
-        when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong()))
-                .thenReturn(100L)
-                .thenReturn(500L);
+    void whenFlowControlLimitIsIncreasedMoreDataWillBeSent() throws Exception {
+        // Given
+        FlowControl flowController = new FlowControl(Role.Client, 100000, 100, 100, 100);
+        ArgumentCaptor<FlowControlUpdateListener> fcUpdateListenerCaptor = ArgumentCaptor.forClass(FlowControlUpdateListener.class);
 
         QuicStream stream = new QuicStream(1, connection, flowController);
-        stream.getOutputStream().write(new byte[500], 0, 500);
 
-        verify(flowController, times(1)).waitForFlowControlCredits(any(QuicStream.class));
-        verify(flowController, times(2)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
+        stream.getOutputStream().write(new byte[1024]);
 
-        InOrder inOrder = inOrder(connection);
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(100)), any(), anyBoolean());
-        inOrder.verify(connection).send(argThat(new StreamFrameDataLengthMatcher(400)), any(), anyBoolean());
-    }
+        StreamFrame frame1 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        assertThat(frame1.getLength()).isLessThanOrEqualTo(100);
+        StreamFrame noFrame = (StreamFrame) captureSendFunction(connection).apply(1000);
 
-    @Test
-    void writeArrayInFragmentsDueToFlowControl() throws Exception {
-        FlowControl flowController = mock(FlowControl.class);
-        when(flowController.increaseFlowControlLimit(any(QuicStream.class), anyLong()))
-                .thenReturn(9L)
-                .thenReturn(22L)
-                .thenReturn(31L)
-                .thenReturn(38L)
-                .thenReturn(50L)
-                .thenReturn(60L);
+        // When
+        flowController.process(new MaxStreamDataFrame(1, 233));
 
-        QuicStream stream = new QuicStream(1, connection, flowController);
-        byte[] data = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".getBytes();
-        stream.getOutputStream().write(data);
-
-        verify(flowController, times(5)).waitForFlowControlCredits(any(QuicStream.class));
-        verify(flowController, times(6)).increaseFlowControlLimit(any(QuicStream.class), anyLong());
-
-        ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(6)).send(sendFrameCaptor.capture(), any(Consumer.class), anyBoolean());
-
-        String sentData = sendFrameCaptor.getAllValues().stream()
-                .map(frame -> new String(((StreamFrame) frame).getStreamData()))
-                .collect(Collectors.joining());
-
-        assertThat(sentData).isEqualTo("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        // Then
+        StreamFrame frame2 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        assertThat(frame2.getLength()).isLessThanOrEqualTo(233);
     }
 
     @Test
@@ -573,6 +699,12 @@ class QuicStreamTest {
         }
     }
 
+    private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        clearInvocations(connection);
+        return captor.getValue();
+    }
 
     /**
      * Mockito Argumentmatcher for checking StreamFrame arguments.

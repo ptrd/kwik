@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.QuicClientConnectionImpl;
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
@@ -36,7 +36,14 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.function.Consumer;
+import java.util.Arrays;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static net.luminis.quic.EncryptionLevel.App;
 
 
 public class QuicStream extends BaseStream {
@@ -50,16 +57,17 @@ public class QuicStream extends BaseStream {
     protected final QuicConnectionImpl connection;
     protected final FlowControl flowController;
     protected final Logger log;
-    private StreamInputStream inputStream;
-    private StreamOutputStream outputStream;
+    private final StreamInputStream inputStream;
+    private final StreamOutputStream outputStream;
     private volatile boolean aborted;
     private volatile Thread blocking;
     private long receiverFlowControlLimit;
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
     private volatile int lastOffset = -1;
+    private int sendBufferSize = 50 * 1024;
 
-
+    
     public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
@@ -69,18 +77,28 @@ public class QuicStream extends BaseStream {
     }
 
     public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+        this(quicVersion, streamId, connection, flowController, log, null);
+    }
+
+    QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
         this.flowController = flowController;
+        if (sendBufferSize != null && sendBufferSize > 0) {
+            this.sendBufferSize = sendBufferSize;
+        }
         this.log = log;
-        inputStream = new StreamInputStream();
-        outputStream = new StreamOutputStream();
 
+        inputStream = new StreamInputStream();
+        outputStream = createStreamOutputStream();
+
+        flowController.streamOpened(this);
         receiverFlowControlLimit = connection.getInitialMaxStreamData();
         lastCommunicatedMaxData = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
+
 
     public InputStream getInputStream() {
         return inputStream;
@@ -138,7 +156,11 @@ public class QuicStream extends BaseStream {
         return "Stream " + streamId;
     }
 
-    private class StreamInputStream extends InputStream {
+    protected StreamOutputStream createStreamOutputStream() {
+        return new StreamOutputStream();
+    }
+
+    protected class StreamInputStream extends InputStream {
 
         @Override
         public int available() throws IOException {
@@ -220,7 +242,7 @@ public class QuicStream extends BaseStream {
         }
 
         private void updateAllowedFlowControl(int bytesRead) {
-            // Slide flow control window forward (which as much bytes as are read)
+            // Slide flow control window forward (with as much bytes as are read)
             receiverFlowControlLimit += bytesRead;
             connection.updateConnectionFlowControl(bytesRead);
             // Avoid sending flow control updates with every single read; check diff with last send max data
@@ -236,8 +258,39 @@ public class QuicStream extends BaseStream {
         }
     }
 
-    private class StreamOutputStream extends OutputStream {
-        int currentOffset;
+    protected class StreamOutputStream extends OutputStream implements FlowControlUpdateListener {
+
+        // Minimum stream frame size: frame type (1), stream id (1..8), offset (1..8), length (1..2), data (1...)
+        // Note that in practice stream id and offset will seldom / never occupy 8 bytes, so the minimum leaves more room for data.
+        private static final int MIN_FRAME_SIZE = 1 + 8 + 8 + 2 + 1;
+
+        private final ByteBuffer END_OF_STREAM_MARKER = ByteBuffer.allocate(0);
+        private final Object lock = new Object();
+
+        // Send queue contains stream bytes to send in order. The position of the first byte buffer in the queue determines the next byte(s) to send.
+        private Queue<ByteBuffer> sendQueue = new ConcurrentLinkedDeque<>();
+        private final int maxBufferSize;
+        private final AtomicInteger bufferedBytes;
+        private final ReentrantLock bufferLock;
+        private final Condition notFull;
+        // Current offset is the offset of the next byte in the stream that will be sent.
+        // Thread safety: only used by sender thread, so no synchronization needed.
+        private int currentOffset;
+        // Closed indicates whether the OutputStream is closed, meaning that no more bytes can be written by caller.
+        // Thread safety: only use by caller
+        private boolean closed;
+        // Send request queued indicates whether a request to send a stream frame is queued with the sender. Is used to avoid multiple requests being queued.
+        // Thread safety: read/set by caller and by sender thread, so must be synchronized; guarded by lock
+        private volatile boolean sendRequestQueued;
+
+        StreamOutputStream() {
+            maxBufferSize = sendBufferSize;
+            bufferedBytes = new AtomicInteger();
+            bufferLock = new ReentrantLock();
+            notFull = bufferLock.newCondition();
+
+            flowController.register(QuicStream.this, this);
+        }
 
         @Override
         public void write(byte[] data) throws IOException {
@@ -246,65 +299,188 @@ public class QuicStream extends BaseStream {
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            long flowControlLimit = flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + len);
-            if (currentOffset + len <= flowControlLimit) {
-                sendData(data, off, len);
+            if (closed) {
+                throw new IOException("already closed");
             }
-            else {
-                int sizeOfFirstWrite = (int) (flowControlLimit - currentOffset);
-                sendData(data, off, sizeOfFirstWrite);
 
-                try {
-                    flowController.waitForFlowControlCredits(QuicStream.this);
-                } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
+            if (len > maxBufferSize) {
+                // Buffering all would break the contract (because this method copies _all_ data) but splitting and
+                // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
+                int halfBuffersize = maxBufferSize / 2;
+                int times = len / halfBuffersize;
+                for (int i = 0; i < times; i++) {
+                    // Each individual write will probably block, but by splitting the writes in half buffer sizes
+                    // avoids that the buffer needs to be emptied completely before a new block can be added (which
+                    // could have severed negative impact on performance as the sender might have to wait for the caller
+                    // to fill the buffer again).
+                    write(data, off + i * halfBuffersize, halfBuffersize);
                 }
+                int rest = len % halfBuffersize;
+                if (rest > 0) {
+                    write(data, off + times * halfBuffersize, rest);
+                }
+                return;
+            }
 
-                write(data, off + sizeOfFirstWrite, len - sizeOfFirstWrite);    // TODO: refactor recursion to while
+            int availableBufferSpace = maxBufferSize - bufferedBytes.get();
+            if (len > availableBufferSpace) {
+                // Wait for enough buffer space to become available
+                bufferLock.lock();
+                try {
+                    while (maxBufferSize - bufferedBytes.get() < len) {
+                        try {
+                            notFull.await();
+                        } catch (InterruptedException e) {
+                            throw new InterruptedIOException();
+                        }
+                    }
+                }
+                finally {
+                    bufferLock.unlock();
+                }
+            }
+
+            sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
+            bufferedBytes.getAndAdd(len);
+            synchronized (lock) {
+                if (! sendRequestQueued) {
+                    sendRequestQueued = true;
+                    connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                }
             }
         }
 
         @Override
         public void write(int dataByte) throws IOException {
-            write(new byte[] { (byte) dataByte }, 0, 1);
+            // Terrible for performance of course, but that is calling this method anyway.
+            byte[] data = new byte[] { (byte) dataByte };
+            write(data, 0, 1);
         }
 
         @Override
         public void flush() throws IOException {
-            // No-op, this implementation flushes immediately.
+            if (closed) {
+                throw new IOException("already closed");
+            }
+
+            // No-op, this implementation sends data as soon as possible.
         }
 
         @Override
         public void close() throws IOException {
-            send(new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], true), this::retransmitStreamFrame, true);
+            if (! closed) {
+                sendQueue.add(END_OF_STREAM_MARKER);
+                closed = true;
+            }
         }
 
-        private void sendData(byte[] data, int off, int len) {
-            int maxDataPerFrame = connection.getMaxPacketSize() - StreamFrame.maxOverhead() - connection.getMaxShortHeaderPacketOverhead();
-            int remaining = len;
-            int offsetInDataArray = off;
-            while (remaining > 0) {
-                int bytesInFrame = Math.min(maxDataPerFrame, remaining);
-                StreamFrame frame = new StreamFrame(quicVersion, streamId, currentOffset, data, offsetInDataArray, bytesInFrame, false);
-                send(frame, this::retransmitStreamFrame, false);
-                remaining -= bytesInFrame;
-                offsetInDataArray += bytesInFrame;
-                currentOffset += bytesInFrame;
+        QuicFrame sendFrame(int maxFrameSize) {
+            if (!sendQueue.isEmpty()) {
+                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
+                assert (flowControlLimit >= currentOffset);
+
+                if (flowControlLimit > currentOffset) {
+                    int nrOfBytes = 0;
+                    StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
+                    int maxBytesToSend = maxFrameSize - dummy.getBytes().length - 1;  // Take one byte extra for length field var int
+                    // Use max to reserve flow control limits; might reserve to much, should be returned when stream closed.
+                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
+                    maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
+
+                    byte[] dataToSend = new byte[maxBytesToSend];
+                    boolean finalFrame = false;
+                    while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
+                        ByteBuffer buffer = sendQueue.peek();
+                        if (buffer == END_OF_STREAM_MARKER) {
+                            finalFrame = true;
+                            sendQueue.poll();
+                            break;
+                        }
+                        int position = nrOfBytes;
+                        if (buffer.remaining() <= maxBytesToSend - nrOfBytes) {
+                            // All bytes remaining in buffer will fit in stream frame
+                            nrOfBytes += buffer.remaining();
+                            buffer.get(dataToSend, position, buffer.remaining());
+                            sendQueue.poll();
+                        }
+                        else {
+                            // Just part of the buffer will fit in (and will fill up) the stream frame
+                            buffer.get(dataToSend, position, maxBytesToSend - nrOfBytes);
+                            nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
+                        }
+                    }
+
+                    bufferedBytes.getAndAdd(-1 * nrOfBytes);
+                    bufferLock.lock();
+                    try {
+                        notFull.signal();
+                    } finally {
+                        bufferLock.unlock();
+                    }
+
+                    if (nrOfBytes < maxBytesToSend) {
+                        // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
+                        dataToSend = Arrays.copyOfRange(dataToSend, 0, nrOfBytes);
+                    }
+                    StreamFrame streamFrame = new StreamFrame(quicVersion, streamId, currentOffset, dataToSend, finalFrame);
+                    currentOffset += nrOfBytes;
+
+                    if (sendQueue.isEmpty()) {
+                        // There is a race condition with the write method, but it does not harm: incorrectly setting flag to false just adds an extra send request which does not hurt.
+                        synchronized (lock) {
+                            sendRequestQueued = false;
+                        }
+                    }
+                    else {
+                        // There is more to send, so queue a new send request.
+                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                    }
+
+                    if (streamFrame.isFinal()) {
+                        // Done! Retransmissions may follow, but don't need flow control.
+                        flowController.unregister(QuicStream.this);
+                        flowController.streamClosed(QuicStream.this);
+                    }
+                    return streamFrame;
+                }
+                else {
+                    // So flowControlLimit <= currentOffset
+                    // TODO: Should send DATA_BLOCKED or STREAM_DATA_BLOCKED.
+                    log.info("Stream " + streamId + " is blocked by flow control (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
+                }
             }
+            return null;
+        }
+
+        public void streamNotBlocked(int streamId) {
+            // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
+            // and let sendFrame method determine whether there is more to send or not.
+            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
             connection.send(frame, this::retransmitStreamFrame, true);
             log.recovery("Retransmitted lost stream frame " + frame);
         }
+
+        protected EncryptionLevel getEncryptionLevel() {
+            return App;
+        }
+
+        private void restart() {
+            currentOffset = 0;
+            sendQueue.clear();
+            sendRequestQueued = false;
+        }
     }
 
+    /**
+     * Resets the output stream so data can again be send from the start of the stream (offset 0). Note that in such
+     * cases the caller must (again) provide the data to be sent.
+     */
     protected void resetOutputStream() {
-        outputStream.currentOffset = 0;
-    }
-
-    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
-        connection.send(frame, lostFrameCallback, flush);
+        // TODO: this is currently not thread safe, see comment in EarlyDataStream how to fix.
+        outputStream.restart();
     }
 
     void abort() {
