@@ -782,24 +782,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
-        // "If a max_idle_timeout is specified by either peer in its transport parameters (Section 18.2), the
-        //  connection is silently closed and its state is discarded when it remains idle for longer than the minimum
-        //  of both peers max_idle_timeout values."
-        long idleTimeout = Long.min(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        if (idleTimeout == 0) {
-            idleTimeout = Long.max(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        }
-        if (idleTimeout != 0) {
-            log.info("Effective idle timeout is " + idleTimeout);
-            // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
-            idleTimer.setIdleTimeout(idleTimeout);
-        }
-        else {
-            // Both or 0 or not set:
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
-            // "Idle timeout is disabled when both endpoints omit this transport parameter or specify a value of 0."
-        }
+        determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
 
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||

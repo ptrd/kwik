@@ -66,6 +66,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
+    private int maxIdleTimeoutInSeconds;
 
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
@@ -90,6 +91,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
+        maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
@@ -224,7 +226,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters(30, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -429,6 +431,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
+
+        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
 
         flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),

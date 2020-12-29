@@ -238,6 +238,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     public void shutdown() {
+        stop();
         running = false;
         senderThread.interrupt();
     }

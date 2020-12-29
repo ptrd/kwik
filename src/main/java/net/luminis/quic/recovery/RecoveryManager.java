@@ -351,10 +351,12 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     public void stopRecovery() {
-        hasBeenReset = true;
-        unschedule();
-        for (PnSpace pnSpace: PnSpace.values()) {
-            stopRecovery(pnSpace);
+        if (! hasBeenReset) {
+            hasBeenReset = true;
+            unschedule();
+            for (PnSpace pnSpace : PnSpace.values()) {
+                stopRecovery(pnSpace);
+            }
         }
     }
 
