@@ -112,7 +112,6 @@ public class Server {
             log = new SysOutLogger();
         }
         log.logWarning(true);
-        log.logPackets(true);
         log.logInfo(true);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);

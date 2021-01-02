@@ -298,7 +298,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
         if (! lossDetectionTimer.cancel(false)) {
-            log.warn("Cancelling loss detection timer failed");
+            log.debug("Cancelling loss detection timer failed");
         }
         timerExpiration = Instant.now().plusMillis(timeout);
         return scheduler.schedule(() -> {
