@@ -4,6 +4,8 @@ COPY build/libs/kwik.jar .
 COPY test.kwik.tech.pem cert.pem
 COPY test.kwik.tech.key key.pem
 RUN mkdir /logs
+RUN mkdir /logs/qlog
+ENV QLOGDIR=/logs/qlog
 RUN mkdir /www
 COPY kwikindex.html /www/index.html
 
