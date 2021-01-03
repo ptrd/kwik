@@ -24,6 +24,7 @@ import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +45,7 @@ class NewRenoCongestionControllerTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
     }
 
     @Test
@@ -58,13 +59,28 @@ class NewRenoCongestionControllerTest {
     }
 
     @Test
-    void whenInSlowStartCwndIncreasesByNumberOfBytesAcked() {
+    void whenInSlowStartCwndIsNotIncreasesWhenUnderUtilized() {
         long initialCwnd = congestionController.getWindowSize();
         QuicPacket packet = new MockPacket(new Padding(800));
         congestionController.registerInFlight(packet);
         congestionController.registerAcked(List.of(new PacketInfo(whenever, packet, this::noOp)));
 
-        assertThat(congestionController.getWindowSize()).isEqualTo(initialCwnd + packet.getSize());
+        assertThat(congestionController.getWindowSize()).isEqualTo(initialCwnd);
+    }
+
+    @Test
+    void whenInSlowStartCwndIncreasesByNumberOfBytesAcked() {
+        // Given (cwnd is fully utilized)
+        long initialCwnd = congestionController.getWindowSize();
+        QuicPacket hugePacket = new MockPacket(new Padding((int) initialCwnd));
+        congestionController.registerInFlight(hugePacket);
+
+        // When
+        MockPacket normalPacket = new MockPacket(new Padding(1100));
+        congestionController.registerInFlight(normalPacket);
+        congestionController.registerAcked(List.of(new PacketInfo(whenever, normalPacket, this::noOp)));
+
+        assertThat(congestionController.getWindowSize()).isEqualTo(initialCwnd + normalPacket.getSize());
     }
 
     @Test
@@ -166,7 +182,7 @@ class NewRenoCongestionControllerTest {
         Instant timeFirstPacketSent = startOfRecovery.minusMillis(2);
         congestionController.registerInFlight(packet1);
 
-        QuicPacket packet2 = new MockPacket(new Padding(800));
+        QuicPacket packet2 = new MockPacket(new Padding(6000));
         congestionController.registerInFlight(packet2);
 
         congestionController.registerLost(List.of(new PacketInfo(timeFirstPacketSent, packet1, this::noOp)));
@@ -204,11 +220,11 @@ class NewRenoCongestionControllerTest {
 
         assertThat(((NewRenoCongestionController) congestionController).getMode()).isEqualTo(NewRenoCongestionController.Mode.CongestionAvoidance);
 
-        MockPacket newPacket = new MockPacket(0, 1000, EncryptionLevel.App);
+        MockPacket newPacket = new MockPacket(0, 6000, EncryptionLevel.App);
         congestionController.registerInFlight(newPacket);
         congestionController.registerAcked(List.of(new PacketInfo(Instant.now(), newPacket, this::noOp)));
-        // cwnd was 6000; congestion avoidance adds 1200 * 1000 / 6000 = 200
-        assertThat(congestionController.getWindowSize()).isEqualTo(6200);
+        // cwnd was 6000; congestion avoidance adds 1200 * 6000 / 6000 = 1200
+        assertThat(congestionController.getWindowSize()).isEqualTo(7200);
     }
 
     @Test

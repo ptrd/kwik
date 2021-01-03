@@ -57,4 +57,8 @@ public class NewTokenFrame extends QuicFrame {
     public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
     }
+
+    public byte[] getToken() {
+        return newToken;
+    }
 }

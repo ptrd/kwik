@@ -157,7 +157,7 @@ public class PacketAssembler {
                     callbacks.add(next.get().getLostCallback());
 
                     // If there was an optional ack (which was not added yet)...
-                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize < available) {
+                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize <= available) {
                         // ..., add it now (now that it is sure there will be at least one non-ack frame)
                         packet.get().addFrame(ackFrame);
                         callbacks.add(EMPTY_CALLBACK);

@@ -298,7 +298,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
         if (! lossDetectionTimer.cancel(false)) {
-            log.warn("Cancelling loss detection timer failed");
+            log.debug("Cancelling loss detection timer failed");
         }
         timerExpiration = Instant.now().plusMillis(timeout);
         return scheduler.schedule(() -> {
@@ -351,10 +351,12 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     public void stopRecovery() {
-        hasBeenReset = true;
-        unschedule();
-        for (PnSpace pnSpace: PnSpace.values()) {
-            stopRecovery(pnSpace);
+        if (! hasBeenReset) {
+            hasBeenReset = true;
+            unschedule();
+            for (PnSpace pnSpace : PnSpace.values()) {
+                stopRecovery(pnSpace);
+            }
         }
     }
 

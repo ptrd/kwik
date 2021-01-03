@@ -291,6 +291,28 @@ class PacketAssemblerTest extends AbstractSenderTest {
     }
 
     @Test
+    void whenSendingLargestPossibleFrameStillImplicitAckIsIncluded() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true),    // Stream length will be > 63, so 2 bytes for length field
+                (3 + 2) + 1, null);  // Send at least 1 byte of data
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]).get().getPacket();
+        assertThat(packet.getFrames())
+                .hasSize(2)
+                .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class);
+        byte[] packetBytes = packet.generatePacketBytes(509, keys);
+        assertThat(packetBytes.length)
+                .isLessThanOrEqualTo(MAX_PACKET_SIZE)
+                .isGreaterThanOrEqualTo(MAX_PACKET_SIZE - 3);   // Packet length computation has allowance for 4 bytes packet number, so length can vary with 3 bytes
+    }
+
+    @Test
     void whenNoDataToSendButAnExplicitAckIsQueueAssembleWillCreateAckOnlyPacket() throws Exception {
         // Given
         oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));

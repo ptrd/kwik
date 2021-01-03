@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
@@ -65,12 +66,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
+    private int maxIdleTimeoutInSeconds;
 
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
                                ApplicationProtocolRegistry applicationProtocolRegistry, Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
-        super(quicVersion, Role.Server, null, log);
+        super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.scid = scid;
         this.dcid = dcid;
         this.originalDcid = originalDcid;
@@ -80,7 +82,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
         idleTimer.setPtoSupplier(sender::getPto);
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -89,10 +91,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
+        maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
         streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi);
+
+        this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
 
     @Override
@@ -221,7 +226,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters(30, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -301,6 +306,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
 
     }
@@ -312,7 +322,12 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxStreamDataFrame);
+        try {
+            flowController.process(maxStreamDataFrame);
+        }
+        catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override
@@ -326,12 +341,42 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
 
     }
 
     @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
 
     }
 
@@ -345,8 +390,19 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     protected void terminate() {
         super.terminate();
+        log.getQLog().emitConnectionTerminatedEvent();
         closeCallback.accept(scid);
     }
 
@@ -375,6 +431,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
+
+        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
 
         flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),

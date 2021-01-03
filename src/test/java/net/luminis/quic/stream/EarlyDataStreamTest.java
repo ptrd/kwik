@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Role;
 import net.luminis.quic.Version;
@@ -31,10 +32,11 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class EarlyDataStreamTest {
@@ -59,7 +61,8 @@ class EarlyDataStreamTest {
         stream.writeEarlyData(new byte[10], false, 10_000);
 
         // Then
-        verify(connection).sendZeroRtt(any(StreamFrame.class), any(Consumer.class));
+        StreamFrame frame = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+        assertThat(frame.getStreamData().length).isEqualTo(10);
     }
 
     @Test
@@ -68,11 +71,9 @@ class EarlyDataStreamTest {
         stream.writeEarlyData(new byte[10], true, 10_000);
 
         // Then
-        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, atLeast(2)).sendZeroRtt(argumentCaptor.capture(), any(Consumer.class));
-        assertThat(argumentCaptor.getAllValues()).hasSize(2);
-        assertThat(((StreamFrame) argumentCaptor.getAllValues().get(0)).isFinal()).isFalse();
-        assertThat(((StreamFrame) argumentCaptor.getAllValues().get(1)).isFinal()).isTrue();
+        StreamFrame frame = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+        assertThat(frame.isFinal()).isTrue();
+        assertThat(frame.getStreamData().length).isEqualTo(10);
     }
 
     @Test
@@ -81,12 +82,14 @@ class EarlyDataStreamTest {
         stream.writeEarlyData(new byte[1500], false, 10_000);
 
         // Then
-        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, atLeast(2)).sendZeroRtt(argumentCaptor.capture(), any(Consumer.class));
-        assertThat(argumentCaptor.getAllValues()).hasSize(2);
-        assertThat(((StreamFrame) argumentCaptor.getAllValues().get(0)).getStreamData().length).isGreaterThan(1000);
-        assertThat(((StreamFrame) argumentCaptor.getAllValues().get(1)).getStreamData().length).isGreaterThan(200);
-        assertThat(argumentCaptor.getAllValues().stream().mapToInt(f -> ((StreamFrame) f).getStreamData().length).sum()).isEqualTo(1500);
+        // Simulate first packet is sent (which will cause second send request to be queued)
+        QuicFrame firstFrame = captureFrameSentAndVerifyEncryptionLevel(connection, 1300, EncryptionLevel.ZeroRTT);
+
+        QuicFrame secondFrame = captureFrameSentAndVerifyEncryptionLevel(connection, 1300, EncryptionLevel.ZeroRTT);
+
+        assertThat(((StreamFrame) firstFrame).getStreamData().length).isGreaterThan(1000);
+        assertThat(((StreamFrame) secondFrame).getStreamData().length).isGreaterThan(200);
+        assertThat(((StreamFrame) firstFrame).getStreamData().length + ((StreamFrame) secondFrame).getStreamData().length).isEqualTo(1500);
     }
 
     @Test
@@ -100,18 +103,18 @@ class EarlyDataStreamTest {
         stream.writeEarlyData(new byte[1500], false, 10_000);
 
         // Then
-        verify(connection, times(1)).sendZeroRtt(any(QuicFrame.class), any(Consumer.class));
-        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length == 1000), any(Consumer.class));
+        StreamFrame frame1 = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+        assertThat(frame1.getLength()).isEqualTo(1000);
     }
 
     @Test
     void earlyDataShouldBeLimitedToInitalMaxData() throws Exception {
         // When
-        stream.writeEarlyData(new byte[1500], true, 500);
+        stream.writeEarlyData(new byte[1500], true, 500);  // earlyDataSizeLeft should be set to initial max data from session ticket
 
         // Then
-        verify(connection, times(1)).sendZeroRtt(any(QuicFrame.class), any(Consumer.class));
-        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).getStreamData().length <= 500), any(Consumer.class));
+        StreamFrame frame1 = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+        assertThat(frame1.getLength()).isEqualTo(500);
     }
 
     @Test
@@ -119,8 +122,10 @@ class EarlyDataStreamTest {
         // When
         stream.writeEarlyData(new byte[1500], true, 500);
 
+        StreamFrame streamFrame = captureFrameSentAndVerifyEncryptionLevel(connection, 1300, EncryptionLevel.ZeroRTT);
+
         // Then
-        verify(connection, times(1)).sendZeroRtt(argThat(f -> ((StreamFrame) f).isFinal() == false), any(Consumer.class));
+        assertThat(streamFrame.isFinal()).isFalse();
     }
 
     @Test
@@ -136,13 +141,14 @@ class EarlyDataStreamTest {
         stream.writeRemaining(true);
 
         // Then
-        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, atLeast(1)).sendZeroRtt(argumentCaptor.capture(), any(Consumer.class));
-        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class), anyBoolean());
-        byte[] transmittedData = transmittedByteStream(argumentCaptor);
+        StreamFrame zeroRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+
+        StreamFrame oneRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.App);
+
+        byte[] transmittedData = transmittedByteStream(List.of(zeroRttData, oneRttData));
         assertThat(transmittedData).isEqualTo(data);
-        StreamFrame lastFrame = ((StreamFrame) argumentCaptor.getAllValues().get(argumentCaptor.getAllValues().size() - 1));
-        assertThat(lastFrame.isFinal()).isTrue();
+        assertThat(zeroRttData.isFinal()).isFalse();
+        assertThat(oneRttData.isFinal()).isTrue();
     }
 
     @Test
@@ -155,17 +161,20 @@ class EarlyDataStreamTest {
 
         // When
         stream.writeEarlyData(data, true, 500);
-        stream.writeRemaining(false);
 
         // Then
-        ArgumentCaptor<QuicFrame> argumentCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, atLeast(1)).send(argumentCaptor.capture(), any(Consumer.class), anyBoolean());
-        byte[] transmittedData = transmittedByteStream(argumentCaptor);
+        StreamFrame zeroRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1200, EncryptionLevel.ZeroRTT);
+
+        stream.writeRemaining(false);
+
+        StreamFrame oneRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1200, EncryptionLevel.App);
+
+        StreamFrame oneRttData2 = captureFrameSentAndVerifyEncryptionLevel(connection, 1200, EncryptionLevel.App);
+
+        byte[] transmittedData = transmittedByteStream(List.of(oneRttData, oneRttData2));
         assertThat(transmittedData).isEqualTo(data);
-        StreamFrame firstFrame = (StreamFrame) argumentCaptor.getAllValues().get(0);
-        assertThat(firstFrame.getOffset()).isEqualTo(0);
-        StreamFrame lastFrame = (StreamFrame) argumentCaptor.getAllValues().get(argumentCaptor.getAllValues().size() - 1);
-        assertThat(lastFrame.isFinal()).isTrue();
+        assertThat(oneRttData.getOffset()).isEqualTo(0);
+        assertThat(oneRttData2.isFinal()).isTrue();
     }
 
     @Test
@@ -178,16 +187,22 @@ class EarlyDataStreamTest {
         stream.writeRemaining(true);
 
         // Then
-        verify(connection, never()).send(any(QuicFrame.class), any(Consumer.class));
+        verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
     }
 
-    byte[] transmittedByteStream(ArgumentCaptor<QuicFrame> argumentCaptor) {
-        int totalSize = argumentCaptor.getAllValues().stream().mapToInt(f -> ((StreamFrame) f).getStreamData().length).sum();
+    StreamFrame captureFrameSentAndVerifyEncryptionLevel(QuicClientConnectionImpl connection, int maxFrameSize, EncryptionLevel expectedLevel) {
+        ArgumentCaptor<Function<Integer, QuicFrame>> frameSupplierCaptor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, times(1)).send(frameSupplierCaptor.capture(), anyInt(), argThat(l -> l == expectedLevel), any(Consumer.class));
+        clearInvocations(connection);
+        return (StreamFrame) frameSupplierCaptor.getValue().apply(maxFrameSize);
+    }
+
+    byte[] transmittedByteStream(List<StreamFrame> streamFrames) {
+        int totalSize = streamFrames.stream().mapToInt(f -> f.getLength()).sum();
         ByteBuffer buffer = ByteBuffer.allocate(totalSize);
-        argumentCaptor.getAllValues().stream()
-                .map(frame -> ((StreamFrame) frame).getStreamData())
+        streamFrames.stream()
+                .map(frame -> frame.getStreamData())
                 .forEach(byteArray -> buffer.put(byteArray));
         return buffer.array();
     }
-
 }

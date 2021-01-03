@@ -285,6 +285,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     protected void processPacket(Instant timeReceived, QuicPacket packet) {
+        log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
+
         if (! connectionState.closingOrDraining()) {
             packet.accept(this, timeReceived);
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.1
@@ -315,6 +317,28 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             }
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
+    }
+
+    protected void determineIdleTimeout(long maxIdleTimout, long peerMaxIdleTimeout) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
+        // "If a max_idle_timeout is specified by either peer in its transport parameters (Section 18.2), the
+        //  connection is silently closed and its state is discarded when it remains idle for longer than the minimum
+        //  of both peers max_idle_timeout values."
+        long idleTimeout = Long.min(maxIdleTimout, peerMaxIdleTimeout);
+        if (idleTimeout == 0) {
+            // Value of 0 is the same as not specified.
+            idleTimeout = Long.max(maxIdleTimout, peerMaxIdleTimeout);
+        }
+        if (idleTimeout != 0) {
+            log.info("Effective idle timeout is " + idleTimeout);
+            // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
+            idleTimer.setIdleTimeout(idleTimeout);
+        }
+        else {
+            // Both or 0 or not set:
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
+            // "Idle timeout is disabled when both endpoints omit this transport parameter or specify a value of 0."
+        }
     }
 
     protected void silentlyCloseConnection(long idleTime) {

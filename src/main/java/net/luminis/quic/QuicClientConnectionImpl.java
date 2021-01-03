@@ -499,6 +499,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
         sender.discard(PnSpace.Handshake, "HandshakeDone is received");
         synchronized (handshakeState) {
@@ -521,7 +526,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxStreamDataFrame);
+        try {
+            flowController.process(maxStreamDataFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override
@@ -535,14 +544,44 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
         PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
         send(response, f -> {});
     }
 
     @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         retireSourceConnectionId(retireConnectionIdFrame);
+    }
+
+    @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
@@ -552,6 +591,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         } catch (TransportError transportError) {
             immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
         }
+    }
+
+    @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
@@ -733,24 +782,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
-        // "If a max_idle_timeout is specified by either peer in its transport parameters (Section 18.2), the
-        //  connection is silently closed and its state is discarded when it remains idle for longer than the minimum
-        //  of both peers max_idle_timeout values."
-        long idleTimeout = Long.min(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        if (idleTimeout == 0) {
-            idleTimeout = Long.max(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        }
-        if (idleTimeout != 0) {
-            log.info("Effective idle timeout is " + idleTimeout);
-            // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
-            idleTimer.setIdleTimeout(idleTimeout);
-        }
-        else {
-            // Both or 0 or not set:
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
-            // "Idle timeout is disabled when both endpoints omit this transport parameter or specify a value of 0."
-        }
+        determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
 
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||

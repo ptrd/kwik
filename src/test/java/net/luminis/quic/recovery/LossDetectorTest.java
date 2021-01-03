@@ -27,6 +27,7 @@ import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -402,7 +403,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 
@@ -420,7 +421,7 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
-        congestionController = new NewRenoCongestionController(mock(Logger.class), mock(CongestionControlEventListener.class));
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
         setCongestionWindowSize(congestionController, 1240);
         FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
 
@@ -433,6 +434,30 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.onAckReceived(new AckFrame(3), Instant.now());
 
         assertThat(congestionController.remainingCwnd()).isLessThan(1);
+    }
+
+    @Test
+    void testAckElicitingInFlightAcked() {
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(12, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(10), Instant.now());
+        assertThat(lossDetector.ackElicitingInFlight()).isTrue();
+
+        lossDetector.onAckReceived(new AckFrame(12), Instant.now());
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
+
+    @Test
+    void testAckElicitingInFlightLost() {
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(15, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(15), Instant.now());
+
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
     }
 
     // This test was used to reproduce a race condition in the LossDetector. It is of no use to run it in each build.
