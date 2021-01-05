@@ -19,6 +19,8 @@
 package net.luminis.quic.server.h09;
 
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.Version;
+import net.luminis.quic.run.KwikCli;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.stream.QuicStream;
 
@@ -56,6 +58,11 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
                     FileInputStream fileInputStream = new FileInputStream(file);
                     fileInputStream.transferTo(outputStream);
                     fileInputStream.close();
+                }
+                else if (fileName.equals("version") || fileName.equals("version.txt")) {
+                    OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
+                    outputStreamWriter.write("Kwik version/build number: " + KwikCli.getVersion() + "\n");
+                    outputStreamWriter.close();
                 }
                 else {
                     OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);

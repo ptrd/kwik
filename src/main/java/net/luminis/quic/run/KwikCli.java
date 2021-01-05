@@ -526,7 +526,7 @@ public class KwikCli {
         }
     }
 
-    static String getVersion() {
+    public static String getVersion() {
         InputStream in = QuicConnection.class.getResourceAsStream("version.properties");
         if (in != null) {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
