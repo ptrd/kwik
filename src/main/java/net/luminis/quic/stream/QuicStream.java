@@ -371,6 +371,12 @@ public class QuicStream extends BaseStream {
             if (! closed) {
                 sendQueue.add(END_OF_STREAM_MARKER);
                 closed = true;
+                synchronized (lock) {
+                    if (! sendRequestQueued) {
+                        sendRequestQueued = true;
+                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                    }
+                }
             }
         }
 
