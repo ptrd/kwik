@@ -360,6 +360,21 @@ class QuicStreamTest {
     }
 
     @Test
+    void noMoreFlowControlCreditsShouldBeRequestedThanByteCountInBuffer() throws Exception {
+        FlowControl flowController = mock(FlowControl.class);
+        when(flowController.getFlowControlLimit(any(QuicStream.class))).thenReturn(1500L);
+        quicStream = new QuicStream(0, connection, flowController, logger);  // Re-instantiate to access to flow control object
+        quicStream.getOutputStream().write(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
+
+        // When
+        QuicFrame streamFrame = captureSendFunction(connection).apply(1500);
+
+        ArgumentCaptor<Long> argumentCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(flowController).increaseFlowControlLimit(any(QuicStream.class), argumentCaptor.capture()); //argThat(requestedLimit -> requestedLimit == 4));
+        assertThat(argumentCaptor.getValue()).isEqualTo(4);
+    }
+
+    @Test
     void lostStreamFrameShouldBeRetransmitted() throws IOException {
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);

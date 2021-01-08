@@ -379,11 +379,11 @@ public class QuicStream extends BaseStream {
                 int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
                 assert (flowControlLimit >= currentOffset);
 
-                if (flowControlLimit > currentOffset) {
+                int maxBytesToSend = bufferedBytes.get();
+                if (flowControlLimit > currentOffset || maxBytesToSend == 0) {
                     int nrOfBytes = 0;
                     StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
-                    int maxBytesToSend = maxFrameSize - dummy.getBytes().length - 1;  // Take one byte extra for length field var int
-                    // Use max to reserve flow control limits; might reserve to much, should be returned when stream closed.
+                    maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getBytes().length - 1);  // Take one byte extra for length field var int
                     int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
                     maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
@@ -391,11 +391,6 @@ public class QuicStream extends BaseStream {
                     boolean finalFrame = false;
                     while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
                         ByteBuffer buffer = sendQueue.peek();
-                        if (buffer == END_OF_STREAM_MARKER) {
-                            finalFrame = true;
-                            sendQueue.poll();
-                            break;
-                        }
                         int position = nrOfBytes;
                         if (buffer.remaining() <= maxBytesToSend - nrOfBytes) {
                             // All bytes remaining in buffer will fit in stream frame
@@ -408,6 +403,14 @@ public class QuicStream extends BaseStream {
                             buffer.get(dataToSend, position, maxBytesToSend - nrOfBytes);
                             nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
                         }
+                    }
+                    if (!sendQueue.isEmpty() && sendQueue.peek() == END_OF_STREAM_MARKER) {
+                        finalFrame = true;
+                        sendQueue.poll();
+                    }
+                    if (nrOfBytes == 0 && !finalFrame) {
+                        // Nothing to send really
+                        return null;
                     }
 
                     bufferedBytes.getAndAdd(-1 * nrOfBytes);
