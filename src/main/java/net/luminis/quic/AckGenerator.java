@@ -118,6 +118,10 @@ public class AckGenerator {
         int delay = 0;
         if (newPacketsToAcknowlegdeSince != null) {
             delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
+            if (delay < 0) {
+                // WTF. This should be impossible, but it sometimes happen in the interop tests. Maybe related to docker?
+                delay = 0;
+            }
         }
         List<Long> packetsToAck = this.packetsToAcknowledge;
         if (!packetsToAck.isEmpty()) {
