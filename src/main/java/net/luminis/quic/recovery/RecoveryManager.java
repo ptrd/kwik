@@ -82,49 +82,69 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             boolean ackElicitingInFlight = ackElicitingInFlight();
             boolean peerAwaitingAddressValidation = peerAwaitingAddressValidation();
             if (ackElicitingInFlight || peerAwaitingAddressValidation) {
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
-                // "As with loss detection, the probe timeout is per packet number space."
-                PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-                if (earliestLastAckElicitingSentTime == null) {
-                    if (peerAwaitingAddressValidation) {
-                        log.error("Missing last ack eliciting sent time, probably caused by peer awaiting address validation and initial recovery state being discarded");
-                        // This can happen when Initial pn space is already discarded, but no ack-eliciting handshake packet has been sent, and peer is still awaiting address validation
-                        // Hack: use "now" as start time; must ask experts what to do here
-                        earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
-                    }
-                    else {
-                        // Race condition: the (only) space that had ack eliciting in flight has been reset in the meantime.
-                        // Act as if ackElicitingInFlight was false in the first place.
-                        log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2)) - ack eliciting in flight: " + ackElicitingInFlight());
-                        unschedule();
-                        return;
-                    }
+                PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+                if (ptoTimeAndSpace.lossTime.equals(Instant.MAX)) {
+                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight for I/H, peer not awaiting address validation)");
+                    unschedule();
                 }
+                else {
+                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
+                    if (timeout < 1) {
+                        timeout = 0;
+                    }
 
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2.1
-                // "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay is 0"
-                int maxAckDelay = earliestLastAckElicitingSentTime.pnSpace == PnSpace.App? receiverMaxAckDelay: 0;
-                int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + maxAckDelay;
-                ptoTimeout *= (int) (Math.pow(2, ptoCount));
+                    log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
+                            + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
+                            + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
+                            + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
+                            + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
 
-                int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
-                if (timeout < 1) {
-                    timeout = 0;
+                    lossDetectionTimer.cancel(false);
+                    lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
                 }
-                log.recovery("reschedule loss detection timer over " + timeout + " millis, "
-                        + "based on %s/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
-                        + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation ": "")
-                        + (ackElicitingInFlight ? "ackElicitingInFlight ": "")
-                        + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), earliestLastAckElicitingSentTime.lossTime);
-
-                lossDetectionTimer.cancel(false);
-                lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
                 unschedule();
             }
         }
+    }
+
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+    private PnSpaceTime getPtoTimeAndSpace() {
+        int ptoDuration = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar();
+        ptoDuration *= (int) (Math.pow(2, ptoCount));
+
+        if (! ackElicitingInFlight()) {
+            // Must be peer awaiting address validation
+            if (handshakeState.hasNoHandshakeKeys()) {
+                return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
+            }
+            else {
+                return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
+            }
+        }
+
+        // Find earliest pto time
+        Instant ptoTime = Instant.MAX;
+        PnSpace ptoSpace = PnSpace.Initial;
+        for (PnSpace pnSpace: PnSpace.values()) {
+            if (lossDetectors[pnSpace.ordinal()].ackElicitingInFlight()) {
+                if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
+                    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+                    // Skip Application Data until handshake confirmed
+                    continue;
+                }
+                if (pnSpace == PnSpace.App) {
+                    ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
+                }
+                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();
+                if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
+                    ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
+                }
+            }
+        }
+        return new PnSpaceTime(ptoSpace, ptoTime);
     }
 
     private boolean peerAwaitingAddressValidation() {
