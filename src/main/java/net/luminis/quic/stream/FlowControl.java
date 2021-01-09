@@ -202,11 +202,11 @@ public class FlowControl {
 
     public void streamOpened(QuicStream stream) {
         int streamId = stream.getStreamId();
-        if (!maxStreamDataAllowed.containsKey(streamId)) {
-            maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
-            maxStreamDataAssigned.put(streamId, 0L);
-        }
         synchronized (this) {
+            if (!maxStreamDataAllowed.containsKey(streamId)) {
+                maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
+                maxStreamDataAssigned.put(streamId, 0L);
+            }
             if (streamId > maxOpenedStreamId) {
                 maxOpenedStreamId = streamId;
             }
@@ -215,8 +215,10 @@ public class FlowControl {
 
     public void streamClosed(QuicStream stream) {
         int streamId = stream.getStreamId();
-        maxStreamDataAssigned.remove(streamId);
-        maxStreamDataAllowed.remove(streamId);
+        synchronized (this) {
+            maxStreamDataAssigned.remove(streamId);
+            maxStreamDataAllowed.remove(streamId);
+        }
     }
 
     private long determineInitialMaxStreamData(QuicStream stream) {
