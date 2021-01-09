@@ -381,6 +381,10 @@ public class QuicStream extends BaseStream {
         }
 
         QuicFrame sendFrame(int maxFrameSize) {
+            synchronized (lock) {
+                sendRequestQueued = false;
+            }
+
             if (!sendQueue.isEmpty()) {
                 int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
                 assert (flowControlLimit >= currentOffset);
@@ -434,13 +438,10 @@ public class QuicStream extends BaseStream {
                     StreamFrame streamFrame = new StreamFrame(quicVersion, streamId, currentOffset, dataToSend, finalFrame);
                     currentOffset += nrOfBytes;
 
-                    if (sendQueue.isEmpty()) {
-                        // There is a race condition with the write method, but it does not harm: incorrectly setting flag to false just adds an extra send request which does not hurt.
+                    if (!sendQueue.isEmpty()) {
                         synchronized (lock) {
-                            sendRequestQueued = false;
+                            sendRequestQueued = true;
                         }
-                    }
-                    else {
                         // There is more to send, so queue a new send request.
                         connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
                     }
