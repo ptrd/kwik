@@ -112,7 +112,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
     private PnSpaceTime getPtoTimeAndSpace() {
-        int ptoDuration = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar();
+        int ptoDuration = rttEstimater.getSmoothedRtt() + Integer.max(1, 4 * rttEstimater.getRttVar());
         ptoDuration *= (int) (Math.pow(2, ptoCount));
 
         if (! ackElicitingInFlight()) {
