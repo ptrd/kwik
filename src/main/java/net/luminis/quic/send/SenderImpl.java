@@ -213,8 +213,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 packetAssembler.stop(space);
                 recoveryManager.stopRecovery(space);
                 if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
-                    log.warn("Discarding space that contains probe; moving probe to next level");
-                    space.relatedEncryptionLevel().next().ifPresent(nextLevel -> sendProbe(nextLevel));
+                    log.warn("Discarding space " + space + " that has a probe queued.");
                 }
                 sendRequestQueue[space.ordinal()].clear();
                 globalAckGenerator.discard(space);
