@@ -208,76 +208,74 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         if (earliestLastAckElicitingSentTime != null) {
             log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
-        }
-        else {
+        } else {
             log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
         }
         ptoCount++;
 
-        int nrOfProbes = ptoCount > 1? 2: 1;
+        int nrOfProbes = ptoCount > 1 ? 2 : 1;
 
-        if (handshakeState.hasNoHandshakeKeys()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
-            // "SendOneAckElicitingPaddedInitialPacket"
+        if (ackElicitingInFlight()) {
+            PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+            sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
+        } else {
+            // Must be peer awaiting address validation
+            log.recovery("Sending probe because peer awaiting address validation");
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
+            // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
+            //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
+            if (handshakeState.hasNoHandshakeKeys()) {
+                sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
+            } else {
+                sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+            }
+        }
+    }
+
+    private void sendOneOrTwoAckElicitingPackets(PnSpace pnSpace, int numberOfPackets) {
+        if (pnSpace == PnSpace.Initial) {
             List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
             if (!unAckedInitialPackets.isEmpty()) {
                 // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
                 // All frames need to be resent, because Initial packet wil contain padding.
                 log.recovery("(Probe is an initial retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
                 log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial));
             }
         }
-        else if (handshakeState.hasOnlyHandshakeKeys()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
-            // "If Handshake keys are available to the client, it MUST send a Handshake packet"
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
-            // "SendOneAckElicitingHandshakePacket"
-
+        else if (pnSpace == PnSpace.Handshake) {
             // Client role: find ack eliciting handshake packet that is not acked and retransmit its contents.
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Handshake);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is a handshake retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake));
             }
             else {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-8.1
-                // "In particular, receipt of a packet protected with
-                //   Handshake keys confirms that the client received the Initial packet
-                //   from the server.  Once the server has successfully processed a
-                //   Handshake packet from the client, it can consider the client address
-                //   to have been validated."
-                // Hence, no padding needed.
                 log.recovery("(Probe is a handshake ping)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake));
             }
         }
-        else if (earliestLastAckElicitingSentTime != null) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-29#appendix-A.9
-            // "SendOneOrTwoAckElicitingPackets(pn_space)"
-            EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
-            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
+        else {
+            EncryptionLevel probeLevel = pnSpace.relatedEncryptionLevel();
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(pnSpace);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery(("(Probe is retransmit on level " + probeLevel + ")"));
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(framesToRetransmit, probeLevel));
             }
             else {
                 log.recovery(("(Probe is ping on level " + probeLevel + ")"));
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel));
             }
-        }
-        else {
-            log.recovery("(Sending probe withdrawn; no last ack eliciting packet)");
         }
     }
 
@@ -355,7 +353,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (! hasBeenReset) {
             if (packet.isInflightPacket()) {
-                // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
                 setLossDetectionTimer();
             }
