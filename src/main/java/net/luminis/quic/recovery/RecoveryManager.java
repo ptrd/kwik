@@ -118,9 +118,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (! ackElicitingInFlight()) {
             // Must be peer awaiting address validation
             if (handshakeState.hasNoHandshakeKeys()) {
+                log.info("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
                 return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
             }
             else {
+                log.info("getPtoTimeAndSpace: no ack eliciting in flight and but handshake keys -> H");
                 return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
             }
         }
@@ -138,7 +140,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 if (pnSpace == PnSpace.App) {
                     ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
                 }
-                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();
+                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
                 if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
                     ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
                 }
