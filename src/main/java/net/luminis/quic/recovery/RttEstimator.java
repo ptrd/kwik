@@ -121,12 +121,12 @@ public class RttEstimator {
     }
 
     public void ackReceived(AckFrame ack, Instant timeReceived, List<PacketStatus> newlyAcked) {
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-4.1
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-5.1
         // "An endpoint generates an RTT sample on receiving an ACK frame that meets the following two conditions:
         //   *  the largest acknowledged packet number is newly acknowledged, and
         //   *  at least one of the newly acknowledged packets was ack-eliciting."
         Optional<PacketStatus> largestAcked = newlyAcked.stream()
-                .filter(s -> s.packet().getPacketNumber() == ack.getLargestAcknowledged())
+                .filter(s -> s.packet().getPacketNumber() == ack.getLargestAcknowledged())  // Possible optimization: isn't newlyAcked sorted, so only checking first will do?
                 .findFirst();
         if (largestAcked.isPresent()) {
             if (newlyAcked.stream().anyMatch(s -> s.packet().isAckEliciting())) {

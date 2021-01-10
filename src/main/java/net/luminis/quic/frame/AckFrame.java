@@ -216,6 +216,9 @@ public class AckFrame extends QuicFrame {
         return frameBytes;
     }
 
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
+    // "All frames other than ACK, PADDING, and CONNECTION_CLOSE are considered ack-eliciting."
+    @Override
     public boolean isAckEliciting() {
         return false;
     }

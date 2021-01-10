@@ -63,7 +63,7 @@ public class LossDetector {
             return;
         }
 
-        if (packet.isInflightPacket()) {
+        if (packet.isInflightPacket()) {  // Redundant: caller checked
             congestionController.registerInFlight(packet);
         }
 
@@ -89,6 +89,8 @@ public class LossDetector {
                 .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
                 .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
                 .collect(Collectors.toList());
+
+        // Possible optimization: everything that follows only if newlyAcked not empty
 
         int ackedAckEliciting = (int) newlyAcked.stream().filter(packetStatus -> packetStatus.packet().isAckEliciting()).count();
         assert ackedAckEliciting <= ackElicitingInFlight.get();
@@ -122,6 +124,7 @@ public class LossDetector {
         }
 
         int lossDelay = (int) (kTimeThreshold * Integer.max(rttEstimater.getSmoothedRtt(), rttEstimater.getLatestRtt()));
+        assert(lossDelay > 0);  // Minimum time of kGranularity before packets are deemed lost
         Instant lostSendTime = Instant.now().minusMillis(lossDelay);
 
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1
