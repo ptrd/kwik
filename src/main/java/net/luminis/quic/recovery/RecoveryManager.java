@@ -129,7 +129,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         // Find earliest pto time
         Instant ptoTime = Instant.MAX;
-        PnSpace ptoSpace = PnSpace.Initial;
+        PnSpace ptoSpace = null;
         for (PnSpace pnSpace: PnSpace.values()) {
             if (lossDetectors[pnSpace.ordinal()].ackElicitingInFlight()) {
                 if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
@@ -143,6 +143,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
                 if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
                     ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
+                    ptoSpace = pnSpace;
                 }
             }
         }
