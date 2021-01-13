@@ -135,6 +135,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
                     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
                     // Skip Application Data until handshake confirmed
+                    log.recovery("getPtoTimeAndSpace is skipping level App, because handshake not yet confirmed!");
                     continue;
                 }
                 if (pnSpace == PnSpace.App) {
@@ -396,6 +397,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+                log.recovery("State is set to " + newState);
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-30#section-6.2.1
                 // "A sender SHOULD restart its PTO timer (...), when the handshake is confirmed (...),"
                 setLossDetectionTimer();
