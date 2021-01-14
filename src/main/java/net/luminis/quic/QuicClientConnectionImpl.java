@@ -546,9 +546,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
         PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
         send(response, f -> {});
+    }
+
+    @Override
+    public void process(Padding paddingFrames, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+        // Intentionally left empty (nothing to do on receiving ping: will be acknowledged like any other ack-eliciting frame)
     }
 
     @Override

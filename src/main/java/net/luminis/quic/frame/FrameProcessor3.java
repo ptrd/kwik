@@ -24,7 +24,13 @@ public interface FrameProcessor3 {
 
     void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived);
 
+    void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived);
+
     void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived);
+
+    void process(Padding paddingFrames, QuicPacket packet, Instant timeReceived);
+
+    void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived);
 
     void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived);
 
