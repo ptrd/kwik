@@ -196,7 +196,7 @@ public class InteropRunner extends KwikCli {
 
         for (URL download : downloadUrls) {
             try {
-                logger.info("Starting download at " + timeNow());
+                logger.info("Start downloading " + download.getFile() + " at " + timeNow());
 
                 QuicClientConnection connection = builder.build();
                 connection.connect(275_000);

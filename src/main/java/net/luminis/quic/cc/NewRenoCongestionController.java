@@ -43,7 +43,7 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     // "Minimum congestion window in bytes.  The RECOMMENDED value is 2 * kMaxDatagramSize."
     protected int kMinimumWindow = 2 * 1200;
 
-    protected int kMaxDatagramSize = 1200;
+    protected int kMaxDatagramSize = 1200;           // TODO: 1200 is the minimum, actual value can be larger
 
     private long slowStartThreshold = Long.MAX_VALUE;
     private Instant congestionRecoveryStartTime;

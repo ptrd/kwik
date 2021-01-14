@@ -494,6 +494,8 @@ abstract public class QuicPacket {
         return true;
     }
 
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
+    // "Packets that contain ack-eliciting frames elicit an ACK from the receiver (...) and are called ack-eliciting packets."
     public boolean isAckEliciting() {
         return frames.stream().anyMatch(frame -> frame.isAckEliciting());
     }
@@ -504,11 +506,9 @@ abstract public class QuicPacket {
         return frames.stream().allMatch(frame -> frame instanceof AckFrame);
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-2
-    // "In-flight:  Packets are considered in-flight when they are ack-
-    //      eliciting or contain a PADDING frame, and they have been sent but
-    //      are not acknowledged, declared lost, or abandoned along with old
-    //      keys."
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
+    // "In-flight:  Packets are considered in-flight when they are ack-eliciting or contain a PADDING frame, and they
+    //  have been sent but are not acknowledged, declared lost, or abandoned along with old keys."
     // This method covers only the first part, which can be derived from the packet.
     public boolean isInflightPacket() {
         return frames.stream().anyMatch(frame -> frame.isAckEliciting() || frame instanceof Padding);

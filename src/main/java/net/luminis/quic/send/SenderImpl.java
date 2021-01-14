@@ -166,7 +166,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 wakeUpSenderLoop();
             }
             else {
-                log.warn("Attempt to send probe on discarded space => moving to next");
+                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => moving to next");
                 level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
             }
         }
@@ -180,7 +180,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 wakeUpSenderLoop();
             }
             else {
-                log.warn("Attempt to send probe on discarded space => moving to next");
+                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => moving to next");
                 // Do not move frames from one level to another, just create a ping probe.
                 level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
             }
@@ -213,8 +213,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 packetAssembler.stop(space);
                 recoveryManager.stopRecovery(space);
                 if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
-                    log.warn("Discarding space that contains probe; moving probe to next level");
-                    space.relatedEncryptionLevel().next().ifPresent(nextLevel -> sendProbe(nextLevel));
+                    log.warn("Discarding space " + space + " that has a probe queued.");
                 }
                 sendRequestQueue[space.ordinal()].clear();
                 globalAckGenerator.discard(space);
