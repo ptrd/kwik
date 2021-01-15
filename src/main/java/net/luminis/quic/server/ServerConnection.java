@@ -175,6 +175,16 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
         connectionState = Connected;
 
+        synchronized (handshakeState) {
+            if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
+                handshakeState = HandshakeState.Confirmed;
+                handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+            }
+            else {
+                log.debug("Handshake state cannot be set to Confirmed");
+            }
+        }
+
         applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
     }
 

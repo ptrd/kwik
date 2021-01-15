@@ -75,7 +75,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private volatile FlowControl flowController;
-    private HandshakeState handshakeState = HandshakeState.Initial;
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
