@@ -436,21 +436,29 @@ class QuicStreamTest {
 
         quicStream.getOutputStream().write("just a stream frame".getBytes());
         verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
-        // Simulate data is sent
+        clearInvocations(connection);
+        // Simulate data is sent (will call QuicStream::sendFrame)
         QuicFrame frame = sendFunctionCaptor.getValue().apply(1500);
+        // Should not call send again, as there is (currently) nothing more to send.
+        verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        clearInvocations(connection);
 
         quicStream.getOutputStream().close();  // Close will send an empty final frame.
 
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor2 = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(connection, times(1)).send(sendFunctionCaptor2.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
-        // Simulate close frame is sent (and lost)
-        QuicFrame lostFrame = sendFunctionCaptor2.getValue().apply(1500);
+        clearInvocations(connection);
+        // Simulate close frame is actually sent
+        QuicFrame frameThatWillBecomeLost = sendFunctionCaptor2.getValue().apply(1500);
+        // Should not call send again, as there is (currently) nothing more to send.
+        verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        clearInvocations(connection);
 
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
-        lostFrameCallback.accept(lostFrame);
+        lostFrameCallback.accept(frameThatWillBecomeLost);
 
         ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
