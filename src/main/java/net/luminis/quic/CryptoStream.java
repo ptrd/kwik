@@ -179,8 +179,8 @@ public class CryptoStream extends BaseStream {
     }
 
     private void retransmitCrypto(QuicFrame cryptoFrame) {
-        log.recovery("Retransmitting " + cryptoFrame);
-        sender.send(cryptoFrame, EncryptionLevel.Initial, this::retransmitCrypto);
+        log.recovery("Retransmitting " + cryptoFrame + " on level " + encryptionLevel);
+        sender.send(cryptoFrame, encryptionLevel, this::retransmitCrypto);
     }
 
     public void reset() {
