@@ -149,7 +149,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             catch (DecryptionException | MissingKeysException cannotParse) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
                 // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
-                log.error("Discarding packet (" + data.position() + " bytes) that cannot be decrypted (" + cannotParse + ")");
+                int nrOfPacketBytes = data.position();
+                if (nrOfPacketBytes == 0) {
+                    // Nothing could be made out of it, so the whole datagram will be discarded
+                    nrOfPacketBytes = data.remaining();
+                }
+                log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
             }
             catch (InvalidPacketException invalidPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2

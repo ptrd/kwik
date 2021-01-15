@@ -82,49 +82,73 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             boolean ackElicitingInFlight = ackElicitingInFlight();
             boolean peerAwaitingAddressValidation = peerAwaitingAddressValidation();
             if (ackElicitingInFlight || peerAwaitingAddressValidation) {
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2
-                // "As with loss detection, the probe timeout is per packet number space."
-                PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-                if (earliestLastAckElicitingSentTime == null) {
-                    if (peerAwaitingAddressValidation) {
-                        log.error("Missing last ack eliciting sent time, probably caused by peer awaiting address validation and initial recovery state being discarded");
-                        // This can happen when Initial pn space is already discarded, but no ack-eliciting handshake packet has been sent, and peer is still awaiting address validation
-                        // Hack: use "now" as start time; must ask experts what to do here
-                        earliestLastAckElicitingSentTime = new PnSpaceTime(PnSpace.Handshake, Instant.now());
-                    }
-                    else {
-                        // Race condition: the (only) space that had ack eliciting in flight has been reset in the meantime.
-                        // Act as if ackElicitingInFlight was false in the first place.
-                        log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2)) - ack eliciting in flight: " + ackElicitingInFlight());
-                        unschedule();
-                        return;
-                    }
+                PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+                if (ptoTimeAndSpace.lossTime.equals(Instant.MAX)) {
+                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight for I/H, peer not awaiting address validation)");
+                    unschedule();
                 }
+                else {
+                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
+                    if (timeout < 1) {
+                        timeout = 0;
+                    }
 
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-25#section-5.2.1
-                // "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay is 0"
-                int maxAckDelay = earliestLastAckElicitingSentTime.pnSpace == PnSpace.App? receiverMaxAckDelay: 0;
-                int ptoTimeout = rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + maxAckDelay;
-                ptoTimeout *= (int) (Math.pow(2, ptoCount));
+                    log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
+                            + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
+                            + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
+                            + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
+                            + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
 
-                int timeout = (int) Duration.between(Instant.now(), earliestLastAckElicitingSentTime.lossTime.plusMillis(ptoTimeout)).toMillis();
-                if (timeout < 1) {
-                    timeout = 0;
+                    lossDetectionTimer.cancel(false);
+                    lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
                 }
-                log.recovery("reschedule loss detection timer over " + timeout + " millis, "
-                        + "based on %s/" + earliestLastAckElicitingSentTime.pnSpace + ", because "
-                        + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation ": "")
-                        + (ackElicitingInFlight ? "ackElicitingInFlight ": "")
-                        + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), earliestLastAckElicitingSentTime.lossTime);
-
-                lossDetectionTimer.cancel(false);
-                lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
                 unschedule();
             }
         }
+    }
+
+    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+    private PnSpaceTime getPtoTimeAndSpace() {
+        int ptoDuration = rttEstimater.getSmoothedRtt() + Integer.max(1, 4 * rttEstimater.getRttVar());
+        ptoDuration *= (int) (Math.pow(2, ptoCount));
+
+        if (! ackElicitingInFlight()) {
+            // Must be peer awaiting address validation
+            if (handshakeState.hasNoHandshakeKeys()) {
+                log.info("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
+                return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
+            }
+            else {
+                log.info("getPtoTimeAndSpace: no ack eliciting in flight and but handshake keys -> H");
+                return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
+            }
+        }
+
+        // Find earliest pto time
+        Instant ptoTime = Instant.MAX;
+        PnSpace ptoSpace = null;
+        for (PnSpace pnSpace: PnSpace.values()) {
+            if (lossDetectors[pnSpace.ordinal()].ackElicitingInFlight()) {
+                if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
+                    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+                    // Skip Application Data until handshake confirmed
+                    log.recovery("getPtoTimeAndSpace is skipping level App, because handshake not yet confirmed!");
+                    continue;
+                }
+                if (pnSpace == PnSpace.App) {
+                    ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
+                }
+                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
+                if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
+                    ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
+                    ptoSpace = pnSpace;
+                }
+            }
+        }
+        return new PnSpaceTime(ptoSpace, ptoTime);
     }
 
     private boolean peerAwaitingAddressValidation() {
@@ -188,76 +212,74 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         if (earliestLastAckElicitingSentTime != null) {
             log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
-        }
-        else {
+        } else {
             log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
         }
         ptoCount++;
 
-        int nrOfProbes = ptoCount > 1? 2: 1;
+        int nrOfProbes = ptoCount > 1 ? 2 : 1;
 
-        if (handshakeState.hasNoHandshakeKeys()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
-            // "SendOneAckElicitingPaddedInitialPacket"
+        if (ackElicitingInFlight()) {
+            PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+            sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
+        } else {
+            // Must be peer awaiting address validation
+            log.recovery("Sending probe because peer awaiting address validation");
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
+            // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
+            //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
+            if (handshakeState.hasNoHandshakeKeys()) {
+                sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
+            } else {
+                sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+            }
+        }
+    }
+
+    private void sendOneOrTwoAckElicitingPackets(PnSpace pnSpace, int numberOfPackets) {
+        if (pnSpace == PnSpace.Initial) {
             List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
             if (!unAckedInitialPackets.isEmpty()) {
                 // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
                 // All frames need to be resent, because Initial packet wil contain padding.
                 log.recovery("(Probe is an initial retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
                 log.recovery("(Probe is Initial ping, because there is no Initial data to retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Initial));
             }
         }
-        else if (handshakeState.hasOnlyHandshakeKeys()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#section-5.3
-            // "If Handshake keys are available to the client, it MUST send a Handshake packet"
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-26#appendix-A.9
-            // "SendOneAckElicitingHandshakePacket"
-
+        else if (pnSpace == PnSpace.Handshake) {
             // Client role: find ack eliciting handshake packet that is not acked and retransmit its contents.
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Handshake);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is a handshake retransmit)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(framesToRetransmit, EncryptionLevel.Handshake));
             }
             else {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-8.1
-                // "In particular, receipt of a packet protected with
-                //   Handshake keys confirms that the client received the Initial packet
-                //   from the server.  Once the server has successfully processed a
-                //   Handshake packet from the client, it can consider the client address
-                //   to have been validated."
-                // Hence, no padding needed.
                 log.recovery("(Probe is a handshake ping)");
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), EncryptionLevel.Handshake));
             }
         }
-        else if (earliestLastAckElicitingSentTime != null) {
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-29#appendix-A.9
-            // "SendOneOrTwoAckElicitingPackets(pn_space)"
-            EncryptionLevel probeLevel = earliestLastAckElicitingSentTime.pnSpace.relatedEncryptionLevel();
-            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(earliestLastAckElicitingSentTime.pnSpace);
+        else {
+            EncryptionLevel probeLevel = pnSpace.relatedEncryptionLevel();
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(pnSpace);
             if (!framesToRetransmit.isEmpty()) {
                 log.recovery(("(Probe is retransmit on level " + probeLevel + ")"));
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(framesToRetransmit, probeLevel));
             }
             else {
                 log.recovery(("(Probe is ping on level " + probeLevel + ")"));
-                repeatSend(nrOfProbes, () ->
+                repeatSend(numberOfPackets, () ->
                         sender.sendProbe(List.of(new PingFrame(), new Padding(2)), probeLevel));
             }
-        }
-        else {
-            log.recovery("(Sending probe withdrawn; no last ack eliciting packet)");
         }
     }
 
@@ -335,7 +357,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (! hasBeenReset) {
             if (packet.isInflightPacket()) {
-                // Because it's just being sent, it's definitely in flight in the sense: not acknowledged, declared lost or abandoned.
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
                 setLossDetectionTimer();
             }
@@ -354,14 +375,18 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (! hasBeenReset) {
             hasBeenReset = true;
             unschedule();
-            for (PnSpace pnSpace : PnSpace.values()) {
-                stopRecovery(pnSpace);
+            for (PnSpace pnSpace: PnSpace.values()) {
+                lossDetectors[pnSpace.ordinal()].reset();
             }
         }
     }
 
     public void stopRecovery(PnSpace pnSpace) {
         lossDetectors[pnSpace.ordinal()].reset();
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
+        // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
+        ptoCount = 0;
+        setLossDetectionTimer();
     }
 
     public long getLost() {
@@ -374,6 +399,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
+                log.recovery("State is set to " + newState);
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-30#section-6.2.1
                 // "A sender SHOULD restart its PTO timer (...), when the handshake is confirmed (...),"
                 setLossDetectionTimer();

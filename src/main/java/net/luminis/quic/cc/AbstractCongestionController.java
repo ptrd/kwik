@@ -44,7 +44,7 @@ public class AbstractCongestionController implements CongestionController {
 
     @Override
     public synchronized void registerInFlight(QuicPacket sentPacket) {
-        if (! sentPacket.isAckOnly()) {
+        if (! sentPacket.isAckOnly()) {  // Redundant: caller has checked in-flight, which implies not ack-only
             bytesInFlight += sentPacket.getSize();
             eventListener.bytesInFlightIncreased(bytesInFlight);
             log.debug("Bytes in flight increased to " + bytesInFlight);

@@ -505,7 +505,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
-        sender.discard(PnSpace.Handshake, "HandshakeDone is received");
         synchronized (handshakeState) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                 handshakeState = HandshakeState.Confirmed;
@@ -514,6 +513,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.debug("Handshake state cannot be set to Confirmed");
             }
         }
+        sender.discard(PnSpace.Handshake, "HandshakeDone is received");
         // TODO: discard handshake keys:
         // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
         // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
@@ -545,12 +545,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
     public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
@@ -561,17 +559,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
     public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
-
+        // Intentionally left empty (nothing to do on receiving ping: will be acknowledged like any other ack-eliciting frame)
     }
 
     @Override
     public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override

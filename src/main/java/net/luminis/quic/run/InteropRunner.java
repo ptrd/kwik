@@ -27,6 +27,8 @@ import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -92,6 +94,11 @@ public class InteropRunner extends KwikCli {
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
+            String keylogfileEnvVar = System.getenv("SSLKEYLOGFILE");
+            if (keylogfileEnvVar != null && ! keylogfileEnvVar.isBlank()) {
+                System.out.println("Writing keys to " + keylogfileEnvVar);
+                builder.secrets(Paths.get(keylogfileEnvVar));
+            }
 
             if (testCase.equals(TC_TRANSFER)) {
                 testTransfer(downloadUrls, builder);
@@ -189,7 +196,7 @@ public class InteropRunner extends KwikCli {
 
         for (URL download : downloadUrls) {
             try {
-                logger.info("Starting download at " + timeNow());
+                logger.info("Start downloading " + download.getFile() + " at " + timeNow());
 
                 QuicClientConnection connection = builder.build();
                 connection.connect(275_000);

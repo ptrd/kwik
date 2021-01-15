@@ -98,6 +98,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void whenAckElicitingPacketIsNotAckedProbeIsSent() throws InterruptedException {
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
         recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
 
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
@@ -108,6 +109,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void whenProbeIsNotAckedAnotherOneIsSent() throws InterruptedException {
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
         mockSendingProbe(3, 4);
 
         Instant firstPacketTime = Instant.now();
@@ -146,6 +148,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void whenAckElicitingPacketsAreNotAckedProbeIsSentForLastOnly() throws InterruptedException {
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
         int delta = epsilon;
         recoveryManager.packetSent(createPacket(10), Instant.now(), p -> {});
@@ -167,6 +170,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
     @Test
     void probeTimeoutShouldMoveToLastAckEliciting() throws InterruptedException {
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
         int probeTimeout = defaultRtt + 4 * defaultRttVar;
 
         // First ack-eliciting
