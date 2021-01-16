@@ -61,7 +61,7 @@ public class Server {
     private final List<Integer> supportedVersionIds;
     private final DatagramSocket serverSocket;
     private Integer initalRtt = 100;
-    private Map<ConnectionSource, ServerConnection> currentConnections;
+    private Map<ConnectionSource, ServerConnectionProxy> currentConnections;
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
@@ -206,7 +206,7 @@ public class Server {
                 data.get(scid);
                 data.rewind();
 
-                Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
+                Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
                 if (connection.isEmpty()) {
                     synchronized (this) {
                         if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
@@ -228,7 +228,7 @@ public class Server {
         data.position(1);
         data.get(dcid);
         data.rewind();
-        Optional<ServerConnection> connection = isExistingConnection(clientAddress, dcid);
+        Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
         connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data),
                 () -> log.warn("Discarding short header packet addressing non existent connection " + ByteUtils.bytesToHex(dcid)));
     }
@@ -258,16 +258,17 @@ public class Server {
         return false;
     }
 
-    private ServerConnection createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
+    private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
             log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid) + " with " + clientAddress.getAddress().getHostAddress());
             ServerConnection newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
+            ServerConnectionProxy newConnectionProxy = new ServerConnectionProxy(newConnection);
             // Register new connection with both the new connection id, and the original (as retransmitted initial packets
             // with the same original dcid might be received, which should _not_ lead to another connection)
-            currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnection);
-            currentConnections.put(new ConnectionSource(newConnection.getOriginalDestinationConnectionId()), newConnection);
-            return newConnection;
+            currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnectionProxy);
+            currentConnections.put(new ConnectionSource(newConnection.getOriginalDestinationConnectionId()), newConnectionProxy);
+            return newConnectionProxy;
         } catch (UnknownVersionException e) {
             // Impossible, as it only gets here if the given version is supported, so it is a known version.
             throw new RuntimeException();
@@ -275,7 +276,7 @@ public class Server {
     }
 
     private void removeConnection(byte[] cid) {
-        ServerConnection removed = currentConnections.remove(new ConnectionSource(cid));
+        ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(cid));
         currentConnections.remove(new ConnectionSource(removed.getOriginalDestinationConnectionId()));
         if (removed == null) {
             log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));
@@ -283,9 +284,10 @@ public class Server {
         else if (! removed.isClosed()) {
             log.error("Removed connection with cid " + ByteUtils.bytesToHex(cid) + " that is not closed...");
         }
+        removed.terminate();
     }
 
-    private Optional<ServerConnection> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
+    private Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
         return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
     }
     
