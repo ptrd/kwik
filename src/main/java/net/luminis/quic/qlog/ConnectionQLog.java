@@ -95,63 +95,53 @@ public class ConnectionQLog implements QLogEventProcessor {
 
     private void writeHeader() {
         jsonGenerator.writeStartObject()
-                .write("qlog_version", "draft-01")
+                .write("qlog_version", "draft-02")
+                .write("qlog_format", "JSON")
                 .writeStartArray("traces")
-                .writeStartObject()
+                .writeStartObject()  // start trace
+                .writeStartObject("common_fields")
+                .write("ODCID", ByteUtils.bytesToHex(cid))
+                .write("time_format", "relative")
+                .write("reference_time", startTime.toEpochMilli())
+                .writeEnd()
                 .writeStartObject("vantage_point")
                 .write("name", "kwik")
                 .write("type", "server")
-                .writeEnd()
-                .writeStartObject("configuration")
-                .write("time_units", "ms")
-                .writeEnd()
-                .writeStartObject("common_fields")
-                .write("ODCID", ByteUtils.bytesToHex(cid))
-                .write("reference_time", startTime.toEpochMilli())
-                .writeEnd()
-                .writeStartArray("event_fields")
-                .write("relative_time")
-                .write("category")
-                .write("event_type")
-                .write("data")
                 .writeEnd()
                 .writeStartArray("events");
     }
 
     private void writePacketEvent(PacketEvent event) {
         QuicPacket packet = event.getPacket();
-        jsonGenerator.writeStartArray()
-                .write(Duration.between(startTime, event.getTime()).toMillis())
-                .write("transport")
-                .write(event instanceof PacketReceivedEvent? "packet_received": "packet_sent")
-                .writeStartObject()
-                .write("packet_type", formatPacketType(packet))
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "transport:" + (event instanceof PacketReceivedEvent? "packet_received": "packet_sent"))
+                .writeStartObject("data")
                 .writeStartObject("header")
+                .write("packet_type", formatPacketType(packet))
                 .write("packet_number", packet.getPacketNumber())
-                .write("packet_size", packet.getSize())
-                .write("dcid", format(packet.getDestinationConnectionId()))
-                .writeEnd();
-
+                .write("dcid", format(packet.getDestinationConnectionId()));
         if (packet instanceof LongHeaderPacket) {
             jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId()));
         }
+        jsonGenerator.writeEnd();  // header
+
         jsonGenerator.writeStartArray("frames");
         packet.getFrames().stream().forEach(frame -> frame.accept(frameFormatter, null, null));
-        jsonGenerator.writeEnd()
-                .writeEnd()
-                .writeEnd();
+        jsonGenerator.writeEnd()  // frames
+                .writeEnd()       // data
+                .writeEnd();      // event
     }
 
     private void emitMetrics(CongestionControlMetricsEvent event) {
-        jsonGenerator.writeStartArray()
-                .write(Duration.between(startTime, event.getTime()).toMillis())
-                .write("recovery")
-                .write("metrics_updated")
-                .writeStartObject()
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "recovery:metrics_updated")
+                .writeStartObject("data")
                 .write("bytes_in_flight", event.getBytesInFlight())
                 .write("congestion_window", event.getCongestionWindow())
-                .writeEnd()
-                .writeEnd();
+                .writeEnd()  // data
+                .writeEnd(); // event
     }
 
     private String formatPacketType(QuicPacket packet) {
@@ -168,9 +158,9 @@ public class ConnectionQLog implements QLogEventProcessor {
     }
 
     private void writeFooter() {
-        jsonGenerator.writeEnd()
-                .writeEnd()
-                .writeEnd()
+        jsonGenerator.writeEnd()  // events
+                .writeEnd()       // trace
+                .writeEnd()       // traces
                 .writeEnd();
         jsonGenerator.close();
         System.out.println("QLog: done with " + format(cid) + ".qlog");
