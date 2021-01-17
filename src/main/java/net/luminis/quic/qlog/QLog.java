@@ -40,4 +40,8 @@ public interface QLog {
     void emitConnectionTerminatedEvent();
 
     void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight);
+
+    void emitConnectionClosedEvent(Instant time);
+
+    void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason);
 }

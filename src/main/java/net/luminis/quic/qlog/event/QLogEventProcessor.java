@@ -24,6 +24,8 @@ public interface QLogEventProcessor {
 
     void process(ConnectionCreatedEvent event);
 
+    void process(ConnectionClosedEvent event);
+
     void process(PacketReceivedEvent event);
 
     void process(ConnectionTerminatedEvent event);

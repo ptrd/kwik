@@ -44,9 +44,11 @@ import static javax.json.stream.JsonGenerator.PRETTY_PRINTING;
 public class ConnectionQLog implements QLogEventProcessor {
 
     private final byte[] cid;
-    private Instant startTime;
+    private final Instant startTime;
     private final JsonGenerator jsonGenerator;
     private final FrameFormatter frameFormatter;
+    private boolean closed;  // thread-confined
+
 
     public ConnectionQLog(QLogEvent event) throws IOException {
         this.cid = event.getCid();
@@ -75,6 +77,11 @@ public class ConnectionQLog implements QLogEventProcessor {
     }
 
     @Override
+    public void process(ConnectionClosedEvent event) {
+        emitConnectionClosedEvent(event);
+    }
+
+    @Override
     public void process(PacketReceivedEvent event) {
         writePacketEvent(event);
     }
@@ -90,7 +97,10 @@ public class ConnectionQLog implements QLogEventProcessor {
     }
 
     public void close() {
-        writeFooter();
+        if (! closed) {
+            closed = true;
+            writeFooter();
+        }
     }
 
     private void writeHeader() {
@@ -146,6 +156,24 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeEnd()  // data
                 .writeEnd(); // event
     }
+
+    private void emitConnectionClosedEvent(ConnectionClosedEvent event) {
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "connectivity:connection_closed")
+                .writeStartObject("data")
+                .write("trigger", event.getTrigger().qlogFormat());
+        if (event.getTransportErrorCode() != null) {
+            jsonGenerator.write("connection_code", event.getTransportErrorCode());
+        }
+        if (event.getErrorReason() != null) {
+            jsonGenerator.write("reason", event.getErrorReason());
+        }
+        jsonGenerator
+                .writeEnd()  // data
+                .writeEnd(); // event
+    }
+
 
     private String formatPacketType(QuicPacket packet) {
         if (packet instanceof LongHeaderPacket) {

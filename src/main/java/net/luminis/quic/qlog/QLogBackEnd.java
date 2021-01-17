@@ -52,7 +52,7 @@ public class QLogBackEnd {
     private void generateConnectionLog() {
         while (true) {
             try {
-                QLogEvent event = queue.poll(10_000, TimeUnit.MILLISECONDS);
+                QLogEvent event = queue.poll(63_000, TimeUnit.MILLISECONDS);   // Should be greater than max idle-timeout
                 if (event != null) {
                     if (event instanceof ConnectionCreatedEvent) {
                         connections.put(event.getCid(), new ConnectionQLog(event));

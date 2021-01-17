@@ -21,6 +21,7 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
 
+import javax.sql.ConnectionEvent;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Iterator;
@@ -67,6 +68,16 @@ public class QLogFrontEnd implements QLog {
     @Override
     public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {
         eventQueue.add(new CongestionControlMetricsEvent(originalDcid, congestionWindow, bytesInFlight, Instant.now()));
+    }
+
+    @Override
+    public void emitConnectionClosedEvent(Instant time) {
+        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.idleTimeout));
+    }
+
+    @Override
+    public void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason) {
+        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, transportErrorCode, errorReason));
     }
 
     private static class NullQueue implements Queue<QLogEvent> {

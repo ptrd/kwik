@@ -352,12 +352,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
         log.info("Idle timeout: silently closing connection after " + idleTime + " ms of inactivity (" + bytesToHex(getSourceConnectionId()) + ")");
+        log.getQLog().emitConnectionClosedEvent(Instant.now());
         terminate();
     }
 
     protected void immediateClose(EncryptionLevel level) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         immediateCloseWithError(level, NO_ERROR.value, null);
+        log.getQLog().emitConnectionClosedEvent(Instant.now(), NO_ERROR.value, null);
     }
 
     /**
@@ -397,6 +399,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         else {
             postProcessingActions.add(() -> terminate());
         }
+
+        log.getQLog().emitConnectionClosedEvent(Instant.now(), error, errorReason);
     }
 
     protected void handlePacketInClosingState(QuicPacket packet) {
