@@ -25,9 +25,9 @@ import java.time.Instant;
 
 /**
  * See
- * https://tools.ietf.org/html/draft-marx-qlog-main-schema-01
+ * https://tools.ietf.org/html/draft-marx-qlog-main-schema-02
  * and
- * https://tools.ietf.org/html/draft-marx-qlog-event-definitions-quic-h3-01
+ * https://tools.ietf.org/html/draft-marx-qlog-event-definitions-quic-h3-02
  */
 public interface QLog {
 
