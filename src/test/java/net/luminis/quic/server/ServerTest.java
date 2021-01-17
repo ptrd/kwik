@@ -148,6 +148,7 @@ class ServerTest {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
         ServerConnection connection = mock(ServerConnection.class);
         when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
+        when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection); // new ServerConnection(Version.getDefault(), serverSocket, null, new byte[8], null, 100, mock(Logger.class)));
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
@@ -170,6 +171,7 @@ class ServerTest {
 
     @Test
     void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
+        // TODO: this test is more an integration test. Testing correct use of connection id's can be tested on serverconnection directly
         byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
         TransportParameters clientTransportParams = new TransportParameters();
         clientTransportParams.setInitialSourceConnectionId(scid);
@@ -184,6 +186,7 @@ class ServerTest {
         connectionSecrets.computeInitialKeys(dcid);
         byte[] packetBytes = initialPacket.generatePacketBytes(0, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
         server.process(createPacket(ByteBuffer.wrap(packetBytes)));
+        Thread.sleep(100);  // Because processing packets is done on seperate thread.
 
         // Then
         ArgumentCaptor<DatagramPacket> captor = ArgumentCaptor.forClass(DatagramPacket.class);
