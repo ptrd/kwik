@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.NullQLog;
@@ -116,6 +117,10 @@ public class NullLogger implements Logger {
 
     @Override
     public void received(Instant timeReceived, int datagram, QuicPacket packet) {
+    }
+
+    @Override
+    public void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid) {
     }
 
     @Override

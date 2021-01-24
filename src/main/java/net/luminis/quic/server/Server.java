@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.RawPacket;
-import net.luminis.quic.Receiver;
-import net.luminis.quic.UnknownVersionException;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -212,6 +209,7 @@ public class Server {
                         if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
                             connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
                         } else if (initialWithUnspportedVersion(data, version)) {
+                            log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
                             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
                             // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
                             sendVersionNegotiationPacket(clientAddress, data, dcidLength);
@@ -311,6 +309,7 @@ public class Server {
             DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
             try {
                 serverSocket.send(datagram);
+                log.sent(Instant.now(), versionNegotiationPacket);
             } catch (IOException e) {
                 log.error("Sending version negotiation packet failed", e);
             }

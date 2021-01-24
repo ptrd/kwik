@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.qlog.QLogFrontEnd;
@@ -143,6 +144,11 @@ public class LogProxy implements Logger {
     @Override
     public void received(Instant timeReceived, int datagram, QuicPacket packet) {
         proxiedLogger.received(timeReceived, datagram, packet);
+    }
+
+    @Override
+    public void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid) {
+        proxiedLogger.received(timeReceived, datagram, encryptionLevel, dcid, scid);
     }
 
     @Override

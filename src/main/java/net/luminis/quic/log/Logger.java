@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.QLog;
 
@@ -69,6 +70,8 @@ public interface Logger {
     void info(String message, byte[] data);
 
     void received(Instant timeReceived, int datagram, QuicPacket packet);
+
+    void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid);
 
     void sent(Instant sent, QuicPacket packet);
 

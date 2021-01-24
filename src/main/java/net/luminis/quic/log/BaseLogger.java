@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.NullQLog;
 import net.luminis.quic.qlog.QLog;
@@ -178,6 +179,19 @@ public abstract class BaseLogger implements Logger {
     public void received(Instant timeReceived, int datagram, QuicPacket packet) {
         if (logPackets) {
             log(formatTime(timeReceived) + " <- (" + datagram + ") " + packet);
+        }
+    }
+
+    @Override
+    public void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid) {
+        if (logPackets) {
+            log(formatTime(timeReceived) + " <- (" + datagram + ") "
+                    + "Packet "
+                    + encryptionLevel.name().charAt(0) + "|"
+                    + "." + "|"
+                    + "L" + "|"
+                    + ByteUtils.bytesToHex(dcid) + "|"
+                    + ByteUtils.bytesToHex(scid));
         }
     }
 
