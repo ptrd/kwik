@@ -243,7 +243,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
-    public void process(InitialPacket packet, Instant time) {
+    public ProcessResult process(InitialPacket packet, Instant time) {
         if (Arrays.equals(packet.getDestinationConnectionId(), scid) || !firstInitialPacketProcessed) {
             firstInitialPacketProcessed = true;
             processFrames(packet, time);
@@ -258,20 +258,23 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
             // Must be programming error
             throw new RuntimeException();
         }
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(VersionNegotiationPacket packet, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket packet, Instant time) {
         // Intentionally discarding packet without any action (clients should not send Version Negotiation packets).
+        return ProcessResult.Abort;
     }
 
     @Override
-    public void process(HandshakePacket packet, Instant time) {
+    public ProcessResult process(HandshakePacket packet, Instant time) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
@@ -279,16 +282,20 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
         // TODO: discard keys too
+
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(RetryPacket packet, Instant time) {
+    public ProcessResult process(RetryPacket packet, Instant time) {
         // Intentionally discarding packet without any action (clients should not send Retry packets).
+        return ProcessResult.Abort;
     }
 
     @Override
-    public void process(ZeroRttPacket packet, Instant time) {
+    public ProcessResult process(ZeroRttPacket packet, Instant time) {
         // TODO
+        return ProcessResult.Continue;
     }
 
     @Override

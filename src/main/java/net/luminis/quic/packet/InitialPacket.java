@@ -89,8 +89,8 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     @Override

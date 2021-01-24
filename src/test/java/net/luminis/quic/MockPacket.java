@@ -128,7 +128,8 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return PacketProcessor.ProcessResult.Continue;
     }
 
     @Override

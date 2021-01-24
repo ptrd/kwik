@@ -474,7 +474,7 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public abstract void accept(PacketProcessor processor, Instant time);
+    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time);
 
     /**
      * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2
