@@ -425,10 +425,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(RetryPacket packet, Instant time) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
-        // "Clients MUST discard Retry packets that contain an Original
-        //   Destination Connection ID field that does not match the Destination
-        //   Connection ID from its Initial packet"
         if (packet.validateIntegrityTag(destConnectionIds.getCurrent())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
