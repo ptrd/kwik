@@ -87,6 +87,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private boolean signalled;
 
     private volatile boolean running;
+    private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
     private volatile int datagramsSent;
     private volatile long bytesSent;
@@ -234,10 +235,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         // No more retransmissions either.
         recoveryManager.stopRecovery();
+
+        stopped = true;
     }
 
     public void shutdown() {
-        stop();
+        assert(stopped);  // Stopped should have be called before.
+        // Stop cannot be called here (again), because it would drop ConnectionCloseFrame still waiting to be sent.
+
         running = false;
         senderThread.interrupt();
     }
