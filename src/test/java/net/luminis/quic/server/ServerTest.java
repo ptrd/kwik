@@ -143,6 +143,24 @@ class ServerTest {
     }
 
     @Test
+    void invalidInitialPacketShouldNotLeadToVersionNegotiationPacket() throws Exception {
+        // Given
+        ByteBuffer buffer = ByteBuffer.allocate(1200);
+        buffer.put((byte) 0b1100_0000);
+        buffer.putInt(Version.getDefault().getId());
+        buffer.put((byte) 7);  // Invalid: initial destination connection id should be 8 bytes or longer
+        buffer.put(new byte[] { 1, 2, 3, 4, 5, 6, 7 });
+        buffer.put((byte) 4);  // source connection id length
+        buffer.put(new byte[] { 11, 12, 13, 14 });
+
+        // When
+        server.process(createPacket(buffer));
+
+        // Then
+        verify(serverSocket, never()).send(any(DatagramPacket.class));
+    }
+
+    @Test
     void serverReceivingValidInitialShouldCreateNewConnection() throws Exception {
         // Given
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);

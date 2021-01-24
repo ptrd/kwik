@@ -252,7 +252,7 @@ public class Server {
             //   datagram with a payload that is smaller than the smallest allowed
             //   maximum datagram size of 1200 bytes. "
             if (packetBytes.limit() >= 1200) {
-                return !supportedVersions.contains(version);
+                return !supportedVersionIds.contains(version);
             }
         }
         return false;
