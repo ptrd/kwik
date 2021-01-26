@@ -129,7 +129,7 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeStartObject("data")
                 .writeStartObject("header")
                 .write("packet_type", formatPacketType(packet))
-                .write("packet_number", packet.getPacketNumber())
+                .write("packet_number", packet.getPacketNumber() != null? packet.getPacketNumber(): 0)
                 .write("dcid", format(packet.getDestinationConnectionId()));
         if (packet instanceof LongHeaderPacket) {
             jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId()));

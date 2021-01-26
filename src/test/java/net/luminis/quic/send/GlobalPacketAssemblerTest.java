@@ -68,7 +68,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
 
         int datagramLength = packets.stream()
-                .mapToInt(p -> p.getPacket().generatePacketBytes(0, levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
+                .mapToInt(p -> p.getPacket().generatePacketBytes(0L, levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
                 .sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
         assertThat(datagramLength)
@@ -82,7 +82,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(0, keys).length).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(0L, keys).length).sum();
         assertThat(datagramLength).isCloseTo(18 + 3 + 36, Percentage.withPercentage(5));
     }
 

@@ -41,6 +41,7 @@ public class HandshakePacket extends LongHeaderPacket {
         return new HandshakePacket(quicVersion, sourceConnectionId, destinationConnectionId, frames.size() > 0? frames.get(0): null);
     }
 
+    @Override
     protected byte getPacketType() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
         // "|1|1|T T|R R|P P|"

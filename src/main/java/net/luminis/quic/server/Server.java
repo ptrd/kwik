@@ -305,7 +305,7 @@ public class Server {
             //  Destination Connection ID field. The value for Source Connection ID MUST be copied from the Destination
             //  Connection ID of the received packet, ..."
             VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(supportedVersions, dcid, scid);
-            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null, null);
             DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
             try {
                 serverSocket.send(datagram);

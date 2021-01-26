@@ -74,7 +74,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
         assertThat(packet.getFrames()).containsExactly(new StreamFrame(0, new byte[7], true));
-        assertThat(packet.generatePacketBytes(0, keys).length).isLessThan(MAX_PACKET_SIZE);
+        assertThat(packet.generatePacketBytes(0L, keys).length).isLessThan(MAX_PACKET_SIZE);
     }
 
     @Test
@@ -120,7 +120,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
             assertThat(frame).isInstanceOf(AckFrame.class);
             assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(10);
         });
-        assertThat(packet.generatePacketBytes(1, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
+        assertThat(packet.generatePacketBytes(1L, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -138,7 +138,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
             // Short packet overhead is 18 to 21, so available for stream frame: 1232 - 21 - 10 - 9 = 1192. Frame overhead: 5 bytes.
             assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1187, withPercentage(0.1));
         });
-        assertThat(packet.generatePacketBytes(1, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
+        assertThat(packet.generatePacketBytes(1L, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -158,7 +158,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames())
                 .hasAtLeastOneElementOfType(DataBlockedFrame.class)
                 .hasAtLeastOneElementOfType(StreamFrame.class);
-        assertThat(packet.generatePacketBytes(0, keys).length).isLessThanOrEqualTo(remainingCwndSize);
+        assertThat(packet.generatePacketBytes(0L, keys).length).isLessThanOrEqualTo(remainingCwndSize);
     }
 
     @Test
@@ -178,7 +178,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
-        assertThat(packet.generatePacketBytes(0, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
+        assertThat(packet.generatePacketBytes(0L, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
 
     @Test
@@ -200,7 +200,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
         assertThat(((InitialPacket) packet).getToken()).hasSize(16);
-        assertThat(packet.generatePacketBytes(0, keys).length)
+        assertThat(packet.generatePacketBytes(0L, keys).length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
@@ -221,7 +221,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
-        assertThat(packet.generatePacketBytes(0, keys).length)
+        assertThat(packet.generatePacketBytes(0L, keys).length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
@@ -239,7 +239,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames())
                 .hasOnlyElementsOfTypes(AckFrame.class, Padding.class);
         assertThat(packet.getToken()).hasSize(8);
-        assertThat(packet.generatePacketBytes(0, keys).length)
+        assertThat(packet.generatePacketBytes(0L, keys).length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
 
@@ -306,7 +306,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames())
                 .hasSize(2)
                 .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class);
-        byte[] packetBytes = packet.generatePacketBytes(509, keys);
+        byte[] packetBytes = packet.generatePacketBytes(509L, keys);
         assertThat(packetBytes.length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE)
                 .isGreaterThanOrEqualTo(MAX_PACKET_SIZE - 3);   // Packet length computation has allowance for 4 bytes packet number, so length can vary with 3 bytes

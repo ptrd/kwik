@@ -51,6 +51,7 @@ public class InitialPacket extends LongHeaderPacket {
         return new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, token, frames);
     }
 
+    @Override
     protected byte getPacketType() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "|1|1| 0 |R R|P P|"
@@ -63,6 +64,7 @@ public class InitialPacket extends LongHeaderPacket {
         return encodePacketNumberLength(flags, packetNumber);
     }
 
+    @Override
     protected void generateAdditionalFields(ByteBuffer packetBuffer) {
         // Token length (variable-length integer)
         if (token != null) {
@@ -74,6 +76,7 @@ public class InitialPacket extends LongHeaderPacket {
         }
     }
 
+    @Override
     protected int estimateAdditionalFieldsLength() {
         return token == null? 1: 1 + token.length;
     }

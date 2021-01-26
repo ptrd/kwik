@@ -120,7 +120,7 @@ class RetryPacketTest {
         byte[] dcid = new byte[] { 0, 1, 2, 3};
         byte[] odcid = new byte[] { 9, 9, 9, 9 };
         byte[] retryToken = new byte[32];
-        byte[] packetBytes = new RetryPacket(Version.getDefault(), scid, dcid, odcid, retryToken).generatePacketBytes(0, null);
+        byte[] packetBytes = new RetryPacket(Version.getDefault(), scid, dcid, odcid, retryToken).generatePacketBytes(0L, null);
 
         RetryPacket deserializedPacket  = new RetryPacket(Version.getDefault());
         deserializedPacket.parse(ByteBuffer.wrap(packetBytes), null, DONT_CARE, mock(Logger.class), DONT_CARE);

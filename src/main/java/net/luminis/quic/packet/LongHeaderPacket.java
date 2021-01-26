@@ -77,9 +77,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.frames = frames;
     }
 
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    @Override
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
-
 
         ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         generateFrameHeaderInvariant(packetBuffer);
@@ -118,7 +118,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
                 + 16;
     }
 
-
     protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
         // Packet type
         byte packetType = getPacketType();
@@ -146,6 +145,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
+    @Override
     public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.position() != 0) {
