@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
 
-    private final byte[] token;
+    private byte[] token;
 
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
         super(quicVersion, sourceConnectionId, destConnectionId, payload);
@@ -114,7 +114,8 @@ public class InitialPacket extends LongHeaderPacket {
             long tokenLength = VariableLengthInteger.parseLong(buffer);
             if (tokenLength > 0) {
                 if (tokenLength <= buffer.remaining()) {
-                    buffer.position(buffer.position() + (int) tokenLength);
+                    token = new byte[(int) tokenLength];
+                    buffer.get(token);
                 }
                 else {
                     throw new InvalidPacketException();

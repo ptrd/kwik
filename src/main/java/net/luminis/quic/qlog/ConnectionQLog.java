@@ -20,7 +20,9 @@ package net.luminis.quic.qlog;
 
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.qlog.event.*;
+import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
@@ -176,7 +178,10 @@ public class ConnectionQLog implements QLogEventProcessor {
 
 
     private String formatPacketType(QuicPacket packet) {
-        if (packet instanceof LongHeaderPacket) {
+        if (packet instanceof RetryPacket) {
+            return "retry";
+        }
+        else if (packet instanceof LongHeaderPacket) {
             return packet.getEncryptionLevel().name().toLowerCase();
         }
         else {

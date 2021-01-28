@@ -57,6 +57,7 @@ public class Server {
     private final List<Version> supportedVersions;
     private final List<Integer> supportedVersionIds;
     private final DatagramSocket serverSocket;
+    private final boolean requireRetry = true;
     private Integer initalRtt = 100;
     private Map<ConnectionSource, ServerConnectionProxy> currentConnections;
     private TlsServerEngineFactory tlsEngineFactory;
@@ -114,7 +115,7 @@ public class Server {
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                applicationProtocolRegistry, initalRtt, this::removeConnection, log);
+                requireRetry, applicationProtocolRegistry, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         if (dir != null) {

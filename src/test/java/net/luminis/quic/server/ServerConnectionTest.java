@@ -3,7 +3,9 @@ package net.luminis.quic.server;
 import net.luminis.quic.*;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.FrameProcessor3;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
@@ -31,8 +34,11 @@ import java.net.InetSocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -51,7 +57,7 @@ class ServerConnectionTest {
     @BeforeEach
     void setupObjectUnderTest() throws Exception {
         TlsServerEngineFactory tlsServerEngineFactory = createTlsServerEngine();
-        connection = createServerConnection(tlsServerEngineFactory);
+        connection = createServerConnection(tlsServerEngineFactory, false);
     }
 
     @Test
@@ -164,6 +170,91 @@ class ServerConnectionTest {
         verify(secondFrame, never()).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
     }
 
+    @Test
+    void whenRetryIsRequiredFirstInitialLeadsToRetryPacket() throws Exception {
+        // Given
+        connection = createServerConnection(createTlsServerEngine(), true);
+
+        // When
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+
+        // Then
+        verify(connection.getSender()).send(any(RetryPacket.class));
+    }
+
+    @Test
+    void whenRetryIsRequiredAllRetryPacketsContainsSameToken() throws Exception {
+        // Given
+        connection = createServerConnection(createTlsServerEngine(), true);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection.getSender()).send(argumentCaptor.capture());
+        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        clearInvocations(connection.getSender());
+        // When
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+
+        // Then
+        verify(connection.getSender()).send(argThat(retryPacket -> Arrays.equals(retryPacket.getRetryToken(), retryToken)));
+    }
+
+    @Test
+    void whenRetryIsRequiredDifferentDestinationConnectionIdsGetDifferentToken() throws Exception {
+        // Given
+        ServerConnection connection1 = createServerConnection(createTlsServerEngine(), true);
+        byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), Instant.now());
+        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection1.getSender()).send(argumentCaptor.capture());
+        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+
+        // When
+        ServerConnection connection2 = createServerConnection(createTlsServerEngine(), true);
+        byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+        connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), Instant.now());
+
+        // Then
+        verify(connection2.getSender()).send(argThat(retryPacket -> !Arrays.equals(retryPacket.getRetryToken(), retryToken)));
+    }
+
+    @Test
+    void whenRetryIsRequiredInitialWithTokenIsProcessed() throws Exception {
+        // Given
+        connection = createServerConnection(createTlsServerEngine(), true);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection.getSender()).send(argumentCaptor.capture());
+        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        clearInvocations(connection.getSender());
+
+        // When
+        ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, Collections.emptyList());
+        CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), Instant.now());
+
+        // Then
+        verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
+                && ((ConnectionCloseFrame) frame).getErrorCode() == 256 + TlsConstants.AlertDescription.missing_extension.value), any(EncryptionLevel.class));
+    }
+
+    @Test
+    void whenRetryIsRequiredInitialWithInvalidTokenConnectionIsClosed() throws Exception {
+        // Given
+        connection = createServerConnection(createTlsServerEngine(), true);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection.getSender()).send(argumentCaptor.capture());
+        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        byte[] incorrectToken = Arrays.copyOfRange(retryToken, 0, retryToken.length - 1);
+
+        // When
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], incorrectToken, new CryptoFrame()), Instant.now());
+
+        // Then
+        verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
+                && ((ConnectionCloseFrame) frame).getErrorCode() == 0x0b), any(EncryptionLevel.class));
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
@@ -187,14 +278,14 @@ class ServerConnectionTest {
                 invalidActiveConnectionIdLimit, incorrectInitialSourceConnectionId);
     }
 
-    private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory) throws Exception {
+    private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
 
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
-                tlsServerEngineFactory, applicationProtocolRegistry, 100, cid -> {}, mock(Logger.class));
+                tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, cid -> {}, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

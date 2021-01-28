@@ -26,6 +26,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.recovery.RttEstimator;
@@ -140,6 +141,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     @Override
     public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
         sendRequestQueue[level.ordinal()].addRequest(frameSupplier, minimumSize, lostCallback);
+    }
+
+    public void send(RetryPacket retryPacket) {
+        try {
+            send(List.of(new SendItem(retryPacket)));
+        } catch (IOException e) {
+            log.error("Sending packet failed: " + retryPacket);
+        }
     }
 
     @Override
