@@ -216,7 +216,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
                         tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
                         return protocol; })
                     .map(selectedProtocol -> negotiatedApplicationProtocol = selectedProtocol)
-                    .orElseThrow(() -> new NoApplicationProtocolAlert());
+                    .orElseThrow(() -> new NoApplicationProtocolAlert(requestedProtocols));
         }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
