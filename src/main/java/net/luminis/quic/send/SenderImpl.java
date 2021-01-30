@@ -41,6 +41,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -92,6 +93,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int datagramsSent;
     private volatile long bytesSent;
     private volatile long packetsSent;
+    private AtomicInteger subsequentZeroDelays = new AtomicInteger();
+    private volatile boolean lastDelayWasZero = false;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -319,9 +322,18 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
+                subsequentZeroDelays.set(0);
+                lastDelayWasZero = false;
                 return delay;
             }
             else {
+                if (lastDelayWasZero) {
+                    int count = subsequentZeroDelays.incrementAndGet();
+                    if (count % 100 == 3) {
+                        log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
+                    }
+                }
+                lastDelayWasZero = true;
                 // Next time is already in the past, hurry up!
                 return 0;
             }
