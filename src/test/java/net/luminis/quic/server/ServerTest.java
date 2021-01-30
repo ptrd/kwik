@@ -42,7 +42,7 @@ class ServerTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()), new File("."));
+        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()), false, new File("."));
     }
 
     @Test

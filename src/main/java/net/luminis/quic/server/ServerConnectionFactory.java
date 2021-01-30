@@ -48,6 +48,7 @@ public class ServerConnectionFactory {
             throw new IllegalArgumentException();
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
+        this.requireRetry = requireRetry;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.connectionIdLength = connectionIdLength;
         this.closeCallback = closeCallback;
