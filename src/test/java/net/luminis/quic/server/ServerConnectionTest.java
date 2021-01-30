@@ -2,6 +2,8 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.Version;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.FrameProcessor3;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
@@ -31,6 +33,7 @@ import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -42,7 +45,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -157,7 +160,7 @@ class ServerConnectionTest {
     }
 
     @Test
-    void messageWithOriginalDestinationCidIsProcessedOnlyOnce() throws Exception {
+    void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         CryptoFrame firstFrame = mock(CryptoFrame.class);
         CryptoFrame secondFrame = mock(CryptoFrame.class);
@@ -167,7 +170,7 @@ class ServerConnectionTest {
         connection.process(packet2, Instant.now());
 
         verify(firstFrame).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
-        verify(secondFrame, never()).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
+        verify(secondFrame).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
     }
 
     @Test
@@ -201,16 +204,16 @@ class ServerConnectionTest {
     @Test
     void whenRetryIsRequiredDifferentDestinationConnectionIdsGetDifferentToken() throws Exception {
         // Given
-        ServerConnection connection1 = createServerConnection(createTlsServerEngine(), true);
         byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+        ServerConnection connection1 = createServerConnection(createTlsServerEngine(), dcid1,true);
         connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection1.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
 
         // When
-        ServerConnection connection2 = createServerConnection(createTlsServerEngine(), true);
         byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+        ServerConnection connection2 = createServerConnection(createTlsServerEngine(), dcid2, true);
         connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), Instant.now());
 
         // Then
@@ -255,6 +258,32 @@ class ServerConnectionTest {
                 && ((ConnectionCloseFrame) frame).getErrorCode() == 0x0b), any(EncryptionLevel.class));
     }
 
+    @Test
+    void whenRetryIsRequiredSecondInitialShouldReturnSameRetryPacket() throws Exception {
+        // Given
+        byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        connection = createServerConnection(createTlsServerEngine(), odcid,true);
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
+        clientConnectionSecrets.computeInitialKeys(odcid);
+        byte[] initialPacketBytes = initialPacket.generatePacketBytes(0L, clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
+
+        connection.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection.getSender()).send(argumentCaptor1.capture());
+        byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(0L, null);
+        clearInvocations(connection.getSender());
+
+        // When
+        connection.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
+        verify(connection.getSender()).send(argumentCaptor2.capture());
+        RetryPacket retryPacket2 = argumentCaptor1.getValue();
+
+        // Then
+        assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(0L, null));
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
@@ -279,10 +308,14 @@ class ServerConnectionTest {
     }
 
     private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired) throws Exception {
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        return createServerConnection(tlsServerEngineFactory, odcid, retryRequired);
+    }
+
+    private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid, boolean retryRequired) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
 
-        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
                 tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, cid -> {}, mock(Logger.class));

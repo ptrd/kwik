@@ -180,7 +180,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         postProcessingActions.clear();
     }
 
-    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");

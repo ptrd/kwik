@@ -39,6 +39,7 @@ import net.luminis.tls.handshake.*;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
@@ -266,44 +267,53 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
-    public ProcessResult process(InitialPacket packet, Instant time) {
-        // Only the first initial may (and will) have a destination connection id that is not equal to _the_ conneciton id
-        if (Arrays.equals(packet.getDestinationConnectionId(), scid) || !firstInitialPacketProcessed) {
-            firstInitialPacketProcessed = true;
-            if (retryRequired) {
-                if (packet.getToken() == null) {
-                    sendRetry();
+    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+        try {
+            return super.parsePacket(data);
+        }
+        catch (DecryptionException decryptionException) {
+            if (retryRequired && (data.get(0) & 0b1111_0000) == 0b1100_0000) {
+                try {
+                    data.rewind();
+                    connectionSecrets.computeInitialKeys(originalDcid);
+                    return super.parsePacket(data);
+                }
+                finally {
                     connectionSecrets.computeInitialKeys(scid);
-                    return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
-                }
-                else if (!Arrays.equals(packet.getToken(), token)) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
-                    // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
-                    // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
-                    immediateCloseWithError(EncryptionLevel.Initial, INVALID_TOKEN.value, null);
-                    return ProcessResult.Abort;
-                }
-                else {
-                    // Valid token, proceed as usual.
-                    processFrames(packet, time);
-                    return ProcessResult.Continue;
                 }
             }
             else {
+                throw decryptionException;
+            }
+        }
+    }
+
+    @Override
+    public ProcessResult process(InitialPacket packet, Instant time) {
+        assert(Arrays.equals(packet.getDestinationConnectionId(), scid) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
+
+        if (retryRequired) {
+            if (packet.getToken() == null) {
+                sendRetry();
+                connectionSecrets.computeInitialKeys(scid);
+                return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
+            }
+            else if (!Arrays.equals(packet.getToken(), token)) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
+                // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
+                // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
+                immediateCloseWithError(EncryptionLevel.Initial, INVALID_TOKEN.value, null);
+                return ProcessResult.Abort;
+            }
+            else {
+                // Valid token, proceed as usual.
                 processFrames(packet, time);
                 return ProcessResult.Continue;
             }
         }
-        else if (Arrays.equals(packet.getDestinationConnectionId(), originalDcid)) {
-            // From the specification, it is not clear what to do with packets using the original destination id.
-            // It might be that the client did not receive responses, but it might as well be an opportunistic client
-            // sending multiple initials at once. Just ignore them; retransmitting will be triggered by detecting lost packets.
-            log.debug("Ignoring initial packet with original destination connection id");
-            return ProcessResult.Continue;
-        }
         else {
-            // Must be programming error
-            throw new RuntimeException();
+            processFrames(packet, time);
+            return ProcessResult.Continue;
         }
     }
 
