@@ -456,7 +456,7 @@ public class QuicStream extends BaseStream {
                 else {
                     // So flowControlLimit <= currentOffset
                     // TODO: Should send DATA_BLOCKED or STREAM_DATA_BLOCKED.
-                    log.info("Stream " + streamId + " is blocked by flow control (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
+                    log.info("Stream " + streamId + " is blocked by flow control at " + flowControlLimit + " (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
                 }
             }
             return null;
