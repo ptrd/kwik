@@ -42,7 +42,7 @@ class ServerTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()), new File("."));
+        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault()), false, new File("."));
     }
 
     @Test
@@ -202,7 +202,7 @@ class ServerTest {
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
         connectionSecrets.computeInitialKeys(dcid);
-        byte[] packetBytes = initialPacket.generatePacketBytes(0, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
+        byte[] packetBytes = initialPacket.generatePacketBytes(0L, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
         server.process(createPacket(ByteBuffer.wrap(packetBytes)));
         Thread.sleep(100);  // Because processing packets is done on seperate thread.
 

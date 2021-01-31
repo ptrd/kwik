@@ -1,7 +1,6 @@
 package net.luminis.quic;
 
 import net.luminis.quic.frame.*;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
@@ -10,9 +9,6 @@ import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -235,28 +231,34 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void process(InitialPacket packet, Instant time) {
+        public ProcessResult process(InitialPacket packet, Instant time) {
+            return null;
         }
 
         @Override
-        public void process(ShortHeaderPacket packet, Instant time) {
+        public ProcessResult process(ShortHeaderPacket packet, Instant time) {
             processFrames(packet, time);
+            return null;
         }
 
         @Override
-        public void process(VersionNegotiationPacket packet, Instant time) {
+        public ProcessResult process(VersionNegotiationPacket packet, Instant time) {
+            return null;
         }
 
         @Override
-        public void process(HandshakePacket packet, Instant time) {
+        public ProcessResult process(HandshakePacket packet, Instant time) {
+            return null;
         }
 
         @Override
-        public void process(RetryPacket packet, Instant time) {
+        public ProcessResult process(RetryPacket packet, Instant time) {
+            return null;
         }
 
         @Override
-        public void process(ZeroRttPacket packet, Instant time) {
+        public ProcessResult process(ZeroRttPacket packet, Instant time) {
+            return null;
         }
 
         @Override

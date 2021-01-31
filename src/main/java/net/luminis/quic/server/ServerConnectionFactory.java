@@ -38,15 +38,17 @@ public class ServerConnectionFactory {
     private int initalRtt;
     private SecureRandom randomGenerator;
     private final Consumer<byte[]> closeCallback;
+    private boolean requireRetry = true;
 
     public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
-                                   ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<byte[]> closeCallback, Logger log) {
+                                   boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<byte[]> closeCallback, Logger log) {
         if (connectionIdLength > 20 || connectionIdLength < 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
             // "In QUIC version 1, this value MUST NOT exceed 20 bytes"
             throw new IllegalArgumentException();
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
+        this.requireRetry = requireRetry;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.connectionIdLength = connectionIdLength;
         this.closeCallback = closeCallback;
@@ -63,7 +65,7 @@ public class ServerConnectionFactory {
         // "A server MUST set the Destination Connection ID it uses for sending packets based on the first received Initial packet."
         byte[] dcid = originalScid;
         return new ServerConnection(version, serverSocket, clientAddress, scid, dcid, originalDcid,
-                tlsServerEngineFactory, applicationProtocolRegistry, initalRtt, closeCallback, log);
+                tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, closeCallback, log);
     }
 
     private byte[] generateNewConnectionId() {

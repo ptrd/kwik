@@ -34,7 +34,7 @@ class ShortHeaderPacketTest {
         ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new PingFrame());
 
         Keys keys = TestUtils.createKeys();
-        shortHeaderPacket.generatePacketBytes(1, keys);
+        shortHeaderPacket.generatePacketBytes(1L, keys);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(shortHeaderPacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);

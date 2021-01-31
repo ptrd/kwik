@@ -24,15 +24,20 @@ import java.time.Instant;
 
 public interface PacketProcessor {
 
-    void process(InitialPacket packet, Instant time);
+    enum ProcessResult {
+        Continue,
+        Abort
+    }
 
-    void process(ShortHeaderPacket packet, Instant time);
+    ProcessResult process(InitialPacket packet, Instant time);
 
-    void process(VersionNegotiationPacket packet, Instant time);
+    ProcessResult process(ShortHeaderPacket packet, Instant time);
 
-    void process(HandshakePacket packet, Instant time);
+    ProcessResult process(VersionNegotiationPacket packet, Instant time);
 
-    void process(RetryPacket packet, Instant time);
+    ProcessResult process(HandshakePacket packet, Instant time);
 
-    void process(ZeroRttPacket packet, Instant time);
+    ProcessResult process(RetryPacket packet, Instant time);
+
+    ProcessResult process(ZeroRttPacket packet, Instant time);
 }

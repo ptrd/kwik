@@ -180,7 +180,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         postProcessingActions.clear();
     }
 
-    QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
@@ -294,7 +294,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
 
         if (! connectionState.closingOrDraining()) {
-            packet.accept(this, timeReceived);
+            ProcessResult result = packet.accept(this, timeReceived);
+            if (result == ProcessResult.Abort) {
+                return;
+            }
+
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.1
             // "A packet MUST NOT be acknowledged until packet protection has been successfully removed and all frames
             //  contained in the packet have been processed."

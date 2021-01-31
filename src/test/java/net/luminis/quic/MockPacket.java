@@ -104,7 +104,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
         ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);
@@ -128,7 +128,8 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return PacketProcessor.ProcessResult.Continue;
     }
 
     @Override

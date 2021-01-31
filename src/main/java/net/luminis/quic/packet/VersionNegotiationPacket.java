@@ -149,7 +149,7 @@ public class VersionNegotiationPacket extends QuicPacket {
 
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4 * serverSupportedVersions.size());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.1
@@ -168,8 +168,8 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     @Override

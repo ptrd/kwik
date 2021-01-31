@@ -466,7 +466,7 @@ abstract public class QuicPacket {
 
     public abstract PnSpace getPnSpace();
 
-    public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
+    public abstract byte[] generatePacketBytes(Long packetNumber, Keys keys);
 
     public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
 
@@ -474,7 +474,7 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public abstract void accept(PacketProcessor processor, Instant time);
+    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time);
 
     /**
      * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2

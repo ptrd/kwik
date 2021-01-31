@@ -57,49 +57,71 @@ public class Server {
     private final List<Version> supportedVersions;
     private final List<Integer> supportedVersionIds;
     private final DatagramSocket serverSocket;
+    private final boolean requireRetry;
     private Integer initalRtt = 100;
     private Map<ConnectionSource, ServerConnectionProxy> currentConnections;
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
 
+    private static void usageAndExit() {
+        System.err.println("Usage: [--noRetry] cert file, cert key file, port number [www dir]");
+        System.exit(1);
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("Usage: cert file, cert key file, port number [www dir]");
-            System.exit(1);
+            usageAndExit();
         }
-        File certificateFile = new File(args[0]);
+
+        int argIndex = 0;
+        boolean requireRetry = true;
+        if (args[argIndex].equals("--noRetry")) {
+            requireRetry = false;
+            argIndex++;
+
+            if (args.length < 4) {
+                usageAndExit();
+            }
+        }
+
+        File certificateFile = new File(args[argIndex]);
         if (!certificateFile.exists()) {
-            System.err.println("Cannot open certificate file " + args[0]);
+            System.err.println("Cannot open certificate file " + args[argIndex]);
             System.exit(1);
         }
-        File certificateKeyFile = new File(args[1]);
+
+        argIndex++;
+        File certificateKeyFile = new File(args[argIndex]);
         if (!certificateKeyFile.exists()) {
-            System.err.println("Cannot open certificate file " + args[0]);
+            System.err.println("Cannot open certificate file " + args[argIndex]);
             System.exit(1);
         }
-        int port = Integer.parseInt(args[2]);
+
+        argIndex++;
+        int port = Integer.parseInt(args[argIndex]);
 
         File wwwDir = null;
-        if (args.length == 4) {
-            wwwDir = new File(args[3]);
+        if (args.length > argIndex) {
+            argIndex++;
+            wwwDir = new File(args[argIndex]);
             if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
                 System.err.println("Cannot read www dir '" + wwwDir + "'");
                 System.exit(1);
             }
         }
 
-        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), List.of(Version.getDefault()), wwwDir).start();
+        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), List.of(Version.getDefault()), requireRetry, wwwDir).start();
     }
 
-    public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, File dir) throws Exception {
-        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, dir);
+    public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, File dir) throws Exception {
+        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, dir);
     }
 
-    public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, File dir) throws Exception {
+    public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, File dir) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
+        this.requireRetry = requireRetry;
 
         File logDir = new File("/logs");
         if (logDir.exists() && logDir.isDirectory() && logDir.canWrite()) {
@@ -109,12 +131,14 @@ public class Server {
             log = new SysOutLogger();
         }
         log.logWarning(true);
+        log.logPackets(true);
+        log.logRecovery(true);
         log.logInfo(true);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                applicationProtocolRegistry, initalRtt, this::removeConnection, log);
+                this.requireRetry, applicationProtocolRegistry, initalRtt, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         if (dir != null) {
@@ -305,7 +329,7 @@ public class Server {
             //  Destination Connection ID field. The value for Source Connection ID MUST be copied from the Destination
             //  Connection ID of the received packet, ..."
             VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(supportedVersions, dcid, scid);
-            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null, null);
             DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
             try {
                 serverSocket.send(datagram);

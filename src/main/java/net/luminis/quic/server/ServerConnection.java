@@ -39,20 +39,29 @@ import net.luminis.tls.handshake.*;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 
 public class ServerConnection extends QuicConnectionImpl implements TlsStatusEventHandler {
 
+    private static final int TOKEN_SIZE = 37;
+    private final Random random;
     private final SenderImpl sender;
     private final byte[] scid;
     private final byte[] dcid;
+    private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
@@ -63,6 +72,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final int initialMaxStreamData;
     private final int maxOpenStreamsUni;
     private final int maxOpenStreamsBidi;
+    private final byte[] token;
     private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
@@ -71,11 +81,13 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
-                               ApplicationProtocolRegistry applicationProtocolRegistry, Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
+                               boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
+                               Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.scid = scid;
         this.dcid = dcid;
         this.originalDcid = originalDcid;
+        this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
 
@@ -88,6 +100,15 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
 
+        if (retryRequired) {
+            random = new SecureRandom();
+            token = new byte[TOKEN_SIZE];
+            random.nextBytes(token);
+        }
+        else {
+            random = null;
+            token = null;
+        }
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
@@ -239,39 +260,82 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
         serverTransportParams.setInitialSourceConnectionId(scid);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
+        if (retryRequired) {
+            serverTransportParams.setRetrySourceConnectionId(scid);
+        }
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
     }
 
     @Override
-    public void process(InitialPacket packet, Instant time) {
-        if (Arrays.equals(packet.getDestinationConnectionId(), scid) || !firstInitialPacketProcessed) {
-            firstInitialPacketProcessed = true;
-            processFrames(packet, time);
+    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+        try {
+            return super.parsePacket(data);
         }
-        else if (Arrays.equals(packet.getDestinationConnectionId(), originalDcid)) {
-            // From the specification, it is not clear what to do with packets using the original destination id.
-            // It might be that the client did not receive responses, but it might as well be an opportunistic client
-            // sending multiple initials at once. Just ignore them; retransmitting will be triggered by detecting lost packets.
-            log.debug("Ignoring initial packet with original destination connection id");
+        catch (DecryptionException decryptionException) {
+            if (retryRequired && (data.get(0) & 0b1111_0000) == 0b1100_0000) {
+                try {
+                    data.rewind();
+                    connectionSecrets.computeInitialKeys(originalDcid);
+                    return super.parsePacket(data);
+                }
+                finally {
+                    connectionSecrets.computeInitialKeys(scid);
+                }
+            }
+            else {
+                throw decryptionException;
+            }
+        }
+    }
+
+    @Override
+    public ProcessResult process(InitialPacket packet, Instant time) {
+        assert(Arrays.equals(packet.getDestinationConnectionId(), scid) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
+
+        if (retryRequired) {
+            if (packet.getToken() == null) {
+                sendRetry();
+                connectionSecrets.computeInitialKeys(scid);
+                return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
+            }
+            else if (!Arrays.equals(packet.getToken(), token)) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
+                // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
+                // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
+                immediateCloseWithError(EncryptionLevel.Initial, INVALID_TOKEN.value, null);
+                return ProcessResult.Abort;
+            }
+            else {
+                // Valid token, proceed as usual.
+                processFrames(packet, time);
+                return ProcessResult.Continue;
+            }
         }
         else {
-            // Must be programming error
-            throw new RuntimeException();
+            processFrames(packet, time);
+            return ProcessResult.Continue;
         }
     }
 
+    private void sendRetry() {
+        RetryPacket retry = new RetryPacket(quicVersion, scid, getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        sender.send(retry);
+    }
+
     @Override
-    public void process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(VersionNegotiationPacket packet, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket packet, Instant time) {
         // Intentionally discarding packet without any action (clients should not send Version Negotiation packets).
+        return ProcessResult.Abort;
     }
 
     @Override
-    public void process(HandshakePacket packet, Instant time) {
+    public ProcessResult process(HandshakePacket packet, Instant time) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
@@ -279,16 +343,20 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
         // TODO: discard keys too
+
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(RetryPacket packet, Instant time) {
+    public ProcessResult process(RetryPacket packet, Instant time) {
         // Intentionally discarding packet without any action (clients should not send Retry packets).
+        return ProcessResult.Abort;
     }
 
     @Override
-    public void process(ZeroRttPacket packet, Instant time) {
+    public ProcessResult process(ZeroRttPacket packet, Instant time) {
         // TODO
+        return ProcessResult.Continue;
     }
 
     @Override

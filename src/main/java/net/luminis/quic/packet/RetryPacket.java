@@ -56,13 +56,14 @@ public class RetryPacket extends QuicPacket {
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
 
-    private int packetSize;
+
     private byte[] sourceConnectionId;
-    private byte[] destinationConnectionId;
+
     private byte[] originalDestinationConnectionId;
     private byte[] retryToken;
     private byte[] rawPacketData;
     private byte[] retryIntegrityTag;
+
 
     public RetryPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -138,35 +139,7 @@ public class RetryPacket extends QuicPacket {
      * @return
      */
     public boolean validateIntegrityTag(byte[] originalDestinationConnectionId) {
-        ByteBuffer pseudoPacket = ByteBuffer.allocate(1 + originalDestinationConnectionId.length + 1 + 4 +
-                1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length);
-        pseudoPacket.put((byte) originalDestinationConnectionId.length);
-        pseudoPacket.put(originalDestinationConnectionId);
-        pseudoPacket.put(rawPacketData, 0, rawPacketData.length - RETRY_INTEGRITY_TAG_LENGTH);
-
-        try {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
-            // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
-            SecretKeySpec secretKey = new SecretKeySpec(SECRET_KEY, "AES");
-            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, NONCE);
-            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
-            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
-            // "The associated data, A, is the contents of the Retry Pseudo-Packet"
-            aeadCipher.updateAAD(pseudoPacket.array());
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
-            // "The plaintext, P, is empty."
-            byte[] cipherText = aeadCipher.doFinal(new byte[0]);
-            return Arrays.equals(cipherText, retryIntegrityTag);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            // Inappropriate runtime environment
-            throw new QuicRuntimeException(e);
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-
+        return Arrays.equals(computeIntegrityTag(originalDestinationConnectionId), retryIntegrityTag);
     }
 
     @Override
@@ -191,13 +164,55 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
-        return new byte[0];
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
+        packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
+        ByteBuffer buffer = ByteBuffer.allocate(packetSize);
+        buffer.put((byte) 0b11110000);
+        buffer.put(quicVersion.getBytes());
+        buffer.put((byte) destinationConnectionId.length);
+        buffer.put(destinationConnectionId);
+        buffer.put((byte) sourceConnectionId.length);
+        buffer.put(sourceConnectionId);
+        buffer.put(retryToken);
+        rawPacketData = buffer.array();
+        buffer.put(computeIntegrityTag(originalDestinationConnectionId));
+        return buffer.array();
+    }
+
+    private byte[] computeIntegrityTag(byte[] originalDestinationConnectionId) {
+        ByteBuffer pseudoPacket = ByteBuffer.allocate(1 + originalDestinationConnectionId.length + 1 + 4 +
+                1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length);
+        pseudoPacket.put((byte) originalDestinationConnectionId.length);
+        pseudoPacket.put(originalDestinationConnectionId);
+        pseudoPacket.put(rawPacketData, 0, rawPacketData.length - RETRY_INTEGRITY_TAG_LENGTH);
+
+        try {
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
+            SecretKeySpec secretKey = new SecretKeySpec(SECRET_KEY, "AES");
+            String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, NONCE);
+            Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The associated data, A, is the contents of the Retry Pseudo-Packet"
+            aeadCipher.updateAAD(pseudoPacket.array());
+            // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
+            // "The plaintext, P, is empty."
+            byte[] cipherText = aeadCipher.doFinal(new byte[0]);
+            return cipherText;
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            // Inappropriate runtime environment
+            throw new QuicRuntimeException(e);
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            // Programming error
+            throw new RuntimeException();
+        }
     }
 
     @Override
@@ -207,23 +222,29 @@ public class RetryPacket extends QuicPacket {
         return false;
     }
 
-    public byte[] getRetryToken() {
-        return retryToken;
+    @Override
+    public boolean isInflightPacket() {
+        return false;
     }
 
-    public byte[] getDestinationConnectionId() {
-        return destinationConnectionId;
+    @Override
+    public boolean isAckEliciting() {
+        return false;
+    }
+
+    @Override
+    public boolean isAckOnly() {
+        return false;
+    }
+
+    public byte[] getRetryToken() {
+        return retryToken;
     }
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
     }
 
-    public byte[] getOriginalDestinationConnectionId() {
-        return originalDestinationConnectionId;
-    }
-
-    /**/
     @Override
     public String toString() {
         return "Packet "

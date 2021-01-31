@@ -383,19 +383,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(InitialPacket packet, Instant time) {
+    public ProcessResult process(InitialPacket packet, Instant time) {
         destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);
         ignoreVersionNegotiation = true;
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(HandshakePacket packet, Instant time) {
+    public ProcessResult process(HandshakePacket packet, Instant time) {
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
         if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
             // New connection id, not used before.
             // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
@@ -407,10 +409,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
         }
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(VersionNegotiationPacket vnPacket, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket vnPacket, Instant time) {
         if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
@@ -419,16 +422,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // Must be a corrupted packet or sent because of a corrupted packet, so ignore.
             log.debug("Ignoring Version Negotiation packet");
         }
+        return ProcessResult.Continue;
     }
 
     private volatile boolean processedRetryPacket = false;
 
     @Override
-    public void process(RetryPacket packet, Instant time) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
-        // "Clients MUST discard Retry packets that contain an Original
-        //   Destination Connection ID field that does not match the Destination
-        //   Connection ID from its Initial packet"
+    public ProcessResult process(RetryPacket packet, Instant time) {
         if (packet.validateIntegrityTag(destConnectionIds.getCurrent())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
@@ -465,11 +465,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             log.error("Discarding Retry packet, because integrity tag is invalid.");
         }
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(ZeroRttPacket packet, Instant time) {
+    public ProcessResult process(ZeroRttPacket packet, Instant time) {
         // Intentionally discarding packet without any action (servers should not send 0-RTT packets).
+        return ProcessResult.Abort;
     }
 
     @Override

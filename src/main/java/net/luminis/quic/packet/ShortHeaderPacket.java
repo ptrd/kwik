@@ -120,7 +120,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -156,8 +156,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     protected void checkPacketType(byte flags) {
