@@ -658,4 +658,41 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Then
         assertThat(optionalSendItem).isEmpty();
     }
+
+    @Test
+    void whenExplicitAckIsSentImplicitlySendRequestQueueDoesNotContainAckRequestAnymore() throws Exception {
+        // Given
+        // ... there is a delayed ack pending
+        int ackDelay = 20;
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest(ackDelay);  // As test is using mock sender, this call must be done explicitly in the test
+
+        // When
+        // ... it is send together with a ack-eliciting packet
+        sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        assertThat(optionalSendItem).isPresent();
+        assertThat(optionalSendItem.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
+
+        // Then
+        // ... after delay time
+        Thread.sleep(ackDelay);
+        // ... and after one check for explicit ack
+        sendRequestQueue.mustAndWillSendAck();
+        assertThat(sendRequestQueue.mustSendAck()).isFalse();
+    }
+
+    @Test
+    void whenAckDoesNotFitInPacketItStaysQueued() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest();  // As test is using mock sender, this call must be done explicitly in the test
+
+        // When
+        oneRttPacketAssembler.assemble(6000, 2, null, new byte[0]);
+
+        // Then
+        sendRequestQueue.mustSendAck();
+    }
 }

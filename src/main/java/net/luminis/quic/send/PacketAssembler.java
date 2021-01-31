@@ -80,7 +80,7 @@ public class PacketAssembler {
 
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
-        if (requestQueue.mustSendAck()) {
+        if (requestQueue.mustAndWillSendAck()) {
             if (ackGenerator.hasNewAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
                 ackFrame = ackGenerator.generateAck().get();   // Explicit ack cannot disappear by other means than sending it.
@@ -91,13 +91,14 @@ public class PacketAssembler {
                     packet.get().addFrame(ackFrame);
                     callbacks.add(EMPTY_CALLBACK);
                     ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
-                    requestQueue.getAck();
                 }
                 else {
                     // If not even a mandatory ack can be added, don't bother about other frames: theoretically there might be frames
                     // that can be fit, but this is very unlikely to happen (because limit packet size is caused by coalescing packets
                     // in one datagram, which will only happen during handshake, when acks are still small) and even then: there
                     // will be a next packet in due time.
+                    // However, the ack removed from the queue must be returned
+                    requestQueue.addAckRequest();
                     return Optional.empty();
                 }
             }
