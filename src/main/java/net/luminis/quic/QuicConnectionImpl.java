@@ -355,6 +355,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
+        getSender().stop();
         log.info("Idle timeout: silently closing connection after " + idleTime + " ms of inactivity (" + bytesToHex(getSourceConnectionId()) + ")");
         log.getQLog().emitConnectionClosedEvent(Instant.now());
         terminate();
