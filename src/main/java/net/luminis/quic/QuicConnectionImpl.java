@@ -25,6 +25,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
 import net.luminis.tls.TlsProtocolException;
@@ -355,6 +356,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
+        getStreamManager().abortAll();
         getSender().stop();
         log.info("Idle timeout: silently closing connection after " + idleTime + " ms of inactivity (" + bytesToHex(getSourceConnectionId()) + ")");
         log.getQLog().emitConnectionClosedEvent(Instant.now());
@@ -388,7 +390,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
         connectionState = Status.Closing;
 
-        // TODO streamManager.abortAll();
+        getStreamManager().abortAll();
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.3
         // "An endpoint that has not established state, such as a server that detects an error in an Initial packet,
@@ -527,6 +529,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected abstract TlsEngine getTlsEngine();
 
     protected abstract GlobalAckGenerator getAckGenerator();
+
+    protected abstract StreamManager getStreamManager();
 
     public abstract long getInitialMaxStreamData();
 

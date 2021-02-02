@@ -936,6 +936,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return tlsEngine;
     }
 
+    protected StreamManager getStreamManager() {
+        return streamManager;
+    }
+
     protected int getSourceConnectionIdLength() {
         return sourceConnectionIds.getConnectionIdlength();
     }

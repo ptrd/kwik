@@ -140,6 +140,11 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     @Override
+    protected StreamManager getStreamManager() {
+        return streamManager;
+    }
+
+    @Override
     public long getInitialMaxStreamData() {
         return initialMaxStreamData;
     }

@@ -5,6 +5,7 @@ import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,17 @@ class QuicConnectionImplTest {
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenClosingStreamsAreClosed() {
+        // Given
+
+        // When
+        connection.immediateClose(EncryptionLevel.App);
+
+        // Then
+        verify(connection.getStreamManager()).abortAll();
     }
 
     @Test
@@ -124,11 +136,13 @@ class QuicConnectionImplTest {
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {
+        private final StreamManager streamManager;
         public boolean terminated;
 
         NonAbstractQuicConnection() {
             super(Version.getDefault(), Role.Server, null, new NullLogger());
             idleTimer = new IdleTimer(this, log);
+            streamManager = mock(StreamManager.class);
         }
 
        @Override
@@ -287,6 +301,11 @@ class QuicConnectionImplTest {
         @Override
         protected GlobalAckGenerator getAckGenerator() {
             return mock(GlobalAckGenerator.class);
+        }
+
+        @Override
+        protected StreamManager getStreamManager() {
+            return streamManager;
         }
 
         @Override
