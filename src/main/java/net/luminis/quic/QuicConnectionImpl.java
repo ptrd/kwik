@@ -544,6 +544,4 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         return idleTimer;
     }
 
-    
-
 }

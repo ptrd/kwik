@@ -136,10 +136,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     /**
      * Set up the connection with the server.
      */
+    @Override
     public void connect(int connectionTimeout) throws IOException {
         connect(connectionTimeout, null);
     }
 
+    @Override
     public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
         String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
         connect(connectionTimeout, alpn, transportParameters, null);
@@ -154,6 +156,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * @return
      * @throws IOException
      */
+    @Override
     public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
@@ -234,6 +237,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public void keepAlive(int seconds) {
         if (connectionState != Status.Connected) {
             throw new IllegalStateException("keep alive can only be set when connected");
@@ -611,10 +615,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         System.exit(1);
     }
 
+    @Override
     public QuicStream createStream(boolean bidirectional) {
         return streamManager.createStream(bidirectional);
     }
 
+    @Override
     public void close() {
         if (connectionState == Status.Closing || connectionState == Status.Draining) {
             log.debug("Already closing");
@@ -639,6 +645,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         terminate();
     }
 
+    @Override
     protected void handlePeerClosing(ConnectionCloseFrame closing) {
         if (connectionState != Status.Closing) {
             if (closing.hasError()) {
@@ -675,6 +682,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {
@@ -731,6 +739,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
                 + destConnectionIds.getConnectionIdlength()
@@ -834,6 +843,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * Abort connection due to a fatal error in this client. No message is sent to peer; just inform client it's all over.
      * @param error  the exception that caused the trouble
      */
+    @Override
     public void abortConnection(Throwable error) {
         if (error != null) {
             if (connectionState == Status.Handshaking) {
@@ -924,26 +934,32 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     protected SenderImpl getSender() {
         return sender;
     }
 
+    @Override
     protected GlobalAckGenerator getAckGenerator() {
         return ackGenerator;
     }
 
+    @Override
     protected TlsClientEngine getTlsEngine() {
         return tlsEngine;
     }
 
+    @Override
     protected StreamManager getStreamManager() {
         return streamManager;
     }
 
+    @Override
     protected int getSourceConnectionIdLength() {
         return sourceConnectionIds.getConnectionIdlength();
     }
 
+    @Override
     public byte[] getSourceConnectionId() {
         return sourceConnectionIds.getCurrent();
     }
@@ -952,6 +968,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return sourceConnectionIds.getAll();
     }
 
+    @Override
     public byte[] getDestinationConnectionId() {
         return destConnectionIds.getCurrent();
     }
@@ -966,18 +983,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     // For internal use only.
+    @Override
     public long getInitialMaxStreamData() {
         return transportParams.getInitialMaxStreamDataBidiLocal();
     }
 
+    @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
         transportParams.setInitialMaxStreamsBidi(max);
     }
 
+    @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
         transportParams.setInitialMaxStreamsUni(max);
     }
 
+    @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
         transportParams.setInitialMaxStreamData(size);
     }
@@ -1001,6 +1022,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         newSessionTickets.add(new QuicSessionTicket(tlsSessionTicket, peerTransportParams));
     }
 
+    @Override
     public List<QuicSessionTicket> getNewSessionTickets() {
         return newSessionTickets;
     }
@@ -1022,10 +1044,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
         ackProcessors.add(ackProcessor);
     }
 
+    @Override
     public InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }

@@ -34,11 +34,11 @@ public class ServerConnectionFactory {
     private final Logger log;
     private final TlsServerEngineFactory tlsServerEngineFactory;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
-    private DatagramSocket serverSocket;
-    private int initalRtt;
-    private SecureRandom randomGenerator;
+    private final DatagramSocket serverSocket;
+    private final int initalRtt;
+    private final SecureRandom randomGenerator;
     private final Consumer<byte[]> closeCallback;
-    private boolean requireRetry = true;
+    private final boolean requireRetry;
 
     public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<byte[]> closeCallback, Logger log) {

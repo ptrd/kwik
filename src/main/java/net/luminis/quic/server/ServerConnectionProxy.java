@@ -39,9 +39,9 @@ public class ServerConnectionProxy {
 
     public ServerConnectionProxy(ServerConnection serverConnection) {
         this.serverConnection = serverConnection;
-        queue = new LinkedBlockingQueue();
+        queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
-        connectionReceiverThread = new Thread(() -> process(), threadId);
+        connectionReceiverThread = new Thread(this::process, threadId);
         connectionReceiverThread.start();
     }
 
