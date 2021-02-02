@@ -59,8 +59,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
-    private final byte[] scid;
-    private final byte[] dcid;
+    private final byte[] connectionId;
+    private final byte[] peerConnectionId;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
@@ -73,19 +73,18 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     private final int maxOpenStreamsUni;
     private final int maxOpenStreamsBidi;
     private final byte[] token;
-    private volatile boolean firstInitialPacketProcessed = false;
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
     private int maxIdleTimeoutInSeconds;
 
 
     protected ServerConnection(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                               byte[] scid, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                               byte[] connectionId, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
                                boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
                                Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
-        this.scid = scid;
-        this.dcid = dcid;
+        this.connectionId = connectionId;
+        this.peerConnectionId = dcid;
         this.originalDcid = originalDcid;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -148,24 +147,24 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
-                + dcid.length
+                + peerConnectionId.length
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16; // encryption overhead
     }
 
     @Override
     protected int getSourceConnectionIdLength() {
-        return scid.length;
+        return connectionId.length;
     }
 
     @Override
     public byte[] getSourceConnectionId() {
-        return scid;
+        return connectionId;
     }
 
     @Override
     public byte[] getDestinationConnectionId() {
-        return dcid;
+        return peerConnectionId;
     }
 
     @Override
@@ -258,10 +257,10 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
-        serverTransportParams.setInitialSourceConnectionId(scid);
+        serverTransportParams.setInitialSourceConnectionId(connectionId);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         if (retryRequired) {
-            serverTransportParams.setRetrySourceConnectionId(scid);
+            serverTransportParams.setRetrySourceConnectionId(connectionId);
         }
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
     }
@@ -273,13 +272,14 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         }
         catch (DecryptionException decryptionException) {
             if (retryRequired && (data.get(0) & 0b1111_0000) == 0b1100_0000) {
+                // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
                 try {
                     data.rewind();
                     connectionSecrets.computeInitialKeys(originalDcid);
                     return super.parsePacket(data);
                 }
                 finally {
-                    connectionSecrets.computeInitialKeys(scid);
+                    connectionSecrets.computeInitialKeys(connectionId);
                 }
             }
             else {
@@ -290,12 +290,12 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
-        assert(Arrays.equals(packet.getDestinationConnectionId(), scid) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
+        assert(Arrays.equals(packet.getDestinationConnectionId(), connectionId) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
 
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
-                connectionSecrets.computeInitialKeys(scid);
+                connectionSecrets.computeInitialKeys(connectionId);
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
             else if (!Arrays.equals(packet.getToken(), token)) {
@@ -318,7 +318,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion, scid, getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        RetryPacket retry = new RetryPacket(quicVersion, connectionId, getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
     }
 
@@ -361,7 +361,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
-
+        // TODO: eventually, this method should be removed from the FrameProcessor3 interface
     }
 
     @Override
@@ -481,7 +481,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
     protected void terminate() {
         super.terminate();
         log.getQLog().emitConnectionTerminatedEvent();
-        closeCallback.accept(scid);
+        closeCallback.accept(connectionId);
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
@@ -500,7 +500,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         if (transportParameters.getActiveConnectionIdLimit() < 2) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
-        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), dcid)) {
+        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), peerConnectionId)) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
