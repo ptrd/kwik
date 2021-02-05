@@ -23,6 +23,7 @@ import net.luminis.quic.cid.DestinationConnectionIdRegistry;
 import net.luminis.quic.cid.SourceConnectionIdRegistry;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
@@ -1081,7 +1082,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private int port;
         private QuicSessionTicket sessionTicket;
         private Version quicVersion = Version.getDefault();
-        private Logger log;
+        private Logger log = new NullLogger();
         private String proxyHost;
         private Path secretsFile;
         private Integer initialRtt;
