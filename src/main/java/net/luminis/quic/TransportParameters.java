@@ -55,6 +55,7 @@ public class TransportParameters {
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
         ackDelayExponent = 0;
+        maxUdpPayloadSize = Receiver.MAX_DATAGRAM_SIZE;
     }
 
     private void setDefaults() {
