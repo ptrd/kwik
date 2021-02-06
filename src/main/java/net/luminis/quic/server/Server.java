@@ -111,7 +111,8 @@ public class Server {
             }
         }
 
-        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), List.of(Version.getDefault()), requireRetry, wwwDir).start();
+        List<Version> supportedVersions = List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32);
+        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
     }
 
     public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, File dir) throws Exception {
