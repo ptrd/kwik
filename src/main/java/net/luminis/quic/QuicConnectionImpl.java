@@ -520,6 +520,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     @Override
+    public void close(QuicConstants.TransportErrorCode applicationError, String errorReason) {
+        immediateCloseWithError(App, applicationError.value, errorReason);
+    }
+
+    @Override
     public Statistics getStats() {
         return new Statistics(getSender().getStatistics());
     }

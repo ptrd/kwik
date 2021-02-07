@@ -19,7 +19,9 @@
 package net.luminis.quic.server.h09;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.Version;
+import net.luminis.quic.QuicConstants;
+import net.luminis.quic.io.LimitExceededException;
+import net.luminis.quic.io.LimitedInputStream;
 import net.luminis.quic.run.KwikCli;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.stream.QuicStream;
@@ -32,13 +34,18 @@ import java.util.regex.Pattern;
 
 public class Http09Connection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
 
+    public static final int MAX_REQUEST_SIZE = 4096;
+
     private static AtomicInteger threadCount = new AtomicInteger();
 
-    private File wwwDir;
+    private final QuicConnection connection;
+    private final File wwwDir;
 
     public Http09Connection(QuicConnection quicConnection, File wwwDir) {
         this.wwwDir = wwwDir;
-        quicConnection.setPeerInitiatedStreamCallback(this);
+        this.connection = quicConnection;
+
+        connection.setPeerInitiatedStreamCallback(this);
     }
 
     @Override
@@ -75,7 +82,12 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
             else {
                 System.out.println("Error: cannot extract file name");
             }
-        } catch (IOException e) {
+        }
+        catch (LimitExceededException requestToLarge) {
+            connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, "Request too large");
+        }
+        catch (IOException e) {
+            connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, e.getMessage());
             e.printStackTrace();
         }
 
@@ -98,7 +110,7 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
     }
 
     String extractPathFromRequest(InputStream input) throws IOException {
-        BufferedReader inputReader = new BufferedReader(new InputStreamReader(input));
+        BufferedReader inputReader = new BufferedReader(new InputStreamReader(new LimitedInputStream(input, MAX_REQUEST_SIZE)));
         String line = inputReader.readLine();
         Matcher matcher = Pattern.compile("GET\\s+/?(\\S+)").matcher(line);
         if (matcher.matches()) {

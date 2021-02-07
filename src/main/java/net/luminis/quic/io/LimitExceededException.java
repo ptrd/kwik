@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,28 +16,13 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.io;
 
-import net.luminis.quic.stream.QuicStream;
+import java.io.IOException;
 
-import java.util.function.Consumer;
+public class LimitExceededException extends IOException {
 
-
-public interface QuicConnection {
-
-    void setMaxAllowedBidirectionalStreams(int max);
-
-    void setMaxAllowedUnidirectionalStreams(int max);
-
-    void setDefaultStreamReceiveBufferSize(long size);
-
-    QuicStream createStream(boolean bidirectional);
-
-    void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
-
-    void close();
-
-    void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
-
-    Statistics getStats();
+    public LimitExceededException(long limit) {
+        super("Limit of " + limit + " bytes is exceeded");
+    }
 }
