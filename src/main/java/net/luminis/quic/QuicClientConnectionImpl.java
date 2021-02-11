@@ -181,16 +181,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
-                terminate();
+                stopAndTerminate();
                 throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
-                terminate();
+                stopAndTerminate();
                 throw new ConnectException("Handshake error");
             }
         }
         catch (InterruptedException e) {
-            terminate();
+            stopAndTerminate();
             throw new RuntimeException();  // Should not happen.
         }
 
@@ -698,6 +698,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             return "";
         }
+    }
+
+    private void stopAndTerminate() {
+        sender.stop();
+        terminate();
     }
 
     @Override
