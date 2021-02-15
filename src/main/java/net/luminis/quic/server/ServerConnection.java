@@ -35,6 +35,7 @@ import net.luminis.tls.alert.NoApplicationProtocolAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
+import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -122,6 +123,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
 
     @Override
     public void abortConnection(Throwable error) {
+        log.error(this.toString() + " aborted due to internal error", error);
+        closeCallback.accept(connectionId);
     }
 
     @Override
@@ -558,20 +561,16 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         return originalDcid;
     }
 
-
     @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
-
     }
 
     @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
-
     }
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
-
     }
 
     @Override
@@ -584,4 +583,8 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         streamManager.setPeerInitiatedStreamCallback(streamConsumer);
     }
 
+    @Override
+    public String toString() {
+        return "ServerConnection[" + ByteUtils.bytesToHex(originalDcid) + "]";
+    }
 }
