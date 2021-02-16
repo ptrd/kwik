@@ -64,12 +64,16 @@ public class ServerConnectionProxy {
     private void process() {
         try {
             while (true) {
-                ReceivedDatagram datagram = null;
-                datagram = queue.take();
+                ReceivedDatagram datagram = queue.take();
                 serverConnection.parsePackets(datagram.datagramNumber, datagram.timeReceived, datagram.data);
             }
-        } catch (InterruptedException e) {
+        }
+        catch (InterruptedException e) {
             // Terminate process and thread, see terminate() method
+        }
+        catch (Exception error) {
+            // Of course, this should never happen. But if it does, there is no point in going on with this connection.
+            serverConnection.abortConnection(error);
         }
     }
 
