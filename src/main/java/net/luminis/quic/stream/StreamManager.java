@@ -289,6 +289,10 @@ public class StreamManager {
         peerInitiatedStreamCallback = streamProcessor;
     }
 
+    /**
+     * Set initial max bidirectional streams that the peer will accept.
+     * @param initialMaxStreamsBidi
+     */
     public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
         if (maxStreamsAcceptedByPeerBidi == null || initialMaxStreamsBidi >= maxStreamsAcceptedByPeerBidi) {
             log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
@@ -304,6 +308,10 @@ public class StreamManager {
         }
     }
 
+    /**
+     * Set initial max unidirectional streams that the peer will accept.
+     * @param initialMaxStreamsUni
+     */
     public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
         if (maxStreamsAcceptedByPeerUni == null || initialMaxStreamsUni >= maxStreamsAcceptedByPeerUni) {
             log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);

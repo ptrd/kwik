@@ -524,6 +524,9 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),
                 transportParameters.getInitialMaxStreamDataUni(), log);
         streamManager.setFlowController(flowController);
+
+        streamManager.setInitialMaxStreamsBidi(transportParameters.getInitialMaxStreamsBidi());
+        streamManager.setInitialMaxStreamsUni(transportParameters.getInitialMaxStreamsUni());
     }
 
     private class TlsMessageSender implements ServerMessageSender {

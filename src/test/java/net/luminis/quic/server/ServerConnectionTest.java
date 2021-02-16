@@ -6,6 +6,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.FrameProcessor3;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
@@ -141,6 +142,27 @@ class ServerConnectionTest {
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
                 && ((ConnectionCloseFrame) frame).getErrorCode() == 0x08),
                 eq(EncryptionLevel.Initial));
+    }
+
+    @Test
+    void whenTransportParametersAreProcessedStreamManagerDefaultsShouldHaveBeenSet() throws Exception {
+        // Given
+        StreamManager streamManager = mock(StreamManager.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("streamManager"), streamManager);
+
+        QuicTransportParametersExtension transportParametersExtension = createTransportParametersExtension();
+        transportParametersExtension.getTransportParameters().setInitialMaxStreamsUni(3);
+        transportParametersExtension.getTransportParameters().setInitialMaxStreamsBidi(100);
+        List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+
+        // When
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        verify(streamManager).setInitialMaxStreamsUni(longThat(value -> value == 3));
+        verify(streamManager).setInitialMaxStreamsBidi(longThat(value -> value == 100));
     }
 
     @Test
