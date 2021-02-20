@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -156,7 +157,20 @@ public class Server {
     }
 
     private void registerApplicationLayerProtocols(File wwwDir) {
+        ApplicationProtocolConnectionFactory http3ApplicationProtocolConnectionFactory = null;
+
+        try {
+            // If flupke server plugin is on classpath, load the http3 connection factory class.
+            Class<?> http3FactoryClass = this.getClass().getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
+            http3ApplicationProtocolConnectionFactory = (ApplicationProtocolConnectionFactory)
+                    http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
+            log.info("Loading Flupke H3 server plugin");
+        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        }
+
         Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory(wwwDir);
+
+        final ApplicationProtocolConnectionFactory http3ApplicationProtocolFactory = http3ApplicationProtocolConnectionFactory;
         supportedVersions.forEach(version -> {
             String protocol = "hq";
             String versionSuffix = version.getDraftVersion();
@@ -164,8 +178,11 @@ public class Server {
                 protocol += "-" + versionSuffix;
             }
             applicationProtocolRegistry.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
-        });
 
+            if (http3ApplicationProtocolFactory != null) {
+                applicationProtocolRegistry.registerApplicationProtocol(protocol.replace("hq", "h3"), http3ApplicationProtocolFactory);
+            }
+        });
     }
 
     private void receiveLoop() {
