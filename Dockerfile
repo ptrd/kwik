@@ -8,7 +8,7 @@ RUN mkdir /logs
 RUN mkdir /logs/qlog
 ENV QLOGDIR=/logs/qlog
 RUN mkdir /www
-COPY kwikindex.html /www/index.html
+COPY www /www
 RUN truncate -s 50K /www/50K
 RUN truncate -s 100K /www/100K
 RUN truncate -s 500K /www/500K
