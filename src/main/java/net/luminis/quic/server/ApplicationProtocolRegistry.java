@@ -39,4 +39,8 @@ public class ApplicationProtocolRegistry {
     void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory factory) {
         registeredFactories.put(protocol, factory);
     }
+
+    Set<String> getRegisteredApplicationProtocols() {
+        return registeredFactories.keySet();
+    }
 }

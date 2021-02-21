@@ -132,8 +132,6 @@ public class Server {
             log = new SysOutLogger();
         }
         log.logWarning(true);
-        log.logPackets(true);
-        log.logRecovery(true);
         log.logInfo(true);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
@@ -148,6 +146,7 @@ public class Server {
 
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
+        log.info("Kwik server started; supported application protcols: " + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
     private void start() {
