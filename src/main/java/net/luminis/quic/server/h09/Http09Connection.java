@@ -76,7 +76,6 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
                     outputStreamWriter.write("404: file '" + fileName + "' not found\n");
                     outputStreamWriter.close();
                 }
-                outputStream.flush();
                 outputStream.close();
             }
             else {
