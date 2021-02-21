@@ -365,7 +365,7 @@ class ServerConnectionTest {
         when(tlsServerEngineFactory.createServerEngine(any(ServerMessageSender.class), any(TlsStatusEventHandler.class))).then(new Answer<TlsServerEngine>() {
             @Override
             public TlsServerEngine answer(InvocationOnMock invocation) throws Throwable {
-                tlsServerEngine = new MockTlsServerEngine(null, null, invocation.getArgument(0), invocation.getArgument(1));
+                tlsServerEngine = new MockTlsServerEngine(mock(X509Certificate.class), null, invocation.getArgument(0), invocation.getArgument(1));
                 return tlsServerEngine;
             }
         });
