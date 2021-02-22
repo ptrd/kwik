@@ -5,7 +5,6 @@ COPY libs/flupke.jar .
 ENV CERT=cert.pem
 ENV KEY=key.pem
 RUN mkdir /logs
-RUN mkdir /logs/qlog
 ENV QLOGDIR=/logs/qlog
 RUN mkdir /www
 COPY www /www

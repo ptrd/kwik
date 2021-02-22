@@ -22,6 +22,7 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
 
 import javax.sql.ConnectionEvent;
+import java.io.File;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Iterator;
@@ -39,6 +40,10 @@ public class QLogFrontEnd implements QLog {
         String qlogdirEnvVar = System.getenv("QLOGDIR");
         if (qlogdirEnvVar != null && !qlogdirEnvVar.isBlank()) {
             eventQueue = new QLogBackEnd().getQueue();
+            File qlogDir = new File(qlogdirEnvVar);
+            if (!qlogDir.exists()) {
+                qlogDir.mkdirs();
+            }
         }
         else {
             eventQueue = new NullQueue();
