@@ -180,6 +180,21 @@ class ServerConnectionTest {
     }
 
     @Test
+    void serverShouldSendTransportParameterDisableActiveMigration() throws Exception {
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getDisableMigration()).isTrue();
+    }
+
+    @Test
     void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         CryptoFrame firstFrame = mock(CryptoFrame.class);

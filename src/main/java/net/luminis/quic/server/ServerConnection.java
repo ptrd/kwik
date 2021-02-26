@@ -265,6 +265,7 @@ public class ServerConnection extends QuicConnectionImpl implements TlsStatusEve
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        serverTransportParams.setDisableMigration(true);
         serverTransportParams.setInitialSourceConnectionId(connectionId);
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         if (retryRequired) {
