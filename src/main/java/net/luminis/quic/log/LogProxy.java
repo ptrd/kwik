@@ -102,6 +102,11 @@ public class LogProxy implements Logger {
     }
 
     @Override
+    public void timeFormat(TimeFormat aLong) {
+
+    }
+
+    @Override
     public void debug(String message) {
         proxiedLogger.debug(message);
     }

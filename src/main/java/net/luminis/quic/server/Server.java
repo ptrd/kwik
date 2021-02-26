@@ -131,6 +131,7 @@ public class Server {
         else {
             log = new SysOutLogger();
         }
+        log.timeFormat(Logger.TimeFormat.Long);
         log.logWarning(true);
         log.logInfo(true);
 

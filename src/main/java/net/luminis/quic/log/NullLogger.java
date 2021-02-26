@@ -84,6 +84,11 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void timeFormat(TimeFormat aLong) {
+
+    }
+
+    @Override
     public void debug(String message) {
     }
 

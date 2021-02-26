@@ -27,6 +27,11 @@ import java.time.Instant;
 
 public interface Logger {
 
+    enum TimeFormat {
+        Short,
+        Long
+    }
+
     void logDebug(boolean enabled);
 
     void logRaw(boolean enabled);
@@ -52,6 +57,8 @@ public interface Logger {
     void logFlowControl(boolean enabled);
 
     void useRelativeTime(boolean enabled);
+
+    void timeFormat(TimeFormat aLong);
 
     void debug(String message);
 
