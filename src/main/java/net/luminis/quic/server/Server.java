@@ -186,13 +186,18 @@ public class Server {
     }
 
     private void receiveLoop() {
-        try {
-            while (true) {
+        while (true) {
+            try {
                 RawPacket rawPacket = receiver.get((int) Duration.ofDays(10 * 365).toSeconds());
                 process(rawPacket);
             }
-        } catch (InterruptedException e) {
-            log.error("receiver interrupted (ignoring)");
+            catch (InterruptedException e) {
+                log.error("receiver interrupted (ignoring)");
+                break;
+            }
+            catch (Exception runtimeError) {
+                log.error("Uncaught exception in server receive loop", runtimeError);
+            }
         }
     }
 
