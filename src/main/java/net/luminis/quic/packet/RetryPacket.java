@@ -47,11 +47,20 @@ public class RetryPacket extends QuicPacket {
     public static final byte[] SECRET_KEY = new byte[] {
             (byte) 0xcc, (byte) 0xce, (byte) 0x18, (byte) 0x7e, (byte) 0xd0, (byte) 0x9a, (byte) 0x09, (byte) 0xd0,
             (byte) 0x57, (byte) 0x28, (byte) 0x15, (byte) 0x5a, (byte) 0x6c, (byte) 0xb9, (byte) 0x6b, (byte) 0xe1 };
+
+    public static final byte[] SECRET_KEY_V1 = new byte[] {
+            (byte) 0xbe, (byte) 0x0c, (byte) 0x69, (byte) 0x0b, (byte) 0x9f, (byte) 0x66, (byte) 0x57, (byte) 0x5a,
+            (byte) 0x1d, (byte) 0x76, (byte) 0x6b, (byte) 0x54, (byte) 0xe3, (byte) 0x68, (byte) 0xc8, (byte) 0x4e };
+
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
     // "The nonce, N, is 96 bits equal to 0xe54930f97f2136f0530a8c1c."
     public static final byte[] NONCE = new byte[] {
             (byte) 0xe5, (byte) 0x49, (byte) 0x30, (byte) 0xf9, (byte) 0x7f, (byte) 0x21, (byte) 0x36, (byte) 0xf0,
             (byte) 0x53, (byte) 0x0a, (byte) 0x8c, (byte) 0x1c };
+
+    public static final byte[] NONCE_V1 = new byte[] {
+            (byte) 0x46, (byte) 0x15, (byte) 0x99, (byte) 0xd3, (byte) 0x5d, (byte) 0x63, (byte) 0x2b, (byte) 0xf2,
+            (byte) 0x23, (byte) 0x98, (byte) 0x25, (byte) 0xbb };
 
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
@@ -147,9 +156,9 @@ public class RetryPacket extends QuicPacket {
         try {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
             // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
-            SecretKeySpec secretKey = new SecretKeySpec(SECRET_KEY, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(quicVersion == Version.QUIC_version_1? SECRET_KEY_V1: SECRET_KEY, "AES");
             String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, NONCE);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, quicVersion == Version.QUIC_version_1? NONCE_V1: NONCE);
             Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8

@@ -31,10 +31,23 @@ import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18
 public class QuicTransportParametersExtension extends Extension {
 
+    public static final int CODEPOINT_IETFDRAFT = 0xffa5;
+    public static final int CODEPOINT_V1 = 57;
+
     private final Version quicVersion;
     private byte[] data;
     private TransportParameters params;
     private Integer discardTransportParameterSize;
+
+
+    public static boolean isCodepoint(Version quicVersion, int extensionType) {
+        if (quicVersion == Version.QUIC_version_1) {
+            return extensionType == CODEPOINT_V1;
+        }
+        else {
+            return extensionType == CODEPOINT_IETFDRAFT;
+        }
+    }
 
     public QuicTransportParametersExtension() {
         this(Version.getDefault());
@@ -72,7 +85,7 @@ public class QuicTransportParametersExtension extends Extension {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-8.2:
         // "quic_transport_parameters(0xffa5)"
-        buffer.putShort((short) 0xffa5);
+        buffer.putShort((short) (quicVersion == Version.QUIC_version_1? CODEPOINT_V1: CODEPOINT_IETFDRAFT));
 
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
@@ -169,7 +182,7 @@ public class QuicTransportParametersExtension extends Extension {
     // Assuming Handshake message type encrypted_extensions
     public QuicTransportParametersExtension parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         int extensionType = buffer.getShort() & 0xffff;
-        if (extensionType != 0xffa5) {
+        if (!isCodepoint(quicVersion, extensionType)) {
             throw new RuntimeException();  // Must be programming error
         }
         int extensionLength = buffer.getShort();
