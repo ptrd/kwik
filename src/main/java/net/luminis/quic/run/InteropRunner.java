@@ -90,6 +90,7 @@ public class InteropRunner extends KwikCli {
             }
 
             QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
+            builder.version(Version.QUIC_version_1);
             builder.noServerCertificateCheck();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
@@ -178,6 +179,7 @@ public class InteropRunner extends KwikCli {
         }
 
         builder = QuicClientConnectionImpl.newBuilder();
+        builder.version(Version.QUIC_version_1);
         builder.uri(url2.toURI());
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
@@ -242,7 +244,7 @@ public class InteropRunner extends KwikCli {
             earlyDataRequests.add(new QuicClientConnection.StreamEarlyData(httpRequest.getBytes(), true));
         }
         Version quicVersion = Version.getDefault();
-        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        String alpn = "hq-interop";
         List<QuicStream> earlyDataStreams = connection2.connect(15_000, alpn, null, earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
             if (earlyDataStreams.get(i) == null) {
