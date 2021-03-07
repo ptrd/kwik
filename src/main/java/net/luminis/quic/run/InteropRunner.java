@@ -130,7 +130,7 @@ public class InteropRunner extends KwikCli {
         logger.logRecovery(true);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000);
+        connection.connect(5_000, "hq-interop", null, null);
 
         ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
         try {
@@ -164,7 +164,7 @@ public class InteropRunner extends KwikCli {
         URL url2 = downloadUrls.get(1);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000);
+        connection.connect(5_000, "hq-interop", null, null);
 
         doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
         logger.info("Downloaded " + url1);
@@ -184,7 +184,7 @@ public class InteropRunner extends KwikCli {
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
         QuicClientConnection connection2 = builder.build();
-        connection2.connect(5_000);
+        connection2.connect(5_000, "hq-interop", null, null);
         doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
         logger.info("Downloaded " + url2);
         connection2.close();
@@ -201,7 +201,7 @@ public class InteropRunner extends KwikCli {
                 logger.info("Start downloading " + download.getFile() + " at " + timeNow());
 
                 QuicClientConnection connection = builder.build();
-                connection.connect(275_000);
+                connection.connect(275_000, "hq-interop", null, null);
 
                 doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
                 logger.info("Downloaded " + download + " finished at " + timeNow());
@@ -220,7 +220,7 @@ public class InteropRunner extends KwikCli {
         logger.info("Starting first download at " + timeNow());
 
         QuicClientConnection connection = builder.build();
-        connection.connect(15_000);
+        connection.connect(15_000, "hq-interop", null, null);
 
         doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
@@ -265,7 +265,7 @@ public class InteropRunner extends KwikCli {
         logger.info("Starting download at " + timeNow());
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000);
+        connection.connect(5_000, "hq-interop", null, null);
 
         String requestPath = downloadUrls.get(0).getPath();
         String outputFile = outputDir.getAbsolutePath();
