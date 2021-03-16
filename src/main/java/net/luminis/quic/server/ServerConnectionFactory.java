@@ -59,12 +59,12 @@ public class ServerConnectionFactory {
         randomGenerator = new SecureRandom();
     }
 
-    public ServerConnection createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid) {
+    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid) {
         byte[] connectionId = generateNewConnectionId();
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.2
         // "A server MUST set the Destination Connection ID it uses for sending packets based on the first received Initial packet."
         byte[] dcid = originalScid;
-        return new ServerConnection(version, serverSocket, clientAddress, connectionId, dcid, originalDcid,
+        return new ServerConnectionImpl(version, serverSocket, clientAddress, connectionId, dcid, originalDcid,
                 tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, closeCallback, log);
     }
 

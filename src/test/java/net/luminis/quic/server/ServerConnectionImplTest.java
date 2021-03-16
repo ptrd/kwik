@@ -49,10 +49,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 
-class ServerConnectionTest {
+class ServerConnectionImplTest {
 
     public static final String DEFAULT_APPLICATION_PROTOCOL = "hq-29";
-    private ServerConnection connection;
+    private ServerConnectionImpl connection;
     private ApplicationLayerProtocolNegotiationExtension alpn = new ApplicationLayerProtocolNegotiationExtension(DEFAULT_APPLICATION_PROTOCOL);
     private TlsServerEngine tlsServerEngine;
 
@@ -240,7 +240,7 @@ class ServerConnectionTest {
     void whenRetryIsRequiredDifferentDestinationConnectionIdsGetDifferentToken() throws Exception {
         // Given
         byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
-        ServerConnection connection1 = createServerConnection(createTlsServerEngine(), dcid1,true, cid -> {});
+        ServerConnectionImpl connection1 = createServerConnection(createTlsServerEngine(), dcid1,true, cid -> {});
         connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection1.getSender()).send(argumentCaptor.capture());
@@ -248,7 +248,7 @@ class ServerConnectionTest {
 
         // When
         byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
-        ServerConnection connection2 = createServerConnection(createTlsServerEngine(), dcid2, true, cid -> {});
+        ServerConnectionImpl connection2 = createServerConnection(createTlsServerEngine(), dcid2, true, cid -> {});
         connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), Instant.now());
 
         // Then
@@ -356,16 +356,16 @@ class ServerConnectionTest {
                 invalidActiveConnectionIdLimit, incorrectInitialSourceConnectionId);
     }
 
-    private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired) throws Exception {
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired) throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         return createServerConnection(tlsServerEngineFactory, odcid, retryRequired, cid -> {});
     }
 
-    private ServerConnection createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid, boolean retryRequired, Consumer<byte[]> closeCallback) throws Exception {
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid, boolean retryRequired, Consumer<byte[]> closeCallback) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
 
-        ServerConnection connection = new ServerConnection(Version.getDefault(), mock(DatagramSocket.class),
+        ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
                 tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, closeCallback, mock(Logger.class));
 

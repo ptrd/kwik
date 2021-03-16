@@ -32,12 +32,12 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class ServerConnectionProxy {
 
-    private final ServerConnection serverConnection;
+    private final ServerConnectionImpl serverConnection;
     private final BlockingQueue<ReceivedDatagram> queue;
     private final Thread connectionReceiverThread;
 
 
-    public ServerConnectionProxy(ServerConnection serverConnection) {
+    public ServerConnectionProxy(ServerConnectionImpl serverConnection) {
         this.serverConnection = serverConnection;
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());

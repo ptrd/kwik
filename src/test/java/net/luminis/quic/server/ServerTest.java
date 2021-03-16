@@ -164,7 +164,7 @@ class ServerTest {
     void serverReceivingValidInitialShouldCreateNewConnection() throws Exception {
         // Given
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
-        ServerConnection connection = mock(ServerConnection.class);
+        ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
         when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
         when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
@@ -224,7 +224,7 @@ class ServerTest {
     void receivingDuplicateInitialShouldNotCreateNewConnection() throws Exception {
         // Given
         byte[] orginalDcid = ByteUtils.hexToBytes("f8e39b14d954c988");
-        ServerConnection connection = mock(ServerConnection.class);
+        ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
         when(connection.getSourceConnectionId()).thenReturn(ByteUtils.hexToBytes("cafebabe"));
         when(connection.getOriginalDestinationConnectionId()).thenReturn(orginalDcid);
 

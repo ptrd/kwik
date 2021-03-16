@@ -23,8 +23,8 @@ class ServerConnectionFactoryTest {
     @Test
     void newConnectionHasRandomSourceConnectionId() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(16, null, tlsServerEngineFactory, false, null, 100, cid -> {}, mock(Logger.class));
-        ServerConnection conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
-        ServerConnection conn2 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn2 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
 
         assertThat(conn1.getSourceConnectionId()).hasSize(16);
         assertThat(conn2.getSourceConnectionId()).hasSize(16);
@@ -34,14 +34,14 @@ class ServerConnectionFactoryTest {
     @Test
     void connectionFactorySupportsConnectionIdsWithSmallLength() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(4, null, tlsServerEngineFactory, false, null, 100, cid -> {}, mock(Logger.class));
-        ServerConnection conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
         assertThat(conn1.getSourceConnectionId()).hasSize(4);
     }
 
     @Test
     void connectionFactorySupportsConnectionIdsWithLargeLength() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(20, null, tlsServerEngineFactory, false, null, 100, cid -> {}, mock(Logger.class));
-        ServerConnection conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
         assertThat(conn1.getSourceConnectionId()).hasSize(20);
     }
 
