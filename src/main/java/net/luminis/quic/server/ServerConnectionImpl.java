@@ -39,6 +39,7 @@ import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
@@ -60,6 +61,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
+    private final InetSocketAddress initialClientAddress;
     private final byte[] connectionId;
     private final byte[] peerConnectionId;
     private final boolean retryRequired;
@@ -529,6 +531,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         streamManager.setInitialMaxStreamsBidi(transportParameters.getInitialMaxStreamsBidi());
         streamManager.setInitialMaxStreamsUni(transportParameters.getInitialMaxStreamsUni());
+    }
+
+    @Override
+    public InetAddress getInitialClientAddress() {
+        return initialClientAddress.getAddress();
     }
 
     private class TlsMessageSender implements ServerMessageSender {
