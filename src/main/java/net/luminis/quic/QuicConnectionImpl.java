@@ -137,6 +137,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         getSender().send(frameSupplier, minimumSize, level, lostCallback);
     }
 
+    public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback, boolean flush) {
+        getSender().send(frameSupplier, minimumSize, level, lostCallback);
+        if (flush) {
+            getSender().flush();
+        }
+    }
+
     public void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
         while (data.remaining() > 0) {
             try {

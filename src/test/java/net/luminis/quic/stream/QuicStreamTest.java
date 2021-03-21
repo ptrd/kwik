@@ -309,10 +309,10 @@ class QuicStreamTest {
         quicStream.getOutputStream().write(data);
 
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
-        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
 
         StreamFrame firstFrame = (StreamFrame) captor.getAllValues().get(0).apply(1200);
-        verify(connection, times(2)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        verify(connection, times(2)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
         StreamFrame secondFrame = (StreamFrame) captor.getAllValues().get(1).apply(1200);
 
         // This is what the test is about: the first frame should be less than max packet size.
@@ -380,7 +380,7 @@ class QuicStreamTest {
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
         quicStream.getOutputStream().write("this frame might get lost".getBytes());
-        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
 
         QuicFrame lostFrame = sendFunctionCaptor.getValue().apply(1500);
         Consumer lostFrameCallback = lostFrameCallbackCaptor.getValue();
@@ -435,7 +435,7 @@ class QuicStreamTest {
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
         quicStream.getOutputStream().write("just a stream frame".getBytes());
-        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
         clearInvocations(connection);
         // Simulate data is sent (will call QuicStream::sendFrame)
         QuicFrame frame = sendFunctionCaptor.getValue().apply(1500);
@@ -447,7 +447,7 @@ class QuicStreamTest {
 
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor2 = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
-        verify(connection, times(1)).send(sendFunctionCaptor2.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture());
+        verify(connection, times(1)).send(sendFunctionCaptor2.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
         clearInvocations(connection);
         // Simulate close frame is actually sent
         QuicFrame frameThatWillBecomeLost = sendFunctionCaptor2.getValue().apply(1500);
@@ -569,7 +569,7 @@ class QuicStreamTest {
         StreamFrame lastFrame = null;
         do {
             ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
-            verify(connection, atLeastOnce()).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+            verify(connection, atLeastOnce()).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
             for (Function<Integer, QuicFrame> f: sendFunctionCaptor.getAllValues()) {
                 QuicFrame frame = f.apply(1200);
                 if (frame != null) {
@@ -724,7 +724,7 @@ class QuicStreamTest {
 
     private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
-        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class));
+        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
         clearInvocations(connection);
         return captor.getValue();
     }

@@ -192,7 +192,7 @@ class EarlyDataStreamTest {
 
     StreamFrame captureFrameSentAndVerifyEncryptionLevel(QuicClientConnectionImpl connection, int maxFrameSize, EncryptionLevel expectedLevel) {
         ArgumentCaptor<Function<Integer, QuicFrame>> frameSupplierCaptor = ArgumentCaptor.forClass(Function.class);
-        verify(connection, times(1)).send(frameSupplierCaptor.capture(), anyInt(), argThat(l -> l == expectedLevel), any(Consumer.class));
+        verify(connection, times(1)).send(frameSupplierCaptor.capture(), anyInt(), argThat(l -> l == expectedLevel), any(Consumer.class), anyBoolean());
         clearInvocations(connection);
         return (StreamFrame) frameSupplierCaptor.getValue().apply(maxFrameSize);
     }

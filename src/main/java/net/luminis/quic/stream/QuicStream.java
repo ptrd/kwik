@@ -345,7 +345,7 @@ public class QuicStream extends BaseStream {
             synchronized (lock) {
                 if (! sendRequestQueued) {
                     sendRequestQueued = true;
-                    connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                    connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
                 }
             }
         }
@@ -374,7 +374,7 @@ public class QuicStream extends BaseStream {
                 synchronized (lock) {
                     if (! sendRequestQueued) {
                         sendRequestQueued = true;
-                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
                     }
                 }
             }
@@ -443,7 +443,7 @@ public class QuicStream extends BaseStream {
                             sendRequestQueued = true;
                         }
                         // There is more to send, so queue a new send request.
-                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+                        connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
                     }
 
                     if (streamFrame.isFinal()) {
@@ -465,7 +465,7 @@ public class QuicStream extends BaseStream {
         public void streamNotBlocked(int streamId) {
             // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
             // and let sendFrame method determine whether there is more to send or not.
-            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame);
+            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
