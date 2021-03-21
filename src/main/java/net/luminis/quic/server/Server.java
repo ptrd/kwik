@@ -111,7 +111,7 @@ public class Server {
             }
         }
 
-        List<Version> supportedVersions = List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32);
+        List<Version> supportedVersions = List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32, Version.QUIC_version_1);
         new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
     }
 
@@ -177,10 +177,15 @@ public class Server {
             if (! versionSuffix.isBlank()) {
                 protocol += "-" + versionSuffix;
             }
+            else {
+                protocol = "hq-interop";
+            }
             applicationProtocolRegistry.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
 
             if (http3ApplicationProtocolFactory != null) {
-                applicationProtocolRegistry.registerApplicationProtocol(protocol.replace("hq", "h3"), http3ApplicationProtocolFactory);
+
+                String h3Protocol = protocol.replace("hq-interop", "h3").replace("hq", "h3");
+                applicationProtocolRegistry.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
             }
         });
     }
