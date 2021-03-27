@@ -323,7 +323,7 @@ public class Server {
             Version version = Version.parse(versionValue);
             log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid) + " with " + clientAddress.getAddress().getHostAddress());
             ServerConnectionImpl newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
-            ServerConnectionProxy newConnectionProxy = new ServerConnectionProxy(newConnection);
+            ServerConnectionProxy newConnectionProxy = new ServerConnectionThread(newConnection);
             // Register new connection with both the new connection id, and the original (as retransmitted initial packets
             // with the same original dcid might be received, which should _not_ lead to another connection)
             currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnectionProxy);

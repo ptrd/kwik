@@ -18,75 +18,17 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.tls.util.ByteUtils;
-
 import java.nio.ByteBuffer;
 import java.time.Instant;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-
-/**
- * Proxy for server connection that ensures that all processing of received datagrams is executed on a separate thread.
- * This implementation creates a new thread for each connection, so the methods that execute as part of processing
- * received datagrams can use thread-confinement strategy for concurrency control.
- */
-public class ServerConnectionProxy {
-
-    private final ServerConnectionImpl serverConnection;
-    private final BlockingQueue<ReceivedDatagram> queue;
-    private final Thread connectionReceiverThread;
 
 
-    public ServerConnectionProxy(ServerConnectionImpl serverConnection) {
-        this.serverConnection = serverConnection;
-        queue = new LinkedBlockingQueue<>();
-        String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
-        connectionReceiverThread = new Thread(this::process, threadId);
-        connectionReceiverThread.start();
-    }
+public interface ServerConnectionProxy {
 
-    public byte[] getOriginalDestinationConnectionId() {
-        return serverConnection.getOriginalDestinationConnectionId();
-    }
+    byte[] getOriginalDestinationConnectionId();
 
-    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
-        queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data));
-    }
+    void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data);
 
-    public boolean isClosed() {
-        return serverConnection.isClosed();
-    }
+    boolean isClosed();
 
-    public void terminate() {
-        connectionReceiverThread.interrupt();
-    }
-
-    private void process() {
-        try {
-            while (true) {
-                ReceivedDatagram datagram = queue.take();
-                serverConnection.parsePackets(datagram.datagramNumber, datagram.timeReceived, datagram.data);
-            }
-        }
-        catch (InterruptedException e) {
-            // Terminate process and thread, see terminate() method
-        }
-        catch (Exception error) {
-            // Of course, this should never happen. But if it does, there is no point in going on with this connection.
-            serverConnection.abortConnection(error);
-        }
-    }
-
-    static class ReceivedDatagram {
-
-        final int datagramNumber;
-        final Instant timeReceived;
-        final ByteBuffer data;
-
-        public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data) {
-            this.datagramNumber = datagramNumber;
-            this.timeReceived = timeReceived;
-            this.data = data;
-        }
-    }
+    void terminate();
 }
