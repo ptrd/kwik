@@ -123,7 +123,7 @@ public class CryptoStream extends BaseStream {
         buffer.mark();
         int extensionType = buffer.getShort();
         buffer.reset();
-        if ((extensionType & 0xffff) == 0xffa5) {
+        if (QuicTransportParametersExtension.isCodepoint(quicVersion, extensionType & 0xffff)) {
             return new QuicTransportParametersExtension(quicVersion).parse(buffer, peerRole, log);
         }
         else {

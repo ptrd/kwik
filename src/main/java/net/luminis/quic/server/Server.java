@@ -26,6 +26,7 @@ import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
+import org.apache.commons.cli.*;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,6 +39,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,49 +71,58 @@ public class Server {
         System.exit(1);
     }
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 3) {
+    public static void main(String[] rawArgs) throws Exception {
+        Options cmdLineOptions = new Options();
+        cmdLineOptions.addOption(null, "noRetry", false, "disable always use retry");
+        cmdLineOptions.addOption(null, "quicV1", false, "enable QUIC version 1");
+
+        CommandLineParser parser = new DefaultParser();
+        CommandLine cmd = null;
+        try {
+            cmd = parser.parse(cmdLineOptions, rawArgs);
+        }
+        catch (ParseException argError) {
+            System.out.println("Invalid argument: " + argError.getMessage());
             usageAndExit();
         }
 
-        int argIndex = 0;
-        boolean requireRetry = true;
-        if (args[argIndex].equals("--noRetry")) {
-            requireRetry = false;
-            argIndex++;
-
-            if (args.length < 4) {
-                usageAndExit();
-            }
+        List<String> args = cmd.getArgList();
+        if (args.size() < 3) {
+            usageAndExit();
         }
 
-        File certificateFile = new File(args[argIndex]);
+        boolean requireRetry = ! cmd.hasOption("noRetry");
+
+        boolean enableQuicV1 = cmd.hasOption("quicV1");
+
+        File certificateFile = new File(args.get(0));
         if (!certificateFile.exists()) {
-            System.err.println("Cannot open certificate file " + args[argIndex]);
+            System.err.println("Cannot open certificate file " + args.get(0));
             System.exit(1);
         }
 
-        argIndex++;
-        File certificateKeyFile = new File(args[argIndex]);
+        File certificateKeyFile = new File(args.get(1));
         if (!certificateKeyFile.exists()) {
-            System.err.println("Cannot open certificate file " + args[argIndex]);
+            System.err.println("Cannot open certificate file " + args.get(1));
             System.exit(1);
         }
 
-        argIndex++;
-        int port = Integer.parseInt(args[argIndex]);
+        int port = Integer.parseInt(args.get(2));
 
         File wwwDir = null;
-        if (args.length > argIndex) {
-            argIndex++;
-            wwwDir = new File(args[argIndex]);
+        if (args.size() > 3) {
+            wwwDir = new File(args.get(3));
             if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
                 System.err.println("Cannot read www dir '" + wwwDir + "'");
                 System.exit(1);
             }
         }
 
-        List<Version> supportedVersions = List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32);
+        List<Version> supportedVersions = new ArrayList<>();
+        supportedVersions.addAll(List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32));
+        if (enableQuicV1) {
+            supportedVersions.add(Version.QUIC_version_1);
+        }
         new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
     }
 
@@ -177,10 +188,15 @@ public class Server {
             if (! versionSuffix.isBlank()) {
                 protocol += "-" + versionSuffix;
             }
+            else {
+                protocol = "hq-interop";
+            }
             applicationProtocolRegistry.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
 
             if (http3ApplicationProtocolFactory != null) {
-                applicationProtocolRegistry.registerApplicationProtocol(protocol.replace("hq", "h3"), http3ApplicationProtocolFactory);
+
+                String h3Protocol = protocol.replace("hq-interop", "h3").replace("hq", "h3");
+                applicationProtocolRegistry.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
             }
         });
     }

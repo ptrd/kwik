@@ -73,8 +73,8 @@ public enum Version {
     }
 
     public boolean atLeast(Version other) {
-        // Only for IETF drafts
-        if (isIetfDraft(this) && isIetfDraft(other)) {
+        // Only for IETF drafts/version
+        if (isIetfVersion(this) && isIetfVersion(other)) {
             return this.versionId >= other.versionId;
         }
         else if (isReserved()) {
@@ -84,12 +84,11 @@ public enum Version {
         else {
             throw new RuntimeException();
         }
-
     }
 
     public boolean before(Version other) {
         // Only for IETF drafts
-        if (isIetfDraft(this) && isIetfDraft(other)) {
+        if (isIetfVersion(this) && isIetfVersion(other)) {
             return this.versionId < other.versionId;
         }
         else if (isReserved()) {
@@ -114,8 +113,8 @@ public enum Version {
         }
     }
 
-    private boolean isIetfDraft(Version version) {
-        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_32.versionId;
+    private boolean isIetfVersion(Version version) {
+        return version.versionId >= IETF_draft_11.versionId && version.versionId <= IETF_draft_32.versionId || version == QUIC_version_1;
     }
 
     public int getId() {

@@ -334,9 +334,9 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void testQuicVersion23IsSupported() throws Exception {
+    void testQuicVersion29IsSupported() throws Exception {
         assertThat(QuicClientConnectionImpl.newBuilder()
-                .version(Version.IETF_draft_23)
+                .version(Version.IETF_draft_29)
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build())
                 .isNotNull();
