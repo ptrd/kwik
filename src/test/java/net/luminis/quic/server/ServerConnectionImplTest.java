@@ -303,14 +303,14 @@ class ServerConnectionImplTest {
         clientConnectionSecrets.computeInitialKeys(odcid);
         byte[] initialPacketBytes = initialPacket.generatePacketBytes(0L, clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
 
-        connection.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor1.capture());
         byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(0L, null);
         clearInvocations(connection.getSender());
 
         // When
-        connection.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
         RetryPacket retryPacket2 = argumentCaptor1.getValue();

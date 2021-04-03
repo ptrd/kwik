@@ -69,7 +69,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         try {
             while (true) {
                 ReceivedDatagram datagram = queue.take();
-                serverConnection.parsePackets(datagram.datagramNumber, datagram.timeReceived, datagram.data);
+                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data, null);
             }
         }
         catch (InterruptedException e) {

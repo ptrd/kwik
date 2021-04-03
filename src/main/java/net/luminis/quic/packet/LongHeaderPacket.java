@@ -166,7 +166,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
             // "... packets are discarded if they indicate a different protocol version than that of the connection..."
-            throw new InvalidPacketException();
+            throw new InvalidPacketException("Version does not match version of the connection");
         }
 
         int dstConnIdLength = buffer.get();

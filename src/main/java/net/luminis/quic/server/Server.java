@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
 /**
  * Simple QUIC server.
  */
-public class Server {
+public class Server implements ServerConnectionRegistry {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
     private static final int CONNECTION_ID_LENGTH = 4;
@@ -321,14 +321,12 @@ public class Server {
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
-            log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(dcid) + " with " + clientAddress.getAddress().getHostAddress());
-            ServerConnectionImpl newConnection = serverConnectionFactory.createNewConnection(version, clientAddress, scid, dcid);
-            ServerConnectionProxy newConnectionProxy = new ServerConnectionThread(newConnection);
-            // Register new connection with both the new connection id, and the original (as retransmitted initial packets
-            // with the same original dcid might be received, which should _not_ lead to another connection)
-            currentConnections.put(new ConnectionSource(newConnection.getSourceConnectionId()), newConnectionProxy);
-            currentConnections.put(new ConnectionSource(newConnection.getOriginalDestinationConnectionId()), newConnectionProxy);
-            return newConnectionProxy;
+            ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+            // Register new connection now with the original connection id, as retransmitted initial packets with the
+            // same original dcid might be received, which should _not_ lead to another connection candidate)
+            currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
+
+            return connectionCandidate;
         } catch (UnknownVersionException e) {
             // Impossible, as it only gets here if the given version is supported, so it is a known version.
             throw new RuntimeException();
@@ -378,4 +376,13 @@ public class Server {
         }
     }
 
+    @Override
+    public void registerConnection(ServerConnectionProxy connection, byte[] connectionId) {
+        currentConnections.put(new ConnectionSource(connectionId), connection);
+    }
+
+    @Override
+    public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {
+        currentConnections.remove(new ConnectionSource(connectionId));
+    }
 }
