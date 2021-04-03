@@ -23,6 +23,7 @@ import net.luminis.quic.QuicConstants;
 import net.luminis.quic.io.LimitExceededException;
 import net.luminis.quic.io.LimitedInputStream;
 import net.luminis.quic.run.KwikCli;
+import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.stream.QuicStream;
 
@@ -68,7 +69,7 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
                 }
                 else if (fileName.equals("version") || fileName.equals("version.txt")) {
                     OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
-                    outputStreamWriter.write("Kwik version/build number: " + KwikCli.getVersion() + "\n");
+                    outputStreamWriter.write("Kwik version/build number: " + KwikVersion.getVersion() + "\n");
                     outputStreamWriter.close();
                 }
                 else {

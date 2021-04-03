@@ -93,7 +93,7 @@ public class KwikCli {
         }
 
         if (cmd.hasOption("v")) {
-            System.out.println("Kwik build nr: " + getVersion());
+            System.out.println("Kwik build nr: " + KwikVersion.getVersion());
             System.exit(0);
         }
 
@@ -528,18 +528,6 @@ public class KwikCli {
                 System.out.println(line);
             }
         }
-    }
-
-    public static String getVersion() {
-        InputStream in = QuicConnection.class.getResourceAsStream("version.properties");
-        if (in != null) {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
-                return reader.readLine();
-            } catch (IOException e) {
-                return null;
-            }
-        }
-        else return "dev";
     }
 
     public static void usage() {
