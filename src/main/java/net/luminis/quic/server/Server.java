@@ -23,6 +23,7 @@ import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
@@ -158,7 +159,8 @@ public class Server {
 
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
-        log.info("Kwik server started; supported application protcols: " + applicationProtocolRegistry.getRegisteredApplicationProtocols());
+        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protcols: "
+                + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
     private void start() {
