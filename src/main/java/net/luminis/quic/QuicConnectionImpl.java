@@ -150,14 +150,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 QuicPacket packet;
                 if (parsedPacket == null) {
                     packet = parsePacket(data);
+                    log.received(timeReceived, datagram, packet);
+                    log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
                 }
                 else {
                     packet = parsedPacket;
                     parsedPacket = null;
                 }
-
-                log.received(timeReceived, datagram, packet);
-                log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
 
                 processPacket(timeReceived, packet);
                 getSender().packetProcessed(data.hasRemaining());

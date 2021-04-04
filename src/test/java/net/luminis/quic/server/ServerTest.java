@@ -13,6 +13,7 @@ import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.ClientHello;
 import net.luminis.tls.util.ByteUtils;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -174,11 +175,12 @@ class ServerTest {
 
         // When
         server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()))));
+        Thread.sleep(300);
 
         // Then
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         // And
-        verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), argThat(data -> data.limit() >= 1200), any(QuicPacket.class));
+        verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), any(ByteBuffer.class), argThat(packet -> packet instanceof InitialPacket));
     }
 
     @Test
@@ -230,6 +232,8 @@ class ServerTest {
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()));
 
         server.process(createPacket(buffer));
+        Thread.sleep(100);
+
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         clearInvocations(connectionFactory);
 
