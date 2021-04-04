@@ -259,28 +259,30 @@ public class Server {
                 }
                 return;
             }
-            if (data.remaining() >= dcidLength) {
+            if (data.remaining() >= dcidLength + 1) {  // after dcid at least one byte scid length
                 byte[] dcid = new byte[dcidLength];
                 data.get(dcid);
                 int scidLength = data.get() & 0xff;
-                byte[] scid = new byte[scidLength];
-                data.get(scid);
-                data.rewind();
+                if (data.remaining() >= scidLength) {
+                    byte[] scid = new byte[scidLength];
+                    data.get(scid);
+                    data.rewind();
 
-                Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
-                if (connection.isEmpty()) {
-                    synchronized (this) {
-                        if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
-                            connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
-                        } else if (initialWithUnspportedVersion(data, version)) {
-                            log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
-                            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
-                            // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
-                            sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+                    Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
+                    if (connection.isEmpty()) {
+                        synchronized (this) {
+                            if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
+                                connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
+                            } else if (initialWithUnspportedVersion(data, version)) {
+                                log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
+                                // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
+                                // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
+                                sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+                            }
                         }
                     }
+                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
                 }
-                connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
             }
         }
     }

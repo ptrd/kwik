@@ -249,6 +249,23 @@ class ServerTest {
         verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
     }
 
+    @Test
+    void truncatedLongHeaderPacketShouldBeIgnoredWithoutException() {
+        // Given
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes("c0 00000001 08 0102030405060708".replace(" ", "")));
+
+        // When
+        server.process(createPacket(buffer));
+    }
+
+    @Test
+    void longHeaderPacketWithInvalidSourceConnectionIdLengthShouldBeIgnoredWithoutException() {
+        // Given
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes("c0 00000001 08 0102030405060708 ff".replace(" ", "")));
+
+        // When
+        server.process(createPacket(buffer));
+    }
 
     private RawPacket createPacket(ByteBuffer buffer) {
         DatagramPacket datagram = new DatagramPacket(buffer.array(), 0, buffer.limit(), new InetSocketAddress(InetAddress.getLoopbackAddress(), 38675));
