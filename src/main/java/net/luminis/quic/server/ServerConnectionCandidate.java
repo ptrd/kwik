@@ -90,8 +90,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                         createAndRegisterServerConnection(initialPacket, timeReceived);
                     }
                 } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
-                    // Drop packet without any action (i.e. do not send anything; do not change state; avoid unncessary processing)
-                    log.debug("Dropped invalid initial packet (no connection created)");
+                    // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
+                    log.error("Dropped invalid initial packet (no connection created)");
                     // But still the candidate must be removed from the connection registry of course.
                     connectionRegistry.deregisterConnection(this, dcid);
                 }
@@ -102,7 +102,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private void createAndRegisterServerConnection(InitialPacket initialPacket, Instant timeReceived) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
-        log.info("Creating new connection with version " + quicVersion + " for odcid " + ByteUtils.bytesToHex(originalDcid) + " with " + clientAddress.getAddress().getHostAddress());
+        log.info("Creating " + hashCode() + " new connection with version " + quicVersion + " for odcid " + ByteUtils.bytesToHex(originalDcid) + " with " + clientAddress.getAddress().getHostAddress());
         ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
 
         // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
