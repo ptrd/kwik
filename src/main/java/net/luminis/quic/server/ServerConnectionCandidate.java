@@ -69,16 +69,15 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
-        if (registeredConnection != null) {
-            // Should not occur in current server implementation, as incoming packets are processed sequentially on the same thread...
-            registeredConnection.parsePackets(datagramNumber, timeReceived, data);
-            return;
-        }
-
         // Execute packet parsing on separate thread, to make this method return a.s.a.p.
         executor.submit(() -> {
             // If duplicate initial packets are arriving faster than they are processed, serialized processing (per connection candidate)
             synchronized (this) {
+                if (registeredConnection != null) {
+                    registeredConnection.parsePackets(datagramNumber, timeReceived, data);
+                    return;
+                }
+
                 try {
                     InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
 
