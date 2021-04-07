@@ -34,6 +34,8 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A server connection candidate: whether an initial packet causes a new server connection to be created cannot be
@@ -50,6 +52,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private final Logger log;
     private volatile ServerConnectionThread registeredConnection;
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
 
 
     public ServerConnectionCandidate(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
@@ -90,9 +93,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                     }
                 } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
                     // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
-                    log.error("Dropped invalid initial packet (no connection created)");
-                    // But still the candidate must be removed from the connection registry of course.
-                    connectionRegistry.deregisterConnection(this, dcid);
+                    log.error("Dropped invalid initial packet (no connection created) " + hashCode());
+                    // But still the (now useless) candidate should be removed from the connection registry.
+                    // To avoid race conditions with incoming duplicated first packets (possibly leading to scheduling
+                    // a task for this candidate while it is not registered anymore), the removal of the candidate is
+                    // delayed until connection setup is over.
+                    // The delay should be longer then the maximum connection timeout clients (are likely to) use.
+                    // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
+                    scheduledExecutor.schedule(() -> connectionRegistry.deregisterConnection(this, dcid), 30, TimeUnit.SECONDS);
                 }
             }
         });
