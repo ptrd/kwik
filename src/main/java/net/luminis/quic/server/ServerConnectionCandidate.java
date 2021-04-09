@@ -91,7 +91,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                     if (registeredConnection == null) {
                         createAndRegisterServerConnection(initialPacket, timeReceived);
                     }
-                } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
+                }
+                catch (InvalidPacketException | DecryptionException cannotParsePacket) {
                     // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
                     log.debug("Dropped invalid initial packet (no connection created)");
                     // But still the (now useless) candidate should be removed from the connection registry.
@@ -100,7 +101,16 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                     // delayed until connection setup is over.
                     // The delay should be longer then the maximum connection timeout clients (are likely to) use.
                     // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
-                    scheduledExecutor.schedule(() -> connectionRegistry.deregisterConnection(this, dcid), 30, TimeUnit.SECONDS);
+                    scheduledExecutor.schedule(() -> {
+                                // But only if no connection is created in the meantime (which will do the cleanup)
+                                if (registeredConnection == null) {
+                                    connectionRegistry.deregisterConnection(this, dcid);
+                                }
+                            },
+                            30, TimeUnit.SECONDS);
+                }
+                catch (Exception error) {
+                    log.error("error while parsing or processing initial packet", error);
                 }
             }
         });
@@ -109,8 +119,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private void createAndRegisterServerConnection(InitialPacket initialPacket, Instant timeReceived) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
-        log.info("Creating new connection with version " + quicVersion + " for odcid " + ByteUtils.bytesToHex(originalDcid) + " with " + clientAddress.getAddress().getHostAddress());
         ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
+        log.info("Creating new connection with version " + quicVersion + " for odcid " + ByteUtils.bytesToHex(originalDcid)
+                + " with " + clientAddress.getAddress().getHostAddress() + ": " + ByteUtils.bytesToHex(connection.getConnectionId()));
 
         // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
         registeredConnection = new ServerConnectionThread(connection, initialPacket, timeReceived);
@@ -154,5 +165,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
             return packet;
         }
         throw new InvalidPacketException();
+    }
+
+    @Override
+    public String toString() {
+        return "ServerConnectionCandidate(" + ByteUtils.bytesToHex(dcid) + ")";
     }
 }
