@@ -168,6 +168,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         return connectionId.length;
     }
 
+    public byte[] getConnectionId() {
+        return connectionId;
+    }
+
     @Override
     public byte[] getSourceConnectionId() {
         return connectionId;

@@ -144,13 +144,19 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
-    public void parsePackets(int datagram, Instant timeReceived, ByteBuffer data) {
-        while (data.remaining() > 0) {
+    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
+        while (data.remaining() > 0 || parsedPacket != null) {
             try {
-                QuicPacket packet = parsePacket(data);
-
-                log.received(timeReceived, datagram, packet);
-                log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+                QuicPacket packet;
+                if (parsedPacket == null) {
+                    packet = parsePacket(data);
+                    log.received(timeReceived, datagram, packet);
+                    log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+                }
+                else {
+                    packet = parsedPacket;
+                    parsedPacket = null;
+                }
 
                 processPacket(timeReceived, packet);
                 getSender().packetProcessed(data.hasRemaining());
@@ -180,7 +186,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             data = data.slice();
         }
 
-        // Processed all packets in the datagram.
+        // Processed all packets in the datagram, so not expecting more.
         getSender().packetProcessed(false);
 
         // Finally, execute actions that need to be executed after all responses and acks are sent.

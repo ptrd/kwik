@@ -521,4 +521,8 @@ abstract public class QuicPacket {
     public void setIsProbe(boolean probe) {
         isProbe = probe;
     }
+
+    public Version getVersion() {
+        return quicVersion;
+    }
 }

@@ -18,17 +18,9 @@
  */
 package net.luminis.quic.server;
 
-import java.nio.ByteBuffer;
-import java.time.Instant;
+public interface ServerConnectionRegistry {
 
+    void registerConnection(ServerConnectionProxy connection, byte[] connectionId);
 
-public interface ServerConnectionProxy {
-
-    byte[] getOriginalDestinationConnectionId();
-
-    void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data);
-
-    boolean isClosed();
-
-    void terminate();
+    void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId);
 }

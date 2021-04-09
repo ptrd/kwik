@@ -274,7 +274,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
+                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData(), null);
                     sender.datagramProcessed(receiver.hasMore());
                 }
             }
