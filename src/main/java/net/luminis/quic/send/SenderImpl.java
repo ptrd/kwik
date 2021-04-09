@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -357,15 +358,21 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     void send(List<SendItem> itemsToSend) throws IOException {
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
-        itemsToSend.stream()
-                .map(item -> item.getPacket())
-                .forEach(packet -> {
-                    Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
-                    byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
-                    buffer.put(packetData);
-                    log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
-                });
-
+        try {
+            itemsToSend.stream()
+                    .map(item -> item.getPacket())
+                    .forEach(packet -> {
+                        Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
+                        byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
+                        buffer.put(packetData);
+                        log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
+                    });
+        }
+        catch (BufferOverflowException bufferOverflow) {
+            log.error("Buffer overflow while generating datagram for " + itemsToSend);
+            // rethrow
+            throw bufferOverflow;
+        }
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
         Instant timeSent = Instant.now();

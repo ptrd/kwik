@@ -54,5 +54,10 @@ public class SendItem {
     public Consumer<QuicPacket> getPacketLostCallback() {
         return packetLostCallback;
     }
+
+    @Override
+    public String toString() {
+        return packet.toString();
+    }
 }
 
