@@ -238,13 +238,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     private void sendOneOrTwoAckElicitingPackets(PnSpace pnSpace, int numberOfPackets) {
         if (pnSpace == PnSpace.Initial) {
-            List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
-            if (!unAckedInitialPackets.isEmpty()) {
-                // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
-                // All frames need to be resent, because Initial packet wil contain padding.
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Initial);
+            if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is an initial retransmit)");
                 repeatSend(numberOfPackets, () ->
-                        sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
+                        sender.sendProbe(framesToRetransmit , EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
