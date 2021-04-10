@@ -60,6 +60,7 @@ public class Keys {
     protected Cipher writeCipher;
     private int keyUpdateCounter = 0;
     private boolean possibleKeyUpdateInProgresss = false;
+    private volatile Keys peerKeys;
 
     public Keys(Version quicVersion, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
@@ -144,6 +145,18 @@ public class Keys {
             possibleKeyUpdateInProgresss = false;
             newKey = null;
             newIV = null;
+            checkPeerKeys();
+        }
+    }
+
+    /**
+     * In case keys are updated, check if the peer keys are already updated too (which depends on who initiated the
+     * key update).
+     */
+    private void checkPeerKeys() {
+        if (peerKeys.keyUpdateCounter < keyUpdateCounter) {
+            log.debug("Keys out of sync; updating keys for peer");
+            peerKeys.computeKeyUpdate(true);
         }
     }
 
@@ -355,8 +368,12 @@ public class Keys {
                 log.secret("Computed new (updated) key", newKey);
                 log.secret("Computed new (updated) iv", newIV);
             }
-            log.debug("Received key phase does not match current => possible key update in progress");
+            log.info("Received key phase does not match current => possible key update in progress");
             possibleKeyUpdateInProgresss = true;
         }
+    }
+
+    void setPeerKeys(Keys peerKeys) {
+        this.peerKeys = peerKeys;
     }
 }

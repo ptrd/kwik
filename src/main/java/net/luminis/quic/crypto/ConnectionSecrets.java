@@ -118,6 +118,10 @@ public class ConnectionSecrets {
         }
         clientSecrets[level.ordinal()] = clientHandshakeSecrets;
         serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+
+        // Keys for peer and keys for self must be able to signal each other of a key update.
+        clientHandshakeSecrets.setPeerKeys(serverHandshakeSecrets);
+        serverHandshakeSecrets.setPeerKeys(clientHandshakeSecrets);
     }
 
     public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
