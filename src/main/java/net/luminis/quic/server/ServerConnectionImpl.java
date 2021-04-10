@@ -387,7 +387,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-        handlePeerClosing(connectionCloseFrame);
+        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
     }
 
     @Override

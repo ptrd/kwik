@@ -70,7 +70,7 @@ class QuicConnectionImplTest {
     @Test
     void whenReceivingCloseOneCloseIsSend() {
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null));
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), EncryptionLevel.App);
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -79,7 +79,7 @@ class QuicConnectionImplTest {
     @Test
     void whenReceivingCloseNormalPacketsAreNotProcessed() {
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null));
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), EncryptionLevel.App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
@@ -107,7 +107,7 @@ class QuicConnectionImplTest {
     @Test
     void whenPeerClosingAfterThreePtoConnectionIsTerminated() throws Exception {
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null));
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), EncryptionLevel.App);
 
         // When
         Thread.sleep(2 * onePto);

@@ -488,7 +488,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-        handlePeerClosing(connectionCloseFrame);
+        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
     }
 
     @Override
@@ -646,7 +646,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected void handlePeerClosing(ConnectionCloseFrame closing) {
+    protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
         if (connectionState != Status.Closing) {
             if (closing.hasError()) {
                 log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));

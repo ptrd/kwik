@@ -133,6 +133,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
+    public void send(QuicFrame frame, EncryptionLevel level, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
+        getSender().send(frame, level, lostFrameCallback);
+        if (flush) {
+            getSender().flush();
+        }
+    }
+
     public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
         getSender().send(frameSupplier, minimumSize, level, lostCallback);
     }
@@ -435,11 +442,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), NO_RETRANSMIT));
+            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), packet.getEncryptionLevel(), NO_RETRANSMIT, false));
         }
     }
 
-    protected void handlePeerClosing(ConnectionCloseFrame closing) {
+    protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
         // "The draining state is entered once an endpoint receives a CONNECTION_CLOSE frame, which indicates that its
         //  peer is closing or draining."
@@ -456,7 +463,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
-            send(new ConnectionCloseFrame(quicVersion), NO_RETRANSMIT);
+            send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);
 
             connectionState = Status.Draining;
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
