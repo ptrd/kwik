@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter;
 public abstract class BaseLogger implements Logger {
 
     public static final String TIME_FORMAT_SHORT = "mm:ss.SSS";
-    private static final String TIME_FORMAT_LONG = "yy-MM-dd'T'mm:ss.SSS";
+    private static final String TIME_FORMAT_LONG = "yy-MM-dd'T'HH:mm:ss.SSS";
 
     private volatile boolean logDebug = false;
     private volatile boolean logRawBytes = false;
