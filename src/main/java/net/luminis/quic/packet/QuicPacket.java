@@ -460,7 +460,14 @@ abstract public class QuicPacket {
         }
     }
 
-    public abstract int estimateLength();
+    /**
+     * Estimates what the length of this packet will be after it has been encrypted. The returned length must be
+     * less then or equal the actual length after encryption. Length estimates are used when preparing packets for
+     * sending, where certain limits must be met (e.g. congestion control, max datagram size, ...).
+     * @param additionalPayload    when not 0, estimate the length if this amount of additional (frame) bytes were added.
+     * @return
+     */
+    public abstract int estimateLength(int additionalPayload);
 
     public abstract EncryptionLevel getEncryptionLevel();
 

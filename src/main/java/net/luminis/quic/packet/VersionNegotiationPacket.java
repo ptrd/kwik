@@ -143,7 +143,7 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         throw new NotYetImplementedException();
     }
 

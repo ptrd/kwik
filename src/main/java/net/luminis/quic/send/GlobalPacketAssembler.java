@@ -87,7 +87,7 @@ public class GlobalPacketAssembler {
                 Optional<SendItem> item = assembler.assemble(remaining, maxPacketSize - size, sourceConnectionId, destinationConnectionId);
                 if (item.isPresent()) {
                     packets.add(item.get());
-                    int packetSize = item.get().getPacket().estimateLength();
+                    int packetSize = item.get().getPacket().estimateLength(0);
                     size += packetSize;
                     remaining -= packetSize;
                     if (level == EncryptionLevel.Initial) {

@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Offset.offset;
 import static org.assertj.core.data.Percentage.withPercentage;
 import static org.mockito.Mockito.*;
 
@@ -168,17 +169,22 @@ class PacketAssemblerTest extends AbstractSenderTest {
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
 
         // When
-        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (3 + (maxSize < 64? 1: 2))]), (3 + 2) + 1, null);
+        sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (2 + (maxSize < 64? 1: 2))]), (2 + 2) + 1, null);
 
         // Then
-        QuicPacket packet = handshakePacketAssembler.assemble(12000, 1232, srcCid, destCid).get().getPacket();
+        QuicPacket packet = handshakePacketAssembler.assemble(12000, 1500, srcCid, destCid).get().getPacket();
+        int generatedPacketLength = packet.generatePacketBytes(0L, keys).length;
+
         assertThat(packet).isInstanceOf(HandshakePacket.class);
         assertThat(((HandshakePacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
         assertThat(packet.getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
-        assertThat(packet.generatePacketBytes(0L, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
+        assertThat(generatedPacketLength)
+                .isLessThanOrEqualTo(MAX_PACKET_SIZE)
+                // Generated packet length is 3 bytes less than max packet size to allow for largest possible packet number encoding (4 bytes)
+                .isCloseTo(MAX_PACKET_SIZE, offset(3));
     }
 
     @Test
@@ -694,5 +700,21 @@ class PacketAssemblerTest extends AbstractSenderTest {
 
         // Then
         sendRequestQueue.mustSendAck();
+    }
+
+    @Test
+    void sizeOfAssembledPacketShouldNotBeGreaterThanMaxRequested() throws Exception {
+        // Given
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true),    // Stream length will be > 63, so 2 bytes for length field
+                (3 + 2) + 1,  // Send at least 1 byte of data
+                null);
+
+        // When
+        int maxSize = 1229;
+        Optional<SendItem> item = handshakePacketAssembler.assemble(6000, maxSize, new byte[0], new byte[0]);
+
+        // Then
+        QuicPacket packet = item.get().getPacket();
+        assertThat(packet.generatePacketBytes(0L, createKeys()).length).isLessThanOrEqualTo(maxSize);
     }
 }

@@ -83,7 +83,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         return packetSize;
     }
 

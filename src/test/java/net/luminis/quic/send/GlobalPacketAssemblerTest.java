@@ -56,7 +56,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength()).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
     }
 
@@ -188,7 +188,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         // When
         List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
         List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
-        int datagramPayloadSize = packets.stream().mapToInt(p -> p.estimateLength()).sum();
+        int datagramPayloadSize = packets.stream().mapToInt(p -> p.estimateLength(0)).sum();
 
         assertThat(datagramPayloadSize).isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
@@ -224,7 +224,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength()).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
     }
 

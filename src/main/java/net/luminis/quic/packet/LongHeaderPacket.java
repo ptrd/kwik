@@ -103,8 +103,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
-        int payloadLength = getFrames().stream().mapToInt(f -> f.getBytes().length).sum();   // TODO: f.getBytes
+    public int estimateLength(int additionalPayload) {
+        int payloadLength = getFrames().stream().mapToInt(f -> f.getBytes().length).sum() + additionalPayload;
         return 1
                 + 4
                 + 1 + destinationConnectionId.length

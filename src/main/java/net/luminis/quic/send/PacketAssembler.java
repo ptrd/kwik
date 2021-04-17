@@ -58,7 +58,7 @@ public class PacketAssembler {
     public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
-        this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length
+        this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length. TODO: this should not be reponsibility of this class.
         this.requestQueue = requestQueue;
         this.ackGenerator = ackGenerator;
         packetNumberGenerator = pnGenerator;
@@ -87,7 +87,7 @@ public class PacketAssembler {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2
                 // "... packets containing only ACK frames are not congestion controlled ..."
                 // So: only check if it fits within available packet space
-                if (packet.get().estimateLength() + ackFrame.getBytes().length <= availablePacketSize) {
+                if (packet.get().estimateLength(ackFrame.getBytes().length) <= availablePacketSize) {
                     packet.get().addFrame(ackFrame);
                     callbacks.add(EMPTY_CALLBACK);
                     ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
@@ -132,7 +132,7 @@ public class PacketAssembler {
         if (requestQueue.hasRequests()) {
             // Must create packet here, to have an initial estimate of packet header overhead
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-            int estimatedSize = packet.get().estimateLength();
+            int estimatedSize = packet.get().estimateLength(1000) - 1000;  // Estimate length if large frame would have been added; this will give upper limit of packet overhead.
 
             while (estimatedSize < available) {
                 // First try to find a frame that will leave space for optional frame (if any)

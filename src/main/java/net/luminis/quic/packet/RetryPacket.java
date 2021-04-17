@@ -168,7 +168,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         throw new NotYetImplementedException();
     }
 
