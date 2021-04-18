@@ -117,10 +117,11 @@ public class PacketAssembler {
         }
 
         if (requestQueue.hasProbeWithData()) {
-            // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
-            // But it is limited by max packet length
-            if (probeData.stream().mapToInt(f -> f.getBytes().length).sum() > availablePacketSize) {
+            // Probe is not limited by congestion control, but it is limited by max packet size.
+            packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+            int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getBytes().length).sum());
+            if (estimatedSize > availablePacketSize) {
                 probeData = List.of(new PingFrame());
             }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));

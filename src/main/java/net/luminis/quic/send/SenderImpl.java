@@ -113,7 +113,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             sendRequestQueue[levelIndex] = new SendRequestQueue();
         });
         globalAckGenerator = new GlobalAckGenerator(this);
-        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, connection.getMaxPacketSize());
+        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, maxPacketSize);
 
         congestionController = new NewRenoCongestionController(log, this);
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);

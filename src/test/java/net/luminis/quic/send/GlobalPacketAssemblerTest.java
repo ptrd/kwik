@@ -228,6 +228,18 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
     }
 
+    @Test
+    void probeWithDataShouldNotExceedMaxDataframSize() {
+        ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.Initial));
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addAckRequest();
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[1190])));
+
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        System.out.println(packets);
+
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
+        assertThat(datagramLength).isLessThanOrEqualTo(1232);
+    }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();
