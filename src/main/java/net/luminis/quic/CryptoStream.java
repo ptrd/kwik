@@ -48,12 +48,13 @@ public class CryptoStream extends BaseStream {
     private final Sender sender;
     private final List<Message> messages;
     private final TlsMessageParser tlsMessageParser;
+    private final List<ByteBuffer> dataToSend;
+    private volatile int dataToSendOffset;
+    private volatile int sendStreamSize;
+    // Only used by add method; thread confinement concurrency control (assuming one receiver thread)
     private boolean msgSizeRead = false;
     private int msgSize;
     private byte msgType;
-    private List<ByteBuffer> dataToSend;
-    private int dataToSendOffset;
-    private int sendStreamSize;
 
 
     public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
