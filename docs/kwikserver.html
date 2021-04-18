@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kwik & Flupke</title>
+    <style>
+    .content {
+      max-width: 65em;
+      margin: auto;
+      padding-top: 15px;
+    }
+    img {
+      width: 100%;
+      margin-top: 25px;
+      margin-bottom: 25px;
+    }
+    p {
+      font-size: 1.2em;
+      line-height: 150%;
+    }
+  </style>
+</head>
+<body>
+<div class="content">
+    <img src="media/Logo_Kwik_rectangle.png" alt="kwik logo">
+    <h1>Welcome to Kwik & Flupke!</h1>
+    <h2>The open source QUIC (and HTTP/3) server written entirely in Java!</h2>
+
+    <p>
+        <a href="https://bitbucket.org/pjtr/kwik/src/master/">Kwik</a> started as a Java QUIC client library and command line application.
+        Today, the Kwik client is a rather mature implementation of the QUIC protocol, and includes features like connection migration, 0-RTT and key update.
+        Interoperability with 13 server implementations is tested daily, see <a href="https://interop.seemann.io/">automated interoperability tests</a>.
+    </p>
+    <p>
+        The QUIC protocol is not yet an official RFC. Kwik supports the latest IETF draft versions (draft-29 to draft-32, draft-33 and draft-34 are not supposed to be deployed)
+        and will support QUIC v1 as soon as the RFC is published. See <a href="https://quicwg.org/">QUIC Working Group</a> for more information.
+    </p>
+    <p>
+        Development of the <a href="https://bitbucket.org/pjtr/kwik/commits/">Kwik server</a> started in November 2020.
+        It is still work in progress, but basic functionality works fine, which is proven by the fact that you are currently reading a resource that was served by Kwik.
+    </p>
+
+    <p>
+        HTTP/3 support is implemented by <a href="https://bitbucket.org/pjtr/flupke/src">Flupke</a>, a library written on top of Kwik.
+        Flupke implements the basic HTTP methods and uses a <a href="https://bitbucket.org/pjtr/qpack/src/master/">QPack</a> implementation
+        that doesn't use dynamic compression (i.e. it does not use dynamic table; static table is of course supported, it wouldn't work without).
+    </p>
+
+    <p>
+        Kwik and Flupke are created an maintained by Peter Doornbosch. Logo's by Piet van Dongen. For questions, see
+        the contact information in the readme's of the bitbucket repositories.
+    </p>
+    <img src="media/Logo_Flupke_rectangle.png" alt="flupke logo">
+    <iframe src="https://try.kwik.tech/version" frameBorder="0"></iframe>
+</div>
+</body>
+</html>
