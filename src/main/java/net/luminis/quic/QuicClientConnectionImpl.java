@@ -117,6 +117,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             @Override
             public void send(ClientHello clientHello) {
                 getCryptoStream(Initial).write(clientHello.getBytes());
+                sender.flush();
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
             }
