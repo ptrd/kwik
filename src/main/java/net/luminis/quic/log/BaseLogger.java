@@ -27,6 +27,7 @@ import net.luminis.tls.util.ByteUtils;
 import java.nio.ByteBuffer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 
 public abstract class BaseLogger implements Logger {
@@ -226,6 +227,25 @@ public abstract class BaseLogger implements Logger {
         }
         if (logPackets) {
             log(formatTime(sent) + " -> " + packet);
+        }
+    }
+
+    @Override
+    public void sent(Instant sent, List<QuicPacket> packets) {
+        synchronized (this) {
+            if (useRelativeTime) {
+                if (start == null) {
+                    start = sent;
+                }
+            }
+        }
+        if (logPackets) {
+            if (packets.size() == 1) {
+                log(formatTime(sent) + " -> " + packets.get(0));
+            }
+            else {
+                log(formatTime(sent) + " -> " + packets);
+            }
         }
     }
 

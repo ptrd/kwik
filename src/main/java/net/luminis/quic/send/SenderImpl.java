@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.lang.Long.max;
 
@@ -387,12 +388,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
-        itemsToSend.stream()
-                .map(item -> item.getPacket())
-                .forEach(packett -> {
-                    log.sent(timeSent, packett);
-                    qlog.emitPacketSentEvent(packett, timeSent);
-                });
+        List packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        log.sent(timeSent, packetsSent);
+        qlog.emitPacketSentEvent(packetsSent, timeSent);
     }
 
     private List<SendItem> assemblePacket() {

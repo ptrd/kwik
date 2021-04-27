@@ -24,6 +24,7 @@ import net.luminis.quic.qlog.QLog;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 public interface Logger {
 
@@ -81,6 +82,8 @@ public interface Logger {
     void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid);
 
     void sent(Instant sent, QuicPacket packet);
+
+    void sent(Instant sent, List<QuicPacket> packets);
 
     void secret(String message, byte[] secret);
 
