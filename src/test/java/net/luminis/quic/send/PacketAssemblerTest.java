@@ -54,11 +54,11 @@ class PacketAssemblerTest extends AbstractSenderTest {
     void initObjectUnderTest() {
         sendRequestQueue = new SendRequestQueue();
         initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
-        initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), MAX_PACKET_SIZE, sendRequestQueue, initialAckGenerator);
+        initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), sendRequestQueue, initialAckGenerator);
         handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
-        handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, MAX_PACKET_SIZE, sendRequestQueue, handshakeAckGenerator);
+        handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator);
         oneRttAckGenerator = new AckGenerator(PnSpace.App, mock(Sender.class));
-        oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, MAX_PACKET_SIZE, sendRequestQueue, oneRttAckGenerator);
+        oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
 
     }
 
@@ -136,8 +136,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames()).hasOnlyElementsOfTypes(MaxStreamDataFrame.class, MaxDataFrame.class, StreamFrame.class);
         assertThat(packet.getFrames()).anySatisfy(frame -> {
             assertThat(frame).isInstanceOf(StreamFrame.class);
-            // Short packet overhead is 18 to 21, so available for stream frame: 1232 - 21 - 10 - 9 = 1192. Frame overhead: 5 bytes.
-            assertThat(((StreamFrame) frame).getStreamData().length).isCloseTo(1187, withPercentage(0.1));
+            // Short packet overhead is 18 to 21, so available for stream frame: 1232 - (18 ~ 21) - 10 - 9 = 1192 ~ 1195.
+            // Stream Frame overhead: 5 bytes, so Stream Frame can contain 1187 ~ 1190 bytes
+            assertThat(((StreamFrame) frame).getStreamData().length).isBetween(1187, 1192);
         });
         assertThat(packet.generatePacketBytes(1L, keys).length).isCloseTo(MAX_PACKET_SIZE, Percentage.withPercentage(0.25));
     }
@@ -172,7 +173,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (2 + (maxSize < 64? 1: 2))]), (2 + 2) + 1, null);
 
         // Then
-        QuicPacket packet = handshakePacketAssembler.assemble(12000, 1500, srcCid, destCid).get().getPacket();
+        QuicPacket packet = handshakePacketAssembler.assemble(12000, MAX_PACKET_SIZE, srcCid, destCid).get().getPacket();
         int generatedPacketLength = packet.generatePacketBytes(0L, keys).length;
 
         assertThat(packet).isInstanceOf(HandshakePacket.class);
@@ -716,5 +717,12 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Then
         QuicPacket packet = item.get().getPacket();
         assertThat(packet.generatePacketBytes(0L, createKeys()).length).isLessThanOrEqualTo(maxSize);
+    }
+
+    @Test
+    void whenPacketDoesNotFitInPacketSizeAssembleShouldNotReturnPacket() throws Exception {
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 500, null, new byte[0]);
+        assertThat(item).isNotPresent();
     }
 }

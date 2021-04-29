@@ -22,7 +22,6 @@ import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,10 +70,10 @@ class SenderImplTest extends AbstractSenderTest {
         clearInvocations(packetAssembler);  // PacketProcessed will check to see if anything must be sent
 
         Thread.sleep(30);
-        verify(packetAssembler, never()).assemble(anyInt(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, never()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
 
         Thread.sleep(20);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
     }
 
     @Test

@@ -21,12 +21,9 @@ package net.luminis.quic.send;
 import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
-import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
-
-import java.util.Optional;
 
 
 /**
@@ -39,8 +36,8 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     protected byte[] initialToken;
 
-    public InitialPacketAssembler(Version version, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        super(version, EncryptionLevel.Initial, maxPacketSize, requestQueue, ackGenerator);
+    public InitialPacketAssembler(Version version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+        super(version, EncryptionLevel.Initial, requestQueue, ackGenerator);
     }
 
     @Override

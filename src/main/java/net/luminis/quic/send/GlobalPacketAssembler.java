@@ -32,13 +32,11 @@ import java.util.*;
 public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
-    private final int maxPacketSize;
     private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
 
 
-    public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator, int maxPacketSize) {
+    public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
         this.sendRequestQueue = sendRequestQueues;
-        this.maxPacketSize = maxPacketSize;
 
         PacketNumberGenerator appSpacePnGenerator = new PacketNumberGenerator();
 
@@ -53,13 +51,13 @@ public class GlobalPacketAssembler {
             switch (level) {
                 case ZeroRTT:
                 case App:
-                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator, appSpacePnGenerator);
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator, appSpacePnGenerator);
                     break;
                 case Initial:
-                    packetAssembler[levelIndex] = new InitialPacketAssembler(quicVersion, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator);
+                    packetAssembler[levelIndex] = new InitialPacketAssembler(quicVersion, sendRequestQueue[levelIndex], ackGenerator);
                     break;
                 default:
-                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, maxPacketSize, sendRequestQueue[levelIndex], ackGenerator);
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator);
             }
         });
     }
@@ -68,23 +66,24 @@ public class GlobalPacketAssembler {
      * Assembles packets for sending in one datagram. The total size of the QUIC packets returned will never exceed
      * max packet size and for packets not containing probes, it will not exceed the remaining congestion window size.
      * @param remainingCwndSize
+     * @param maxDatagramSize
      * @param sourceConnectionId
      * @param destinationConnectionId
      * @return
      */
-    public List<SendItem> assemble(int remainingCwndSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
         boolean hasPathChallengeOrResponse = false;
 
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
-        int remaining = Integer.min(remainingCwndSize, maxPacketSize);
+        int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
 
         for (EncryptionLevel level: EncryptionLevel.values()) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
-                Optional<SendItem> item = assembler.assemble(remaining, maxPacketSize - size, sourceConnectionId, destinationConnectionId);
+                Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, sourceConnectionId, destinationConnectionId);
                 if (item.isPresent()) {
                     packets.add(item.get());
                     int packetSize = item.get().getPacket().estimateLength(0);
@@ -97,7 +96,7 @@ public class GlobalPacketAssembler {
                         hasPathChallengeOrResponse = true;
                     }
                 }
-                if (remaining < minPacketSize && (maxPacketSize - size) < minPacketSize) {
+                if (remaining < minPacketSize && (maxDatagramSize - size) < minPacketSize) {
                     // Trying a next level to produce a packet is useless
                     break;
                 }
