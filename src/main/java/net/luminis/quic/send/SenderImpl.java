@@ -39,10 +39,7 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -90,6 +87,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final Object condition = new Object();
     private boolean signalled;
 
+    // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
     private volatile boolean running;
     private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
@@ -98,6 +96,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile long packetsSent;
     private AtomicInteger subsequentZeroDelays = new AtomicInteger();
     private volatile boolean lastDelayWasZero = false;
+    private volatile int antiAmplificationLimit = -1;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -395,9 +394,19 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private List<SendItem> assemblePacket() {
         int remainingCwnd = (int) congestionController.remainingCwnd();
+        int currentMaxPacketSize = maxPacketSize;
+        if (antiAmplificationLimit >= 0) {
+            if (bytesSent < antiAmplificationLimit) {
+                currentMaxPacketSize = Integer.min(currentMaxPacketSize, (int) (antiAmplificationLimit - bytesSent));
+            }
+            else {
+                log.warn("Cannot send; anti-amplification limit is reached");
+                return Collections.emptyList();
+            }
+        }
         byte[] srcCid = connection.getSourceConnectionId();
         byte[] destCid = connection.getDestinationConnectionId();
-        return packetAssembler.assemble(remainingCwnd, maxPacketSize, srcCid, destCid);
+        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, srcCid, destCid);
     }
 
     private Instant earliest(Instant instant1, Instant instant2) {
@@ -434,6 +443,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public GlobalAckGenerator getGlobalAckGenerator() {
         return globalAckGenerator;
+    }
+
+    public void setAntiAmplificationLimit(int antiAmplificationLimit) {
+        this.antiAmplificationLimit = antiAmplificationLimit;
+    }
+
+    public void unsetAntiAmplificationLimit() {
+        antiAmplificationLimit = -1;
     }
 }
 

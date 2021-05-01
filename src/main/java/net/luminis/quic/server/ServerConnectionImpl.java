@@ -79,6 +79,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private volatile String negotiatedApplicationProtocol;
     private volatile FlowControl flowController;
     private int maxIdleTimeoutInSeconds;
+    private volatile long bytesReceived;
+    private volatile boolean addressValidated;
 
 
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
@@ -98,6 +100,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
+        if (! retryRequired) {
+            sender.setAntiAmplificationLimit(0);
+        }
         idleTimer.setPtoSupplier(sender::getPto);
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -284,6 +289,19 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         try {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8
+            // "Therefore, after receiving packets from an address that is not yet validated, an endpoint MUST limit the
+            //  amount of data it sends to the unvalidated address to three times the amount of data received from that address."
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8.1
+            // "For the purposes of avoiding amplification prior to address validation, servers MUST count all of the
+            //  payload bytes received in datagrams that are uniquely attributed to a single connection. This includes
+            //  datagrams that contain packets that are successfully processed and datagrams that contain packets that
+            //  are all discarded."
+            bytesReceived += data.remaining();
+            if (! addressValidated) {
+                log.info("Anti ampl limit: 3 * " + bytesReceived + " = " + (3 * bytesReceived));
+                sender.setAntiAmplificationLimit(3 * (int) bytesReceived);
+            }
             return super.parsePacket(data);
         }
         catch (DecryptionException decryptionException) {
@@ -305,6 +323,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
+        if (parsedPacket != null) {
+            bytesReceived += parsedPacket.getSize();
+            if (! addressValidated) {
+                log.info("Anti ampl limit: 3 * " + bytesReceived + " = " + (3 * bytesReceived));
+                sender.setAntiAmplificationLimit(3 * (int) bytesReceived);
+            }
+        }
+        super.parseAndProcessPackets(datagram, timeReceived, data, parsedPacket);
+    }
+
+    @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
         assert(Arrays.equals(packet.getDestinationConnectionId(), connectionId) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
 
@@ -322,6 +352,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 return ProcessResult.Abort;
             }
             else {
+                // Receiving a valid token implies address is validated.
+                addressValidated = true;
+                sender.unsetAntiAmplificationLimit();
                 // Valid token, proceed as usual.
                 processFrames(packet, time);
                 return ProcessResult.Continue;
@@ -352,6 +385,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(HandshakePacket packet, Instant time) {
+        if (! addressValidated) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8.1
+            // "In particular, receipt of a packet protected with Handshake keys confirms that the peer successfully processed
+            //  an Initial packet. Once an endpoint has successfully processed a Handshake packet from the peer, it can consider
+            //  the peer address to have been validated."
+            addressValidated = true;
+            sender.unsetAntiAmplificationLimit();
+            log.info("Anti amplification limit: disabled, address validated");
+        }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
