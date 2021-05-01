@@ -121,7 +121,11 @@ public class PacketAssembler {
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getBytes().length).sum());
             if (estimatedSize > availablePacketSize) {
-                probeData = List.of(new PingFrame());
+                QuicFrame probeFrame = new PingFrame();
+                if (packet.get().estimateLength(probeFrame.getBytes().length) > availablePacketSize) {
+                    return Optional.empty();
+                }
+                probeData = List.of(probeFrame);
             }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             packet.get().setIsProbe(true);

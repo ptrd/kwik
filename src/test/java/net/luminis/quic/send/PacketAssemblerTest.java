@@ -725,4 +725,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
         Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 500, null, new byte[0]);
         assertThat(item).isNotPresent();
     }
+
+    @Test
+    void evenSmallestProbePacketMustObeyMaxPacketSizeLimit() throws Exception {
+        sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[90])));
+
+        int maxAvailablePacketSize = 10;
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, maxAvailablePacketSize, new byte[0], new byte[0]);
+        assertThat(item).isNotPresent();
+    }
 }
