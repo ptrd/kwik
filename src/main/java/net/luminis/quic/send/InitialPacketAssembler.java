@@ -25,6 +25,8 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.util.Optional;
+
 
 /**
  * Assembles initial packets, based on "send requests" that are previously queued.
@@ -38,6 +40,21 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     public InitialPacketAssembler(Version version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
         super(version, EncryptionLevel.Initial, requestQueue, ackGenerator);
+    }
+
+    @Override
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        if (availablePacketSize < 1200) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
+            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
+            //  allowed maximum datagram size of 1200 bytes... "
+            // "Similarly, a server MUST expand the payload of all UDP datagrams carrying ack-eliciting Initial packets
+            //  to at least the smallest allowed maximum datagram size of 1200 bytes."
+            // Note that in case of an initial packet, the availablePacketSize equals the maximum datagram size; even
+            // when different packets are coalesced, the initial packet is always the first that is assembled.
+            return Optional.empty();
+        }
+        return super.assemble(remainingCwndSize, availablePacketSize, sourceConnectionId, destinationConnectionId);
     }
 
     @Override

@@ -104,9 +104,11 @@ public class GlobalPacketAssembler {
         }
 
         if (hasInitial && size < 1200) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-14
-            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to
-            // at least 1200 bytes, by adding PADDING frames to the Initial packet or ..."
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
+            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
+            //  allowed maximum datagram size of 1200 bytes... "
+            // "Similarly, a server MUST expand the payload of all UDP datagrams carrying ack-eliciting Initial packets
+            //  to at least the smallest allowed maximum datagram size of 1200 bytes."
             int requiredPadding = 1200 - size;
             packets.stream()
                     .map(item -> item.getPacket())

@@ -251,6 +251,16 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         assertThat(packets.get(0).getPacket().estimateLength(0)).isLessThanOrEqualTo(maxDatagramSize);
     }
 
+    @Test
+    void ifInitialPacketsCannotStatisfyTheMinimum1200bytesRequirementItShouldNotBeSend() {
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[123])));
+
+        // Max datagram size can be limited by anti amplification limit
+        int maxDatagramSize = 30;
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
+        assertThat(packets).isEmpty();
+    }
+
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();
         PacketAssembler packetAssember = (PacketAssembler) ((Object[]) packetAssemblers)[level.ordinal()];
