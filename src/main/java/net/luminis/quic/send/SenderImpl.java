@@ -342,6 +342,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     if (count % 100 == 3) {
                         log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
                     }
+                    if (count > 100003) {
+                        return 8000;
+                    }
                 }
                 lastDelayWasZero = true;
                 // Next time is already in the past, hurry up!
