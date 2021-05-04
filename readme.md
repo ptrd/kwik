@@ -3,6 +3,7 @@
 ## A QUIC client Java library
 
 Kwik is a client implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in Java.
+([Server](https://bitbucket.org/pjtr/kwik/branch/server) implementation is on its way!)
 
 QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
