@@ -72,6 +72,16 @@ public class TestUtils {
         }
     }
 
+    public static byte[] createValidInitialNoPadding(Version quicVersion) {
+        switch (quicVersion) {
+            case IETF_draft_29:
+                // ODCID: c3265ad62fae4bc3   Packet length: 283
+                return ByteUtils.hexToBytes("cfff00001d08c3265ad62fae4bc308a2cd427a0a3e15f1004101e0423c8e5e598c0dcaef595d39197c99fd231ac8f64739fb1e9593cd80bf19fc315cccb6b98b065ce35a1c0c30cf6357f8518b69cd89e1d663fc82e0d63e0d1a7bf4d751d39222b35949eb4df26c9275c577ab3f0479e374afe4834a8168cf874d3ca96b17e4facffa65270285cd7257be0f2ecedaaebc2e88100574a1bd6b8a21e0055e584233187f9fc3f6545e69cff287e454b46b1cb41c53b1528ba511aa305ff2be7193248ac74d07e06da4cd5142af0d4db06753068079281767b7a76b3d3202c0c4120f9d338cb0e4a42fd95e42992765b72b45739f524bbd9d672b94f15a07a08de4c11dfb797e6f7fa592150dc0c005e55031791a33eaf66b91010bce");
+            default:
+                throw new IllegalStateException("Unexpected value: " + quicVersion);
+        }
+    }
+
     public static byte[] createInvalidInitial(Version quicVersion) {
         switch (quicVersion) {
             case IETF_draft_29:

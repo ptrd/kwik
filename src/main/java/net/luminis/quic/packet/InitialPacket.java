@@ -32,6 +32,13 @@ public class InitialPacket extends LongHeaderPacket {
 
     private byte[] token;
 
+    public static boolean isInitial(ByteBuffer data) {
+        data.mark();
+        int flags = data.get();
+        data.rewind();
+        return (flags & 0xf0) == 0b1100_0000;
+    }
+
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
         super(quicVersion, sourceConnectionId, destConnectionId, payload);
         this.token = token;

@@ -22,6 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.Version;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.FrameProcessor3;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
@@ -40,6 +41,7 @@ import net.luminis.tls.handshake.*;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
@@ -323,15 +325,17 @@ class ServerConnectionImplTest {
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
         byte[] initialPacketBytes = initialPacket.generatePacketBytes(0L, clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
+        ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
+        paddedInitial.put(initialPacketBytes);
 
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor1.capture());
         byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(0L, null);
         clearInvocations(connection.getSender());
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
         RetryPacket retryPacket2 = argumentCaptor1.getValue();
@@ -362,7 +366,7 @@ class ServerConnectionImplTest {
 
         // When
         byte[] validInitial = TestUtils.createValidInitial(Version.getDefault());
-        connection.parsePacket(ByteBuffer.wrap(validInitial));
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(validInitial), null);
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
 
         // Then
@@ -374,10 +378,7 @@ class ServerConnectionImplTest {
     void receivingInvalidInitialPacketShouldAddToAntiAmplificationLimit() throws Exception {
         // When
         byte[] invalidInitial = TestUtils.createInvalidInitial(Version.getDefault());
-        try {
-            connection.parsePacket(ByteBuffer.wrap(invalidInitial));
-        }
-        catch (DecryptionException expected) {}
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(invalidInitial), null);
 
         // Then
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -412,6 +413,55 @@ class ServerConnectionImplTest {
         // Then
         verify(connection.getSender()).unsetAntiAmplificationLimit();
     }
+
+    @Test
+    void initialPacketCarriedInDatagramSmallerThan1200BytesShouldBeDropped() throws Exception {
+        // Given
+        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
+        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+
+        // When
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+
+        // Then
+        verify(connection.getSender(), never()).send(any(QuicFrame.class), any(EncryptionLevel.class));
+    }
+
+    @Test
+    void initialPacketWithPaddingInDatagramShouldBeAccepted() throws Exception {
+        // Given
+        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
+        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(1200);
+        buffer.put(initialPacketBytes);
+        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
+
+        // Then
+        verify(connection.getSender(), atLeastOnce()).send(any(QuicFrame.class), any(EncryptionLevel.class));
+    }
+
+    @Test
+    void whenInitialPacketPaddedInDatagramAllBytesShouldBeCountedInAntiAmplificationLimit() throws Exception {
+        // Given
+        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
+        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(1200);
+        buffer.put(initialPacketBytes);
+        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
+
+        // Then
+        ArgumentCaptor<Integer> antiAmplicationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(connection.getSender()).setAntiAmplificationLimit(antiAmplicationLimitCaptor.capture());
+        assertThat(antiAmplicationLimitCaptor.getValue()).isEqualTo(3 * 1200);
+    }
+
 
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
