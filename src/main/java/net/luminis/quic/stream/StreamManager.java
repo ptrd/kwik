@@ -173,7 +173,7 @@ public class StreamManager {
             if (isPeerInitiated(streamId)) {
                 synchronized (this) {
                     if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
-                        log.info("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
+                        log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
                         stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
                         streams.put(streamId, stream);
                         stream.add(frame);

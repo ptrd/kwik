@@ -348,7 +348,7 @@ public class QuicTransportParametersExtension extends Extension {
             if (!extension.isBlank()) {
                 msg += " (" + extension + " extension)";
             }
-            log.info(msg);
+            log.warn(msg);
             buffer.get(new byte[size]);
         }
 

@@ -363,7 +363,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             idleTimeout = Long.max(maxIdleTimout, peerMaxIdleTimeout);
         }
         if (idleTimeout != 0) {
-            log.info("Effective idle timeout is " + idleTimeout);
+            log.debug("Effective idle timeout is " + idleTimeout);
             // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
             idleTimer.setIdleTimeout(idleTimeout);
         }
