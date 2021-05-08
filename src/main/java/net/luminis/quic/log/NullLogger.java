@@ -26,6 +26,7 @@ import net.luminis.quic.qlog.QLog;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 public class NullLogger implements Logger {
 
@@ -130,6 +131,10 @@ public class NullLogger implements Logger {
 
     @Override
     public void sent(Instant sent, QuicPacket packet) {
+    }
+
+    @Override
+    public void sent(Instant sent, List<QuicPacket> packets) {
     }
 
     @Override

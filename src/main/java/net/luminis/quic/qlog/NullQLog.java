@@ -21,6 +21,7 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Instant;
+import java.util.List;
 
 
 public class NullQLog implements QLog {
@@ -30,6 +31,9 @@ public class NullQLog implements QLog {
 
     @Override
     public void emitPacketSentEvent(QuicPacket packet, Instant sent) {}
+
+    @Override
+    public void emitPacketSentEvent(List<QuicPacket> packets, Instant sent) {}
 
     @Override
     public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {}

@@ -21,6 +21,7 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Instant;
+import java.util.List;
 
 
 /**
@@ -34,6 +35,8 @@ public interface QLog {
     void emitConnectionCreatedEvent(Instant created);
 
     void emitPacketSentEvent(QuicPacket packet, Instant sent);
+
+    void emitPacketSentEvent(List<QuicPacket> packets, Instant sent);
 
     void emitPacketReceivedEvent(QuicPacket packet, Instant received);
 

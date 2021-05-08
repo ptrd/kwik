@@ -22,11 +22,11 @@ import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
@@ -71,10 +71,10 @@ class SenderImplTest extends AbstractSenderTest {
         clearInvocations(packetAssembler);  // PacketProcessed will check to see if anything must be sent
 
         Thread.sleep(30);
-        verify(packetAssembler, never()).assemble(anyInt(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, never()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
 
         Thread.sleep(20);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
     }
 
     @Test
@@ -105,5 +105,34 @@ class SenderImplTest extends AbstractSenderTest {
         // Then
         assertThat(senderQueues[EncryptionLevel.Initial.ordinal()].hasProbe()).isFalse();
         assertThat(senderQueues[EncryptionLevel.Handshake.ordinal()].hasProbe()).isTrue();
+    }
+
+    @Test
+    void whenAntiAmplificationLimitNotReachedAssemblerIsCalledWithNoLimit() throws Exception {
+        // Given
+        sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+
+        // When
+        sender.sendIfAny();
+
+        // Then verify
+        ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
+        assertThat(packetSizeCaptor.getValue()).isLessThanOrEqualTo(3 * 1200);
+    }
+
+    @Test
+    void whenAntiAmplificationLimitIsReachedNothingIsSend() throws Exception {
+        // Given
+        sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+
+        // When
+        sender.sendIfAny();
+
+        // Then verify
+        ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(packetAssembler, times(3)).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
     }
 }

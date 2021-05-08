@@ -44,21 +44,19 @@ public class PacketAssembler {
 
     protected final Version quicVersion;
     protected final EncryptionLevel level;
-    protected final int maxPacketSize;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
     private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
 
 
-    public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        this(version, level, maxPacketSize, requestQueue, ackGenerator, new PacketNumberGenerator());
+    public PacketAssembler(Version version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+        this(version, level, requestQueue, ackGenerator, new PacketNumberGenerator());
     }
 
-    public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
+    public PacketAssembler(Version version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
-        this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length. TODO: this should not be reponsibility of this class.
         this.requestQueue = requestQueue;
         this.ackGenerator = ackGenerator;
         packetNumberGenerator = pnGenerator;
@@ -73,7 +71,8 @@ public class PacketAssembler {
      * @return
      */
     Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        final int available = Integer.min(remainingCwndSize, maxPacketSize);
+        // Packet can be 3 bytes larger than estimated size because of unknown packet number length. TODO: this should not be responsibility of this class.
+        final int available = Integer.min(remainingCwndSize, availablePacketSize - 3);
 
         Optional<QuicPacket> packet = Optional.empty();
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
@@ -122,7 +121,11 @@ public class PacketAssembler {
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getBytes().length).sum());
             if (estimatedSize > availablePacketSize) {
-                probeData = List.of(new PingFrame());
+                QuicFrame probeFrame = new PingFrame();
+                if (packet.get().estimateLength(probeFrame.getBytes().length) > availablePacketSize) {
+                    return Optional.empty();
+                }
+                probeData = List.of(probeFrame);
             }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             packet.get().setIsProbe(true);

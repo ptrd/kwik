@@ -26,6 +26,7 @@ import java.io.File;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Queue;
 
 
@@ -58,6 +59,11 @@ public class QLogFrontEnd implements QLog {
     @Override
     public void emitPacketSentEvent(QuicPacket packet, Instant sent) {
         eventQueue.add(new PacketSentEvent(originalDcid, packet, sent));
+    }
+
+    @Override
+    public void emitPacketSentEvent(List<QuicPacket> packets, Instant sent) {
+        packets.stream().forEach(packet -> eventQueue.add(new PacketSentEvent(originalDcid, packet, sent)));
     }
 
     @Override

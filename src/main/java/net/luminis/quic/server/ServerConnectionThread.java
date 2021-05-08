@@ -38,12 +38,14 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final Thread connectionReceiverThread;
     private final InitialPacket firstInitialPacket;
     private final Instant firstPacketReceived;
+    private final ByteBuffer firstDatagram;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, Instant firstPacketReceived) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, Instant firstPacketReceived, ByteBuffer firstDatagram) {
         this.serverConnection = serverConnection;
         this.firstInitialPacket = firstInitialPacket;
         this.firstPacketReceived = firstPacketReceived;
+        this.firstDatagram = firstDatagram;
 
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
@@ -74,7 +76,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private void process() {
         try {
             if (firstInitialPacket != null) {
-                serverConnection.parseAndProcessPackets(0, firstPacketReceived, ByteBuffer.wrap(new byte[0]), firstInitialPacket);
+                serverConnection.parseAndProcessPackets(0, firstPacketReceived, firstDatagram, firstInitialPacket);
             }
             while (true) {
                 ReceivedDatagram datagram = queue.take();

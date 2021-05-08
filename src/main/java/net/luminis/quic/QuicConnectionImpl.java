@@ -182,6 +182,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
                 // "Invalid packets without packet protection, such as Initial, Retry, or Version Negotiation, MAY be discarded."
                 log.debug("Dropping invalid packet");
+                // There is not point in trying to parse the rest of the datagram.
+                return;
             }
 
             if (data.position() == 0) {

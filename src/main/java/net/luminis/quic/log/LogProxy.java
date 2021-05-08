@@ -25,6 +25,7 @@ import net.luminis.quic.qlog.QLogFrontEnd;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 public class LogProxy implements Logger {
 
@@ -159,6 +160,11 @@ public class LogProxy implements Logger {
     @Override
     public void sent(Instant sent, QuicPacket packet) {
         proxiedLogger.sent(sent, packet);
+    }
+
+    @Override
+    public void sent(Instant sent, List<QuicPacket> packets) {
+        proxiedLogger.sent(sent, packets);
     }
 
     @Override

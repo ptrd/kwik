@@ -39,13 +39,11 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.lang.Long.max;
 
@@ -89,6 +87,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final Object condition = new Object();
     private boolean signalled;
 
+    // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
     private volatile boolean running;
     private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
@@ -97,6 +96,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile long packetsSent;
     private AtomicInteger subsequentZeroDelays = new AtomicInteger();
     private volatile boolean lastDelayWasZero = false;
+    private volatile int antiAmplificationLimit = -1;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -113,7 +113,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             sendRequestQueue[levelIndex] = new SendRequestQueue();
         });
         globalAckGenerator = new GlobalAckGenerator(this);
-        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, maxPacketSize);
+        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
 
         congestionController = new NewRenoCongestionController(log, this);
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
@@ -342,6 +342,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     if (count % 100 == 3) {
                         log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
                     }
+                    if (count > 100003) {
+                        return 8000;
+                    }
                 }
                 lastDelayWasZero = true;
                 // Next time is already in the past, hurry up!
@@ -387,19 +390,26 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
-        itemsToSend.stream()
-                .map(item -> item.getPacket())
-                .forEach(packett -> {
-                    log.sent(timeSent, packett);
-                    qlog.emitPacketSentEvent(packett, timeSent);
-                });
+        List packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        log.sent(timeSent, packetsSent);
+        qlog.emitPacketSentEvent(packetsSent, timeSent);
     }
 
     private List<SendItem> assemblePacket() {
         int remainingCwnd = (int) congestionController.remainingCwnd();
+        int currentMaxPacketSize = maxPacketSize;
+        if (antiAmplificationLimit >= 0) {
+            if (bytesSent < antiAmplificationLimit) {
+                currentMaxPacketSize = Integer.min(currentMaxPacketSize, (int) (antiAmplificationLimit - bytesSent));
+            }
+            else {
+                log.warn("Cannot send; anti-amplification limit is reached");
+                return Collections.emptyList();
+            }
+        }
         byte[] srcCid = connection.getSourceConnectionId();
         byte[] destCid = connection.getDestinationConnectionId();
-        return packetAssembler.assemble(remainingCwnd, srcCid, destCid);
+        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, srcCid, destCid);
     }
 
     private Instant earliest(Instant instant1, Instant instant2) {
@@ -436,6 +446,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public GlobalAckGenerator getGlobalAckGenerator() {
         return globalAckGenerator;
+    }
+
+    public void setAntiAmplificationLimit(int antiAmplificationLimit) {
+        this.antiAmplificationLimit = antiAmplificationLimit;
+    }
+
+    public void unsetAntiAmplificationLimit() {
+        antiAmplificationLimit = -1;
     }
 }
 

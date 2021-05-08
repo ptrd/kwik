@@ -149,7 +149,6 @@ public class CryptoStream extends BaseStream {
         dataToSend.add(ByteBuffer.wrap(data));
         sendStreamSize += data.length;
         sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
-        sender.flush();
     }
 
     private QuicFrame sendFrame(int maxSize) {
