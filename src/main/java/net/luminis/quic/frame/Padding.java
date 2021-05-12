@@ -48,10 +48,11 @@ public class Padding extends QuicFrame {
      * @return
      */
     public Padding parse(ByteBuffer buffer, Logger log) {
-        while (buffer.position() < buffer.limit() && buffer.get() == 0)
+        byte lastByte = 0;
+        while (buffer.position() < buffer.limit() && (lastByte = buffer.get()) == 0)
             length++;
 
-        if (buffer.position() < buffer.limit()) {
+        if (lastByte != 0) {
             // Set back one position
             buffer.position(buffer.position() - 1);
         }
