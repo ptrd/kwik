@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -53,6 +53,11 @@ public class SendItem {
 
     public Consumer<QuicPacket> getPacketLostCallback() {
         return packetLostCallback;
+    }
+
+    @Override
+    public String toString() {
+        return packet.toString();
     }
 }
 

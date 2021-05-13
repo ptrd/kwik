@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -39,7 +39,6 @@ public class VersionNegotiationPacket extends QuicPacket {
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  4;
     private static Random random = new Random();
 
-    private Version quicVersion;
     private byte[] sourceConnectionId;
     private byte[] destinationConnectionId;
     private int packetSize;
@@ -55,7 +54,13 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     public VersionNegotiationPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        this.quicVersion = quicVersion;
+        serverSupportedVersions = List.of(quicVersion);
+        this.sourceConnectionId = sourceConnectionId;
+        this.destinationConnectionId = destinationConnectionId;
+    }
+
+    public VersionNegotiationPacket(List<Version> supportedVersions, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        serverSupportedVersions = supportedVersions;
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destinationConnectionId;
     }
@@ -138,14 +143,14 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         throw new NotYetImplementedException();
     }
 
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
-        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4);
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
+        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4 * serverSupportedVersions.size());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.1
         // "The value in the Unused field is selected randomly by the server. (...)
@@ -158,14 +163,13 @@ public class VersionNegotiationPacket extends QuicPacket {
         buffer.put(destinationConnectionId);
         buffer.put((byte) sourceConnectionId.length);
         buffer.put(sourceConnectionId);
-        buffer.put(quicVersion.getBytes());
-
+        serverSupportedVersions.forEach(version -> buffer.put(version.getBytes()));
         return buffer.array();
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     @Override
@@ -178,7 +182,7 @@ public class VersionNegotiationPacket extends QuicPacket {
     @Override
     public String toString() {
         return "Packet "
-                + "I" + "|"
+                + "V" + "|"
                 + "-" + "|"
                 + "V" + "|"
                 + (packetSize >= 0? packetSize: ".") + "|"

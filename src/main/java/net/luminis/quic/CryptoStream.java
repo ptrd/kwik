@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -24,10 +24,11 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.stream.BaseStream;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.*;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.HandshakeMessage;
-import net.luminis.tls.handshake.TlsClientEngine;
+import net.luminis.tls.handshake.TlsEngine;
 import net.luminis.tls.handshake.TlsMessageParser;
 
 import java.io.IOException;
@@ -41,23 +42,26 @@ public class CryptoStream extends BaseStream {
     private final Version quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ConnectionSecrets connectionSecrets;
-    private final TlsClientEngine tlsEngine;
+    private final Role peerRole;
+    private final TlsEngine tlsEngine;
     private final Logger log;
     private final Sender sender;
     private final List<Message> messages;
     private final TlsMessageParser tlsMessageParser;
+    private final List<ByteBuffer> dataToSend;
+    private volatile int dataToSendOffset;
+    private volatile int sendStreamSize;
+    // Only used by add method; thread confinement concurrency control (assuming one receiver thread)
     private boolean msgSizeRead = false;
     private int msgSize;
     private byte msgType;
-    private List<ByteBuffer> dataToSend;
-    private int dataToSendOffset;
-    private int sendStreamSize;
 
 
-    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, TlsClientEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
+        peerRole = role.other();
         this.tlsEngine = tlsEngine;
         this.log = log;
         this.sender = sender;
@@ -67,7 +71,7 @@ public class CryptoStream extends BaseStream {
         dataToSend = new ArrayList<>();
     }
 
-    public void add(CryptoFrame cryptoFrame) {
+    public void add(CryptoFrame cryptoFrame) throws TlsProtocolException {
         try {
             if (super.add(cryptoFrame)) {
                 int availableBytes = bytesAvailable();
@@ -110,10 +114,7 @@ public class CryptoStream extends BaseStream {
                 log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + readOffset());
             }
         }
-        catch (TlsProtocolException tlsError) {
-            log.error("Parsing TLS message failed", tlsError);
-            throw new ProtocolError("TLS error");
-        } catch (IOException e) {
+        catch (IOException e) {
             // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
             throw new RuntimeException();
         }
@@ -124,11 +125,7 @@ public class CryptoStream extends BaseStream {
         int extensionType = buffer.getShort();
         buffer.reset();
         if (QuicTransportParametersExtension.isCodepoint(quicVersion, extensionType & 0xffff)) {
-            try {
-                return new QuicTransportParametersExtension(quicVersion).parse(buffer, log);
-            } catch (InvalidIntegerEncodingException e) {
-                throw new TlsProtocolException("Invalid transport parameter extension");
-            }
+            return new QuicTransportParametersExtension(quicVersion).parse(buffer, peerRole, log);
         }
         else {
             return null;
@@ -152,7 +149,6 @@ public class CryptoStream extends BaseStream {
         dataToSend.add(ByteBuffer.wrap(data));
         sendStreamSize += data.length;
         sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
-        sender.flush();
     }
 
     private QuicFrame sendFrame(int maxSize) {
@@ -183,8 +179,8 @@ public class CryptoStream extends BaseStream {
     }
 
     private void retransmitCrypto(QuicFrame cryptoFrame) {
-        log.recovery("Retransmitting " + cryptoFrame);
-        sender.send(cryptoFrame, EncryptionLevel.Initial, this::retransmitCrypto);
+        log.recovery("Retransmitting " + cryptoFrame + " on level " + encryptionLevel);
+        sender.send(cryptoFrame, encryptionLevel, this::retransmitCrypto);
     }
 
     public void reset() {

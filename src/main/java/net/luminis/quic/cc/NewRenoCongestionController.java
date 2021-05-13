@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -54,7 +54,17 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     }
 
     @Override
+    public synchronized void registerInFlight(QuicPacket sentPacket) {
+        super.registerInFlight(sentPacket);
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
+    }
+
+    @Override
     public synchronized void registerAcked(List<? extends PacketInfo> acknowlegdedPackets) {
+        int epsilon = 3;
+        boolean cwndLimited = congestionWindow - bytesInFlight <= epsilon;
+
+        long bytesInFlightBefore = this.bytesInFlight;
         super.registerAcked(acknowlegdedPackets);
 
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-23#section-6.4
@@ -63,19 +73,28 @@ public class NewRenoCongestionController extends AbstractCongestionController im
                 .filter(ackedPacket -> ackedPacket.timeSent().isAfter(congestionRecoveryStartTime))
                 .map(ackedPacket -> ackedPacket.packet());
 
-        long previousCwnd = congestionWindow;
-        notBeforeRecovery.forEach(p -> {
-            if (congestionWindow < slowStartThreshold) {
-                // i.e. mode is slow start
-                congestionWindow += p.getSize();
-            } else {
-                // i.e. mode is congestion avoidance
-                congestionWindow += kMaxDatagramSize * p.getSize() / congestionWindow;
+        // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-7.8
+        // "When bytes in flight is smaller than the congestion window (...), the congestion window is under-utilized.
+        //  When this occurs, the congestion window SHOULD NOT be increased in either slow start or congestion avoidance."
+        if (cwndLimited) {
+            long previousCwnd = congestionWindow;
+            notBeforeRecovery.forEach(p -> {
+                if (congestionWindow < slowStartThreshold) {
+                    // i.e. mode is slow start
+                    congestionWindow += p.getSize();
+                } else {
+                    // i.e. mode is congestion avoidance
+                    congestionWindow += kMaxDatagramSize * p.getSize() / congestionWindow;
+                }
+            });
+            if (congestionWindow != previousCwnd) {
+                log.cc("Cwnd(+): " + congestionWindow + " (" + getMode() + "); inflight: " + bytesInFlightBefore);
             }
-        });
-        if (congestionWindow != previousCwnd) {
-            log.cc("Cwnd(+): " + congestionWindow + " (" + getMode() + "); inflight: " + bytesInFlight);
         }
+//        log.cc("CC status: bytes in flight:" + bytesInFlight + " cwnd:" + congestionWindow
+//                + "; diff:" + (congestionWindow - bytesInFlight)
+//                + " (" + ((congestionWindow - bytesInFlight) / (congestionWindow / 100)) + "%). Cwnd limited? "+ cwndLimited);
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, this.bytesInFlight);
     }
 
     @Override
@@ -86,6 +105,7 @@ public class NewRenoCongestionController extends AbstractCongestionController im
             PacketInfo largest = lostPackets.stream().max((p1, p2) -> p1.packet().getPacketNumber().compareTo(p2.packet().getPacketNumber())).get();
             fireCongestionEvent(largest.timeSent());
         }
+        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
     }
 
     private void fireCongestionEvent(Instant timeSent) {

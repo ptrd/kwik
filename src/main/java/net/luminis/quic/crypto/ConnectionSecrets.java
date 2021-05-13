@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -118,6 +118,10 @@ public class ConnectionSecrets {
         }
         clientSecrets[level.ordinal()] = clientHandshakeSecrets;
         serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+
+        // Keys for peer and keys for self must be able to signal each other of a key update.
+        clientHandshakeSecrets.setPeerKeys(serverHandshakeSecrets);
+        serverHandshakeSecrets.setPeerKeys(clientHandshakeSecrets);
     }
 
     public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
@@ -132,11 +136,11 @@ public class ConnectionSecrets {
         }
     }
 
-    public synchronized void computeApplicationSecrets(TlsClientEngine engine) {
+    public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
         createKeys(EncryptionLevel.App, selectedCipherSuite);
 
-        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(engine);
+        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -35,21 +35,27 @@ public class SendRequestQueue {
 
     private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
     private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
-    private volatile Instant nextAckTime;
+    private final Object ackLock = new Object();
+    private Instant nextAckTime;
     private volatile boolean cleared;
+
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
         requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
     }
 
     public void addAckRequest() {
-        nextAckTime = Instant.now();
+        synchronized (ackLock) {
+            nextAckTime = Instant.now();
+        }
     }
 
     public void addAckRequest(int delay) {
         Instant requestedAckTime = Instant.now().plusMillis(delay);
-        if (nextAckTime == null || requestedAckTime.isBefore(nextAckTime)) {
-            nextAckTime = requestedAckTime;
+        synchronized (ackLock) {
+            if (nextAckTime == null || requestedAckTime.isBefore(nextAckTime)) {
+                nextAckTime = requestedAckTime;
+            }
         }
     }
 
@@ -86,20 +92,36 @@ public class SendRequestQueue {
 
     public boolean mustSendAck() {
         Instant now = Instant.now();
-        return nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
+        synchronized (ackLock) {
+            return nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
+        }
+    }
+
+    public boolean mustAndWillSendAck() {
+        Instant now = Instant.now();
+        synchronized (ackLock) {
+            boolean must = nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
+            if (must) {
+                nextAckTime = null;
+            }
+            return must;
+        }
     }
 
     public Instant getAck() {
-        try {
-            return nextAckTime;
-        }
-        finally {
-            nextAckTime = null;
+        synchronized (ackLock) {
+            try {
+                return nextAckTime;
+            } finally {
+                nextAckTime = null;
+            }
         }
     }
 
     public Instant nextDelayedSend() {
-        return nextAckTime;
+        synchronized (ackLock) {
+            return nextAckTime;
+        }
     }
 
     /**
@@ -147,7 +169,9 @@ public class SendRequestQueue {
         cleared = true;
         requestQueue.clear();
         probeQueue.clear();
-        nextAckTime = null;
+        synchronized (ackLock) {
+            nextAckTime = null;
+        }
     }
 }
 

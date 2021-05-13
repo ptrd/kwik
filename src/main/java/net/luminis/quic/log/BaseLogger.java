@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,18 +18,22 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.NullQLog;
+import net.luminis.quic.qlog.QLog;
 import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 
 public abstract class BaseLogger implements Logger {
+
+    public static final String TIME_FORMAT_SHORT = "mm:ss.SSS";
+    private static final String TIME_FORMAT_LONG = "yy-MM-dd'T'HH:mm:ss.SSS";
 
     private volatile boolean logDebug = false;
     private volatile boolean logRawBytes = false;
@@ -43,12 +47,12 @@ public abstract class BaseLogger implements Logger {
     private volatile boolean logCongestionControl = false;
     private volatile boolean logFlowControl = false;
     private volatile boolean useRelativeTime = false;
-    private final DateTimeFormatter timeFormatter;
+    private volatile DateTimeFormatter timeFormatter;
     private Instant start;
 
 
     public BaseLogger() {
-        timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
+        timeFormatter = DateTimeFormatter.ofPattern(TIME_FORMAT_SHORT);
     }
 
     @Override
@@ -117,6 +121,18 @@ public abstract class BaseLogger implements Logger {
     }
 
     @Override
+    public void timeFormat(TimeFormat format) {
+        switch (format) {
+            case Short:
+                timeFormatter = DateTimeFormatter.ofPattern(TIME_FORMAT_SHORT);
+                break;
+            case Long:
+                timeFormatter = DateTimeFormatter.ofPattern(TIME_FORMAT_LONG);
+                break;
+        }
+    }
+
+    @Override
     public void debug(String message) {
         if (logDebug) {
             log(message);
@@ -154,21 +170,21 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void warn(String message) {
         if (logWarning) {
-            log(message);
+            log(formatTime() + " " + message);
         }
     }
 
     @Override
     public void info(String message) {
         if (logInfo) {
-            log(message);
+            log(formatTime() + " " + message);
         }
     }
 
     @Override
     public void info(String message, byte[] data) {
         if (logInfo) {
-            log(message + " (" + data.length + "): " + ByteUtils.bytesToHex(data));
+            log(formatTime() + " " + message + " (" + data.length + "): " + ByteUtils.bytesToHex(data));
         }
     }
 
@@ -176,6 +192,19 @@ public abstract class BaseLogger implements Logger {
     public void received(Instant timeReceived, int datagram, QuicPacket packet) {
         if (logPackets) {
             log(formatTime(timeReceived) + " <- (" + datagram + ") " + packet);
+        }
+    }
+
+    @Override
+    public void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid) {
+        if (logPackets) {
+            log(formatTime(timeReceived) + " <- (" + datagram + ") "
+                    + "Packet "
+                    + encryptionLevel.name().charAt(0) + "|"
+                    + "." + "|"
+                    + "L" + "|"
+                    + ByteUtils.bytesToHex(dcid) + "|"
+                    + ByteUtils.bytesToHex(scid));
         }
     }
 
@@ -198,6 +227,25 @@ public abstract class BaseLogger implements Logger {
         }
         if (logPackets) {
             log(formatTime(sent) + " -> " + packet);
+        }
+    }
+
+    @Override
+    public void sent(Instant sent, List<QuicPacket> packets) {
+        synchronized (this) {
+            if (useRelativeTime) {
+                if (start == null) {
+                    start = sent;
+                }
+            }
+        }
+        if (logPackets) {
+            if (packets.size() == 1) {
+                log(formatTime(sent) + " -> " + packets.get(0));
+            }
+            else {
+                log(formatTime(sent) + " -> " + packets);
+            }
         }
     }
 
@@ -257,18 +305,18 @@ public abstract class BaseLogger implements Logger {
 
     @Override
     public void error(String message) {
-        log("Error: " + message);
+        log(formatTime() + " " + "Error: " + message);
     }
 
     @Override
     public void error(String message, Throwable error) {
-        log("Error: " + message + ": " + error, error);
+        log(formatTime() + " " + "Error: " + message + ": " + error, error);
     }
 
     @Override
     public void recovery(String message) {
         if (logRecovery) {
-            log(formatTime(Instant.now()) + " " + message);
+            log(formatTime() + " " + message);
         }
     }
 
@@ -337,6 +385,10 @@ public abstract class BaseLogger implements Logger {
         return result;
     }
 
+    protected String formatTime() {
+        return formatTime(Instant.now());
+    }
+
     protected String formatTime(Instant time) {
         if (useRelativeTime) {
             if (start == null) {
@@ -346,9 +398,14 @@ public abstract class BaseLogger implements Logger {
             return String.format("%.3f", ((double) relativeTime.toNanos()) / 1000000000);  // Use nano's to get correct rounding to millis
         }
         else {
-            LocalTime localTimeNow = LocalTime.from(time.atZone(ZoneId.systemDefault()));
+            LocalDateTime localTimeNow = LocalDateTime.from(time.atZone(ZoneId.systemDefault()));
             return timeFormatter.format(localTimeNow);
         }
+    }
+
+    @Override
+    public QLog getQLog() {
+        return new NullQLog();
     }
 
     abstract protected void log(String message);

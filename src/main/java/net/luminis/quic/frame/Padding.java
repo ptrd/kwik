@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -48,10 +48,11 @@ public class Padding extends QuicFrame {
      * @return
      */
     public Padding parse(ByteBuffer buffer, Logger log) {
-        while (buffer.position() < buffer.limit() && buffer.get() == 0)
+        byte lastByte = 0;
+        while (buffer.position() < buffer.limit() && (lastByte = buffer.get()) == 0)
             length++;
 
-        if (buffer.position() < buffer.limit()) {
+        if (lastByte != 0) {
             // Set back one position
             buffer.position(buffer.position() - 1);
         }

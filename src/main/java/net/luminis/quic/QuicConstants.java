@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -24,9 +24,9 @@ public class QuicConstants {
     // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-18
     public enum TransportParameterId {
         original_destination_connection_id (0),
-        idle_timeout(1),
+        max_idle_timeout(1),
         stateless_reset_token(2),
-        max_packet_size(3),
+        max_udp_payload_size(3),
         initial_max_data(4),
         initial_max_stream_data_bidi_local(5),
         initial_max_stream_data_bidi_remote(6),
@@ -87,24 +87,28 @@ public class QuicConstants {
         }
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-20
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
     public enum TransportErrorCode {
         NO_ERROR (0x0),
         INTERNAL_ERROR (0x1),
-        SERVER_BUSY (0x2),
+        CONNECTION_REFUSED (0x2),
         FLOW_CONTROL_ERROR (0x3),
         STREAM_LIMIT_ERROR (0x4),
         STREAM_STATE_ERROR (0x5),
         FINAL_SIZE_ERROR (0x6),
         FRAME_ENCODING_ERROR (0x7),
         TRANSPORT_PARAMETER_ERROR (0x8),
-        VERSION_NEGOTIATION_ERROR (0x9),
-        PROTOCOL_VIOLATION (0xA),
-        INVALID_MIGRATION (0xC),
+        CONNECTION_ID_LIMIT_ERROR (0x9),
+        PROTOCOL_VIOLATION (0xa),
+        INVALID_TOKEN (0xb),
+        APPLICATION_ERROR (0xc),
+        CRYPTO_BUFFER_EXCEEDED (0xd),
+        KEY_UPDATE_ERROR (0xe),
+        AEAD_LIMIT_REACHED (0xf),
         CRYPTO_ERROR (0x100),
         ;
 
-        private final short value;
+        public final short value;
 
         TransportErrorCode(int value) {
             this.value = (short) value;

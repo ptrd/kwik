@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.function.Consumer;
 
 
 public interface QuicClientConnection extends QuicConnection {

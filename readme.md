@@ -1,4 +1,4 @@
-![Kwik](https://bitbucket.org/pjtr/kwik/raw/master/docs/Logo%20Kwik%20rectangle.png)
+![Kwik](https://bitbucket.org/pjtr/kwik/raw/master/docs/media/Logo_Kwik_rectangle.png)
 
 ## A QUIC client Java library
 

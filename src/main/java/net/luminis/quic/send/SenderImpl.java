@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -26,6 +26,8 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.recovery.RttEstimator;
 
@@ -33,15 +35,15 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.lang.Long.max;
 
@@ -73,6 +75,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final CongestionController congestionController;
     private final RttEstimator rttEstimater;
     private final Logger log;
+    private final QLog qlog;
     private final SendRequestQueue[] sendRequestQueue = new SendRequestQueue[EncryptionLevel.values().length];
     private final GlobalPacketAssembler packetAssembler;
     private final GlobalAckGenerator globalAckGenerator;
@@ -84,11 +87,16 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final Object condition = new Object();
     private boolean signalled;
 
+    // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
     private volatile boolean running;
+    private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
     private volatile int datagramsSent;
     private volatile long bytesSent;
     private volatile long packetsSent;
+    private AtomicInteger subsequentZeroDelays = new AtomicInteger();
+    private volatile boolean lastDelayWasZero = false;
+    private volatile int antiAmplificationLimit = -1;
 
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -98,18 +106,19 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         this.peerAddress = peerAddress;
         this.connection = connection;
         this.log = log;
+        this.qlog = log.getQLog();
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
             sendRequestQueue[levelIndex] = new SendRequestQueue();
         });
         globalAckGenerator = new GlobalAckGenerator(this);
-        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, connection.getMaxPacketSize());
+        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
 
         congestionController = new NewRenoCongestionController(log, this);
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
 
-        recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
+        recoveryManager = new RecoveryManager(connection, connection.getRole(), rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
 
         idleTimer = connection.getIdleTimer();
@@ -136,6 +145,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     @Override
     public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
         sendRequestQueue[level.ordinal()].addRequest(frameSupplier, minimumSize, lostCallback);
+    }
+
+    public void send(RetryPacket retryPacket) {
+        try {
+            send(List.of(new SendItem(retryPacket)));
+        } catch (IOException e) {
+            log.error("Sending packet failed: " + retryPacket);
+        }
     }
 
     @Override
@@ -231,9 +248,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         // No more retransmissions either.
         recoveryManager.stopRecovery();
+
+        stopped = true;
     }
 
     public void shutdown() {
+        assert(stopped);  // Stopped should have be called before.
+        // Stop cannot be called here (again), because it would drop ConnectionCloseFrame still waiting to be sent.
+
         running = false;
         senderThread.interrupt();
     }
@@ -310,9 +332,21 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
+                subsequentZeroDelays.set(0);
+                lastDelayWasZero = false;
                 return delay;
             }
             else {
+                if (lastDelayWasZero) {
+                    int count = subsequentZeroDelays.incrementAndGet();
+                    if (count % 100 == 3) {
+                        log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
+                    }
+                    if (count > 100003) {
+                        return 8000;
+                    }
+                }
+                lastDelayWasZero = true;
                 // Next time is already in the past, hurry up!
                 return 0;
             }
@@ -327,15 +361,21 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     void send(List<SendItem> itemsToSend) throws IOException {
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
-        itemsToSend.stream()
-                .map(item -> item.getPacket())
-                .forEach(packet -> {
-                    Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
-                    byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
-                    buffer.put(packetData);
-                    log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
-                });
-
+        try {
+            itemsToSend.stream()
+                    .map(item -> item.getPacket())
+                    .forEach(packet -> {
+                        Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
+                        byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
+                        buffer.put(packetData);
+                        log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
+                    });
+        }
+        catch (BufferOverflowException bufferOverflow) {
+            log.error("Buffer overflow while generating datagram for " + itemsToSend);
+            // rethrow
+            throw bufferOverflow;
+        }
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
         Instant timeSent = Instant.now();
@@ -350,16 +390,26 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
-        itemsToSend.stream()
-                .map(item -> item.getPacket())
-                .forEach(packett -> log.sent(timeSent, packett));
+        List packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        log.sent(timeSent, packetsSent);
+        qlog.emitPacketSentEvent(packetsSent, timeSent);
     }
 
     private List<SendItem> assemblePacket() {
         int remainingCwnd = (int) congestionController.remainingCwnd();
+        int currentMaxPacketSize = maxPacketSize;
+        if (antiAmplificationLimit >= 0) {
+            if (bytesSent < antiAmplificationLimit) {
+                currentMaxPacketSize = Integer.min(currentMaxPacketSize, (int) (antiAmplificationLimit - bytesSent));
+            }
+            else {
+                log.warn("Cannot send; anti-amplification limit is reached");
+                return Collections.emptyList();
+            }
+        }
         byte[] srcCid = connection.getSourceConnectionId();
         byte[] destCid = connection.getDestinationConnectionId();
-        return packetAssembler.assemble(remainingCwnd, srcCid, destCid);
+        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, srcCid, destCid);
     }
 
     private Instant earliest(Instant instant1, Instant instant2) {
@@ -396,6 +446,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public GlobalAckGenerator getGlobalAckGenerator() {
         return globalAckGenerator;
+    }
+
+    public void setAntiAmplificationLimit(int antiAmplificationLimit) {
+        this.antiAmplificationLimit = antiAmplificationLimit;
+    }
+
+    public void unsetAntiAmplificationLimit() {
+        antiAmplificationLimit = -1;
     }
 }
 

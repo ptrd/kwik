@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -114,4 +114,20 @@ class RetryPacketTest {
         ).isInstanceOf(InvalidPacketException.class);
     }
 
+    @Test
+    void serializeRetryPacket() throws Exception {
+        byte[] scid = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7};
+        byte[] dcid = new byte[] { 0, 1, 2, 3};
+        byte[] odcid = new byte[] { 9, 9, 9, 9 };
+        byte[] retryToken = new byte[32];
+        byte[] packetBytes = new RetryPacket(Version.getDefault(), scid, dcid, odcid, retryToken).generatePacketBytes(0L, null);
+
+        RetryPacket deserializedPacket  = new RetryPacket(Version.getDefault());
+        deserializedPacket.parse(ByteBuffer.wrap(packetBytes), null, DONT_CARE, mock(Logger.class), DONT_CARE);
+
+        assertThat(deserializedPacket.getSourceConnectionId()).isEqualTo(scid);
+        assertThat(deserializedPacket.getDestinationConnectionId()).isEqualTo(dcid);
+        assertThat(deserializedPacket.getRetryToken()).isEqualTo(retryToken);
+        assertThat(deserializedPacket.validateIntegrityTag(odcid)).isTrue();
+    }
 }

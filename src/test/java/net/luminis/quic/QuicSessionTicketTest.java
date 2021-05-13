@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -34,7 +34,7 @@ class QuicSessionTicketTest {
         long maxIdleTime = 38;
         tp.setMaxIdleTimeout(maxIdleTime);
         int maxPacketSize = 1215;
-        tp.setMaxPacketSize(maxPacketSize);
+        tp.setMaxUdpPayloadSize(maxPacketSize);
         long maxData = 123456789;
         tp.setInitialMaxData(maxData);
         long maxDataBidiLocal = 58374;
@@ -76,7 +76,7 @@ class QuicSessionTicketTest {
         long maxIdleTime = 38;
         tp.setMaxIdleTimeout(maxIdleTime);
         int maxPacketSize = 1215;
-        tp.setMaxPacketSize(maxPacketSize);
+        tp.setMaxUdpPayloadSize(maxPacketSize);
         long maxData = 123456789;
         tp.setInitialMaxData(maxData);
         long maxDataBidiLocal = 58374;
@@ -100,7 +100,7 @@ class QuicSessionTicketTest {
         quicSessionTicket.copyTo(copiedTransportParameters);
 
         assertThat(copiedTransportParameters.getMaxIdleTimeout()).isEqualTo(maxIdleTime);
-        assertThat(copiedTransportParameters.getMaxPacketSize()).isEqualTo(maxPacketSize);
+        assertThat(copiedTransportParameters.getMaxUdpPayloadSize()).isEqualTo(maxPacketSize);
         assertThat(copiedTransportParameters.getInitialMaxData()).isEqualTo(maxData);
         assertThat(copiedTransportParameters.getInitialMaxStreamDataBidiLocal()).isEqualTo(maxDataBidiLocal);
         assertThat(copiedTransportParameters.getInitialMaxStreamDataBidiRemote()).isEqualTo(maxDataBidiRemote);

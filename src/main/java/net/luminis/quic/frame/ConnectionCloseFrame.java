@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -26,6 +26,8 @@ import net.luminis.quic.packet.QuicPacket;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 public class ConnectionCloseFrame extends QuicFrame {
@@ -47,6 +49,14 @@ public class ConnectionCloseFrame extends QuicFrame {
         //      signal that the connection is being closed abruptly in the absence
         //      of any error."
         errorCode = 0x00;
+    }
+
+    public ConnectionCloseFrame(Version quicVersion, int error, String reason) {
+        frameType = 0x1c;
+        errorCode = error;
+        if (reason != null && !reason.isBlank()) {
+            reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
+        }
     }
 
     public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {

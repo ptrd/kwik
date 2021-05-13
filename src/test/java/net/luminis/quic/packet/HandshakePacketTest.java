@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -158,7 +158,7 @@ class HandshakePacketTest {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
 
         Keys keys = TestUtils.createKeys();
-        handshakePacket.generatePacketBytes(1, keys);
+        handshakePacket.generatePacketBytes(1L, keys);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(handshakePacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
@@ -210,7 +210,7 @@ class HandshakePacketTest {
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
         when(keys.getWriteKey()).thenReturn(new byte[16]);
-        byte[] bytes = handshakePacket.generatePacketBytes(1, keys);
+        byte[] bytes = handshakePacket.generatePacketBytes(1L, keys);
         System.out.println(ByteUtils.bytesToHex(bytes));
 
     }

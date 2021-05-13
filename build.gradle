@@ -15,24 +15,34 @@ repositories {
 
 dependencies {
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    compile group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
+    implementation group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    compile group: 'commons-cli', name: 'commons-cli', version: '1.4'
+    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 
     compile name: 'tls13'
+
+    implementation 'org.glassfish:javax.json:1.1.4'
 
     testCompile('org.junit.jupiter:junit-jupiter-api:5.3.2')
     testCompile('org.junit.jupiter:junit-jupiter-params:5.3.2')
     testRuntime('org.junit.jupiter:junit-jupiter-engine:5.3.2')
-    testCompile("org.mockito:mockito-core:2.28.2")
-    testCompile("org.assertj:assertj-core:3.11.1")
+    testCompile("org.mockito:mockito-core:3.2.4")
+    testCompile("org.assertj:assertj-core:3.14.0")
 }
 
 sourceSets {
     main {
         resources {
             srcDir "${buildDir}/generated"
+        }
+        java {
+            srcDir "tls13-java/src/"
+        }
+    }
+    test {
+        java {
+            srcDir "tls13-java/test/"
         }
     }
 }
@@ -63,7 +73,7 @@ jar {
 
     doFirst {
         from {
-           configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+           configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
         }
         exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
     }

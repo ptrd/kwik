@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -24,15 +24,20 @@ import java.time.Instant;
 
 public interface PacketProcessor {
 
-    void process(InitialPacket packet, Instant time);
+    enum ProcessResult {
+        Continue,
+        Abort
+    }
 
-    void process(LongHeaderPacket packet, Instant time);
+    ProcessResult process(InitialPacket packet, Instant time);
 
-    void process(ShortHeaderPacket packet, Instant time);
+    ProcessResult process(ShortHeaderPacket packet, Instant time);
 
-    void process(VersionNegotiationPacket packet, Instant time);
+    ProcessResult process(VersionNegotiationPacket packet, Instant time);
 
-    void process(HandshakePacket packet, Instant time);
+    ProcessResult process(HandshakePacket packet, Instant time);
 
-    void process(RetryPacket packet, Instant time);
+    ProcessResult process(RetryPacket packet, Instant time);
+
+    ProcessResult process(ZeroRttPacket packet, Instant time);
 }

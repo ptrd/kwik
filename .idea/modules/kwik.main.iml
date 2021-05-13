@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module external.linked.project.id="kwik:main" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="GRADLE" external.system.module.group="" external.system.module.type="sourceSet" external.system.module.version="unspecified" type="JAVA_MODULE" version="4">
+  <component name="CheckStyle-IDEA-Module">
+    <option name="configuration">
+      <map />
+    </option>
+  </component>
+  <component name="NewModuleRootManager">
+    <output url="file://$MODULE_DIR$/../../out/production/classes" />
+    <exclude-output />
+    <content url="file://$MODULE_DIR$/../../build/generated">
+      <sourceFolder url="file://$MODULE_DIR$/../../build/generated" type="java-resource" />
+    </content>
+    <content url="file://$MODULE_DIR$/../../src/main">
+      <sourceFolder url="file://$MODULE_DIR$/../../src/main/java" isTestSource="false" />
+    </content>
+    <content url="file://$MODULE_DIR$/../../tls13-java/src">
+      <sourceFolder url="file://$MODULE_DIR$/../../tls13-java/src" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Gradle: at.favre.lib:hkdf:1.0.1" level="project" />
+    <orderEntry type="library" name="Gradle: commons-cli:commons-cli:1.4" level="project" />
+    <orderEntry type="library" name="Gradle: org.glassfish:javax.json:1.1.4" level="project" />
+  </component>
+</module>

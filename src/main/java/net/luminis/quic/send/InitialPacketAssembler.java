@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -21,7 +21,6 @@ package net.luminis.quic.send;
 import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
-import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -39,8 +38,23 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     protected byte[] initialToken;
 
-    public InitialPacketAssembler(Version version, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        super(version, EncryptionLevel.Initial, maxPacketSize, requestQueue, ackGenerator);
+    public InitialPacketAssembler(Version version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+        super(version, EncryptionLevel.Initial, requestQueue, ackGenerator);
+    }
+
+    @Override
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        if (availablePacketSize < 1200) {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
+            // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
+            //  allowed maximum datagram size of 1200 bytes... "
+            // "Similarly, a server MUST expand the payload of all UDP datagrams carrying ack-eliciting Initial packets
+            //  to at least the smallest allowed maximum datagram size of 1200 bytes."
+            // Note that in case of an initial packet, the availablePacketSize equals the maximum datagram size; even
+            // when different packets are coalesced, the initial packet is always the first that is assembled.
+            return Optional.empty();
+        }
+        return super.assemble(remainingCwndSize, availablePacketSize, sourceConnectionId, destinationConnectionId);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -56,7 +56,7 @@ class CryptoStreamTest {
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
         cryptoStream = new CryptoStream(QUIC_VERSION, EncryptionLevel.Handshake, null,
-                new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
+                Role.Client, new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
@@ -152,7 +152,7 @@ class CryptoStreamTest {
     }
 
     @Test
-    void parseMultipleMessages() {
+    void parseMultipleMessages() throws Exception {
         byte[] rawMessageBytes1 = convertToMsgBytes("abcdefghijklmnopqrstuvwxyz");
         byte[] rawMessageBytes2 = convertToMsgBytes("0123456789");
 
@@ -169,7 +169,7 @@ class CryptoStreamTest {
     }
 
     @Test
-    void parseMessageSplitAccrossMultipleFrames() {
+    void parseMessageSplitAccrossMultipleFrames() throws Exception {
         byte[] rawMessageBytes = new byte[4 + 5 + 4 + 5];
         System.arraycopy(convertToMsgBytes("abcde"), 0, rawMessageBytes, 0, 4 + 5);
         System.arraycopy(convertToMsgBytes("12345"), 0, rawMessageBytes, 4 + 5, 4 + 5);

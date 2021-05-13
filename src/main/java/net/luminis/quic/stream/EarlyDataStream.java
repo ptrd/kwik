@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
@@ -27,6 +28,7 @@ import net.luminis.quic.log.Logger;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.function.Consumer;
+
 
 /**
  * A quic stream that is capable of sending early data. When early data is offered but cannot be send as early data,
@@ -38,6 +40,7 @@ public class EarlyDataStream extends QuicStream {
     private boolean earlyDataIsFinalInStream;
     private byte[] earlyData = new byte[0];
     private byte[] remainingData = new byte[0];
+    private boolean writingEarlyData = true;
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, FlowControl flowController, Logger log) {
         super(quicVersion, streamId, connection, flowController, log);
@@ -70,6 +73,7 @@ public class EarlyDataStream extends QuicStream {
     }
 
     public void writeRemaining(boolean earlyDataWasAccepted) throws IOException {
+        writingEarlyData = false;
         if (earlyDataWasAccepted) {
             if (remainingData.length > 0) {
                 getOutputStream().write(remainingData);
@@ -77,6 +81,8 @@ public class EarlyDataStream extends QuicStream {
             }
         }
         else {
+            // TODO reconsider creating new QuicStream object, or fix resetOutputStream to make it thread safe.
+            // Also consider to pass encryption level in that constructor to get rit of getEncryptionLevel
             resetOutputStream();
             getOutputStream().write(earlyData);
             if (earlyDataIsFinalInStream) {
@@ -86,14 +92,15 @@ public class EarlyDataStream extends QuicStream {
     }
 
     @Override
-    protected void send(StreamFrame frame, Consumer<QuicFrame> lostFrameCallback, boolean flush) {
-        if (sendingEarlyData) {
-            ((QuicClientConnectionImpl) connection).sendZeroRtt(frame, lostFrameCallback);
-        }
-        else {
-            connection.send(frame, lostFrameCallback, flush);
-        }
+    protected QuicStream.StreamOutputStream createStreamOutputStream() {
+        return new EarlyDataStreamOutputStream();
     }
 
+    protected class EarlyDataStreamOutputStream extends QuicStream.StreamOutputStream {
+        @Override
+        protected EncryptionLevel getEncryptionLevel() {
+            return writingEarlyData? EncryptionLevel.ZeroRTT: EncryptionLevel.App;
+        }
+    }
 }
 

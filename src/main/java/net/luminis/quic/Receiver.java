@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -36,8 +36,9 @@ import java.util.function.Consumer;
  */
 public class Receiver {
 
+    public static final int MAX_DATAGRAM_SIZE = 1500;
+
     private volatile DatagramSocket socket;
-    private final int maxPacketSize;
     private final Logger log;
     private final Consumer<Throwable> abortCallback;
     private final Thread receiverThread;
@@ -45,9 +46,8 @@ public class Receiver {
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
-    public Receiver(DatagramSocket socket, int initialMaxPacketSize, Logger log, Consumer<Throwable> abortCallback) {
+    public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
         this.socket = socket;
-        this.maxPacketSize = initialMaxPacketSize;
         this.log = log;
         this.abortCallback = abortCallback;
 
@@ -94,7 +94,7 @@ public class Receiver {
 
         try {
             while (! isClosing) {
-                byte[] receiveBuffer = new byte[maxPacketSize + 1];
+                byte[] receiveBuffer = new byte[MAX_DATAGRAM_SIZE];
                 DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
                 try {
                     socket.receive(receivedPacket);

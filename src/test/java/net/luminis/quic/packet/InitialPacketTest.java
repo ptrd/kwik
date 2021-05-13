@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -41,6 +41,16 @@ class InitialPacketTest {
     @BeforeEach
     void setUp() {
         logger = mock(Logger.class);
+    }
+
+    @Test
+    void checkIsInitial() {
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0xcb }))).isTrue();
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1000_0000 }))).isFalse();
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_0000 }))).isFalse();
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_1111 }))).isFalse();
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_1111 }))).isTrue();
+        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_0000 }))).isTrue();
     }
 
     @Test
@@ -120,7 +130,7 @@ class InitialPacketTest {
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
         Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
-        byte[] bytes = initialPacket.generatePacketBytes(0, keys);
+        byte[] bytes = initialPacket.generatePacketBytes(0L, keys);
         System.out.println(ByteUtils.bytesToHex(bytes));
     }
 }

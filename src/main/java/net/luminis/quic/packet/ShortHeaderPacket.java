@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -99,11 +99,11 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         return 1
                 + destinationConnectionId.length
                 + 1  // packet number length: will usually be just 1, actual value cannot be computed until packet number is known
-                + getFrames().stream().mapToInt(f -> f.getBytes().length).sum()   // TODO: f.getBytes
+                + getFrames().stream().mapToInt(f -> f.getBytes().length).sum() + additionalPayload
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
                 // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
                 + 16;
@@ -120,7 +120,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -156,8 +156,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     protected void checkPacketType(byte flags) {

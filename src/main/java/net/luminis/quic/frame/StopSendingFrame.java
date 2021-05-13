@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -58,5 +58,13 @@ public class StopSendingFrame extends QuicFrame {
     @Override
     public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
+    }
+
+    public int getStreamId() {
+        return streamId;
+    }
+
+    public int getErrorCode() {
+        return errorCode;
     }
 }

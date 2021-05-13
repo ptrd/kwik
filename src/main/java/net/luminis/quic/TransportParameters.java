@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -21,12 +21,12 @@ package net.luminis.quic;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 
 public class TransportParameters {
 
     private byte[] originalDestinationConnectionId;
     private long maxIdleTimeout;
-    private int maxPacketSize;
     private long initialMaxData;
     private long initialMaxStreamDataBidiLocal;
     private long initialMaxStreamDataBidiRemote;
@@ -40,6 +40,8 @@ public class TransportParameters {
     private int activeConnectionIdLimit;
     private byte[] initialSourceConnectionId;
     private byte[] retrySourceConnectionId;
+    private int maxUdpPayloadSize;
+    private byte[] statelessResetToken;
 
     public TransportParameters() {
         setDefaults();
@@ -53,16 +55,17 @@ public class TransportParameters {
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
         ackDelayExponent = 0;
+        maxUdpPayloadSize = Receiver.MAX_DATAGRAM_SIZE;
     }
 
     private void setDefaults() {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+        // "The default for this parameter is the maximum permitted UDP payload of 65527"
+        maxUdpPayloadSize = 65527;
         // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
         ackDelayExponent = 3;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-18.1
         // "If this value is absent, a default of 25 milliseconds is assumed."
         maxAckDelay = 25;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-18.2
         // "If this transport parameter is absent, a default of 2 is assumed."
         activeConnectionIdLimit = 2;
     }
@@ -198,11 +201,27 @@ public class TransportParameters {
         this.retrySourceConnectionId = retrySourceConnectionId;
     }
 
+    public int getMaxUdpPayloadSize() {
+        return maxUdpPayloadSize;
+    }
+
+    public void setMaxUdpPayloadSize(int maxUdpPayloadSize) {
+        this.maxUdpPayloadSize = maxUdpPayloadSize;
+    }
+
+    public byte[] getStatelessResetToken() {
+        return statelessResetToken;
+    }
+
+    public void setStatelessResetToken(byte[] statelessResetToken) {
+        this.statelessResetToken = statelessResetToken;
+    }
+
     @Override
     public String toString() {
         return "\n- original destination connection id\t" + formatCid(originalDestinationConnectionId) +
                 "\n- max idle timeout\t" + (maxIdleTimeout / 1000) +
-                // "\n- max packet size\t" +
+                "\n- max udp payload size\t" + maxUdpPayloadSize +
                 "\n- initial max data\t\t\t" + initialMaxData +
                 "\n- initial max stream data bidi local\t" + initialMaxStreamDataBidiLocal +
                 "\n- initial max stream data bidi remote\t" + initialMaxStreamDataBidiRemote +
@@ -226,14 +245,6 @@ public class TransportParameters {
         }
     }
 
-    public int getMaxPacketSize() {
-        return maxPacketSize;
-    }
-
-    public void setMaxPacketSize(int maxPacketSize) {
-        this.maxPacketSize = maxPacketSize;
-    }
-
     public static class PreferredAddress {
         InetAddress ip4;
         int ip4Port;
@@ -241,5 +252,55 @@ public class TransportParameters {
         int ip6Port;
         byte[] connectionId;
         byte[] statelessResetToken;
+
+        public InetAddress getIp4() {
+            return ip4;
+        }
+
+        public void setIp4(InetAddress ip4) {
+            this.ip4 = ip4;
+        }
+
+        public int getIp4Port() {
+            return ip4Port;
+        }
+
+        public void setIp4Port(int ip4Port) {
+            this.ip4Port = ip4Port;
+        }
+
+        public InetAddress getIp6() {
+            return ip6;
+        }
+
+        public void setIp6(InetAddress ip6) {
+            this.ip6 = ip6;
+        }
+
+        public int getIp6Port() {
+            return ip6Port;
+        }
+
+        public void setIp6Port(int ip6Port) {
+            this.ip6Port = ip6Port;
+        }
+
+        public byte[] getConnectionId() {
+            return connectionId;
+        }
+
+        public byte[] getStatelessResetToken() {
+            return statelessResetToken;
+        }
+
+        public void setConnectionId(ByteBuffer buffer, int connectionIdSize) {
+             connectionId = new byte[connectionIdSize];
+             buffer.get(connectionId);
+        }
+
+        public void setStatelessResetToken(ByteBuffer buffer, int size) {
+            statelessResetToken = new byte[size];
+            buffer.get(statelessResetToken);
+        }
     }
 }

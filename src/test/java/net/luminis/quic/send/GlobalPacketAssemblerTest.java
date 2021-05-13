@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -47,16 +47,16 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue();
         }
-        globalPacketAssembler = new GlobalPacketAssembler(Version.getDefault(), sendRequestQueues, ackGenerator, MAX_PACKET_SIZE);
+        globalPacketAssembler = new GlobalPacketAssembler(Version.getDefault(), sendRequestQueues, ackGenerator);
     }
 
     @Test
     void initialPacketMustBeGreaterThan1200Bytes() {
         sendRequestQueues[EncryptionLevel.Initial.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength()).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
     }
 
@@ -65,10 +65,10 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.Initial.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
         sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addRequest(new MaxDataFrame(105_000), f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
         int datagramLength = packets.stream()
-                .mapToInt(p -> p.getPacket().generatePacketBytes(0, levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
+                .mapToInt(p -> p.getPacket().generatePacketBytes(0L, levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
                 .sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
         assertThat(datagramLength)
@@ -80,9 +80,9 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void nonInitialPacketHasMiniumSize() {
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(0, keys).length).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(0L, keys).length).sum();
         assertThat(datagramLength).isCloseTo(18 + 3 + 36, Percentage.withPercentage(5));
     }
 
@@ -92,7 +92,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.Initial.ordinal()].addAckRequest();
         sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addRequest(new MaxDataFrame(105_000), f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
         assertThat(packets).hasSize(2);
     }
@@ -105,7 +105,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
                 10,
                 f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
         int datagramLength = packets.stream()
                 .mapToInt(p -> {
@@ -125,7 +125,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
             sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[0], true), f -> {});
         }
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
         int datagramLength = packets.stream()
                 .mapToInt(p -> {
@@ -146,7 +146,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         globalPacketAssembler.stop(PnSpace.Initial);
 
         // Then
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         assertThat(packets).isEmpty();
     }
 
@@ -159,7 +159,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
 
         // Then
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         assertThat(packets).hasSize(1);
         assertThat(packets.get(0).getPacket().getFrames()).doesNotHaveAnyElementsOfTypes(AckFrame.class);
     }
@@ -171,7 +171,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
 
         // When
-        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
 
         // Then
@@ -186,9 +186,9 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
 
         // When
-        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> sendItems = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
-        int datagramPayloadSize = packets.stream().mapToInt(p -> p.estimateLength()).sum();
+        int datagramPayloadSize = packets.stream().mapToInt(p -> p.estimateLength(0)).sum();
 
         assertThat(datagramPayloadSize).isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
@@ -199,7 +199,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
 
         // When
-        List<SendItem> sendItems = globalPacketAssembler.assemble(200, new byte[0], new byte[0]);
+        List<SendItem> sendItems = globalPacketAssembler.assemble(200, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
 
         // Then
@@ -211,7 +211,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[400])));
 
         // When
-        List<SendItem> sendItems = globalPacketAssembler.assemble(0, new byte[0], new byte[0]);
+        List<SendItem> sendItems = globalPacketAssembler.assemble(0, MAX_PACKET_SIZE, new byte[0], new byte[0]);
         List<QuicPacket> packets = sendItems.stream().map(item -> item.getPacket()).collect(Collectors.toList());
 
         // Then
@@ -222,12 +222,44 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void packetContainingPathResponseMustBeAtLeast1200Bytes() {
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new PathResponseFrame(Version.getDefault(), new byte[8]), f -> {});
 
-        List<SendItem> packets = globalPacketAssembler.assemble(6000, new byte[0], new byte[0]);
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength()).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
     }
 
+    @Test
+    void probeWithDataShouldNotExceedMaxDataframSize() {
+        ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.Initial));
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addAckRequest();
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[1190])));
+
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
+
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
+        assertThat(datagramLength).isLessThanOrEqualTo(1232);
+    }
+
+    @Test
+    void generatedDatagramShouldBeSmallerThanMaxDatagramSize() {
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(maxSize -> new StreamFrame(4, new byte[maxSize - 10], false), 10, f -> {});
+
+        int maxDatagramSize = 700;
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
+
+        assertThat(packets.size()).isEqualTo(1);
+        assertThat(packets.get(0).getPacket().estimateLength(0)).isLessThanOrEqualTo(maxDatagramSize);
+    }
+
+    @Test
+    void ifInitialPacketsCannotStatisfyTheMinimum1200bytesRequirementItShouldNotBeSend() {
+        sendRequestQueues[EncryptionLevel.Initial.ordinal()].addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[123])));
+
+        // Max datagram size can be limited by anti amplification limit
+        int maxDatagramSize = 30;
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
+        assertThat(packets).isEmpty();
+    }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {
         Object packetAssemblers = new FieldReader(globalPacketAssembler, globalPacketAssembler.getClass().getDeclaredField("packetAssembler")).read();

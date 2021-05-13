@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -65,13 +65,14 @@ public class RetryPacket extends QuicPacket {
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
 
-    private int packetSize;
+
     private byte[] sourceConnectionId;
-    private byte[] destinationConnectionId;
+
     private byte[] originalDestinationConnectionId;
     private byte[] retryToken;
     private byte[] rawPacketData;
     private byte[] retryIntegrityTag;
+
 
     public RetryPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -147,6 +148,52 @@ public class RetryPacket extends QuicPacket {
      * @return
      */
     public boolean validateIntegrityTag(byte[] originalDestinationConnectionId) {
+        return Arrays.equals(computeIntegrityTag(originalDestinationConnectionId), retryIntegrityTag);
+    }
+
+    @Override
+    public EncryptionLevel getEncryptionLevel() {
+        return EncryptionLevel.Initial;
+    }
+
+    @Override
+    public PnSpace getPnSpace() {
+        return null;
+    }
+
+    @Override
+    public Long getPacketNumber() {
+        // Retry Packet doesn't have a packet number
+        return null;
+    }
+
+    @Override
+    public int estimateLength(int additionalPayload) {
+        throw new NotYetImplementedException();
+    }
+
+    @Override
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
+    }
+
+    @Override
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
+        packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
+        ByteBuffer buffer = ByteBuffer.allocate(packetSize);
+        buffer.put((byte) 0b11110000);
+        buffer.put(quicVersion.getBytes());
+        buffer.put((byte) destinationConnectionId.length);
+        buffer.put(destinationConnectionId);
+        buffer.put((byte) sourceConnectionId.length);
+        buffer.put(sourceConnectionId);
+        buffer.put(retryToken);
+        rawPacketData = buffer.array();
+        buffer.put(computeIntegrityTag(originalDestinationConnectionId));
+        return buffer.array();
+    }
+
+    private byte[] computeIntegrityTag(byte[] originalDestinationConnectionId) {
         ByteBuffer pseudoPacket = ByteBuffer.allocate(1 + originalDestinationConnectionId.length + 1 + 4 +
                 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length);
         pseudoPacket.put((byte) originalDestinationConnectionId.length);
@@ -167,7 +214,7 @@ public class RetryPacket extends QuicPacket {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
             // "The plaintext, P, is empty."
             byte[] cipherText = aeadCipher.doFinal(new byte[0]);
-            return Arrays.equals(cipherText, retryIntegrityTag);
+            return cipherText;
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             // Inappropriate runtime environment
             throw new QuicRuntimeException(e);
@@ -175,38 +222,6 @@ public class RetryPacket extends QuicPacket {
             // Programming error
             throw new RuntimeException();
         }
-
-    }
-
-    @Override
-    public EncryptionLevel getEncryptionLevel() {
-        return EncryptionLevel.Initial;
-    }
-
-    @Override
-    public PnSpace getPnSpace() {
-        return null;
-    }
-
-    @Override
-    public Long getPacketNumber() {
-        // Retry Packet doesn't have a packet number
-        return null;
-    }
-
-    @Override
-    public int estimateLength() {
-        throw new NotYetImplementedException();
-    }
-
-    @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
-    }
-
-    @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
-        return new byte[0];
     }
 
     @Override
@@ -216,23 +231,29 @@ public class RetryPacket extends QuicPacket {
         return false;
     }
 
-    public byte[] getRetryToken() {
-        return retryToken;
+    @Override
+    public boolean isInflightPacket() {
+        return false;
     }
 
-    public byte[] getDestinationConnectionId() {
-        return destinationConnectionId;
+    @Override
+    public boolean isAckEliciting() {
+        return false;
+    }
+
+    @Override
+    public boolean isAckOnly() {
+        return false;
+    }
+
+    public byte[] getRetryToken() {
+        return retryToken;
     }
 
     public byte[] getSourceConnectionId() {
         return sourceConnectionId;
     }
 
-    public byte[] getOriginalDestinationConnectionId() {
-        return originalDestinationConnectionId;
-    }
-
-    /**/
     @Override
     public String toString() {
         return "Packet "

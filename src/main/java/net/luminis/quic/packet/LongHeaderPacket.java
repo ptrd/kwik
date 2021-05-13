@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -77,9 +77,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
         this.frames = frames;
     }
 
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    @Override
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
-
 
         ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         generateFrameHeaderInvariant(packetBuffer);
@@ -103,8 +103,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
-        int payloadLength = getFrames().stream().mapToInt(f -> f.getBytes().length).sum();   // TODO: f.getBytes
+    public int estimateLength(int additionalPayload) {
+        int payloadLength = getFrames().stream().mapToInt(f -> f.getBytes().length).sum() + additionalPayload;
         return 1
                 + 4
                 + 1 + destinationConnectionId.length
@@ -117,7 +117,6 @@ public abstract class LongHeaderPacket extends QuicPacket {
                 // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
                 + 16;
     }
-
 
     protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
         // Packet type
@@ -146,6 +145,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
+    @Override
     public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.position() != 0) {
@@ -166,7 +166,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
             // "... packets are discarded if they indicate a different protocol version than that of the connection..."
-            throw new InvalidPacketException();
+            throw new InvalidPacketException("Version does not match version of the connection");
         }
 
         int dstConnIdLength = buffer.get();

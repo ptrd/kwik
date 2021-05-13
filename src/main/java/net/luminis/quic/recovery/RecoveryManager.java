@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -45,6 +45,7 @@ import java.util.stream.Stream;
 
 public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
+    private final Role role;
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
     private final Sender sender;
@@ -57,7 +58,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
     private volatile boolean hasBeenReset = false;
 
-    public RecoveryManager(FrameProcessorRegistry processorRegistry, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+    public RecoveryManager(FrameProcessorRegistry processorRegistry, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+        this.role = role;
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController);
@@ -81,6 +83,9 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         else {
             boolean ackElicitingInFlight = ackElicitingInFlight();
             boolean peerAwaitingAddressValidation = peerAwaitingAddressValidation();
+            // https://datatracker.ietf.org/doc/html/draft-ietf-quic-recovery-34#section-6.2.2.1
+            // "That is, the client MUST set the probe timer if the client has not received an acknowledgment for any of
+            //  its Handshake packets and the handshake is not confirmed (...), even if there are no packets in flight."
             if (ackElicitingInFlight || peerAwaitingAddressValidation) {
                 PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
                 if (ptoTimeAndSpace.lossTime.equals(Instant.MAX)) {
@@ -152,10 +157,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     private boolean peerAwaitingAddressValidation() {
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.2.1
-        // "the client MUST set the probe timer if the client has not received an acknowledgement for one of its
-        // Handshake packets and the handshake is not confirmed"
-        return handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived();
+        return role == Role.Client && handshakeState.isNotConfirmed() && lossDetectors[PnSpace.Handshake.ordinal()].noAckedReceived();
     }
 
     private void lossDetectionTimeout() {
@@ -238,13 +240,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     private void sendOneOrTwoAckElicitingPackets(PnSpace pnSpace, int numberOfPackets) {
         if (pnSpace == PnSpace.Initial) {
-            List<QuicPacket> unAckedInitialPackets = lossDetectors[PnSpace.Initial.ordinal()].unAcked();
-            if (!unAckedInitialPackets.isEmpty()) {
-                // Client role: there can only be one (unique) initial, as the client sends only one Initial packet.
-                // All frames need to be resent, because Initial packet wil contain padding.
+            List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Initial);
+            if (!framesToRetransmit.isEmpty()) {
                 log.recovery("(Probe is an initial retransmit)");
                 repeatSend(numberOfPackets, () ->
-                        sender.sendProbe(unAckedInitialPackets.get(0).getFrames(), EncryptionLevel.Initial));
+                        sender.sendProbe(framesToRetransmit , EncryptionLevel.Initial));
             }
             else {
                 // This can happen, when the probe is sent because of peer awaiting address validation
@@ -320,7 +320,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
     ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
         if (! lossDetectionTimer.cancel(false)) {
-            log.warn("Cancelling loss detection timer failed");
+            log.debug("Cancelling loss detection timer failed");
         }
         timerExpiration = Instant.now().plusMillis(timeout);
         return scheduler.schedule(() -> {
@@ -340,10 +340,9 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
         if (! hasBeenReset) {
             if (ptoCount > 0) {
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-31#section-6.2.1
-                // "the PTO backoff is not reset at a client that is not yet certain that the server has finished
-                //   validating the client's address. That is, a client does not reset the PTO backoff factor on
-                //   receiving acknowledgements until the handshake is confirmed;"
+                // https://datatracker.ietf.org/doc/html/draft-ietf-quic-recovery-34#section-6.2.1
+                // "To protect such a server from repeated client probes, the PTO backoff is not reset at a client that
+                //  is not yet certain that the server has finished validating the client's address.
                 if (!peerAwaitingAddressValidation()) {
                     ptoCount = 0;
                 } else {
@@ -372,10 +371,12 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     public void stopRecovery() {
-        hasBeenReset = true;
-        unschedule();
-        for (PnSpace pnSpace: PnSpace.values()) {
-            lossDetectors[pnSpace.ordinal()].reset();
+        if (! hasBeenReset) {
+            hasBeenReset = true;
+            unschedule();
+            for (PnSpace pnSpace: PnSpace.values()) {
+                lossDetectors[pnSpace.ordinal()].reset();
+            }
         }
     }
 

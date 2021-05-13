@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -60,7 +60,10 @@ public class MaxStreamsFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(maxStreams));
+        buffer.put((byte) (appliesToBidirectional? 0x12: 0x13));
+        VariableLengthInteger.encode(maxStreams, buffer);
+        return buffer.array();
     }
 
     public long getMaxStreams() {

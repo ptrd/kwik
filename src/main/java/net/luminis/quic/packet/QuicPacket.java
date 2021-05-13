@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -460,13 +460,20 @@ abstract public class QuicPacket {
         }
     }
 
-    public abstract int estimateLength();
+    /**
+     * Estimates what the length of this packet will be after it has been encrypted. The returned length must be
+     * less then or equal the actual length after encryption. Length estimates are used when preparing packets for
+     * sending, where certain limits must be met (e.g. congestion control, max datagram size, ...).
+     * @param additionalPayload    when not 0, estimate the length if this amount of additional (frame) bytes were added.
+     * @return
+     */
+    public abstract int estimateLength(int additionalPayload);
 
     public abstract EncryptionLevel getEncryptionLevel();
 
     public abstract PnSpace getPnSpace();
 
-    public abstract byte[] generatePacketBytes(long packetNumber, Keys keys);
+    public abstract byte[] generatePacketBytes(Long packetNumber, Keys keys);
 
     public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
 
@@ -474,7 +481,7 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public abstract void accept(PacketProcessor processor, Instant time);
+    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time);
 
     /**
      * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2
@@ -520,5 +527,9 @@ abstract public class QuicPacket {
 
     public void setIsProbe(boolean probe) {
         isProbe = probe;
+    }
+
+    public Version getVersion() {
+        return quicVersion;
     }
 }

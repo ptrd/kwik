@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -102,6 +102,15 @@ public enum Version {
 
     public boolean isReserved() {
         return this.equals(reserved_1);
+    }
+
+    public String getDraftVersion() {
+        if (this.name().startsWith("IETF_draft_")) {
+            return this.name().substring("IETF_draft_".length());
+        }
+        else {
+            return "";
+        }
     }
 
     private boolean isIetfVersion(Version version) {

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -137,7 +137,7 @@ public class VariableLengthInteger {
         return value;
     }
 
-    public static int bytesNeeded(int value) {
+    public static int bytesNeeded(long value) {
         if (value <= 63) {
             return 1;
         }

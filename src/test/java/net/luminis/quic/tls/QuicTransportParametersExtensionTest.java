@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -16,9 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.tls;
 
+import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
 
@@ -46,17 +48,17 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, mock(Logger.class));
+        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
 
         assertThat(preferredAddress).isNotNull();
-        assertThat(preferredAddress.ip4).isEqualTo(InetAddress.getByAddress(new byte[] { 4, 31, (byte) 198, 62 } ));
-        assertThat(preferredAddress.ip4Port).isEqualTo(4433);
-        assertThat(preferredAddress.ip6).isEqualTo(InetAddress.getByAddress(new byte[] { 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a }));
-        assertThat(preferredAddress.ip6Port).isEqualTo(4433);
-        assertThat(preferredAddress.connectionId).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
-        assertThat(preferredAddress.statelessResetToken).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
+        assertThat(preferredAddress.getIp4()).isEqualTo(InetAddress.getByAddress(new byte[] { 4, 31, (byte) 198, 62 } ));
+        assertThat(preferredAddress.getIp4Port()).isEqualTo(4433);
+        assertThat(preferredAddress.getIp6()).isEqualTo(InetAddress.getByAddress(new byte[] { 0x20, 0x01, 0x18, (byte) 0x90, 0x12, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2a }));
+        assertThat(preferredAddress.getIp6Port()).isEqualTo(4433);
+        assertThat(preferredAddress.getConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
+        assertThat(preferredAddress.getStatelessResetToken()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 });
     }
 
     @Test
@@ -73,10 +75,10 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, mock(Logger.class));
+        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
-        assertThat(preferredAddress.ip4).isNull();
+        assertThat(preferredAddress.getIp4()).isNull();
     }
 
     @Test
@@ -93,10 +95,10 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, mock(Logger.class));
+        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
-        assertThat(preferredAddress.ip6).isNull();
+        assertThat(preferredAddress.getIp6()).isNull();
     }
 
     @Test
@@ -115,7 +117,7 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
 
         assertThatThrownBy(
-                () -> params.parseTransportParameter(buffer, mock(Logger.class)))
+                () -> params.parseTransportParameter(buffer, Role.Server, mock(Logger.class)))
                 .isInstanceOf(ProtocolError.class);
     }
 
@@ -125,7 +127,7 @@ class QuicTransportParametersExtensionTest {
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06 0a 01 07 0b 01 29".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
-        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getAckDelayExponent()).isEqualTo(7);
         assertThat(transportParametersExtension.getTransportParameters().getMaxAckDelay()).isEqualTo(41);
@@ -137,7 +139,7 @@ class QuicTransportParametersExtensionTest {
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0e     80 00 ff f9      05 01 02 03 04 05    01      02 67 10".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
-        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
     }
@@ -148,7 +150,7 @@ class QuicTransportParametersExtensionTest {
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06     01 04 80 00 75 30".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
-        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(30_000);
     }
@@ -157,10 +159,10 @@ class QuicTransportParametersExtensionTest {
     void testSerializeTransportParameters() throws Exception {
         TransportParameters tp = new TransportParameters(10, 1_048_576, 1024, 256);
         tp.setInitialSourceConnectionId(new byte[] { 0x01, 0x02, 0x03, 0x04 });
-        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp).getBytes();
+        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client).getBytes();
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
-        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
         assertThat(transportParametersExtension.getTransportParameters().getInitialMaxStreamDataBidiLocal()).isEqualTo(1_048_576);
@@ -174,7 +176,7 @@ class QuicTransportParametersExtensionTest {
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
-        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getInitialSourceConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
     }
@@ -184,10 +186,10 @@ class QuicTransportParametersExtensionTest {
         TransportParameters tp = new TransportParameters(10, 1_048_576, 1024, 256);
         tp.setInitialSourceConnectionId(new byte[0]);
 
-        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp).getBytes();
+        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client).getBytes();
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
-        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), Role.Server, mock(Logger.class));
         assertThat(transportParametersExtension.getTransportParameters().getInitialSourceConnectionId()).isEqualTo(new byte[0]);
     }
 
@@ -197,8 +199,50 @@ class QuicTransportParametersExtensionTest {
         byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 10 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
-        transportParametersExtension.parse(ByteBuffer.wrap(rawData), mock(Logger.class));
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getRetrySourceConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
+    }
+
+    @Test
+    void parseTransportParametersExtensionFromLargerBuffer() throws Exception {
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01 02 03 04 05 06 07 08 01 02 03".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
+    }
+
+    @Test
+    void parseTooShortTransportParametersExtension() throws Exception {
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        assertThatThrownBy(() ->
+                transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
+                .isInstanceOf(DecodeErrorException.class);
+    }
+
+    @Test
+    void parseTransportParameterWithCorruptLength() throws Exception {
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 03 08 41".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        assertThatThrownBy(() ->
+                transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
+                .isInstanceOf(DecodeErrorException.class);
+    }
+
+    @Test
+    void parseTransportParameterWithInconsistentSize() throws Exception {
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 03 08 02 03 ff".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        assertThatThrownBy(() ->
+                transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
+                .isInstanceOf(DecodeErrorException.class);
     }
 }

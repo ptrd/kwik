@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -60,7 +60,7 @@ class RecoveryManagerTest extends RecoveryTests {
         Logger logger = mock(Logger.class);
         // logger = new SysOutLogger();
         // logger.logRecovery(true);
-        recoveryManager = new RecoveryManager(mock(FrameProcessorRegistry.class), rttEstimator, mock(CongestionController.class), probeSender, logger);
+        recoveryManager = new RecoveryManager(mock(FrameProcessorRegistry.class), Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);
     }
 
     @BeforeEach

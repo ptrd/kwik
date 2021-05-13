@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -93,7 +93,7 @@ public class KwikCli {
         }
 
         if (cmd.hasOption("v")) {
-            System.out.println("Kwik build nr: " + getVersion());
+            System.out.println("Kwik build nr: " + KwikVersion.getVersion());
             System.exit(0);
         }
 
@@ -528,18 +528,6 @@ public class KwikCli {
                 System.out.println(line);
             }
         }
-    }
-
-    static String getVersion() {
-        InputStream in = QuicConnection.class.getResourceAsStream("version.properties");
-        if (in != null) {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
-                return reader.readLine();
-            } catch (IOException e) {
-                return null;
-            }
-        }
-        else return "dev";
     }
 
     public static void usage() {

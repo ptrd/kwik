@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -98,6 +98,11 @@ class VersionTest {
         int rawVersion = buffer.getInt();
         Version version = Version.parse(rawVersion);
         assertThat(version).isEqualTo(Version.IETF_draft_29);
+    }
+
+    @Test
+    void testGetDraftSuffix() {
+        assertThat(Version.IETF_draft_29.getDraftVersion()).isEqualTo("29");
     }
 
 }

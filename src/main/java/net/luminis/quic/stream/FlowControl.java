@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -21,20 +21,23 @@ package net.luminis.quic.stream;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_STATE_ERROR;
 
 /**
- * Keeps track of connection and stream flow control limits.
+ * Keeps track of connection and stream flow control limits imposed by the peer.
  */
 public class FlowControl {
 
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-18.2
+    private final Role role;
+
+    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
 
     // "The initial maximum data parameter is an integer value that contains the initial value for the maximum
     //  amount of data that can be sent on the connection."
@@ -52,23 +55,29 @@ public class FlowControl {
     //  streams."
     private final long initialMaxStreamDataUni;
 
+    // The maximum amount of data that can be sent (to the peer) on the connection as a whole
     private long maxDataAllowed;
+    // The maximum amount of data that can be sent on the connection, that is already assigned to a particular stream
     private long maxDataAssigned;
     private Map<Integer, Long> maxStreamDataAllowed;
     private Map<Integer, Long> maxStreamDataAssigned;
     private final Logger log;
+    private final Map<Integer, FlowControlUpdateListener> streamListeners;
+    private int maxOpenedStreamId;
 
 
-    public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
-        this(initialMaxData, initialMaxStreamDataBidiLocal, initialMaxStreamDataBidiRemote, initialMaxStreamDataUni, new NullLogger());
+    public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni) {
+        this(role, initialMaxData, initialMaxStreamDataBidiLocal, initialMaxStreamDataBidiRemote, initialMaxStreamDataUni, new NullLogger());
     }
 
-    public FlowControl(long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni, Logger log) {
+    public FlowControl(Role role, long initialMaxData, long initialMaxStreamDataBidiLocal, long initialMaxStreamDataBidiRemote, long initialMaxStreamDataUni, Logger log) {
+        this.role = role;
         this.initialMaxData = initialMaxData;
         this.initialMaxStreamDataBidiLocal = initialMaxStreamDataBidiLocal;
         this.initialMaxStreamDataBidiRemote = initialMaxStreamDataBidiRemote;
         this.initialMaxStreamDataUni = initialMaxStreamDataUni;
         this.log = log;
+        this.streamListeners = new ConcurrentHashMap<>();
 
         maxDataAllowed = initialMaxData;
         maxDataAssigned = 0;
@@ -103,98 +112,112 @@ public class FlowControl {
         }
     }
 
+    /**
+     * Returns the maximum flow control limit for the given stream, if it was requested now. Note that this limit
+     * cannot be used to send data on the stream, as the flow control credits are not yet reserved.
+     * @param stream
+     * @return
+     */
     public long getFlowControlLimit(QuicStream stream) {
         synchronized (this) {
-            return currentStreamCredits(stream);
+            return maxStreamDataAssigned.get(stream.getStreamId()) + currentStreamCredits(stream);
         }
     }
 
     /**
-     * Waits for flow control credits. Returns immediately when credits are available for the given
-     * stream, blocks until credits become available otherwise.
-     * @param stream
-     * @throws InterruptedException
+     * Update initial values. This can happen in a client that has sent 0-RTT data, for which it has used remembered
+     * values and that updates the values when the ServerHello message is received.
+     * Hence: only called by a client.
+     * @param peerTransportParameters
      */
-    public void waitForFlowControlCredits(QuicStream stream) throws InterruptedException {
-        if (log.logFlowControl()) {
-            // This piece of code can be part of a race condition, but for logging this is less problematic; logging from a synchronized block is worse.
-            if (currentStreamCredits(stream) == 0) {
-                log.fc("Flow control: stream " + stream.getStreamId() + " blocked");
-                // Note that with the current (Sender) implementation, blocking might be caused by congestion control all well.
-                // That's why no (stream) data blocked frame should be sent at this point.
+    public synchronized void updateInitialValues(TransportParameters peerTransportParameters) {
+        if (role == Role.Server) {
+            throw new ImplementationError();
+        }
+
+        if (peerTransportParameters.getInitialMaxData() > initialMaxData) {
+            log.info("Increasing initial max data from " + initialMaxData + " to " + peerTransportParameters.getInitialMaxData());
+            if (peerTransportParameters.getInitialMaxData() > maxDataAllowed) {
+                maxDataAllowed = peerTransportParameters.getInitialMaxData();
             }
         }
-
-        boolean wasBlocked = false;
-        synchronized (this) {
-            while (true) {
-                if (currentStreamCredits(stream) > 0) {
-                    break;
-                }
-                wasBlocked = true;
-                this.wait();
-            }
+        else if (peerTransportParameters.getInitialMaxData() < initialMaxData) {
+            log.error("Ignoring attempt to reduce initial max data from " + initialMaxData + " to " + peerTransportParameters.getInitialMaxData());
         }
 
-        if (wasBlocked && log.logFlowControl()) {
-            log.fc("Flow control: stream " + stream.getStreamId() + " not blocked anymore");
-        }
-    }
-
-    public synchronized void updateInitialValues(TransportParameters transportParameters) {
-        if (transportParameters.getInitialMaxData() > initialMaxData) {
-            log.info("Increasing initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
-            if (transportParameters.getInitialMaxData() > maxDataAllowed) {
-                maxDataAllowed = transportParameters.getInitialMaxData();
-            }
-        }
-        else if (transportParameters.getInitialMaxData() < initialMaxData) {
-            log.error("Ignoring attempt to reduce initial max data from " + initialMaxData + " to " + transportParameters.getInitialMaxData());
-        }
-
-        if (transportParameters.getInitialMaxStreamDataBidiLocal() > initialMaxStreamDataBidiLocal) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+        if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() > initialMaxStreamDataBidiLocal) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiLocal + " to " + peerTransportParameters.getInitialMaxStreamDataBidiLocal());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all server initiated bidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 1)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataBidiLocal() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiLocal());
+                        if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataBidiLocal());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataBidiLocal() < initialMaxStreamDataBidiLocal) {
-            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiLocal + " to " + transportParameters.getInitialMaxStreamDataBidiLocal());
+        else if (peerTransportParameters.getInitialMaxStreamDataBidiLocal() < initialMaxStreamDataBidiLocal) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiLocal + " to " + peerTransportParameters.getInitialMaxStreamDataBidiLocal());
         }
 
-        if (transportParameters.getInitialMaxStreamDataBidiRemote() > initialMaxStreamDataBidiRemote) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+        if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() > initialMaxStreamDataBidiRemote) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataBidiRemote + " to " + peerTransportParameters.getInitialMaxStreamDataBidiRemote());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all client initiated bidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 0)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataBidiRemote() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataBidiRemote());
+                        if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataBidiRemote());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataBidiRemote() < initialMaxStreamDataBidiRemote) {
-            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiRemote + " to " + transportParameters.getInitialMaxStreamDataBidiRemote());
+        else if (peerTransportParameters.getInitialMaxStreamDataBidiRemote() < initialMaxStreamDataBidiRemote) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataBidiRemote + " to " + peerTransportParameters.getInitialMaxStreamDataBidiRemote());
         }
 
-        if (transportParameters.getInitialMaxStreamDataUni() > initialMaxStreamDataUni) {
-            log.info("Increasing initial max data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+        if (peerTransportParameters.getInitialMaxStreamDataUni() > initialMaxStreamDataUni) {
+            log.info("Increasing initial max data from " + initialMaxStreamDataUni + " to " + peerTransportParameters.getInitialMaxStreamDataUni());
             maxStreamDataAllowed.entrySet().stream()
                     // Find all client initiated unidirectional streams
                     .filter(entry -> entry.getKey() % 4 == 2)
                     .forEach(entry -> {
-                        if (transportParameters.getInitialMaxStreamDataUni() > entry.getValue()) {
-                            maxStreamDataAllowed.put(entry.getKey(), transportParameters.getInitialMaxStreamDataUni());
+                        if (peerTransportParameters.getInitialMaxStreamDataUni() > entry.getValue()) {
+                            maxStreamDataAllowed.put(entry.getKey(), peerTransportParameters.getInitialMaxStreamDataUni());
                         }
                     });
         }
-        else if (transportParameters.getInitialMaxStreamDataUni() < initialMaxStreamDataUni) {
-            log.error("Ignoring attempt tomax data from " + initialMaxStreamDataUni + " to " + transportParameters.getInitialMaxStreamDataUni());
+        else if (peerTransportParameters.getInitialMaxStreamDataUni() < initialMaxStreamDataUni) {
+            log.error("Ignoring attempt to reduce max data from " + initialMaxStreamDataUni + " to " + peerTransportParameters.getInitialMaxStreamDataUni());
+        }
+    }
+
+    public void register(QuicStream stream, FlowControlUpdateListener listener) {
+        streamListeners.put(stream.getStreamId(), listener);
+    }
+
+    public void unregister(QuicStream stream) {
+        streamListeners.remove(stream.getStreamId());
+    }
+
+
+    public void streamOpened(QuicStream stream) {
+        int streamId = stream.getStreamId();
+        synchronized (this) {
+            if (!maxStreamDataAllowed.containsKey(streamId)) {
+                maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
+                maxStreamDataAssigned.put(streamId, 0L);
+            }
+            if (streamId > maxOpenedStreamId) {
+                maxOpenedStreamId = streamId;
+            }
+        }
+    }
+
+    public void streamClosed(QuicStream stream) {
+        int streamId = stream.getStreamId();
+        synchronized (this) {
+            maxStreamDataAssigned.remove(streamId);
+            maxStreamDataAllowed.remove(streamId);
         }
     }
 
@@ -202,18 +225,18 @@ public class FlowControl {
         if (stream.isUnidirectional()) {
             return initialMaxStreamDataUni;
         }
-        else if (stream.isClientInitiatedBidirectional()) {
-            // Assuming client role, so for the receiver (imposing the limit) the stream is peer-initiated (remote).
+        else if (role == Role.Client && stream.isClientInitiatedBidirectional()
+                || role == Role.Server && stream.isServerInitiatedBidirectional()) {
+            // For the receiver (imposing the limit) the stream is peer-initiated (remote).
             // "This limit applies to newly created bidirectional streams opened by the endpoint that receives
             // the transport parameter."
-            // The client has received this transport parameter, so it applies to stream opened by the client.
             return initialMaxStreamDataBidiRemote;
         }
-        else if (stream.isServerInitiatedBidirectional()) {
-            // Assuming client role, so for the receiver (imposing the limit), the stream is locally-initiated
+        else if (role == Role.Client && stream.isServerInitiatedBidirectional()
+                || role == Role.Server && stream.isClientInitiatedBidirectional()) {
+            // For the receiver (imposing the limit), the stream is locally-initiated
             // "This limit applies to newly created bidirectional streams opened by the endpoint that sends the
             // transport parameter."
-            // The server has send this transport parameter, so it applies to streams opened by the server.
             return initialMaxStreamDataBidiLocal;
         }
         else {
@@ -221,13 +244,14 @@ public class FlowControl {
         }
     }
 
+    /**
+     * Returns the maximum possible flow control limit for the given stream, taking into account both stream and connection
+     * flow control limits. Note that the returned limit is not yet reserved for use by this stream!
+     * @param stream
+     * @return
+     */
     private long currentStreamCredits(QuicStream stream) {
         int streamId = stream.getStreamId();
-        if (!maxStreamDataAllowed.containsKey(streamId)) {
-            maxStreamDataAllowed.put(streamId, determineInitialMaxStreamData(stream));
-            maxStreamDataAssigned.put(streamId, 0L);
-        }
-
         long allowedByStream = maxStreamDataAllowed.get(streamId);
         long maxStreamIncrement = allowedByStream - maxStreamDataAssigned.get(streamId);
         long maxPossibleDataIncrement = maxDataAllowed - maxDataAssigned;
@@ -237,27 +261,56 @@ public class FlowControl {
         return maxStreamIncrement;
     }
 
-
     public void process(MaxDataFrame frame) {
         synchronized (this) {
             // If frames are received out of order, the new max can be smaller than the current value.
             if (frame.getMaxData() > maxDataAllowed) {
+                boolean maxDataWasReached = maxDataAllowed == maxDataAssigned;
                 maxDataAllowed = frame.getMaxData();
+                if (maxDataWasReached) {
+                    streamListeners.forEach((streamId, listener) -> {
+                        boolean streamWasBlockedByMaxDataOnly = maxStreamDataAssigned.get(streamId) != maxStreamDataAllowed.get(streamId);
+                        if (streamWasBlockedByMaxDataOnly) {
+                            listener.streamNotBlocked(streamId);
+                        }
+                    });
+                }
             }
-            this.notifyAll();
         }
     }
 
-    public void process(MaxStreamDataFrame frame) {
+    public void process(MaxStreamDataFrame frame) throws TransportError {
         synchronized (this) {
             int streamId = frame.getStreamId();
             long maxStreamData = frame.getMaxData();
-            // If frames are received out of order, the new max can be smaller than the current value.
-            if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
-                maxStreamDataAllowed.put(streamId, maxStreamData);
+            if (maxStreamDataAllowed.containsKey(streamId)) {
+                // If frames are received out of order, the new max can be smaller than the current value.
+                if (maxStreamData > maxStreamDataAllowed.get(streamId)) {
+                    boolean streamWasBlocked = maxStreamDataAssigned.get(streamId).longValue() == maxStreamDataAllowed.get(streamId).longValue()
+                            && maxDataAssigned != maxDataAllowed;
+                    maxStreamDataAllowed.put(streamId, maxStreamData);
+                    if (streamWasBlocked) {
+                        streamListeners.get(streamId).streamNotBlocked(streamId);
+                    }
+                }
             }
-            this.notifyAll();
+            else {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-19.10
+                // "Receiving a MAX_STREAM_DATA frame for a locally-initiated stream that has not yet been created MUST
+                //  be treated as a connection error of type STREAM_STATE_ERROR."
+                if (locallyInitiated(streamId) && streamId > maxOpenedStreamId) {
+                    throw new TransportError(STREAM_STATE_ERROR);
+                }
+            }
+        }
+    }
+
+    private boolean locallyInitiated(int streamId) {
+        if (role == Role.Client) {
+            return streamId % 2 == 0;
+        }
+        else {
+            return streamId % 2 == 1;
         }
     }
 }
-

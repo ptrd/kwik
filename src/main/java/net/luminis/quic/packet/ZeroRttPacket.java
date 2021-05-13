@@ -73,7 +73,8 @@ public class ZeroRttPacket extends LongHeaderPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return PacketProcessor.ProcessResult.Continue;
     }
 
     @Override

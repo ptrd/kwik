@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -30,7 +30,14 @@ import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
 
-    private final byte[] token;
+    private byte[] token;
+
+    public static boolean isInitial(ByteBuffer data) {
+        data.mark();
+        int flags = data.get();
+        data.rewind();
+        return (flags & 0xf0) == 0b1100_0000;
+    }
 
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
         super(quicVersion, sourceConnectionId, destConnectionId, payload);
@@ -51,6 +58,7 @@ public class InitialPacket extends LongHeaderPacket {
         return new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, token, frames);
     }
 
+    @Override
     protected byte getPacketType() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
         // "|1|1| 0 |R R|P P|"
@@ -63,6 +71,7 @@ public class InitialPacket extends LongHeaderPacket {
         return encodePacketNumberLength(flags, packetNumber);
     }
 
+    @Override
     protected void generateAdditionalFields(ByteBuffer packetBuffer) {
         // Token length (variable-length integer)
         if (token != null) {
@@ -74,6 +83,7 @@ public class InitialPacket extends LongHeaderPacket {
         }
     }
 
+    @Override
     protected int estimateAdditionalFieldsLength() {
         return token == null? 1: 1 + token.length;
     }
@@ -89,8 +99,8 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
-        processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return processor.process(this, time);
     }
 
     @Override
@@ -111,7 +121,8 @@ public class InitialPacket extends LongHeaderPacket {
             long tokenLength = VariableLengthInteger.parseLong(buffer);
             if (tokenLength > 0) {
                 if (tokenLength <= buffer.remaining()) {
-                    buffer.position(buffer.position() + (int) tokenLength);
+                    token = new byte[(int) tokenLength];
+                    buffer.get(token);
                 }
                 else {
                     throw new InvalidPacketException();

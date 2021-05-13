@@ -2,7 +2,7 @@
 <project version="4">
   <component name="GroovyCompilerProjectConfiguration">
     <excludes>
-      <directory url="file://$PROJECT_DIR$/../../samples/groovy" includeSubdirectories="true" />
+      <directory url="file://$USER_HOME$/source/samples/groovy" includeSubdirectories="true" />
     </excludes>
   </component>
 </project>

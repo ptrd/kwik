@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -89,7 +89,7 @@ class VersionNegotiationPacketTest {
         VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(Version.getDefault(), new byte[]{ 0x01, 0x02, 0x03, 0x04 }, new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
 
         // When
-        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0L, null);
 
         // Then
         assertThat(packetBytes[0] & 0b11000000).isEqualTo(0b11000000);
@@ -99,7 +99,7 @@ class VersionNegotiationPacketTest {
     void createVersionNegotationPacket() throws Exception {
         // Given
         VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(Version.getDefault(), new byte[]{ 0x01, 0x02, 0x03, 0x04 }, new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
-        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0, null);
+        byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(0L, null);
         
         // When
         VersionNegotiationPacket vnPacket = new VersionNegotiationPacket();

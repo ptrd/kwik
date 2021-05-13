@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -24,13 +24,14 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+
+import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 
 
 public class StreamManager {
@@ -39,21 +40,51 @@ public class StreamManager {
     private final Version quicVersion;
     private final QuicConnectionImpl connection;
     private FlowControl flowController;
+    private final Role role;
     private final Logger log;
+    private int maxOpenStreamIdUni;
+    private int maxOpenStreamIdBidi;
     private int nextStreamId;
-    private Consumer<QuicStream> serverStreamCallback;
-    private Long maxStreamsBidi;
-    private Long maxStreamsUni;
+    private Consumer<QuicStream> peerInitiatedStreamCallback;
+    private Long maxStreamsAcceptedByPeerBidi;
+    private Long maxStreamsAcceptedByPeerUni;
     private final Semaphore openBidirectionalStreams;
     private final Semaphore openUnidirectionalStreams;
+    private boolean maxOpenStreamsUniUpdateQueued;
+    private boolean maxOpenStreamsBidiUpdateQueued;
 
-    public StreamManager(QuicConnectionImpl quicConnection, Logger log) {
+
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi) {
         this.connection = quicConnection;
+        this.role = role;
         this.log = log;
+        this.maxOpenStreamIdUni = computeMaxStreamId(maxOpenStreamsUni, role.other(), false);
+        this.maxOpenStreamIdBidi = computeMaxStreamId(maxOpenStreamsBidi, role.other(), true);
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
         openBidirectionalStreams = new Semaphore(0);
         openUnidirectionalStreams = new Semaphore(0);
+    }
+
+    private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
+        // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-2.1
+        //  | 0x0  | Client-Initiated, Bidirectional  |
+        int maxStreamId = maxStreams * 4;
+        //  | 0x1  | Server-Initiated, Bidirectional  |
+        if (peerRole == Role.Server && bidirectional) {
+            maxStreamId += 1;
+        }
+        //  | 0x2  | Client-Initiated, Unidirectional |
+        if (peerRole == Role.Client && !bidirectional) {
+            maxStreamId += 2;
+        }
+        //  | 0x3  | Server-Initiated, Unidirectional |
+        if (peerRole == Role.Client && bidirectional) {
+            maxStreamId += 3;
+        }
+        return maxStreamId;
     }
 
     public QuicStream createStream(boolean bidirectional) {
@@ -70,7 +101,7 @@ public class StreamManager {
                 (quicVersion, streamId, connection, flowController, logger) -> new QuicStream(quicVersion, streamId, connection, flowController, logger));
     }
 
-    private  QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
+    private QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
         try {
             boolean acquired;
             if (bidirectional) {
@@ -87,7 +118,7 @@ public class StreamManager {
             throw new TimeoutException("operation interrupted");
         }
 
-        int streamId = generateClientStreamId(bidirectional);
+        int streamId = generateStreamId(bidirectional);
         QuicStream stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
         return stream;
@@ -108,12 +139,14 @@ public class StreamManager {
         }
     }
 
-    private synchronized int generateClientStreamId(boolean bidirectional) {
+    private synchronized int generateStreamId(boolean bidirectional) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
         // "0x0  | Client-Initiated, Bidirectional"
-        int id = (nextStreamId << 2) + 0x00;
-        if (! bidirectional) {
+        // "0x1  | Server-Initiated, Bidirectional"
+        int id = (nextStreamId << 2) + (role == Role.Client? 0x00: 0x01);
+        if (!bidirectional) {
             // "0x2  | Client-Initiated, Unidirectional |"
+            // "0x3  | Server-Initiated, Unidirectional |"
             id += 0x02;
         }
         nextStreamId++;
@@ -125,44 +158,124 @@ public class StreamManager {
         this.flowController = flowController;
     }
 
-    public void process(StreamFrame frame) {
+    public void process(StreamFrame frame) throws TransportError {
         int streamId = frame.getStreamId();
         QuicStream stream = streams.get(streamId);
         if (stream != null) {
             stream.add(frame);
+            // This implementation maintains a fixed maximum number of open streams, so when the peer closes a stream
+            // it is allowed to open another.
+            if (frame.isFinal() && isPeerInitiated(streamId)) {
+                increaseMaxOpenStreams(streamId);
+            }
         }
         else {
-            if (streamId % 2 == 1) {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-2.1
-                // "servers initiate odd-numbered streams"
-                log.info("Receiving data for server-initiated stream " + streamId);
-                stream = new QuicStream(quicVersion, streamId, connection, null, log);
-                streams.put(streamId, stream);
-                stream.add(frame);
-                if (serverStreamCallback != null) {
-                    serverStreamCallback.accept(stream);
+            if (isPeerInitiated(streamId)) {
+                synchronized (this) {
+                    if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
+                        log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
+                        stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
+                        streams.put(streamId, stream);
+                        stream.add(frame);
+                        if (peerInitiatedStreamCallback != null) {
+                            peerInitiatedStreamCallback.accept(stream);
+                        }
+                        if (frame.isFinal()) {
+                            increaseMaxOpenStreams(streamId);
+                        }
+                    }
+                    else {
+                        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-19.11
+                        // "An endpoint MUST terminate a connection with a STREAM_LIMIT_ERROR error if a peer opens more
+                        //  streams than was permitted."
+                        throw new TransportError(STREAM_LIMIT_ERROR);
+                    }
                 }
             }
             else {
-                log.error("Receiving frame for non-existant stream " + streamId);
+                log.error("Receiving frame for non-existent stream " + streamId);
             }
         }
     }
 
-    public synchronized void process(MaxStreamsFrame frame, PnSpace pnSpace, Instant timeReceived) {
+    private void increaseMaxOpenStreams(int streamId) {
+        synchronized (this) {
+            if (isUni(streamId)) {
+                maxOpenStreamIdUni += 4;
+                if (! maxOpenStreamsUniUpdateQueued) {
+                    connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    maxOpenStreamsUniUpdateQueued = true;
+                }
+            } else {
+                maxOpenStreamIdBidi += 4;
+                if (! maxOpenStreamsBidiUpdateQueued) {
+                    connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    maxOpenStreamsBidiUpdateQueued = true;
+                }
+            }
+        }
+    }
+
+    private QuicFrame createMaxStreamsUpdateUni(int maxSize) {
+        if (maxSize < 9) {
+            throw new ImplementationError();
+        }
+        synchronized (this) {
+            maxOpenStreamsUniUpdateQueued = false;
+        }
+
+        // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
+        return new MaxStreamsFrame(maxOpenStreamIdUni / 4, false);
+    }
+
+    private QuicFrame createMaxStreamsUpdateBidi(int maxSize) {
+        if (maxSize < 9) {
+            throw new ImplementationError();
+        }
+        synchronized (this) {
+            maxOpenStreamsBidiUpdateQueued = false;
+        }
+
+        // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
+        return new MaxStreamsFrame(maxOpenStreamIdBidi / 4, true);
+    }
+
+    void retransmitMaxStreams(QuicFrame frame) {
+        MaxStreamsFrame lostFrame = ((MaxStreamsFrame) frame);
+        if (lostFrame.isAppliesToBidirectional()) {
+            connection.send(createMaxStreamsUpdateBidi(Integer.MAX_VALUE), this::retransmitMaxStreams);
+        }
+        else {
+            connection.send(createMaxStreamsUpdateUni(Integer.MAX_VALUE), this::retransmitMaxStreams);
+        }
+    }
+
+    private boolean isPeerInitiated(int streamId) {
+        return streamId % 2 == (role == Role.Client? 1 : 0);
+    }
+
+    private boolean isUni(int streamId) {
+        return streamId % 4 > 1;
+    }
+
+    private boolean isBidi(int streamId) {
+        return streamId % 4 < 2;
+    }
+
+    public synchronized void process(MaxStreamsFrame frame) {
         if (frame.isAppliesToBidirectional()) {
-            if (frame.getMaxStreams() > maxStreamsBidi) {
-                int increment = (int) (frame.getMaxStreams() - maxStreamsBidi);
+            if (frame.getMaxStreams() > maxStreamsAcceptedByPeerBidi) {
+                int increment = (int) (frame.getMaxStreams() - maxStreamsAcceptedByPeerBidi);
                 log.debug("increased max bidirectional streams with " + increment + " to " + frame.getMaxStreams());
-                maxStreamsBidi = frame.getMaxStreams();
+                maxStreamsAcceptedByPeerBidi = frame.getMaxStreams();
                 openBidirectionalStreams.release(increment);
             }
         }
         else {
-            if (frame.getMaxStreams() > maxStreamsUni) {
-                int increment = (int) (frame.getMaxStreams() - maxStreamsUni);
+            if (frame.getMaxStreams() > maxStreamsAcceptedByPeerUni) {
+                int increment = (int) (frame.getMaxStreams() - maxStreamsAcceptedByPeerUni);
                 log.debug("increased max unidirectional streams with " + increment + " to " + frame.getMaxStreams());
-                maxStreamsUni = frame.getMaxStreams();
+                maxStreamsAcceptedByPeerUni = frame.getMaxStreams();
                 openUnidirectionalStreams.release(increment);
             }
         }
@@ -172,14 +285,18 @@ public class StreamManager {
         streams.values().stream().forEach(s -> s.abort());
     }
 
-    public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
-        serverStreamCallback = streamProcessor;
+    public synchronized void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamProcessor) {
+        peerInitiatedStreamCallback = streamProcessor;
     }
 
+    /**
+     * Set initial max bidirectional streams that the peer will accept.
+     * @param initialMaxStreamsBidi
+     */
     public synchronized void setInitialMaxStreamsBidi(long initialMaxStreamsBidi) {
-        if (maxStreamsBidi == null || initialMaxStreamsBidi >= maxStreamsBidi) {
+        if (maxStreamsAcceptedByPeerBidi == null || initialMaxStreamsBidi >= maxStreamsAcceptedByPeerBidi) {
             log.debug("Initial max bidirectional stream: " + initialMaxStreamsBidi);
-            maxStreamsBidi = initialMaxStreamsBidi;
+            maxStreamsAcceptedByPeerBidi = initialMaxStreamsBidi;
             if (initialMaxStreamsBidi > Integer.MAX_VALUE) {
                 log.error("Server initial max streams bidirectional is larger than supported; limiting to " + Integer.MAX_VALUE);
                 initialMaxStreamsBidi = Integer.MAX_VALUE;
@@ -187,31 +304,35 @@ public class StreamManager {
             openBidirectionalStreams.release((int) initialMaxStreamsBidi);
         }
         else {
-            log.error("Attempt to reduce value of initial_max_streams_bidi from " + maxStreamsBidi + " to " + initialMaxStreamsBidi + "; ignoring.");
+            log.error("Attempt to reduce value of initial_max_streams_bidi from " + maxStreamsAcceptedByPeerBidi + " to " + initialMaxStreamsBidi + "; ignoring.");
         }
     }
 
+    /**
+     * Set initial max unidirectional streams that the peer will accept.
+     * @param initialMaxStreamsUni
+     */
     public synchronized void setInitialMaxStreamsUni(long initialMaxStreamsUni) {
-        if (maxStreamsUni == null || initialMaxStreamsUni >= maxStreamsUni) {
+        if (maxStreamsAcceptedByPeerUni == null || initialMaxStreamsUni >= maxStreamsAcceptedByPeerUni) {
             log.debug("Initial max unidirectional stream: " + initialMaxStreamsUni);
-            maxStreamsUni = initialMaxStreamsUni;
+            maxStreamsAcceptedByPeerUni = initialMaxStreamsUni;
             if (initialMaxStreamsUni > Integer.MAX_VALUE) {
-                log.error("Server initial max streams unirectional is larger than supported; limiting to " + Integer.MAX_VALUE);
+                log.error("Server initial max streams unidirectional is larger than supported; limiting to " + Integer.MAX_VALUE);
                 initialMaxStreamsUni = Integer.MAX_VALUE;
             }
             openUnidirectionalStreams.release((int) initialMaxStreamsUni);
         }
         else {
-            log.error("Attempt to reduce value of initial_max_streams_uni from " + maxStreamsUni + " to " + initialMaxStreamsUni + "; ignoring.");
+            log.error("Attempt to reduce value of initial_max_streams_uni from " + maxStreamsAcceptedByPeerUni + " to " + initialMaxStreamsUni + "; ignoring.");
         }
     }
 
-    public long getMaxBidirectionalStreams() {
-        return maxStreamsBidi;
+    public synchronized long getMaxBidirectionalStreams() {
+        return maxStreamsAcceptedByPeerBidi;
     }
 
-    public long getMaxUnirectionalStreams() {
-        return maxStreamsUni;
+    public synchronized long getMaxUnirectionalStreams() {
+        return maxStreamsAcceptedByPeerUni;
     }
 
     interface QuicStreamSupplier {

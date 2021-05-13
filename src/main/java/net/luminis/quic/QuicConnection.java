@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -20,10 +20,6 @@ package net.luminis.quic;
 
 import net.luminis.quic.stream.QuicStream;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.function.Consumer;
 
 
@@ -33,15 +29,15 @@ public interface QuicConnection {
 
     void setMaxAllowedUnidirectionalStreams(int max);
 
-    void setServerStreamCallback(Consumer<QuicStream> streamProcessor);
-
     void setDefaultStreamReceiveBufferSize(long size);
 
     QuicStream createStream(boolean bidirectional);
 
+    void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
+
     void close();
 
+    void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
+
     Statistics getStats();
-
 }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -44,21 +44,19 @@ public class PacketAssembler {
 
     protected final Version quicVersion;
     protected final EncryptionLevel level;
-    protected final int maxPacketSize;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
     private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
 
 
-    public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        this(version, level, maxPacketSize, requestQueue, ackGenerator, new PacketNumberGenerator());
+    public PacketAssembler(Version version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+        this(version, level, requestQueue, ackGenerator, new PacketNumberGenerator());
     }
 
-    public PacketAssembler(Version version, EncryptionLevel level, int maxPacketSize, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
+    public PacketAssembler(Version version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
-        this.maxPacketSize = maxPacketSize - 3;  // Packet can be 3 bytes larger than estimated size because of unknown packet number length
         this.requestQueue = requestQueue;
         this.ackGenerator = ackGenerator;
         packetNumberGenerator = pnGenerator;
@@ -73,31 +71,33 @@ public class PacketAssembler {
      * @return
      */
     Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        final int available = Integer.min(remainingCwndSize, maxPacketSize);
+        // Packet can be 3 bytes larger than estimated size because of unknown packet number length. TODO: this should not be responsibility of this class.
+        final int available = Integer.min(remainingCwndSize, availablePacketSize - 3);
 
         Optional<QuicPacket> packet = Optional.empty();
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
         // Check for an explicit ack, i.e. an ack on ack-eliciting packet that cannot be delayed (any longer)
-        if (requestQueue.mustSendAck()) {
+        if (requestQueue.mustAndWillSendAck()) {
             if (ackGenerator.hasNewAckToSend()) {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
                 ackFrame = ackGenerator.generateAck().get();   // Explicit ack cannot disappear by other means than sending it.
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2
                 // "... packets containing only ACK frames are not congestion controlled ..."
                 // So: only check if it fits within available packet space
-                if (packet.get().estimateLength() + ackFrame.getBytes().length <= availablePacketSize) {
+                if (packet.get().estimateLength(ackFrame.getBytes().length) <= availablePacketSize) {
                     packet.get().addFrame(ackFrame);
                     callbacks.add(EMPTY_CALLBACK);
                     ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
-                    requestQueue.getAck();
                 }
                 else {
                     // If not even a mandatory ack can be added, don't bother about other frames: theoretically there might be frames
                     // that can be fit, but this is very unlikely to happen (because limit packet size is caused by coalescing packets
                     // in one datagram, which will only happen during handshake, when acks are still small) and even then: there
                     // will be a next packet in due time.
+                    // However, the ack removed from the queue must be returned
+                    requestQueue.addAckRequest();
                     return Optional.empty();
                 }
             }
@@ -116,11 +116,16 @@ public class PacketAssembler {
         }
 
         if (requestQueue.hasProbeWithData()) {
-            // Probe is not limited by congestion control
             List<QuicFrame> probeData = requestQueue.getProbe();
-            // But it is limited by max packet length
-            if (probeData.stream().mapToInt(f -> f.getBytes().length).sum() > availablePacketSize) {
-                probeData = List.of(new PingFrame());
+            // Probe is not limited by congestion control, but it is limited by max packet size.
+            packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
+            int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getBytes().length).sum());
+            if (estimatedSize > availablePacketSize) {
+                QuicFrame probeFrame = new PingFrame();
+                if (packet.get().estimateLength(probeFrame.getBytes().length) > availablePacketSize) {
+                    return Optional.empty();
+                }
+                probeData = List.of(probeFrame);
             }
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
             packet.get().setIsProbe(true);
@@ -131,7 +136,7 @@ public class PacketAssembler {
         if (requestQueue.hasRequests()) {
             // Must create packet here, to have an initial estimate of packet header overhead
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-            int estimatedSize = packet.get().estimateLength();
+            int estimatedSize = packet.get().estimateLength(1000) - 1000;  // Estimate length if large frame would have been added; this will give upper limit of packet overhead.
 
             while (estimatedSize < available) {
                 // First try to find a frame that will leave space for optional frame (if any)
@@ -157,7 +162,7 @@ public class PacketAssembler {
                     callbacks.add(next.get().getLostCallback());
 
                     // If there was an optional ack (which was not added yet)...
-                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize < available) {
+                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize <= available) {
                         // ..., add it now (now that it is sure there will be at least one non-ack frame)
                         packet.get().addFrame(ackFrame);
                         callbacks.add(EMPTY_CALLBACK);

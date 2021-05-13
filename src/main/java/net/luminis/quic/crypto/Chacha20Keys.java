@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -42,10 +42,12 @@ public class Chacha20Keys extends Keys {
         super(quicVersion, server, log);
     }
 
+    @Override
     protected short getKeyLength() {
         return 32;
     }
 
+    @Override
     public Cipher getHeaderProtectionCipher() {
         if (hpCipher == null) {
             try {
@@ -61,6 +63,7 @@ public class Chacha20Keys extends Keys {
         return hpCipher;
     }
 
+    @Override
     public SecretKeySpec getWriteKeySpec() {
         if (writeKeySpec == null) {
             writeKeySpec = new SecretKeySpec(writeKey, "ChaCha20-Poly1305");
@@ -68,6 +71,7 @@ public class Chacha20Keys extends Keys {
         return writeKeySpec;
     }
 
+    @Override
     public Cipher getWriteCipher() {
         if (writeCipher == null) {
             try {
@@ -81,6 +85,7 @@ public class Chacha20Keys extends Keys {
         return writeCipher;
     }
 
+    @Override
     public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
         try {
             Cipher aeadCipher = getWriteCipher();
@@ -96,6 +101,7 @@ public class Chacha20Keys extends Keys {
         }
     }
 
+    @Override
     public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
         try {
             Cipher aeadCipher = getWriteCipher();
@@ -114,6 +120,7 @@ public class Chacha20Keys extends Keys {
         }
     }
 
+    @Override
     public byte[] createHeaderProtectionMask(byte[] sample) {
         try {
             Cipher hpCipher = Cipher.getInstance("ChaCha20");

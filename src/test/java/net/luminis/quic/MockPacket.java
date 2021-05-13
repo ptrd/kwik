@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -83,7 +83,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public int estimateLength() {
+    public int estimateLength(int additionalPayload) {
         return packetSize;
     }
 
@@ -104,7 +104,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         this.packetNumber = packetNumber;
         ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);
@@ -128,7 +128,8 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public void accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+        return PacketProcessor.ProcessResult.Continue;
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -116,8 +116,14 @@ public class AckGenerator {
 
     public synchronized Optional<AckFrame> generateAck() {
         int delay = 0;
-        if (newPacketsToAcknowlegdeSince != null) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-13.2.1
+        // "An endpoint MUST acknowledge all ack-eliciting Initial and Handshake packets immediately"
+        if (newPacketsToAcknowlegdeSince != null && pnSpace == PnSpace.App) {
             delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
+            if (delay < 0) {
+                // WTF. This should be impossible, but it sometimes happen in the interop tests. Maybe related to docker?
+                delay = 0;
+            }
         }
         List<Long> packetsToAck = this.packetsToAcknowledge;
         if (!packetsToAck.isEmpty()) {

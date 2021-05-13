@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -25,12 +25,12 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
+import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.*;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
@@ -61,17 +61,6 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
-    private final List<TlsConstants.CipherSuite> cipherSuites;
-
-    enum Status {
-        Idle,
-        Handshaking,
-        HandshakeError,
-        Connected,
-        Closing,
-        Draining,
-        Error
-    }
 
     private final String host;
     private final int port;
@@ -83,12 +72,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final Receiver receiver;
     private final StreamManager streamManager;
     private volatile byte[] token;
-    private volatile Status connectionState;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private volatile FlowControl flowController;
-    private HandshakeState handshakeState = HandshakeState.Initial;
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -97,13 +84,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
     private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private final List<TlsConstants.CipherSuite> cipherSuites;
 
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
-        super(quicVersion, secretsFile, log);
+        super(quicVersion, Role.Client, secretsFile, log);
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
         this.port = port;
@@ -120,8 +108,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
 
-        receiver = new Receiver(socket, 1500, log, this::abortConnection);
-        streamManager = new StreamManager(this, log);
+        receiver = new Receiver(socket, log, this::abortConnection);
+        streamManager = new StreamManager(this, Role.Client, log, 10, 10);
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
 
@@ -130,6 +118,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             @Override
             public void send(ClientHello clientHello) {
                 getCryptoStream(Initial).write(clientHello.getBytes());
+                sender.flush();
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
             }
@@ -149,10 +138,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     /**
      * Set up the connection with the server.
      */
+    @Override
     public void connect(int connectionTimeout) throws IOException {
         connect(connectionTimeout, null);
     }
 
+    @Override
     public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
         String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
         connect(connectionTimeout, alpn, transportParameters, null);
@@ -167,6 +158,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * @return
      * @throws IOException
      */
+    @Override
     public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
@@ -191,16 +183,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
-                terminate();
+                stopAndTerminate();
                 throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
-                terminate();
+                stopAndTerminate();
                 throw new ConnectException("Handshake error");
             }
         }
         catch (InterruptedException e) {
-            terminate();
+            stopAndTerminate();
             throw new RuntimeException();  // Should not happen.
         }
 
@@ -247,6 +239,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public void keepAlive(int seconds) {
         if (connectionState != Status.Connected) {
             throw new IllegalStateException("keep alive can only be set when connected");
@@ -283,7 +276,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    parsePackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
+                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData(), null);
                     sender.datagramProcessed(receiver.hasMore());
                 }
             }
@@ -305,7 +298,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
 
-        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams);
+        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams, Role.Client);
         if (clientHelloEnlargement != null) {
             tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
         }
@@ -396,24 +389,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(InitialPacket packet, Instant time) {
+    public ProcessResult process(InitialPacket packet, Instant time) {
         destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
         processFrames(packet, time);
         ignoreVersionNegotiation = true;
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(HandshakePacket packet, Instant time) {
+    public ProcessResult process(HandshakePacket packet, Instant time) {
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(LongHeaderPacket packet, Instant time) {
-        processFrames(packet, time);
-    }
-
-    @Override
-    public void process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
         if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
             // New connection id, not used before.
             // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
@@ -425,10 +415,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
         }
         processFrames(packet, time);
+        return ProcessResult.Continue;
     }
 
     @Override
-    public void process(VersionNegotiationPacket vnPacket, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket vnPacket, Instant time) {
         if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
@@ -437,16 +428,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // Must be a corrupted packet or sent because of a corrupted packet, so ignore.
             log.debug("Ignoring Version Negotiation packet");
         }
+        return ProcessResult.Continue;
     }
 
     private volatile boolean processedRetryPacket = false;
 
     @Override
-    public void process(RetryPacket packet, Instant time) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
-        // "Clients MUST discard Retry packets that contain an Original
-        //   Destination Connection ID field that does not match the Destination
-        //   Connection ID from its Initial packet"
+    public ProcessResult process(RetryPacket packet, Instant time) {
         if (packet.validateIntegrityTag(destConnectionIds.getCurrent())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
@@ -483,12 +471,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             log.error("Discarding Retry packet, because integrity tag is invalid.");
         }
+        return ProcessResult.Continue;
     }
 
-    void processFrames(QuicPacket packet, Instant timeReceived) {
-        for (QuicFrame frame: packet.getFrames()) {
-            frame.accept(this, packet, timeReceived);
-        }
+    @Override
+    public ProcessResult process(ZeroRttPacket packet, Instant time) {
+        // Intentionally discarding packet without any action (servers should not send 0-RTT packets).
+        return ProcessResult.Abort;
     }
 
     @Override
@@ -501,13 +490,24 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-        handlePeerClosing(connectionCloseFrame);
+        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
     }
 
     @Override
     public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
-        getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-        log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+        try {
+            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+        }
+        catch (TlsProtocolException tlsError) {
+            log.error("Parsing TLS message failed", tlsError);
+            throw new ProtocolError("TLS error");
+        }
+    }
+
+    @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
@@ -533,12 +533,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxStreamDataFrame);
+        try {
+            flowController.process(maxStreamDataFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override
     public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(maxStreamsFrame, packet.getPnSpace(), timeReceived);
+        streamManager.process(maxStreamsFrame);
     }
 
     @Override
@@ -551,13 +555,17 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
         PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
         send(response, f -> {});
     }
 
     @Override
-    public void process(Padding paddingFrames, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
     }
 
     @Override
@@ -566,13 +574,36 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         retireSourceConnectionId(retireConnectionIdFrame);
     }
 
     @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(streamFrame);
+        try {
+            streamManager.process(streamFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
+    }
+
+    @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+
     }
 
     @Override
@@ -586,10 +617,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         System.exit(1);
     }
 
+    @Override
     public QuicStream createStream(boolean bidirectional) {
         return streamManager.createStream(bidirectional);
     }
 
+    @Override
     public void close() {
         if (connectionState == Status.Closing || connectionState == Status.Draining) {
             log.debug("Already closing");
@@ -614,7 +647,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         terminate();
     }
 
-    private void handlePeerClosing(ConnectionCloseFrame closing) {
+    @Override
+    protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
         if (connectionState != Status.Closing) {
             if (closing.hasError()) {
                 log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));
@@ -650,7 +684,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private String determineClosingErrorMessage(ConnectionCloseFrame closing) {
+    @Override
+    protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {
                 return "TLS error " + closing.getTlsError() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
@@ -667,7 +702,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private void terminate() {
+    private void stopAndTerminate() {
+        sender.stop();
+        terminate();
+    }
+
+    @Override
+    protected void terminate() {
         idleTimer.shutdown();
         sender.shutdown();
         receiver.shutdown();
@@ -705,6 +746,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
                 + destConnectionIds.getConnectionIdlength()
@@ -733,7 +775,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
         peerTransportParams = transportParameters;
         if (flowController == null) {
-            flowController = new FlowControl(peerTransportParams.getInitialMaxData(),
+            flowController = new FlowControl(Role.Client, peerTransportParams.getInitialMaxData(),
                     peerTransportParams.getInitialMaxStreamDataBidiLocal(),
                     peerTransportParams.getInitialMaxStreamDataBidiRemote(),
                     peerTransportParams.getInitialMaxStreamDataUni(),
@@ -753,24 +795,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
-        // "If a max_idle_timeout is specified by either peer in its transport parameters (Section 18.2), the
-        //  connection is silently closed and its state is discarded when it remains idle for longer than the minimum
-        //  of both peers max_idle_timeout values."
-        long idleTimeout = Long.min(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        if (idleTimeout == 0) {
-            idleTimeout = Long.max(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
-        }
-        if (idleTimeout != 0) {
-            log.info("Effective idle timeout is " + idleTimeout);
-            // Initialise the idle timer that will take care of (silently) closing connection if idle longer than idle timeout
-            idleTimer.setIdleTimeout(idleTimeout);
-        }
-        else {
-            // Both or 0 or not set:
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-18.2
-            // "Idle timeout is disabled when both endpoints omit this transport parameter or specify a value of 0."
-        }
+        determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
 
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
@@ -825,6 +850,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * Abort connection due to a fatal error in this client. No message is sent to peer; just inform client it's all over.
      * @param error  the exception that caused the trouble
      */
+    @Override
     public void abortConnection(Throwable error) {
         if (error != null) {
             if (connectionState == Status.Handshaking) {
@@ -915,26 +941,32 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    protected Sender getSender() {
+    @Override
+    protected SenderImpl getSender() {
         return sender;
     }
 
+    @Override
     protected GlobalAckGenerator getAckGenerator() {
         return ackGenerator;
     }
 
+    @Override
     protected TlsClientEngine getTlsEngine() {
         return tlsEngine;
     }
 
+    @Override
+    protected StreamManager getStreamManager() {
+        return streamManager;
+    }
+
+    @Override
     protected int getSourceConnectionIdLength() {
         return sourceConnectionIds.getConnectionIdlength();
     }
 
-    public Statistics getStats() {
-        return new Statistics(sender.getStatistics());
-    }
-
+    @Override
     public byte[] getSourceConnectionId() {
         return sourceConnectionIds.getCurrent();
     }
@@ -943,6 +975,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return sourceConnectionIds.getAll();
     }
 
+    @Override
     public byte[] getDestinationConnectionId() {
         return destConnectionIds.getCurrent();
     }
@@ -951,23 +984,28 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return destConnectionIds.getAll();
     }
 
-    public void setServerStreamCallback(Consumer<QuicStream> streamProcessor) {
-        streamManager.setServerStreamCallback(streamProcessor);
+    @Override
+    public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamProcessor) {
+        streamManager.setPeerInitiatedStreamCallback(streamProcessor);
     }
 
     // For internal use only.
+    @Override
     public long getInitialMaxStreamData() {
         return transportParams.getInitialMaxStreamDataBidiLocal();
     }
 
+    @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
         transportParams.setInitialMaxStreamsBidi(max);
     }
 
+    @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
         transportParams.setInitialMaxStreamsUni(max);
     }
 
+    @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
         transportParams.setInitialMaxStreamData(size);
     }
@@ -991,6 +1029,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         newSessionTickets.add(new QuicSessionTicket(tlsSessionTicket, peerTransportParams));
     }
 
+    @Override
     public List<QuicSessionTicket> getNewSessionTickets() {
         return newSessionTickets;
     }
@@ -1012,10 +1051,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
     public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
         ackProcessors.add(ackProcessor);
     }
 
+    @Override
     public InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }

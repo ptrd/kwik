@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -18,11 +18,15 @@
  */
 package net.luminis.quic.log;
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.NullQLog;
+import net.luminis.quic.qlog.QLog;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 public class NullLogger implements Logger {
 
@@ -81,6 +85,11 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void timeFormat(TimeFormat aLong) {
+
+    }
+
+    @Override
     public void debug(String message) {
     }
 
@@ -117,7 +126,15 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void received(Instant timeReceived, int datagram, EncryptionLevel encryptionLevel, byte[] dcid, byte[] scid) {
+    }
+
+    @Override
     public void sent(Instant sent, QuicPacket packet) {
+    }
+
+    @Override
+    public void sent(Instant sent, List<QuicPacket> packets) {
     }
 
     @Override
@@ -182,6 +199,11 @@ public class NullLogger implements Logger {
 
     @Override
     public void receivedPacketInfo(String toString) {
+    }
+
+    @Override
+    public QLog getQLog() {
+        return new NullQLog();
     }
 }
 

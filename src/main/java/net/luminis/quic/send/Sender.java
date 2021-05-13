@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Peter Doornbosch
+ * Copyright © 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
@@ -39,6 +39,8 @@ import java.util.function.Function;
  * the sender implementation of these events, which enables the sender to coalesce packets efficiently.
  */
 public interface Sender {
+
+    Consumer<QuicFrame> NO_RETRANSMIT = f -> {};
 
     /**
      * Sends a (fixed) frame. Should not be used to send data that is subject to change (e.g. a flow control level),
