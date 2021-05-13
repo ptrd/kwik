@@ -118,7 +118,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         congestionController = new NewRenoCongestionController(log, this);
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
 
-        recoveryManager = new RecoveryManager(connection, rttEstimater, congestionController, this, log);
+        recoveryManager = new RecoveryManager(connection, connection.getRole(), rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
 
         idleTimer = connection.getIdleTimer();

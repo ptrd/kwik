@@ -60,7 +60,7 @@ class RecoveryManagerTest extends RecoveryTests {
         Logger logger = mock(Logger.class);
         // logger = new SysOutLogger();
         // logger.logRecovery(true);
-        recoveryManager = new RecoveryManager(mock(FrameProcessorRegistry.class), rttEstimator, mock(CongestionController.class), probeSender, logger);
+        recoveryManager = new RecoveryManager(mock(FrameProcessorRegistry.class), Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);
     }
 
     @BeforeEach

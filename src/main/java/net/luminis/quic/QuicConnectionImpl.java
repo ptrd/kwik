@@ -571,4 +571,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         return idleTimer;
     }
 
+    public Role getRole() {
+        return role;
+    }
 }
