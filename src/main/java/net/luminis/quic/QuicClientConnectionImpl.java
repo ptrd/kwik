@@ -75,7 +75,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
-    private volatile FlowControl flowController;
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
@@ -489,28 +488,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
-    }
-
-    @Override
-    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
-        }
-        catch (TlsProtocolException tlsError) {
-            log.error("Parsing TLS message failed", tlsError);
-            throw new ProtocolError("TLS error");
-        }
-    }
-
-    @Override
-    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
         synchronized (handshakeState) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
@@ -526,24 +503,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
     }
 
-    @Override
-    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxDataFrame);
-    }
-
-    @Override
-    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            flowController.process(maxStreamDataFrame);
-        } catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
-        }
-    }
-
-    @Override
-    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(maxStreamsFrame);
-    }
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
@@ -555,26 +514,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
-    }
-
-    @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
         PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
         send(response, f -> {});
-    }
-
-    @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
-    }
-
-    @Override
-    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
-        // Intentionally left empty (nothing to do on receiving ping: will be acknowledged like any other ack-eliciting frame)
-    }
-
-    @Override
-    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
     }
 
     @Override
@@ -583,43 +525,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            streamManager.process(streamFrame);
-        } catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
-        }
-    }
-
-    @Override
-    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
     public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
         log.warn("Unhandled frame type: " + frame);
-    }
-
-
-    private void handleIOError(IOException e) {
-        System.out.println("Fatal: IO error " + e);
-        System.exit(1);
-    }
-
-    @Override
-    public QuicStream createStream(boolean bidirectional) {
-        return streamManager.createStream(bidirectional);
     }
 
     @Override
@@ -713,14 +620,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.shutdown();
         receiver.shutdown();
         socket.close();
-    }
-
-    public void sendZeroRtt(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
-        sender.send(frame, ZeroRTT, lostFrameCallback);
-    }
-
-    private void retransmitAppData(QuicFrame frame) {
-        sender.send(frame, App, this::retransmitAppData);
     }
 
     public void changeAddress() {

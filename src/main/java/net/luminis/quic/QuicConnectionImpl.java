@@ -25,6 +25,8 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.FlowControl;
+import net.luminis.quic.stream.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
@@ -84,6 +86,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
     protected final List<CryptoStream> cryptoStreams = new ArrayList<>();
 
+    protected volatile FlowControl flowController;
     protected long flowControlMax;
     protected long flowControlLastAdvertised;
     protected long flowControlIncrement;
@@ -149,6 +152,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (flush) {
             getSender().flush();
         }
+    }
+
+    @Override
+    public QuicStream createStream(boolean bidirectional) {
+        return getStreamManager().createStream(bidirectional);
     }
 
     public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
@@ -338,6 +346,81 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             //  to any incoming packet that it attributes to the connection."
             handlePacketInClosingState(packet);
         }
+    }
+
+    @Override
+    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+        try {
+            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+        } catch (TlsProtocolException e) {
+            immediateCloseWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
+        }
+    }
+
+    @Override
+    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
+        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
+    }
+
+    @Override
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
+        flowController.process(maxDataFrame);
+    }
+
+    @Override
+    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
+        try {
+            flowController.process(maxStreamDataFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
+    }
+    @Override
+    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
+        getStreamManager().process(maxStreamsFrame);
+    }
+
+    @Override
+    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+        // Intentionally left empty (nothing to do on receiving ping: will be acknowledged like any other ack-eliciting frame)
+    }
+
+    @Override
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
+        try {
+            getStreamManager().process(streamFrame);
+        } catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
+    }
+
+    @Override
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
     }
 
     protected CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {

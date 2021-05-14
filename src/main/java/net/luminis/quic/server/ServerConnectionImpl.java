@@ -77,7 +77,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final int maxOpenStreamsBidi;
     private final byte[] token;
     private volatile String negotiatedApplicationProtocol;
-    private volatile FlowControl flowController;
     private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
     private volatile boolean addressValidated;
@@ -427,111 +426,23 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
-        handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
-    }
-
-    @Override
-    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-        } catch (TlsProtocolException e) {
-            immediateCloseWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
-        }
-    }
-
-    @Override
-    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
-        flowController.process(maxDataFrame);
-    }
-
-    @Override
-    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            flowController.process(maxStreamDataFrame);
-        }
-        catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
-        }
-    }
-
-    @Override
-    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
-        streamManager.process(maxStreamsFrame);
     }
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
-        try {
-            streamManager.process(streamFrame);
-        } catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
-        }
-    }
-
-    @Override
-    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
-    }
-
-    @Override
-    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
-
     }
 
     @Override
@@ -628,11 +539,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
-    }
-
-    @Override
-    public QuicStream createStream(boolean bidirectional) {
-        return streamManager.createStream(bidirectional);
     }
 
     @Override
