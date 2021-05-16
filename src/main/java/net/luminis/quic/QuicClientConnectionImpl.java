@@ -73,7 +73,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final StreamManager streamManager;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
-    private final CountDownLatch drainingSignal = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private DestinationConnectionIdRegistry destConnectionIds;
     private SourceConnectionIdRegistry sourceConnectionIds;
@@ -182,16 +181,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         try {
             boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
-                stopAndTerminate();
+                abortHandshake();
                 throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
-                stopAndTerminate();
+                abortHandshake();
                 throw new ConnectException("Handshake error");
             }
         }
         catch (InterruptedException e) {
-            stopAndTerminate();
+            abortHandshake();
             throw new RuntimeException();  // Should not happen.
         }
 
@@ -236,6 +235,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             return Collections.emptyList();
         }
+    }
+
+    private void abortHandshake() {
+        sender.stop();
+        terminate();
     }
 
     @Override
@@ -530,94 +534,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void close() {
-        if (connectionState == Status.Closing || connectionState == Status.Draining) {
-            log.debug("Already closing");
-            return;
-        }
+    protected void immediateCloseWithError(EncryptionLevel level, int error, String errorReason) {
         if (keepAliveActor != null) {
             keepAliveActor.shutdown();
         }
-        sender.stop();
-        connectionState = Status.Closing;
-        streamManager.abortAll();
-        send(new ConnectionCloseFrame(quicVersion), f -> {});
-        sender.flush();
-
-        int closingPeriod = 3 * sender.getPto();
-        log.debug("closing/draining for " + closingPeriod + " ms");
-        try {
-            drainingSignal.await(closingPeriod, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {}
-
-        log.debug("leaving draining state (terminating)");
-        terminate();
+        super.immediateCloseWithError(level, error, errorReason);
     }
 
-    @Override
-    protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
-        if (connectionState != Status.Closing) {
-            if (closing.hasError()) {
-                log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));
-            }
-            else {
-                log.info("Peer is closing");
-            }
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-10.3
-            // "An endpoint that receives a CONNECTION_CLOSE frame
-            //   MAY send a single packet containing a CONNECTION_CLOSE frame before
-            //   entering the draining state, using a CONNECTION_CLOSE frame and a
-            //   NO_ERROR code if appropriate."
-            if (connectionState == Status.Connected) {   // Only if we have Application keys  TODO: also when no Application keys available
-                send(new ConnectionCloseFrame(quicVersion), f -> {});  // TODO: number of connection close packets sent should be limited.
-            }
-            else if (connectionState == Status.Handshaking) {
-                connectionState = Status.HandshakeError;
-                handshakeFinishedCondition.countDown();
-            }
-            connectionState = Status.Draining;
-            // We're done!
-            terminate();
-        }
-        else if (connectionState == Status.Closing) {
-            if (closing.hasError()) {
-                log.error("Peer confirmed closing with " + determineClosingErrorMessage(closing));
-            }
-            else {
-                log.info("Peer confirmed closing; entering draining state.");
-            }
-            connectionState = Status.Draining;
-            drainingSignal.countDown();
-        }
-    }
-
-    @Override
-    protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
-        if (closing.hasTransportError()) {
-            if (closing.hasTlsError()) {
-                return "TLS error " + closing.getTlsError() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
-            }
-            else {
-                return "transport error " + closing.getErrorCode() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
-            }
-        }
-        else if (closing.hasApplicationProtocolError()) {
-            return "application protocol error " + closing.getErrorCode() + (closing.hasReasonPhrase()? ": " + closing.getReasonPhrase():"");
-        }
-        else {
-            return "";
-        }
-    }
-
-    private void stopAndTerminate() {
-        sender.stop();
-        terminate();
-    }
-
+    /**
+     * Closes the connection by discarding all connection state. Do not call directly, should be called after
+     * closing state or draining state ends.
+     */
     @Override
     protected void terminate() {
-        idleTimer.shutdown();
-        sender.shutdown();
+        super.terminate();
+        handshakeFinishedCondition.countDown();
         receiver.shutdown();
         socket.close();
     }
@@ -751,16 +682,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      */
     @Override
     public void abortConnection(Throwable error) {
-        if (error != null) {
-            if (connectionState == Status.Handshaking) {
-                connectionState = Status.HandshakeError;
-            } else {
-                connectionState = Status.Error;
-            }
-        }
-        else {
-            connectionState = Status.Closing;
-        }
+        connectionState = Status.Closing;
 
         if (error != null) {
             log.error("Aborting connection because of error", error);

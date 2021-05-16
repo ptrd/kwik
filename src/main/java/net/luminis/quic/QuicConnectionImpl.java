@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
@@ -58,12 +59,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     public enum Status {
         Idle,
         Handshaking,
-        HandshakeError,
         Connected,
         Closing,
         Draining,
-        Closed,
-        Error;
+        Closed;
+
 
         public boolean closingOrDraining() {
             return this == Closing || this == Draining;
@@ -478,6 +478,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
      * Immediately closes the connection (with or without error) and enters the "closing state".
      * Connection close frame with indicated error (or "NO_ERROR") is send to peer and after 3 x PTO, the closing state
      * is ended and all connection state is discarded.
+     * If this method is called outside received-message-processing, post-processing actions should
+     * be performed by the caller.
      * @param level         The level that should be used for sending the connection close frame
      * @param error         The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
      * @param errorReason
@@ -506,7 +508,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
             //  times the current Probe Timeout (PTO) interval"
             int pto = getSender().getPto();
-            Executors.newScheduledThreadPool(1).schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
+            schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
         }
         else {
             postProcessingActions.add(() -> terminate());
@@ -556,7 +558,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
             //  times the current Probe Timeout (PTO) interval"
             int pto = getSender().getPto();
-            Executors.newScheduledThreadPool(1).schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
+            schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -604,6 +606,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
+    /**
+     * Abort connection due to a local fatal error. No message is sent to peer; just inform application it's all over.
+     * @param error  the exception that caused the trouble
+     */
     public abstract void abortConnection(Throwable error);
 
     public static int getMaxPacketSize() {
@@ -622,11 +628,18 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public void close() {
         immediateClose(App);
+        // Because this method is not called in the context of processing received messages,
+        // sender flush must be called explicitly.
+        getSender().flush();
     }
 
     @Override
     public void close(QuicConstants.TransportErrorCode applicationError, String errorReason) {
         immediateCloseWithError(App, applicationError.value, errorReason);
+    }
+
+    private void schedule(Runnable command, int delay, TimeUnit unit) {
+        Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduled")).schedule(command, delay, unit);
     }
 
     @Override

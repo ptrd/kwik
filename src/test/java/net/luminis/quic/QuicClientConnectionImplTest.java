@@ -432,7 +432,7 @@ class QuicClientConnectionImplTest {
 
         connection.close();
 
-        verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
+        verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class));
     }
 
     @Test
