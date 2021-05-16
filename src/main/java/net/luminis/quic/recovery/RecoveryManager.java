@@ -385,7 +385,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
         // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
         ptoCount = 0;
-        unschedule();
+        setLossDetectionTimer();
     }
 
     public long getLost() {
