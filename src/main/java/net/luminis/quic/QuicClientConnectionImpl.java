@@ -53,6 +53,8 @@ import java.util.stream.Collectors;
 
 import static net.luminis.quic.EarlyDataStatus.*;
 import static net.luminis.quic.EncryptionLevel.*;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
@@ -630,12 +632,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), peerTransportParams.getRetrySourceConnectionId())) {
-                signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
             }
         }
         else {
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
-                signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
         }
     }
@@ -648,7 +650,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         //   server as a connection error of type TRANSPORT_PARAMETER_ERROR."
         if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
             log.error("Missing connection id from server transport parameter");
-            signalConnectionError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR);
+            if (transportParameters.getInitialSourceConnectionId() == null) {
+                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "missing initial_source_connection_id transport parameter");
+            }
+            else {
+                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "missing original_destination_connection_id transport parameter");
+            }
             return false;
         }
 
@@ -658,22 +665,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         //      corresponding Destination or Source Connection ID fields of Initial packets."
         if (! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
-            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
             return false;
         }
         if (! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
             log.error("Original destination connection id does not match corresponding transport parameter");
-            signalConnectionError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION);
+            immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "original_destination_connection_id transport parameter does not match");
             return false;
         }
 
         return true;
-    }
-
-    void signalConnectionError(QuicConstants.TransportErrorCode transportError) {
-        log.info("ConnectionError " + transportError);
-        // TODO: close connection with a frame type of 0x1c
-        abortConnection(null);
     }
 
     /**

@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -182,7 +183,9 @@ class QuicClientConnectionImplTest {
         // Simulate a TransportParametersExtension is received that does not contain the right original destination id
         connection.setPeerTransportParameters(new TransportParameters());
 
-        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
     @Test
@@ -199,7 +202,9 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
     @Test
@@ -216,7 +221,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(retryPacket.getSourceConnectionId());
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).signalConnectionError(any());
+        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
     }
 
     @Test
@@ -232,7 +237,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setOriginalDestinationConnectionId(originalSourceConnectionId);
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).signalConnectionError(any());
+        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
     }
 
     @Test
@@ -244,7 +249,9 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection).signalConnectionError(argThat(error -> error == QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR));
+        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
     private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
