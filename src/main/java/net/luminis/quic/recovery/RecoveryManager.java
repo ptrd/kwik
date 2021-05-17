@@ -381,11 +381,13 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     public void stopRecovery(PnSpace pnSpace) {
-        lossDetectors[pnSpace.ordinal()].reset();
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
-        // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
-        ptoCount = 0;
-        setLossDetectionTimer();
+        if (! hasBeenReset) {
+            lossDetectors[pnSpace.ordinal()].reset();
+            // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
+            // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
+            ptoCount = 0;
+            setLossDetectionTimer();
+        }
     }
 
     public long getLost() {
