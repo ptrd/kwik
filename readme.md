@@ -1,9 +1,9 @@
 ![Kwik](https://bitbucket.org/pjtr/kwik/raw/master/docs/media/Logo_Kwik_rectangle.png)
 
-## A QUIC client Java library
+## A QUIC implementation in Java
 
-Kwik is a client implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in Java.
-([Server](https://bitbucket.org/pjtr/kwik/branch/server) implementation is on its way!)
+Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in Java. 
+Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
 QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
@@ -17,48 +17,70 @@ Although necessary for HTTP3, QUIC is more than just the transport protocol for 
 If you want to know more about QUIC and are able to understand the dutch language, check out
 my [presentation on Luminis DevCon 2019](https://youtu.be/eR2tPOLQRws). 
 
-If you're looking for a Java HTTP3 client, check out [Flupke](https://bitbucket.org/pjtr/flupke), which is build on top of Kwik.
+If you're looking for a Java HTTP3 client or server, check out [Flupke](https://bitbucket.org/pjtr/flupke), which is built on top of Kwik.
 
-Kwik is created an maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik).
+Kwik is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik).
 
-## Not for production
-
-Kwik is not yet suitable for production use. 
-Apart from the fact that the QUIC specification is still work in progress by the IETF, Kwik does not yet implement 
-the complete (draft) specification. 
-Moreover, Kwik has not yet been tested in production-like environments. 
-Use at your own risk (as with all open source software ;-)).
-But apart from that: have fun!
 
 ## Status
 
-The status of the project is that most QUIC features are implemented. Interoperability is tested with a large
-number of server implementations, see the [automated interoperability tests](https://interop.seemann.io/) and 
-the [QUIC interop matrix](https://docs.google.com/spreadsheets/d/1D0tW89vOoaScs3IY9RGC0UesWGAwE6xyLk0l4JtvTVg/edit)
-for details. Due the to fact that all (server) implementations are still in active development, and that some test cases
-(testing behaviour due to packet loss and packet corruption) are non-deterministic, the results of the automatic
-interoperability test vary with each run, but usually, Kwik is amongst the best clients w.r.t. the number of
-successful testcases.  
+The status of the project is different for client and server. 
+For the client role, most QUIC features are implemented. For server role, the essential features necessary for connecting
+and transfering data in both directions are implemented; see below for more details.
+For both roles, interoperability is tested with a large number of other implementations, see [automated interoperability tests](https://interop.seemann.io/). 
+Due the to fact that most implementations are still in active development, and that some test cases
+(specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
+interoperability test vary with each run, but usually, Kwik is amongst the best w.r.t. the number of successful testcases.  
+
 Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
 
 HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
 
-Kwik supports IETF [draft-32](https://tools.ietf.org/html/draft-ietf-quic-transport-32), the latest draft published by the IETF.
+Kwik supports IETF [draft-32](https://tools.ietf.org/html/draft-ietf-quic-transport-32), the latest draft published by the IETF
+and will support QUIC v1 as soon as the offical RFC is published.
 
-Implemented QUIC features:
+
+### Implemented QUIC features
 
 * version negotation
 * handshake based on TLS 1.3
 * data exchange over bidirectional and unidirectional streams
 * stateless retry
+* cipher suites TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256
+* key update
+  
+Client only:
 * session resumption (see -S and -R options of the sample client)
 * connection migration (use the interactive mode of the sample client to try it)
 * 0-RTT
-* cipher suites TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256
-* key update
 
+
+### Is Kwik ready for production use?
+
+It really depends on your use-case. 
+First of all, as with all open source software, there is no guarantee the software will work, it is provided "as is".
+Having said that, interoperability with other implementations is heavily tested and ok, so you can assume it works.
+However, Kwik is not tested in various or extreme networking conditions, so your mileage may vary.  
+As development focus has been on correctness and features (in that order), performance is not optimal yet.
+
+Kwik does not yet implement all QUIC features. The server does not support session resumption and 0-RTT (the client does) 
+which might make the server less suitable for production use at this moment.
+In both roles, you cannot set priority on streams, so the division of network capacity over streams cannot be influenced
+and might not even be fair.
+When wondering whether limitations would harm your use case: just go ahead and test it! When in doubt, you can 
+always contact the author (see contact details below) for more information or help.
+
+
+### Is Kwik secure?
+
+The TLS library used by Kwik is also "home made". Although all security features are implemented (e.g. certificates are
+checked as well as the Certificate Verify message that proofs possession of the certificate private key), it is not 
+security tested nor reviewed by security experts. So if you plan to transfer sensitive data or are afraid of intelligence
+services trying to spy on you, using Kwik is probably not the best idea.
 
 ## Usage
+
+### Client
 
 Kwik is both a library that can be used in any Java application to setup and use a QUIC connection, 
 and a (sample) command line client that can be used to experiment with the QUIC protocol. 
@@ -103,6 +125,22 @@ Usage of the sample client:
      -Z,--use0RTT                   use 0-RTT if possible (requires -H and -R)
             
 If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
+
+### Server
+
+To run the server, execute `java -cp kwik.jar net.luminis.quic.server.Server` with the following arguments:
+- certificate file
+- private key file
+- port number
+- www directory to serve
+
+This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc9000.html#name-address-validation-using-re).
+To run without retry-mode, add the `--noRetry` flag as first argument.  
+
+A plain Kwik server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
+have been using for early testing. 
+To add HTTP/3 to Kwik, just grab the latest `flupke-plugin.jar` from the [Flupke](https://bitbucket.org/pjtr/flupke) project
+and it to the classpath, e.g. `java -cp kwik.jar:flupke-plugin.jar net.luminis.quic.server.Server`.
 
                                 
 ## Contact
