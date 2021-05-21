@@ -1,7 +1,7 @@
 /*
  * Copyright © 2021 Peter Doornbosch
  *
- * This file is part of Kwik, a QUIC client Java library
+ * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
  * Kwik is free software: you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the
