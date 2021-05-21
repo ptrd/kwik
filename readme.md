@@ -50,6 +50,7 @@ and will support QUIC v1 as soon as the offical RFC is published.
 * key update
   
 Client only:
+
 * session resumption (see -S and -R options of the sample client)
 * connection migration (use the interactive mode of the sample client to try it)
 * 0-RTT
