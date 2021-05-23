@@ -25,7 +25,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.stream.QuicStreamImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;

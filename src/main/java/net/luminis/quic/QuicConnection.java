@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.util.function.Consumer;
 

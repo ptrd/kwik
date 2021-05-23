@@ -25,7 +25,7 @@ import net.luminis.quic.io.LimitedInputStream;
 import net.luminis.quic.run.KwikCli;
 import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicInteger;

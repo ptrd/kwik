@@ -22,7 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.*;
 import java.net.*;

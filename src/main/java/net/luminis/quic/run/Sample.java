@@ -21,7 +21,7 @@ package net.luminis.quic.run;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;

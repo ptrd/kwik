@@ -21,20 +21,17 @@ package net.luminis.quic.stream;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.function.Consumer;
 
 
 /**
  * A quic stream that is capable of sending early data. When early data is offered but cannot be send as early data,
  * the data will be cached until it can be send.
  */
-public class EarlyDataStream extends QuicStream {
+public class EarlyDataStream extends QuicStreamImpl {
 
     private volatile boolean sendingEarlyData = true;
     private boolean earlyDataIsFinalInStream;
@@ -92,11 +89,11 @@ public class EarlyDataStream extends QuicStream {
     }
 
     @Override
-    protected QuicStream.StreamOutputStream createStreamOutputStream() {
+    protected QuicStreamImpl.StreamOutputStream createStreamOutputStream() {
         return new EarlyDataStreamOutputStream();
     }
 
-    protected class EarlyDataStreamOutputStream extends QuicStream.StreamOutputStream {
+    protected class EarlyDataStreamOutputStream extends QuicStreamImpl.StreamOutputStream {
         @Override
         protected EncryptionLevel getEncryptionLevel() {
             return writingEarlyData? EncryptionLevel.ZeroRTT: EncryptionLevel.App;

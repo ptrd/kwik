@@ -29,7 +29,7 @@ import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;

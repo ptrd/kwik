@@ -19,7 +19,7 @@
 package net.luminis.quic.server.h09;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

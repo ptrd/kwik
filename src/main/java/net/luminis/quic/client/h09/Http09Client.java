@@ -19,8 +19,8 @@
 package net.luminis.quic.client.h09;
 
 import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
-import net.luminis.quic.stream.QuicStream;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;

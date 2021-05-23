@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -46,7 +47,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static net.luminis.quic.EncryptionLevel.App;
 
 
-public class QuicStream extends BaseStream {
+public class QuicStreamImpl extends BaseStream implements QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
@@ -68,19 +69,19 @@ public class QuicStream extends BaseStream {
     private int sendBufferSize = 50 * 1024;
 
     
-    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
 
-    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(Version.getDefault(), streamId, connection, flowController, log);
     }
 
-    public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+    public QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(quicVersion, streamId, connection, flowController, log, null);
     }
 
-    QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
+    QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
@@ -100,10 +101,12 @@ public class QuicStream extends BaseStream {
     }
 
 
+    @Override
     public InputStream getInputStream() {
         return inputStream;
     }
 
+    @Override
     public OutputStream getOutputStream() {
         return outputStream;
     }
@@ -129,10 +132,12 @@ public class QuicStream extends BaseStream {
         return lastOffset >= 0 && offset >= lastOffset;
     }
 
+    @Override
     public int getStreamId() {
         return streamId;
     }
 
+    @Override
     public boolean isUnidirectional() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-2.1
         // "The second least significant bit (0x2) of the stream ID distinguishes
@@ -141,11 +146,13 @@ public class QuicStream extends BaseStream {
         return (streamId & 0x0002) == 0x0002;
     }
 
+    @Override
     public boolean isClientInitiatedBidirectional() {
         // "Client-initiated streams have even-numbered stream IDs (with the bit set to 0)"
         return (streamId & 0x0003) == 0x0000;
     }
 
+    @Override
     public boolean isServerInitiatedBidirectional() {
         // "server-initiated streams have odd-numbered stream IDs"
         return (streamId & 0x0003) == 0x0001;
@@ -164,7 +171,7 @@ public class QuicStream extends BaseStream {
 
         @Override
         public int available() throws IOException {
-            return Integer.max(0, QuicStream.this.bytesAvailable());
+            return Integer.max(0, QuicStreamImpl.this.bytesAvailable());
         }
 
         // InputStream.read() contract:
@@ -207,7 +214,7 @@ public class QuicStream extends BaseStream {
                     try {
                         blocking = Thread.currentThread();
 
-                        int bytesRead = QuicStream.this.read(ByteBuffer.wrap(buffer, offset, len));
+                        int bytesRead = QuicStreamImpl.this.read(ByteBuffer.wrap(buffer, offset, len));
                         if (bytesRead > 0) {
                             updateAllowedFlowControl(bytesRead);
                             return bytesRead;
@@ -289,7 +296,7 @@ public class QuicStream extends BaseStream {
             bufferLock = new ReentrantLock();
             notFull = bufferLock.newCondition();
 
-            flowController.register(QuicStream.this, this);
+            flowController.register(QuicStreamImpl.this, this);
         }
 
         @Override
@@ -386,7 +393,7 @@ public class QuicStream extends BaseStream {
             }
 
             if (!sendQueue.isEmpty()) {
-                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
+                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStreamImpl.this));
                 assert (flowControlLimit >= currentOffset);
 
                 int maxBytesToSend = bufferedBytes.get();
@@ -394,7 +401,7 @@ public class QuicStream extends BaseStream {
                     int nrOfBytes = 0;
                     StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
                     maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getBytes().length - 1);  // Take one byte extra for length field var int
-                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
+                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStreamImpl.this, currentOffset + maxBytesToSend) - currentOffset);
                     maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
                     byte[] dataToSend = new byte[maxBytesToSend];
@@ -448,8 +455,8 @@ public class QuicStream extends BaseStream {
 
                     if (streamFrame.isFinal()) {
                         // Done! Retransmissions may follow, but don't need flow control.
-                        flowController.unregister(QuicStream.this);
-                        flowController.streamClosed(QuicStream.this);
+                        flowController.unregister(QuicStreamImpl.this);
+                        flowController.streamClosed(QuicStreamImpl.this);
                     }
                     return streamFrame;
                 }
