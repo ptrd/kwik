@@ -99,7 +99,7 @@ class QuicClientConnectionImplTest {
         recorder.verify(sender, never()).setInitialToken(any(byte[].class));
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(originalConnectionId, "2b57643b17ca7ce7c345771c37e1c6ed");
+        RetryPacket retryPacket = createRetryPacket(originalConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
 
         // A second InitialPacket should be send with token
@@ -276,7 +276,7 @@ class QuicClientConnectionImplTest {
         originalDestinationId = connection.getDestinationConnectionId();
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "2b57643b17ca7ce7c345771c37e1c6ed");
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
         return retryPacket;
     }

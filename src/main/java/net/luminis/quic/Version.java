@@ -69,7 +69,7 @@ public enum Version {
     }
 
     public static Version getDefault() {
-        return IETF_draft_29;
+        return QUIC_version_1;
     }
 
     public boolean atLeast(Version other) {

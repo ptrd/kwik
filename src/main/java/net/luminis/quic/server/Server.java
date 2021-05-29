@@ -75,7 +75,6 @@ public class Server implements ServerConnectionRegistry {
     public static void main(String[] rawArgs) throws Exception {
         Options cmdLineOptions = new Options();
         cmdLineOptions.addOption(null, "noRetry", false, "disable always use retry");
-        cmdLineOptions.addOption(null, "quicV1", false, "enable QUIC version 1");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -93,8 +92,6 @@ public class Server implements ServerConnectionRegistry {
         }
 
         boolean requireRetry = ! cmd.hasOption("noRetry");
-
-        boolean enableQuicV1 = cmd.hasOption("quicV1");
 
         File certificateFile = new File(args.get(0));
         if (!certificateFile.exists()) {
@@ -121,9 +118,8 @@ public class Server implements ServerConnectionRegistry {
 
         List<Version> supportedVersions = new ArrayList<>();
         supportedVersions.addAll(List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32));
-        if (enableQuicV1) {
-            supportedVersions.add(Version.QUIC_version_1);
-        }
+        supportedVersions.add(Version.QUIC_version_1);
+
         new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
     }
 

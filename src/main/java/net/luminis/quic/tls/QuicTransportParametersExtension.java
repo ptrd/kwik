@@ -33,13 +33,13 @@ import static net.luminis.quic.Role.Server;
 
 /**
  * Quic transport parameter TLS extension.
- * see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-18.2
+ * see https://www.rfc-editor.org/rfc/rfc9001.html#name-quic-transport-parameters-e
  */
 public class QuicTransportParametersExtension extends Extension {
 
     private static final int MINIMUM_EXTENSION_LENGTH = 2;
     public static final int CODEPOINT_IETFDRAFT = 0xffa5;
-    public static final int CODEPOINT_V1 = 57;
+    public static final int CODEPOINT_V1 = 0x39;
 
     private final Version quicVersion;
     private Role senderRole;

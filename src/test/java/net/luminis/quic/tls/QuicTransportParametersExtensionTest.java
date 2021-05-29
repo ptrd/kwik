@@ -147,7 +147,7 @@ class QuicTransportParametersExtensionTest {
     @Test
     void testParseMaxIdleTimeoutTransportParameter() throws Exception {
         //                                           ext size  id sz value 30.000 params size unknonw id size  dummy value    idle id size  0x40 | 27 10 (10000)
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06     01 04 80 00 75 30".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 06     01 04 80 00 75 30".replaceAll(" ", ""));
 
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));

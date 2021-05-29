@@ -33,7 +33,7 @@ import static org.mockito.Mockito.mock;
 class RetryPacketTest {
 
     public static final int DONT_CARE = -1;
-    public static final String QUIC_VERSION_AS_HEX = Integer.toHexString(Version.getDefault().getId());
+    public static final String QUIC_VERSION_AS_HEX = String.format("%08x", Version.getDefault().getId());
 
     @Test
     void parseRetryPacket() throws Exception {
