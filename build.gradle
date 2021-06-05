@@ -20,7 +20,7 @@ dependencies {
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 
-    compile name: 'tls13'
+    compile name: 'agent15'
 
     implementation 'org.glassfish:javax.json:1.1.4'
 
@@ -35,14 +35,6 @@ sourceSets {
     main {
         resources {
             srcDir "${buildDir}/generated"
-        }
-        java {
-            srcDir "tls13-java/src/"
-        }
-    }
-    test {
-        java {
-            srcDir "tls13-java/test/"
         }
     }
 }
