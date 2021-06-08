@@ -20,15 +20,15 @@ dependencies {
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 
-    compile name: 'tls13'
+    implementation name: 'tls13'
 
     implementation 'org.glassfish:javax.json:1.1.4'
 
-    testCompile('org.junit.jupiter:junit-jupiter-api:5.3.2')
-    testCompile('org.junit.jupiter:junit-jupiter-params:5.3.2')
-    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.3.2')
-    testCompile("org.mockito:mockito-core:3.2.4")
-    testCompile("org.assertj:assertj-core:3.14.0")
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.3.2')
+    testImplementation('org.junit.jupiter:junit-jupiter-params:5.3.2')
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.3.2')
+    testImplementation("org.mockito:mockito-core:3.2.4")
+    testImplementation("org.assertj:assertj-core:3.14.0")
 }
 
 sourceSets {

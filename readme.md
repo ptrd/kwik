@@ -92,7 +92,7 @@ If you want to use Kwik as a library, consider the various classes in
 the [run package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/) as samples
 of how to setup and use a QUIC connection with Kwik in Java.
 
-To build the client/library, run gradle (`gradle build`).
+To build the client/library, run gradle (`./gradlew build`).
 To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 
 Usage of the sample client:
