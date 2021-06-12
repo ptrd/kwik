@@ -115,7 +115,9 @@ public interface Logger {
 
     void fc(String message);
 
-    void receivedPacketInfo(String toString);
+    void receivedPacketInfo(String info);
+
+    void sentPacketInfo(String info);
 
     QLog getQLog();
 }

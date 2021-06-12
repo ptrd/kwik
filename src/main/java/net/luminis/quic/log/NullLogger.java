@@ -202,6 +202,10 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void sentPacketInfo(String info) {
+    }
+
+    @Override
     public QLog getQLog() {
         return new NullQLog();
     }

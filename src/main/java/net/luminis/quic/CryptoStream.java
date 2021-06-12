@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021 Peter Doornbosch
+ * Copyright © 2018, 2019, 2020, 2021 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -46,7 +46,8 @@ public class CryptoStream extends BaseStream {
     private final TlsEngine tlsEngine;
     private final Logger log;
     private final Sender sender;
-    private final List<Message> messages;
+    private final List<Message> messagesReceived;
+    private final List<Message> messagesSent;
     private final TlsMessageParser tlsMessageParser;
     private final List<ByteBuffer> dataToSend;
     private volatile int dataToSendOffset;
@@ -66,7 +67,8 @@ public class CryptoStream extends BaseStream {
         this.log = log;
         this.sender = sender;
 
-        messages = new ArrayList<>();
+        messagesReceived = new ArrayList<>();
+        messagesSent = new ArrayList<>();
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
     }
@@ -107,7 +109,7 @@ public class CryptoStream extends BaseStream {
                         if (msgBuffer.hasRemaining()) {
                             throw new RuntimeException();  // Must be programming error
                         }
-                        messages.add(tlsMessage);
+                        messagesReceived.add(tlsMessage);
                     }
                 }
             } else {
@@ -134,6 +136,26 @@ public class CryptoStream extends BaseStream {
 
     @Override
     public String toString() {
+        return toStringWith(Collections.emptyList());
+    }
+
+    /**
+     * Return string representation of this crypto stream, including all messages that are received.
+     * @return
+     */
+    public String toStringReceived() {
+        return toStringWith(messagesReceived);
+    }
+
+    /**
+     * Return string representation of this crypto stream, including all messages that are sent.
+     * @return
+     */
+    public String toStringSent() {
+        return toStringWith(messagesSent);
+    }
+
+    private String toStringWith(List<Message> messages) {
         return "CryptoStream["  + encryptionLevel.name().charAt(0) + "|" + messages.stream()
                 .map(msg -> msg.getClass().getSimpleName())
                 .map(name -> name.endsWith("Message")? name.substring(0, name.length() - 7): name)
@@ -142,10 +164,18 @@ public class CryptoStream extends BaseStream {
     }
 
     public List<Message> getTlsMessages() {
-        return messages;
+        return messagesReceived;
     }
 
-    public void write(byte[] data) {
+    public void write(HandshakeMessage message, boolean flush) {
+        write(message.getBytes());
+        if (flush) {
+            sender.flush();
+        }
+        messagesSent.add(message);
+    }
+
+    void write(byte[] data) {
         dataToSend.add(ByteBuffer.wrap(data));
         sendStreamSize += data.length;
         sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);

@@ -243,8 +243,13 @@ public class LogProxy implements Logger {
     }
 
     @Override
-    public void receivedPacketInfo(String toString) {
-        proxiedLogger.receivedPacketInfo(toString);
+    public void receivedPacketInfo(String info) {
+        proxiedLogger.receivedPacketInfo(info);
+    }
+
+    @Override
+    public void sentPacketInfo(String info) {
+        proxiedLogger.sentPacketInfo(info);
     }
 
     @Override

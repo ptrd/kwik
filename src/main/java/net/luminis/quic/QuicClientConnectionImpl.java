@@ -117,22 +117,20 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
-                getCryptoStream(Initial).write(clientHello.getBytes());
-                sender.flush();
+                CryptoStream cryptoStream = getCryptoStream(Initial);
+                cryptoStream.write(clientHello, true);
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
+                log.sentPacketInfo(cryptoStream.toStringSent());
             }
 
             @Override
             public void send(FinishedMessage finished) {
-                sendHandshakeFrameWithRetransmit(new CryptoFrame(quicVersion, finished.getBytes()));
-                sender.flush();
+                CryptoStream cryptoStream = getCryptoStream(Handshake);
+                cryptoStream.write(finished, true);
+                log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
-    }
-
-    private void sendHandshakeFrameWithRetransmit(QuicFrame frame) {
-        sender.send(frame, Handshake, this::sendHandshakeFrameWithRetransmit);
     }
 
     /**
