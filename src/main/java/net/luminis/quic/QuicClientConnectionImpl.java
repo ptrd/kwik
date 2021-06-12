@@ -130,6 +130,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 cryptoStream.write(finished, true);
                 log.sentPacketInfo(cryptoStream.toStringSent());
             }
+
+            @Override
+            public void send(CertificateMessage certificateMessage) throws IOException {
+                CryptoStream cryptoStream = getCryptoStream(Handshake);
+                cryptoStream.write(certificateMessage, true);
+                log.sentPacketInfo(cryptoStream.toStringSent());
+            }
         }, this);
     }
 
@@ -889,12 +896,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public void trustAll() {
         X509TrustManager trustAllCerts =
             new X509TrustManager() {
+                @Override
                 public java.security.cert.X509Certificate[] getAcceptedIssuers() {
                     return null;
                 }
+                @Override
                 public void checkClientTrusted(
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
+                @Override
                 public void checkServerTrusted(
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
