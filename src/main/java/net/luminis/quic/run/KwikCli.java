@@ -463,6 +463,19 @@ public class KwikCli {
     private static PrivateKey readKey(String clientKey) throws IOException, InvalidKeySpecException {
         String key = new String(Files.readAllBytes(Paths.get(clientKey)), Charset.defaultCharset());
 
+        if (key.contains("BEGIN PRIVATE KEY")) {
+            return loadRSAKey(key);
+        }
+        else if (key.contains("BEGIN EC PRIVATE KEY")) {
+            throw new IllegalArgumentException("EC private key must be in DER format");
+        }
+        else {
+            // Assume DER format
+            return loadECKey(Files.readAllBytes(Paths.get(clientKey)));
+        }
+    }
+
+    private static PrivateKey loadRSAKey(String key) throws InvalidKeySpecException {
         String privateKeyPEM = key
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replaceAll(System.lineSeparator(), "")
@@ -472,9 +485,20 @@ public class KwikCli {
         try {
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
-            return (RSAPrivateKey) keyFactory.generatePrivate(keySpec);
+            return keyFactory.generatePrivate(keySpec);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Missing key algorithm RSA");
+        }
+    }
+
+    private static PrivateKey loadECKey(byte[] pkcs8key) throws InvalidKeySpecException {
+        try {
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(pkcs8key);
+            KeyFactory factory = KeyFactory.getInstance("EC");
+            PrivateKey privateKey = factory.generatePrivate(spec);
+            return privateKey;
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Missing ECDSA support");
         }
     }
 
