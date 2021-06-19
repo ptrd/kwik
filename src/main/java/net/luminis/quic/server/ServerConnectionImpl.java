@@ -497,27 +497,31 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private class TlsMessageSender implements ServerMessageSender {
         @Override
         public void send(ServerHello sh) {
-            getCryptoStream(EncryptionLevel.Initial).write(sh.getBytes());
+            CryptoStream cryptoStream = getCryptoStream(EncryptionLevel.Initial);
+            cryptoStream.write(sh, false);
+            log.sentPacketInfo(cryptoStream.toStringSent());
         }
 
         @Override
         public void send(EncryptedExtensions ee) {
-            getCryptoStream(EncryptionLevel.Handshake).write(ee.getBytes());
+            getCryptoStream(EncryptionLevel.Handshake).write(ee, false);
         }
 
         @Override
         public void send(CertificateMessage cm) throws IOException {
-            getCryptoStream(EncryptionLevel.Handshake).write(cm.getBytes());
+            getCryptoStream(EncryptionLevel.Handshake).write(cm, false);
         }
 
         @Override
         public void send(CertificateVerifyMessage cv) throws IOException {
-            getCryptoStream(EncryptionLevel.Handshake).write(cv.getBytes());
+            getCryptoStream(EncryptionLevel.Handshake).write(cv, false);
         }
 
         @Override
         public void send(FinishedMessage finished) throws IOException {
-            getCryptoStream(EncryptionLevel.Handshake).write(finished.getBytes());
+            CryptoStream cryptoStream = getCryptoStream(EncryptionLevel.Handshake);
+            cryptoStream.write(finished, false);
+            log.sentPacketInfo(cryptoStream.toStringSent());
         }
     }
 

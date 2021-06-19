@@ -78,11 +78,22 @@ always contact the author (see contact details below) for more information or he
 ### Is Kwik secure?
 
 The TLS library used by Kwik is also "home made". Although all security features are implemented (e.g. certificates are
-checked as well as the Certificate Verify message that proofs possession of the certificate private key), it is not 
-security tested nor reviewed by security experts. So if you plan to transfer sensitive data or are afraid of intelligence
+checked as well as the Certificate Verify message that proofs possession of the certificate private key), and only
+crypto algorithms provided by the JDK are used, it is not security tested nor reviewed by security experts. 
+So if you plan to transfer sensitive data or are afraid of intelligence
 services trying to spy on you, using Kwik is probably not the best idea.
 
 ## Usage
+
+### Building
+
+To build the project:
+
+- clone the git repository and cd into the directory
+- update / get the agent15 (TLS 1.3 library) sources by executing `git submodule update --init --recursive`
+- build with gradle wrapper: `./gradlew build` (or `gradlew.bat build` on Windows).
+
+Gradle will write the output to `build/libs`.
 
 ### Client
 
@@ -92,7 +103,6 @@ If you want to use Kwik as a library, consider the various classes in
 the [run package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/) as samples
 of how to setup and use a QUIC connection with Kwik in Java.
 
-To build the client/library, run gradle (`gradle build`).
 To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 
 Usage of the sample client:
@@ -105,6 +115,9 @@ Usage of the sample client:
      -A,--alpn <arg>                set alpn (default is hq-xx)
      -c,--connectionTimeout <arg>   connection timeout in seconds
         --chacha20                  use ChaCha20 as only cipher suite     
+        --clientCertificate <arg>   certificate (file) for client
+                                    authentication
+        --clientKey <arg>           private key (file) for client certificate
      -h,--help                      show help
      -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
                                     '/index.html'
@@ -125,7 +138,8 @@ Usage of the sample client:
         --saveServerCertificates <arg>   store server certificates in given file
         --secrets <arg>             write secrets to file (Wireshark format)
      -T,--relativeTime              log with time (in seconds) since first packet 
-     -v,--version                   show Kwik version                                   
+     -v,--version                   show Kwik version
+     -v1                            use Quic version 1                                
      -Z,--use0RTT                   use 0-RTT if possible (requires -H and -R)
             
 If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.

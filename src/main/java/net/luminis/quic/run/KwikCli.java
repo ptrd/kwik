@@ -32,11 +32,19 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
+import java.rmi.RemoteException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.cert.*;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -80,6 +88,8 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
         cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
         cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
+        cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");
+        cmdLineOptions.addOption(null, "clientKey", true, "private key (file) for client certificate");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -348,6 +358,21 @@ public class KwikCli {
             System.exit(1);
         }
 
+        if (cmd.hasOption("clientCertificate") && cmd.hasOption("clientKey")) {
+            try {
+                builder.clientCertificate(readCertificate(cmd.getOptionValue("clientCertificate")));
+                builder.clientCertificateKey(readKey(cmd.getOptionValue("clientKey")));
+            }
+            catch (Exception e) {
+                System.err.println("Loading client certificate/key failed: " + e);
+                System.exit(1);
+            }
+        }
+        else if (cmd.hasOption("clientCertificate") || cmd.hasOption("clientKey")) {
+            System.err.println("Options --clientCertificate and --clientKey should always be used together");
+            System.exit(1);
+        }
+
         if (cmd.hasOption("quantumReadinessTest")) {
             try {
                 builder.quantumReadinessTest(Integer.parseInt(cmd.getOptionValue("quantumReadinessTest")));
@@ -432,6 +457,65 @@ public class KwikCli {
 
         if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+        }
+    }
+
+    private static PrivateKey readKey(String clientKey) throws IOException, InvalidKeySpecException {
+        String key = new String(Files.readAllBytes(Paths.get(clientKey)), Charset.defaultCharset());
+
+        if (key.contains("BEGIN PRIVATE KEY")) {
+            return loadRSAKey(key);
+        }
+        else if (key.contains("BEGIN EC PRIVATE KEY")) {
+            throw new IllegalArgumentException("EC private key must be in DER format");
+        }
+        else {
+            // Assume DER format
+            return loadECKey(Files.readAllBytes(Paths.get(clientKey)));
+        }
+    }
+
+    private static PrivateKey loadRSAKey(String key) throws InvalidKeySpecException {
+        String privateKeyPEM = key
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replaceAll(System.lineSeparator(), "")
+                .replace("-----END PRIVATE KEY-----", "");
+        byte[] encoded = Base64.getMimeDecoder().decode(privateKeyPEM);
+
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
+            return keyFactory.generatePrivate(keySpec);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Missing key algorithm RSA");
+        }
+    }
+
+    private static PrivateKey loadECKey(byte[] pkcs8key) throws InvalidKeySpecException {
+        try {
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(pkcs8key);
+            KeyFactory factory = KeyFactory.getInstance("EC");
+            PrivateKey privateKey = factory.generatePrivate(spec);
+            return privateKey;
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Missing ECDSA support");
+        }
+    }
+
+    private static X509Certificate readCertificate(String certificateFile) throws IOException, CertificateException {
+        String fileContent = new String(Files.readAllBytes(Paths.get(certificateFile)), Charset.defaultCharset());
+
+        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+        if (fileContent.startsWith("-----BEGIN CERTIFICATE-----")) {
+                String encodedCertificate = fileContent
+                        .replace("-----BEGIN CERTIFICATE-----", "")
+                        .replaceAll(System.lineSeparator(), "")
+                        .replace("-----END CERTIFICATE-----", "");
+            Certificate certificate = certificateFactory.generateCertificate(new ByteArrayInputStream(Base64.getDecoder().decode(encodedCertificate)));
+            return (X509Certificate) certificate;
+        }
+        else {
+            throw new IllegalArgumentException("Invalid certificate file");
         }
     }
 

@@ -352,7 +352,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
         try {
             getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toString());
+            log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toStringReceived());
         } catch (TlsProtocolException e) {
             immediateCloseWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
         }

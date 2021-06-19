@@ -38,9 +38,17 @@ import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
 
 import javax.net.ssl.X509TrustManager;
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.*;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -73,6 +81,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
+    private final X509Certificate clientCertificate;
+    private final PrivateKey clientCertificateKey;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -90,7 +100,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private Integer clientHelloEnlargement;
 
 
-    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log, String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength, List<TlsConstants.CipherSuite> cipherSuites) throws UnknownHostException, SocketException {
+    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log,
+                                     String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
+                                     List<TlsConstants.CipherSuite> cipherSuites,
+                                     X509Certificate clientCertificate, PrivateKey clientCertificateKey) throws UnknownHostException, SocketException {
         super(quicVersion, Role.Client, secretsFile, log);
         log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
         this.host = host;
@@ -98,6 +111,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
+        this.clientCertificate = clientCertificate;
+        this.clientCertificateKey = clientCertificateKey;
 
         socket = new DatagramSocket();
 
@@ -117,22 +132,34 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
-                getCryptoStream(Initial).write(clientHello.getBytes());
-                sender.flush();
+                CryptoStream cryptoStream = getCryptoStream(Initial);
+                cryptoStream.write(clientHello, true);
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
+                log.sentPacketInfo(cryptoStream.toStringSent());
             }
 
             @Override
             public void send(FinishedMessage finished) {
-                sendHandshakeFrameWithRetransmit(new CryptoFrame(quicVersion, finished.getBytes()));
-                sender.flush();
+                CryptoStream cryptoStream = getCryptoStream(Handshake);
+                cryptoStream.write(finished, true);
+                log.sentPacketInfo(cryptoStream.toStringSent());
+            }
+
+            @Override
+            public void send(CertificateMessage certificateMessage) throws IOException {
+                CryptoStream cryptoStream = getCryptoStream(Handshake);
+                cryptoStream.write(certificateMessage, true);
+                log.sentPacketInfo(cryptoStream.toStringSent());
+            }
+
+            @Override
+            public void send(CertificateVerifyMessage certificateVerifyMessage) {
+                CryptoStream cryptoStream = getCryptoStream(Handshake);
+                cryptoStream.write(certificateVerifyMessage, true);
+                log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
-    }
-
-    private void sendHandshakeFrameWithRetransmit(QuicFrame frame) {
-        sender.send(frame, Handshake, this::sendHandshakeFrameWithRetransmit);
     }
 
     /**
@@ -302,6 +329,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
+        if (clientCertificate != null && clientCertificateKey != null) {
+            tlsEngine.setClientCertificateCallback(authorities -> {
+                if (! authorities.contains(clientCertificate.getIssuerX500Principal())) {
+                    log.warn("Client certificate is not signed by one of the requested authorities: " + authorities);
+                }
+                return new CertificateWithPrivateKey(clientCertificate, clientCertificateKey);
+            });
+        }
 
         QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams, Role.Client);
         if (clientHelloEnlargement != null) {
@@ -891,12 +926,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public void trustAll() {
         X509TrustManager trustAllCerts =
             new X509TrustManager() {
+                @Override
                 public java.security.cert.X509Certificate[] getAcceptedIssuers() {
                     return null;
                 }
+                @Override
                 public void checkClientTrusted(
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
+                @Override
                 public void checkServerTrusted(
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
@@ -938,6 +976,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         Builder noServerCertificateCheck();
 
         Builder quantumReadinessTest(int nrOfDummyBytes);
+
+        Builder clientCertificate(X509Certificate certificate);
+
+        Builder clientCertificateKey(PrivateKey privateKey);
     }
 
     private static class BuilderImpl implements Builder {
@@ -953,6 +995,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
         private boolean omitCertificateCheck;
         private Integer quantumReadinessTest;
+        private X509Certificate clientCertificate;
+        private PrivateKey clientCertificateKey;
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
@@ -969,7 +1013,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
             }
 
-            QuicClientConnectionImpl quicConnection = new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites);
+            QuicClientConnectionImpl quicConnection =
+                    new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile,
+                            initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
+
             if (omitCertificateCheck) {
                 quicConnection.trustAll();
             }
@@ -1054,7 +1101,17 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             this.quantumReadinessTest = nrOfDummyBytes;
             return this;
         }
+
+        @Override
+        public Builder clientCertificate(X509Certificate certificate) {
+            this.clientCertificate = certificate;
+            return this;
+        }
+
+        @Override
+        public Builder clientCertificateKey(PrivateKey privateKey) {
+            this.clientCertificateKey = privateKey;
+            return this;
+        }
     }
-
-
 }
