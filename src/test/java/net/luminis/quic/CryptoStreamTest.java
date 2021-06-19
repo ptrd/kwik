@@ -283,7 +283,7 @@ class CryptoStreamTest {
     }
 
     private void setParseFunction(Function<ByteBuffer, Message> parseFunction) throws Exception {
-        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class))).thenAnswer(new Answer<Message>() {
+        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class), any(ProtectionKeysType.class))).thenAnswer(new Answer<Message>() {
             @Override
             public Message answer(InvocationOnMock invocation) throws Throwable {
                 ByteBuffer buffer = invocation.getArgument(0);

@@ -41,6 +41,7 @@ public class CryptoStream extends BaseStream {
 
     private final Version quicVersion;
     private final EncryptionLevel encryptionLevel;
+    private final ProtectionKeysType tlsProtectionType;
     private final ConnectionSecrets connectionSecrets;
     private final Role peerRole;
     private final TlsEngine tlsEngine;
@@ -67,6 +68,10 @@ public class CryptoStream extends BaseStream {
         this.log = log;
         this.sender = sender;
 
+        tlsProtectionType =
+                encryptionLevel == EncryptionLevel.Handshake? ProtectionKeysType.Handshake:
+                        encryptionLevel == EncryptionLevel.App? ProtectionKeysType.Application:
+                                ProtectionKeysType.None;
         messagesReceived = new ArrayList<>();
         messagesSent = new ArrayList<>();
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
@@ -104,7 +109,7 @@ public class CryptoStream extends BaseStream {
                         msgSizeRead = false;
 
                         msgBuffer.flip();
-                        HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, tlsEngine);
+                        HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, tlsEngine, tlsProtectionType);
 
                         if (msgBuffer.hasRemaining()) {
                             throw new RuntimeException();  // Must be programming error

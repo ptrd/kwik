@@ -538,7 +538,7 @@ class ServerConnectionImplTest {
         }
 
         @Override
-        public void received(ClientHello clientHello) throws TlsProtocolException, IOException {
+        public void received(ClientHello clientHello, ProtectionKeysType keyType) throws TlsProtocolException, IOException {
             if (exceptionSupplier != null) {
                 throw exceptionSupplier.get();
             }
