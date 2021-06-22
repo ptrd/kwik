@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -95,6 +96,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected volatile Status connectionState;
 
     private RateLimiter closeFramesSendRateLimiter;
+    private final ScheduledExecutorService scheduler;
 
 
     protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
@@ -111,6 +113,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
         connectionState = Status.Idle;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
+        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
     }
 
     public void addHandshakeStateListener(RecoveryManager recoveryManager) {
@@ -589,6 +592,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         idleTimer.shutdown();
         getSender().shutdown();
         connectionState = Status.Closed;
+        scheduler.shutdown();
     }
 
     protected int quicError(TlsProtocolException tlsError) {
@@ -639,7 +643,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     private void schedule(Runnable command, int delay, TimeUnit unit) {
-        Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduled")).schedule(command, delay, unit);
+        scheduler.schedule(command, delay, unit);
     }
 
     @Override

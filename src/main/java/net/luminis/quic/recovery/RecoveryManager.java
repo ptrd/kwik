@@ -374,6 +374,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (! hasBeenReset) {
             hasBeenReset = true;
             unschedule();
+            scheduler.shutdown();
             for (PnSpace pnSpace: PnSpace.values()) {
                 lossDetectors[pnSpace.ordinal()].reset();
             }

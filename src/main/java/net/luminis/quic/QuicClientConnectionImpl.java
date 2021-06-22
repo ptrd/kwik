@@ -98,6 +98,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
+    private volatile Thread receiverThread;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log,
@@ -291,7 +292,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void startReceiverLoop() {
-        Thread receiverThread = new Thread(this::receiveAndProcessPackets, "receiver-loop");
+        receiverThread = new Thread(this::receiveAndProcessPackets, "receiver-loop");
         receiverThread.setDaemon(true);
         receiverThread.start();
     }
@@ -588,6 +589,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         handshakeFinishedCondition.countDown();
         receiver.shutdown();
         socket.close();
+        if (receiverThread != null) {
+            receiverThread.interrupt();
+        }
     }
 
     public void changeAddress() {
