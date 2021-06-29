@@ -653,6 +653,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         return new Statistics(getSender().getStatistics());
     }
 
+    @Override
+    public Version getQuicVersion() {
+        return quicVersion;
+    }
+
     protected abstract SenderImpl getSender();
 
     protected abstract TlsEngine getTlsEngine();
