@@ -40,10 +40,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -643,7 +640,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     private void schedule(Runnable command, int delay, TimeUnit unit) {
-        scheduler.schedule(command, delay, unit);
+        try {
+            scheduler.schedule(command, delay, unit);
+        }
+        catch (RejectedExecutionException rejected) {
+            // Can happen when already terminated; don't bother
+        }
     }
 
     @Override
