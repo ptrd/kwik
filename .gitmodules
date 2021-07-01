@@ -1,6 +1,3 @@
-[submodule "tls13-java"]
-	path = tls13-java
-	url = git@bitbucket.org:pjtr/tls13-java.git
 [submodule "agent15"]
 	path = agent15
-	url = git@bitbucket.org:pjtr/agent15.git
+	url = ../agent15.git
