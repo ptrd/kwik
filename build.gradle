@@ -7,13 +7,11 @@ targetCompatibility = 11
 
 repositories {
     mavenCentral()
-
-    flatDir {
-        dirs 'libs'
-    }
 }
 
 dependencies {
+    implementation project(':agent15')
+
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
     implementation group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
 
@@ -33,9 +31,6 @@ sourceSets {
     main {
         resources {
             srcDir "${buildDir}/generated"
-        }
-        java {
-            srcDir "agent15/src/"
         }
     }
 }

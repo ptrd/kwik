@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module external.linked.project.id=":agent15:main" external.linked.project.path="$MODULE_DIR$/../../../agent15" external.root.project.path="$MODULE_DIR$/../../.." external.system.id="GRADLE" external.system.module.group="kwik" external.system.module.type="sourceSet" external.system.module.version="unspecified" type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <output url="file://$MODULE_DIR$/../../../agent15/out/production/classes" />
+    <exclude-output />
+    <content url="file://$MODULE_DIR$/../../../agent15/build/generated">
+      <sourceFolder url="file://$MODULE_DIR$/../../../agent15/build/generated" type="java-resource" />
+    </content>
+    <content url="file://$MODULE_DIR$/../../../agent15/src">
+      <sourceFolder url="file://$MODULE_DIR$/../../../agent15/src" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Gradle: at.favre.lib:hkdf:1.0.1" level="project" />
+  </component>
+</module>
