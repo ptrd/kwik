@@ -43,6 +43,8 @@ public interface QuicClientConnection extends QuicConnection {
 
     List<X509Certificate> getServerCertificateChain();
 
+    boolean isConnected();
+
     class StreamEarlyData {
         byte[] data;
         boolean closeOutput;
