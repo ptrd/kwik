@@ -19,6 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.*;
+import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -28,12 +29,13 @@ import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.rmi.RemoteException;
@@ -425,8 +427,36 @@ public class KwikCli {
                 }
 
                 if (httpRequestPath != null) {
-                    doHttp09Request(quicConnection, httpRequestPath, httpStream, outputFile);
-                } else {
+                    try {
+                        HttpClient httpClient = new Http09Client(quicConnection);
+                        InetSocketAddress serverAddress = quicConnection.getServerAddress();
+                        HttpRequest request = HttpRequest.newBuilder()
+                                .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
+                                .build();
+
+                        if (outputFile != null) {
+                            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
+                        }
+                        else {
+                            HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+                            try {
+                                Thread.sleep(500);
+                            }
+                            catch (InterruptedException e) {}
+
+                            System.out.println("Server returns: \n" + httpResponse.body());
+                        }
+                    }
+                    catch (InterruptedException interruptedException) {
+                        System.out.println("HTTP request is interrupted");
+                    }
+                    catch (URISyntaxException e) {
+                        // Impossible
+                        throw new RuntimeException();
+                    }
+                }
+                else {
                     if (keepAliveTime > 0) {
                         try {
                             Thread.sleep((keepAliveTime + 30) * 1000);

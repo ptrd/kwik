@@ -41,6 +41,8 @@ public interface QuicClientConnection extends QuicConnection {
 
     InetSocketAddress getLocalAddress();
 
+    InetSocketAddress getServerAddress();
+
     List<X509Certificate> getServerCertificateChain();
 
     boolean isConnected();

@@ -166,7 +166,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
-        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        String alpn;
+        if (quicVersion.equals(Version.QUIC_version_1)) {
+            alpn = "hq-interop";
+        }
+        else {
+            alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+        }
         connect(connectionTimeout, alpn, transportParameters, null);
     }
 
@@ -191,9 +197,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot connect a connection that is in state " + connectionState);
-        }
-        else {
-            System.out.println("JA, het kan, want de state = " + connectionState);
         }
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
@@ -928,6 +931,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) socket.getLocalSocketAddress();
+    }
+
+    @Override
+    public InetSocketAddress getServerAddress() {
+        return new InetSocketAddress(host, port);
     }
 
     @Override
