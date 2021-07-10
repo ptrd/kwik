@@ -403,20 +403,7 @@ public class KwikCli {
                 new InteractiveShell(builder, alpn).start();
             }
             else {
-                QuicStream httpStream = null;
                 QuicClientConnection quicConnection = builder.build();
-                if (useZeroRtt && httpRequestPath != null) {
-                    String http09Request = "GET " + httpRequestPath + "\r\n";
-                    QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(http09Request.getBytes(), true);
-                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, List.of(earlyData)).get(0);
-                }
-                else {
-                    if (alpn == null) {
-                        quicConnection.connect(connectionTimeout * 1000);
-                    } else {
-                        quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
-                    }
-                }
 
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);
@@ -428,7 +415,7 @@ public class KwikCli {
 
                 if (httpRequestPath != null) {
                     try {
-                        HttpClient httpClient = new Http09Client(quicConnection);
+                        HttpClient httpClient = new Http09Client(quicConnection, useZeroRtt);
                         InetSocketAddress serverAddress = quicConnection.getServerAddress();
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
@@ -457,6 +444,7 @@ public class KwikCli {
                     }
                 }
                 else {
+                    quicConnection.connect(connectionTimeout, alpn, null, null);
                     if (keepAliveTime > 0) {
                         try {
                             Thread.sleep((keepAliveTime + 30) * 1000);

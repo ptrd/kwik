@@ -53,10 +53,12 @@ import java.util.concurrent.Flow;
 public class Http09Client extends HttpClient {
 
     private final QuicClientConnection quicConnection;
+    private final boolean with0RTT;
     private final int connectionTimeout = 10_000;
 
-    public Http09Client(QuicClientConnection quicConnection) {
+    public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
         this.quicConnection = quicConnection;
+        this.with0RTT = with0RTT;
     }
 
     @Override
@@ -106,6 +108,10 @@ public class Http09Client extends HttpClient {
 
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
+        String requestPath = request.uri().getPath();
+        String httpGetCommand = "GET " + requestPath + "\r\n";
+        QuicStream httpStream = null;
+
         if (!quicConnection.isConnected()) {
             String alpn;
             if (quicConnection.getQuicVersion().equals(net.luminis.quic.Version.QUIC_version_1)) {
@@ -114,14 +120,21 @@ public class Http09Client extends HttpClient {
                 String draftVersion = quicConnection.getQuicVersion().getDraftVersion();
                 alpn = "hq-" + draftVersion;
             }
-            quicConnection.connect(connectionTimeout, alpn, null, null);
-        }
 
-        boolean bidirectional = true;
-        QuicStream httpStream = quicConnection.createStream(bidirectional);
-        String requestPath = request.uri().getPath();
-        httpStream.getOutputStream().write(("GET " + requestPath + "\r\n").getBytes());
-        httpStream.getOutputStream().close();
+            if (with0RTT) {
+                QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
+                httpStream = quicConnection.connect(connectionTimeout, alpn, null, List.of(earlyData)).get(0);
+            }
+            else {
+                quicConnection.connect(connectionTimeout, alpn, null, null);
+            }
+        }
+        if (httpStream == null) {
+            boolean bidirectional = true;
+            httpStream = quicConnection.createStream(bidirectional);
+            httpStream.getOutputStream().write(httpGetCommand.getBytes());
+            httpStream.getOutputStream().close();
+        }
 
         HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(new HttpResponse.ResponseInfo() {
             @Override

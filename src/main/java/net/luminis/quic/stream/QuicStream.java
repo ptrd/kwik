@@ -300,7 +300,7 @@ public class QuicStream extends BaseStream {
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
             if (closed) {
-                throw new IOException("already closed");
+                throw new IOException("output stream already closed");
             }
 
             if (len > maxBufferSize) {
@@ -360,7 +360,7 @@ public class QuicStream extends BaseStream {
         @Override
         public void flush() throws IOException {
             if (closed) {
-                throw new IOException("already closed");
+                throw new IOException("output stream already closed");
             }
 
             // No-op, this implementation sends data as soon as possible.
