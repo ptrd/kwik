@@ -594,47 +594,6 @@ public class KwikCli {
         }
     }
 
-    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, String outputFile) throws IOException {
-        doHttp09Request(quicConnection, requestPath, null, outputFile);
-    }
-
-    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, QuicStream httpStream, String outputFile) throws IOException {
-        if (httpStream == null) {
-            boolean bidirectional = true;
-            httpStream = quicConnection.createStream(bidirectional);
-            httpStream.getOutputStream().write(("GET " + requestPath + "\r\n").getBytes());
-            httpStream.getOutputStream().close();
-        }
-
-        if (outputFile != null) {
-            FileOutputStream out;
-            if (new File(outputFile).isDirectory()) {
-                String fileName = requestPath;
-                if (fileName.equals("/")) {
-                    fileName = "index";
-                }
-                out = new FileOutputStream(new File(outputFile, fileName));
-            }
-            else {
-                out = new FileOutputStream(outputFile);
-            }
-            httpStream.getInputStream().transferTo(out);
-        }
-        else {
-            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {}
-
-            BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
-            String line;
-            System.out.println("Server returns: ");
-            while ((line = input.readLine()) != null) {
-                System.out.println(line);
-            }
-        }
-    }
-
     public static void usage() {
         HelpFormatter helpFormatter = new HelpFormatter();
         helpFormatter.setWidth(79);
