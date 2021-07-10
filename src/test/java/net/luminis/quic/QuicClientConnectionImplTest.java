@@ -89,7 +89,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3);
+                connection.connect(3, "hq");
             } catch (IOException e) {}
         }).start();
 
@@ -124,7 +124,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3);
+                connection.connect(3, "hq");
             } catch (IOException e) {
             }
         }).start();
@@ -160,7 +160,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3);
+                connection.connect(3, "hq");
             } catch (IOException e) {
             }
         }).start();
@@ -266,7 +266,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3);
+                connection.connect(3, "hq");
             } catch (IOException e) {
             }
         }).start();
@@ -288,7 +288,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3);
+                connection.connect(3, "hq");
             } catch (IOException e) {
             }
         }).start();
@@ -659,7 +659,7 @@ class QuicClientConnectionImplTest {
 
         new Thread(() -> {
             try {
-                connection.connect(3 * idleTimeoutInSeconds * 1000);
+                connection.connect(3 * idleTimeoutInSeconds * 1000, "hq");
             } catch (IOException e) {
                 System.out.println("Exception in connect method: " + e);
             }

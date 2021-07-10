@@ -25,10 +25,7 @@ import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -45,6 +42,8 @@ public class InteractiveShell {
     private TransportParameters params;
 
     public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn) {
+        Objects.requireNonNull(builder);
+        Objects.requireNonNull(alpn);
         this.builder = builder;
         this.alpn = alpn;
 
@@ -142,12 +141,7 @@ public class InteractiveShell {
 
         try {
             quicConnection = builder.build();
-            if (alpn == null) {
-                quicConnection.connect(connectionTimeout, params);
-            }
-            else {
-                quicConnection.connect(connectionTimeout, alpn, params, null);
-            }
+            quicConnection.connect(connectionTimeout, alpn, params, null);
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);

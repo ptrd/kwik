@@ -255,6 +255,14 @@ public class KwikCli {
                 System.exit(1);
             }
         }
+        else {
+            if (quicVersion.equals(Version.QUIC_version_1)) {
+                alpn = "hq-interop";
+            }
+            else {
+                alpn = "hq-" + quicVersion.getDraftVersion();
+            }
+        }
 
         int connectionTimeout = 5;
         if (cmd.hasOption("c")) {

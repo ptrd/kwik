@@ -24,14 +24,13 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.function.Consumer;
 
 
 public interface QuicClientConnection extends QuicConnection {
 
-    void connect(int connectionTimeout) throws IOException;
+    void connect(int connectionTimeout, String alpn) throws IOException;
 
-    void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException;
+    void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException;
 
     List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
 

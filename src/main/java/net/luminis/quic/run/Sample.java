@@ -52,7 +52,7 @@ public class Sample {
                         .uri(new URI(args[0]))
                         .build();
 
-        connection.connect(10_000);
+        connection.connect(10_000, "hq-32");
 
         QuicStream stream = connection.createStream(true);
 

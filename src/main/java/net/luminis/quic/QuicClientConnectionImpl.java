@@ -160,19 +160,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * Set up the connection with the server.
      */
     @Override
-    public void connect(int connectionTimeout) throws IOException {
-        connect(connectionTimeout, null);
+    public void connect(int connectionTimeout, String alpn) throws IOException {
+        connect(connectionTimeout, alpn, null, null);
     }
 
     @Override
-    public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
-        String alpn;
-        if (quicVersion.equals(Version.QUIC_version_1)) {
-            alpn = "hq-interop";
-        }
-        else {
-            alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
-        }
+    public void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException {
         connect(connectionTimeout, alpn, transportParameters, null);
     }
 
