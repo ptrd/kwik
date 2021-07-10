@@ -422,6 +422,9 @@ public class KwikCli {
                                 .build();
 
                         if (outputFile != null) {
+                            if (new File(outputFile).isDirectory()) {
+                                outputFile = new File(outputFile, new File(httpRequestPath).getName()).getAbsolutePath();
+                            }
                             httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
                         }
                         else {
