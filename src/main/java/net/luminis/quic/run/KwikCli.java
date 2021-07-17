@@ -29,6 +29,8 @@ import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -46,6 +48,7 @@ import java.security.cert.*;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -59,6 +62,10 @@ public class KwikCli {
     private static Options cmdLineOptions;
     private static String DEFAULT_LOG_ARGS = "wip";
 
+    public enum HttpVersion {
+        HTTP09,
+        HTTP3
+    }
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
@@ -79,7 +86,7 @@ public class KwikCli {
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
         cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
         cmdLineOptions.addOption("O", "output", true, "write server response to file");
-        cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
+        cmdLineOptions.addOption("H", "http", true, "send HTTP GET request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
         cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
@@ -247,6 +254,8 @@ public class KwikCli {
         }
         builder.version(quicVersion);
 
+        HttpVersion httpVersion = loadHttp3ClientClass()? HttpVersion.HTTP3: HttpVersion.HTTP09;
+
         String alpn = null;
         if (cmd.hasOption("A")) {
             alpn = cmd.getOptionValue("A", null);
@@ -257,10 +266,10 @@ public class KwikCli {
         }
         else {
             if (quicVersion.equals(Version.QUIC_version_1)) {
-                alpn = "hq-interop";
+                alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
             }
             else {
-                alpn = "hq-" + quicVersion.getDraftVersion();
+                alpn = (httpVersion == HttpVersion.HTTP3? "h3-": "hq-") + quicVersion.getDraftVersion();
             }
         }
 
@@ -408,7 +417,7 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(builder, alpn).start();
+                new InteractiveShell(builder, alpn, httpVersion).start();
             }
             else {
                 QuicClientConnection quicConnection = builder.build();
@@ -417,13 +426,9 @@ public class KwikCli {
                     quicConnection.keepAlive(keepAliveTime);
                 }
 
-                if (serverCertificatesFile != null) {
-                    storeServerCertificates(quicConnection, serverCertificatesFile);
-                }
-
                 if (httpRequestPath != null) {
                     try {
-                        HttpClient httpClient = new Http09Client(quicConnection, useZeroRtt);
+                        HttpClient httpClient = createHttpClient(httpVersion, quicConnection, useZeroRtt);
                         InetSocketAddress serverAddress = quicConnection.getServerAddress();
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
@@ -464,6 +469,10 @@ public class KwikCli {
                     }
                 }
 
+                if (serverCertificatesFile != null) {
+                    storeServerCertificates(quicConnection, serverCertificatesFile);
+                }
+
                 if (newSessionTicketsFilename != null) {
                     storeNewSessionTickets(quicConnection, newSessionTicketsFilename);
                 }
@@ -486,6 +495,38 @@ public class KwikCli {
 
         if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+        }
+    }
+
+    private static boolean loadHttp3ClientClass() {
+        try {
+            KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+            return true;
+        }
+        catch (ClassNotFoundException e) {
+            return false;
+        }
+
+    }
+
+    static HttpClient createHttpClient(HttpVersion httpVersion, QuicClientConnection quicConnection, boolean useZeroRtt) {
+        if (httpVersion == HttpVersion.HTTP3) {
+            try {
+                Class http3ClientClass = KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+                Constructor constructor = http3ClientClass.getConstructor(QuicConnection.class, Duration.class, Long.class);
+                // Connection timeout and receive buffer size are not used when client is using an existing quic connection
+
+                long maxReceiveBufferSize = 50_000_000L;
+                Duration connectionTimeout = Duration.ofSeconds(60);
+                HttpClient http3Client = (HttpClient) constructor.newInstance(quicConnection, connectionTimeout, maxReceiveBufferSize);
+                return http3Client;
+            }
+            catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else {
+            return new Http09Client(quicConnection, useZeroRtt);
         }
     }
 

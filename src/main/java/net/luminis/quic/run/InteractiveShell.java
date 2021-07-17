@@ -25,6 +25,13 @@ import net.luminis.quic.stream.QuicStream;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -40,12 +47,15 @@ public class InteractiveShell {
     private final String alpn;
     private QuicClientConnectionImpl quicConnection;
     private TransportParameters params;
+    private KwikCli.HttpVersion httpVersion;
+    private HttpClient httpClient;
 
-    public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn) {
+    public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn, KwikCli.HttpVersion httpVersion) {
         Objects.requireNonNull(builder);
         Objects.requireNonNull(alpn);
         this.builder = builder;
         this.alpn = alpn;
+        this.httpVersion = httpVersion;
 
         commands = new LinkedHashMap<>();
         history = new LinkedHashMap<>();
@@ -160,16 +170,18 @@ public class InteractiveShell {
             return;
         }
 
-        OutputStream out;
         try {
-            QuicStream httpStream = quicConnection.createStream(true);
-            httpStream.getOutputStream().write(("GET " + arg + "\r\n").getBytes());
-            httpStream.getOutputStream().close();
-            File outputFile = createNewFile(arg);
-            out = new FileOutputStream(outputFile);
-            httpStream.getInputStream().transferTo(out);
-            out.close();
-        } catch (IOException e) {
+            if (httpClient == null) {
+                httpClient = KwikCli.createHttpClient(httpVersion, quicConnection, false);
+            }
+            InetSocketAddress serverAddress = quicConnection.getServerAddress();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), arg, null, null))
+                    .build();
+
+            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+        }
+        catch (IOException | URISyntaxException | InterruptedException e) {
             System.out.println("Error: " + e);
         }
     }
