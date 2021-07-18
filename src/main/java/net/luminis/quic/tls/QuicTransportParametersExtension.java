@@ -335,18 +335,23 @@ public class QuicTransportParametersExtension extends Extension {
             params.setRetrySourceConnectionId(retrySourceCid);
         }
         else {
-            String msg = String.format("- unknown transport parameter 0x%04x, size %d", parameterId, size);
             String extension = "";
             if (parameterId == 0x0020) extension = "datagram";
             if (parameterId == 0x0040) extension = "multi-path";
             if (parameterId == 0x1057) extension = "loss-bits";
             if (parameterId == 0x173e) extension = "discard";
             if (parameterId == 0x2ab2) extension = "grease-quic-bit";
-            if (parameterId == 0x7157) extension = "timestamp";
+            if (parameterId == 0x7157) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-02#section-5
+            if (parameterId == 0x7158) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-05#section-5
             if (parameterId == 0x73db) extension = "version-negotiation";
-            if (parameterId == 0xde1a) extension = "delayed-ack";
-            if (!extension.isBlank()) {
-                msg += " (" + extension + " extension)";
+            if (parameterId == 0xde1a) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-01#section-3
+            if (parameterId == 0xff02de1aL) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-02#section-3
+            String msg;
+            if (extension.isBlank()) {
+                msg = String.format("- unknown transport parameter 0x%04x, size %d", parameterId, size);
+            }
+            else {
+                msg = String.format("- unsupported transport parameter 0x%04x, size %d (%s)", parameterId, size, extension);
             }
             log.warn(msg);
             buffer.get(new byte[size]);
