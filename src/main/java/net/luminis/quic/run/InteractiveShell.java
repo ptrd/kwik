@@ -31,8 +31,10 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -49,6 +51,7 @@ public class InteractiveShell {
     private TransportParameters params;
     private KwikCli.HttpVersion httpVersion;
     private HttpClient httpClient;
+    private CompletableFuture<HttpResponse<Path>> currentHttpGetResult;
 
     public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn, KwikCli.HttpVersion httpVersion) {
         Objects.requireNonNull(builder);
@@ -179,9 +182,10 @@ public class InteractiveShell {
                     .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), arg, null, null))
                     .build();
 
-            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+            CompletableFuture<HttpResponse<Path>> sendResult = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+            currentHttpGetResult = sendResult;
         }
-        catch (IOException | URISyntaxException | InterruptedException e) {
+        catch (IOException | URISyntaxException e) {
             System.out.println("Error: " + e);
         }
     }

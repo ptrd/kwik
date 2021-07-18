@@ -19,6 +19,7 @@
 package net.luminis.quic.client.h09;
 
 import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.stream.QuicStream;
 
 import javax.net.ssl.SSLContext;
@@ -37,10 +38,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Flow;
+import java.util.concurrent.*;
 
 /**
  * A HTTP client for HTTP 0.9 requests.
@@ -55,10 +53,13 @@ public class Http09Client extends HttpClient {
     private final QuicClientConnection quicConnection;
     private final boolean with0RTT;
     private final int connectionTimeout = 10_000;
+    private final ExecutorService executorService;
 
     public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
         this.quicConnection = quicConnection;
         this.with0RTT = with0RTT;
+
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http09"));
     }
 
     @Override
@@ -186,7 +187,22 @@ public class Http09Client extends HttpClient {
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-        throw new UnsupportedOperationException();
+        CompletableFuture<HttpResponse<T>> future = new CompletableFuture<>();
+        executorService.submit(() -> {
+            try {
+                future.complete(send(request, responseBodyHandler));
+            }
+            catch (IOException ex) {
+                future.completeExceptionally(ex);
+            }
+            catch (RuntimeException ex) {
+                future.completeExceptionally(ex);
+            }
+            catch (InterruptedException ex) {
+                future.completeExceptionally(ex);
+            }
+        });
+        return future;
     }
 
     @Override
