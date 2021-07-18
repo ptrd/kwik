@@ -25,6 +25,8 @@ import java.util.function.Consumer;
 
 public interface QuicConnection {
 
+    Version getQuicVersion();
+
     void setMaxAllowedBidirectionalStreams(int max);
 
     void setMaxAllowedUnidirectionalStreams(int max);

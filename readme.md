@@ -119,7 +119,7 @@ Usage of the sample client:
                                     authentication
         --clientKey <arg>           private key (file) for client certificate
      -h,--help                      show help
-     -H,--http09 <arg>              send HTTP 0.9 request, arg is path, e.g.
+     -H,--http <arg>                send HTTP GET request, arg is path, e.g.
                                     '/index.html'
      -i,--interactive               start interactive shell
         --initialRtt <arg>          custom initial RTT value (default is 500)
@@ -142,7 +142,11 @@ Usage of the sample client:
      -v1                            use Quic version 1                                
      -Z,--use0RTT                   use 0-RTT if possible (requires -H and -R)
             
-If you do not provide the `--http09` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
+If you do not provide the `--http` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
+
+Plain Kwik will use HTTP 0.9 for http requests. However, if the flupke-plugin.jar is on the classpath (e.g. when using
+the kwik.sh script, it will try to load the plugin from the `libs` directory), it will use Flupke HTTP3 client for the
+HTTP request.
 
 ### Server
 

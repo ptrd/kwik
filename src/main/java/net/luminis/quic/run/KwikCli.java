@@ -19,6 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.*;
+import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -28,12 +29,15 @@ import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.rmi.RemoteException;
@@ -44,6 +48,7 @@ import java.security.cert.*;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -57,6 +62,10 @@ public class KwikCli {
     private static Options cmdLineOptions;
     private static String DEFAULT_LOG_ARGS = "wip";
 
+    public enum HttpVersion {
+        HTTP09,
+        HTTP3
+    }
 
     public static void main(String[] rawArgs) throws ParseException {
         cmdLineOptions = new Options();
@@ -77,7 +86,7 @@ public class KwikCli {
         cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
         cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
         cmdLineOptions.addOption("O", "output", true, "write server response to file");
-        cmdLineOptions.addOption("H", "http09", true, "send HTTP 0.9 request, arg is path, e.g. '/index.html'");
+        cmdLineOptions.addOption("H", "http", true, "send HTTP GET request, arg is path, e.g. '/index.html'");
         cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
         cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
         cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
@@ -245,12 +254,22 @@ public class KwikCli {
         }
         builder.version(quicVersion);
 
+        HttpVersion httpVersion = loadHttp3ClientClass()? HttpVersion.HTTP3: HttpVersion.HTTP09;
+
         String alpn = null;
         if (cmd.hasOption("A")) {
             alpn = cmd.getOptionValue("A", null);
             if (alpn == null) {
                 usage();
                 System.exit(1);
+            }
+        }
+        else {
+            if (quicVersion.equals(Version.QUIC_version_1)) {
+                alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
+            }
+            else {
+                alpn = (httpVersion == HttpVersion.HTTP3? "h3-": "hq-") + quicVersion.getDraftVersion();
             }
         }
 
@@ -398,41 +417,60 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(builder, alpn).start();
+                new InteractiveShell(builder, alpn, httpVersion).start();
             }
             else {
-                QuicStream httpStream = null;
                 QuicClientConnection quicConnection = builder.build();
-                if (useZeroRtt && httpRequestPath != null) {
-                    String http09Request = "GET " + httpRequestPath + "\r\n";
-                    QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(http09Request.getBytes(), true);
-                    httpStream = quicConnection.connect(connectionTimeout * 1000, "hq-27", null, List.of(earlyData)).get(0);
-                }
-                else {
-                    if (alpn == null) {
-                        quicConnection.connect(connectionTimeout * 1000);
-                    } else {
-                        quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
-                    }
-                }
 
                 if (keepAliveTime > 0) {
                     quicConnection.keepAlive(keepAliveTime);
                 }
 
-                if (serverCertificatesFile != null) {
-                    storeServerCertificates(quicConnection, serverCertificatesFile);
-                }
-
                 if (httpRequestPath != null) {
-                    doHttp09Request(quicConnection, httpRequestPath, httpStream, outputFile);
-                } else {
+                    try {
+                        HttpClient httpClient = createHttpClient(httpVersion, quicConnection, useZeroRtt);
+                        InetSocketAddress serverAddress = quicConnection.getServerAddress();
+                        HttpRequest request = HttpRequest.newBuilder()
+                                .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
+                                .build();
+
+                        if (outputFile != null) {
+                            if (new File(outputFile).isDirectory()) {
+                                outputFile = new File(outputFile, new File(httpRequestPath).getName()).getAbsolutePath();
+                            }
+                            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
+                        }
+                        else {
+                            HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+                            try {
+                                Thread.sleep(500);
+                            }
+                            catch (InterruptedException e) {}
+
+                            System.out.println("Server returns: \n" + httpResponse.body());
+                        }
+                    }
+                    catch (InterruptedException interruptedException) {
+                        System.out.println("HTTP request is interrupted");
+                    }
+                    catch (URISyntaxException e) {
+                        // Impossible
+                        throw new RuntimeException();
+                    }
+                }
+                else {
+                    quicConnection.connect(connectionTimeout, alpn, null, null);
                     if (keepAliveTime > 0) {
                         try {
                             Thread.sleep((keepAliveTime + 30) * 1000);
                         } catch (InterruptedException e) {
                         }
                     }
+                }
+
+                if (serverCertificatesFile != null) {
+                    storeServerCertificates(quicConnection, serverCertificatesFile);
                 }
 
                 if (newSessionTicketsFilename != null) {
@@ -457,6 +495,38 @@ public class KwikCli {
 
         if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+        }
+    }
+
+    private static boolean loadHttp3ClientClass() {
+        try {
+            KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+            return true;
+        }
+        catch (ClassNotFoundException e) {
+            return false;
+        }
+
+    }
+
+    static HttpClient createHttpClient(HttpVersion httpVersion, QuicClientConnection quicConnection, boolean useZeroRtt) {
+        if (httpVersion == HttpVersion.HTTP3) {
+            try {
+                Class http3ClientClass = KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+                Constructor constructor = http3ClientClass.getConstructor(QuicConnection.class, Duration.class, Long.class);
+                // Connection timeout and receive buffer size are not used when client is using an existing quic connection
+
+                long maxReceiveBufferSize = 50_000_000L;
+                Duration connectionTimeout = Duration.ofSeconds(60);
+                HttpClient http3Client = (HttpClient) constructor.newInstance(quicConnection, connectionTimeout, maxReceiveBufferSize);
+                return http3Client;
+            }
+            catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else {
+            return new Http09Client(quicConnection, useZeroRtt);
         }
     }
 
@@ -570,47 +640,6 @@ public class KwikCli {
             Files.write(savedSessionTicket.toPath(), ticket.serialize(), StandardOpenOption.CREATE);
         } catch (IOException e) {
             System.err.println("Saving new session ticket failed: " + e);
-        }
-    }
-
-    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, String outputFile) throws IOException {
-        doHttp09Request(quicConnection, requestPath, null, outputFile);
-    }
-
-    public static void doHttp09Request(QuicConnection quicConnection, String requestPath, QuicStream httpStream, String outputFile) throws IOException {
-        if (httpStream == null) {
-            boolean bidirectional = true;
-            httpStream = quicConnection.createStream(bidirectional);
-            httpStream.getOutputStream().write(("GET " + requestPath + "\r\n").getBytes());
-            httpStream.getOutputStream().close();
-        }
-
-        if (outputFile != null) {
-            FileOutputStream out;
-            if (new File(outputFile).isDirectory()) {
-                String fileName = requestPath;
-                if (fileName.equals("/")) {
-                    fileName = "index";
-                }
-                out = new FileOutputStream(new File(outputFile, fileName));
-            }
-            else {
-                out = new FileOutputStream(outputFile);
-            }
-            httpStream.getInputStream().transferTo(out);
-        }
-        else {
-            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {}
-
-            BufferedReader input = new BufferedReader(new InputStreamReader(httpStream.getInputStream()));
-            String line;
-            System.out.println("Server returns: ");
-            while ((line = input.readLine()) != null) {
-                System.out.println(line);
-            }
         }
     }
 

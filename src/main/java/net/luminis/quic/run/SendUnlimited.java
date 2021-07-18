@@ -24,7 +24,6 @@ import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.BufferedOutputStream;
-import java.io.FileOutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
@@ -49,7 +48,7 @@ public class SendUnlimited {
                         .uri(new URI("https://localhost:4433"))
                         .build();
 
-        connection.connect(10_000);
+        connection.connect(10_000, "hq-32");
 
         QuicStream stream = connection.createStream(true);
 

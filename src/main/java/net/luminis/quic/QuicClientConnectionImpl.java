@@ -38,17 +38,10 @@ import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
 
 import javax.net.ssl.X509TrustManager;
-import java.io.ByteArrayInputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.*;
-import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.security.PrivateKey;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -129,7 +122,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
         destConnectionIds = new DestinationConnectionIdRegistry(log);
 
-        connectionState = Status.Idle;
+        connectionState = Status.Created;
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
@@ -167,27 +160,37 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * Set up the connection with the server.
      */
     @Override
-    public void connect(int connectionTimeout) throws IOException {
-        connect(connectionTimeout, null);
+    public void connect(int connectionTimeout, String alpn) throws IOException {
+        connect(connectionTimeout, alpn, null, null);
     }
 
     @Override
-    public void connect(int connectionTimeout, TransportParameters transportParameters) throws IOException {
-        String alpn = "hq-" + quicVersion.toString().substring(quicVersion.toString().length() - 2);
+    public void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException {
         connect(connectionTimeout, alpn, transportParameters, null);
     }
 
-   /**
+    /**
      * Set up the connection with the server, enabling use of 0-RTT data.
-     * The early data is sent on a bidirectional stream and is assumed to be complete (i.e. the output stream is closed
-     * after sending the data).
-     * @param connectionTimeout
-     * @param earlyData
-     * @return
+     * The early data is sent on a bidirectional stream and the output stream is closed immediately after sending the data
+     * if <code>closeOutput</code> is set in the <code>StreamEarlyData</code>.
+     * If this connection object is not in the initial state, an <code>IllegalStateException</code> will be thrown, so
+     * the connect method can only be successfully called once. Use the <code>isConnected</code> method to check whether
+     * it can be connected.
+     *
+     * @param connectionTimeout  the connection timeout in milliseconds
+     * @param applicationProtocol  the ALPN of the protocol that will be used on top of the QUIC connection
+     * @param transportParameters  the transport parameters to use for the connection
+     * @param earlyData            early data to send (RTT-0), each element of the list will lead to a bidirectional stream
+     * @return                     list of streams that was created for the early data; the size of the list will be equal
+     * to the size of the list of the <code>earlyData</code> parameter, but may contain <code>null</code>s if a stream
+     * could not be created due to reaching the max initial streams limit.
      * @throws IOException
      */
     @Override
     public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
+        if (connectionState != Status.Created) {
+            throw new IllegalStateException("Cannot connect a connection that is in state " + connectionState);
+        }
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
             this.transportParams = transportParameters;
@@ -268,6 +271,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void abortHandshake() {
+        connectionState = Status.Failed;
         sender.stop();
         terminate();
     }
@@ -923,8 +927,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public InetSocketAddress getServerAddress() {
+        return new InetSocketAddress(host, port);
+    }
+
+    @Override
     public List<X509Certificate> getServerCertificateChain() {
         return tlsEngine.getServerCertificateChain();
+    }
+
+    @Override
+    public boolean isConnected() {
+        return connectionState == Status.Connected;
     }
 
     public void trustAll() {

@@ -55,13 +55,13 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
 public abstract class QuicConnectionImpl implements QuicConnection, FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
 
     public enum Status {
-        Idle,
+        Created,
         Handshaking,
         Connected,
         Closing,
         Draining,
-        Closed;
-
+        Closed,
+        Failed;
 
         public boolean closingOrDraining() {
             return this == Closing || this == Draining;
@@ -108,7 +108,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         flowControlLastAdvertised = flowControlMax;
         flowControlIncrement = flowControlMax / 10;
 
-        connectionState = Status.Idle;
+        connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
     }
@@ -651,6 +651,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public Statistics getStats() {
         return new Statistics(getSender().getStatistics());
+    }
+
+    @Override
+    public Version getQuicVersion() {
+        return quicVersion;
     }
 
     protected abstract SenderImpl getSender();

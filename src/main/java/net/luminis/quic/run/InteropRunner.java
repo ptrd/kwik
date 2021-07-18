@@ -19,14 +19,16 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.*;
+import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.stream.QuicStream;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -136,13 +138,7 @@ public class InteropRunner extends KwikCli {
         try {
             myPool.submit(() ->
                     downloadUrls.parallelStream()
-                            .forEach(url -> {
-                                try {
-                                    doHttp09Request(connection, url.getPath(), outputDir.getAbsolutePath());
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            }))
+                            .forEach(url -> http09Request(connection, url, outputDir)))
                     .get(5, TimeUnit.MINUTES);
             logger.info("Downloaded " + downloadUrls);
         } catch (InterruptedException e) {
@@ -166,7 +162,7 @@ public class InteropRunner extends KwikCli {
         QuicClientConnection connection = builder.build();
         connection.connect(5_000, "hq-interop", null, null);
 
-        doHttp09Request(connection, url1.getPath(), outputDir.getAbsolutePath());
+        http09Request(connection, url1, outputDir);
         logger.info("Downloaded " + url1);
 
         List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
@@ -185,7 +181,7 @@ public class InteropRunner extends KwikCli {
         builder.sessionTicket(newSessionTickets.get(0));
         QuicClientConnection connection2 = builder.build();
         connection2.connect(5_000, "hq-interop", null, null);
-        doHttp09Request(connection2, url2.getPath(), outputDir.getAbsolutePath());
+        http09Request(connection2, url2, outputDir);
         logger.info("Downloaded " + url2);
         connection2.close();
     }
@@ -203,7 +199,7 @@ public class InteropRunner extends KwikCli {
                 QuicClientConnection connection = builder.build();
                 connection.connect(275_000, "hq-interop", null, null);
 
-                doHttp09Request(connection, download.getPath(), outputDir.getAbsolutePath());
+                http09Request(connection, download, outputDir);
                 logger.info("Downloaded " + download + " finished at " + timeNow());
 
                 connection.close();
@@ -222,7 +218,7 @@ public class InteropRunner extends KwikCli {
         QuicClientConnection connection = builder.build();
         connection.connect(15_000, "hq-interop", null, null);
 
-        doHttp09Request(connection, downloadUrls.get(0).getPath(), outputDir.getAbsolutePath());
+        http09Request(connection, downloadUrls.get(0), outputDir);
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
         List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
         if (newSessionTickets.isEmpty()) {
@@ -243,7 +239,7 @@ public class InteropRunner extends KwikCli {
             String httpRequest = "GET " + downloadUrls.get(i).getPath() + "\r\n";
             earlyDataRequests.add(new QuicClientConnection.StreamEarlyData(httpRequest.getBytes(), true));
         }
-        Version quicVersion = Version.getDefault();
+
         String alpn = "hq-interop";
         List<QuicStream> earlyDataStreams = connection2.connect(15_000, alpn, null, earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
@@ -253,7 +249,7 @@ public class InteropRunner extends KwikCli {
             else {
                 logger.info("Processing response for stream " + earlyDataStreams.get(i));
             }
-            doHttp09Request(connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
+            http09RequestWithZeroRttStream(connection, downloadUrls.get(i+1).getPath(), earlyDataStreams.get(i), outputDir.getAbsolutePath());
         }
 
         logger.info("Download finished at " + timeNow());
@@ -285,6 +281,34 @@ public class InteropRunner extends KwikCli {
         httpStream.getInputStream().transferTo(out);
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
     }
+
+    private static void http09Request(QuicClientConnection connection, URL url, File outputDir) {
+        try {
+            HttpClient httpClient = new Http09Client(connection, false);
+            HttpRequest request = HttpRequest.newBuilder().uri(url.toURI()).build();
+            String fileName = new File(url.getFile()).getName();
+            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputDir.getAbsolutePath(), fileName)));
+        }
+        catch (IOException | URISyntaxException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void http09RequestWithZeroRttStream(QuicConnection quicConnection, String requestPath, QuicStream httpStream, String outputFile) throws IOException {
+        FileOutputStream out;
+        if (new File(outputFile).isDirectory()) {
+            String fileName = requestPath;
+            if (fileName.equals("/")) {
+                fileName = "index";
+            }
+            out = new FileOutputStream(new File(outputFile, fileName));
+        }
+        else {
+            out = new FileOutputStream(outputFile);
+        }
+        httpStream.getInputStream().transferTo(out);
+    }
+
 
     private static void transfer(InputStream in, FileOutputStream out, int bytes) throws IOException {
         byte[] buffer = new byte[1200];
