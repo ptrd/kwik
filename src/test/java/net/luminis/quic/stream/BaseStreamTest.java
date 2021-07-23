@@ -51,16 +51,58 @@ class BaseStreamTest {
         assertThat(read).isEqualTo(0);
     }
 
+    @Test
+    void missingStartShouldFailAllDataReceived() {
+        baseStream = new BaseStream() {
+            protected boolean isStreamEnd(int offset) {
+                return offset == 1000;
+            }
+        };
+
+        baseStream.add(new SimpleStreamElement(100, 900));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(0, 50));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(50, 50));
+        assertThat(baseStream.allDataReceived()).isTrue();
+    }
+
+    @Test
+    void missingPartsShouldFailAllDataReceived() {
+        baseStream = new BaseStream() {
+            protected boolean isStreamEnd(int offset) {
+                return offset == 1000;
+            }
+        };
+
+        baseStream.add(new SimpleStreamElement(0, 100));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(800, 100));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(400, 500));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(900, 100));
+        assertThat(baseStream.allDataReceived()).isFalse();
+
+        baseStream.add(new SimpleStreamElement(100, 300));
+        assertThat(baseStream.allDataReceived()).isTrue();
+    }
+
     static class SimpleStreamElement implements StreamElement {
 
         private int offset;
         private int length;
         private byte[] data;
 
-        public SimpleStreamElement(int offset, int length, byte[] data) {
+        public SimpleStreamElement(int offset, int length) {
             this.offset = offset;
             this.length = length;
-            this.data = data;
+            this.data = new byte[length];
         }
 
         @Override

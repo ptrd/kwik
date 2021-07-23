@@ -85,4 +85,13 @@ public interface QuicStream {
      * @return  true when server initiated and bidirectional
      */
     boolean isServerInitiatedBidirectional();
+
+    /**
+     * Closes the input stream; indicating the client is not interested in reading more data from the stream.
+     * Depending on whether all stream data is already received or not, the implementation might send a request
+     * to the peer to stop sending data for this stream.
+     *
+     * @param  applicationProtocolErrorCode
+     */
+    void closeInput(int applicationProtocolErrorCode);
 }

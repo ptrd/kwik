@@ -24,6 +24,7 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -100,7 +101,6 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
-
     @Override
     public InputStream getInputStream() {
         return inputStream;
@@ -159,6 +159,11 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     }
 
     @Override
+    public void closeInput(int applicationProtocolErrorCode) {
+        inputStream.stopInput(applicationProtocolErrorCode);
+    }
+
+    @Override
     public String toString() {
         return "Stream " + streamId;
     }
@@ -168,6 +173,8 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     }
 
     protected class StreamInputStream extends InputStream {
+
+        private volatile boolean closed;
 
         @Override
         public int available() throws IOException {
@@ -206,8 +213,8 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             Instant readAttemptStarted = Instant.now();
             long waitPeriod = waitForNextFrameTimeout;
             while (true) {
-                if (aborted) {
-                    throw new ProtocolException("Connection aborted");
+                if (aborted || closed) {
+                    throw new IOException(aborted? "Connection closed": "Stream closed");
                 }
 
                 synchronized (addMonitor) {
@@ -226,10 +233,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                         // Nothing read: block until bytes can be read, read timeout or abort
                         try {
                             addMonitor.wait(waitPeriod);
-                        } catch (InterruptedException e) {
-                            if (aborted) {
-                                throw new ProtocolException("Connection aborted");
-                            }
+                        }
+                        catch (InterruptedException e) {
+                            // Nothing to do here: read will be abort in next loop iteration with IOException
                         }
                     }
                     finally {
@@ -245,6 +251,32 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                         waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
                     }
                 }
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            // Note that QUIC specification does not define application protocol error codes.
+            // By absence of an application specified error code, the arbitrary code 0 is used.
+            stopInput(0);
+        }
+
+        private void stopInput(int errorCode) {
+            if (! allDataReceived()) {
+                connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput);
+            }
+            closed = true;
+            Thread readerBlocking = blocking;
+            if (readerBlocking != null) {
+                readerBlocking.interrupt();
+            }
+        }
+
+        private void retransmitStopInput(QuicFrame lostFrame) {
+            assert(lostFrame instanceof StopSendingFrame);
+
+            if (! allDataReceived()) {
+                connection.send(lostFrame, this::retransmitStopInput);
             }
         }
 
@@ -469,6 +501,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             return null;
         }
 
+        @Override
         public void streamNotBlocked(int streamId) {
             // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
             // and let sendFrame method determine whether there is more to send or not.
@@ -502,8 +535,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
     void abort() {
         aborted = true;
-        if (blocking != null) {
-            blocking.interrupt();
+        Thread readerBlocking = blocking;
+        if (readerBlocking != null) {
+            readerBlocking.interrupt();
         }
     }
 

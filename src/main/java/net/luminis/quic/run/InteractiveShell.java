@@ -78,6 +78,7 @@ public class InteractiveShell {
         commands.put("connect", this::connect);
         commands.put("close", this::close);
         commands.put("get", this::httpGet);
+        commands.put("stop", this::httpStop);
         commands.put("ping", this::sendPing);
         commands.put("params", this::printClientParams);
         commands.put("server_params", this::printServerParams);
@@ -188,6 +189,10 @@ public class InteractiveShell {
         catch (IOException | URISyntaxException e) {
             System.out.println("Error: " + e);
         }
+    }
+
+    private void httpStop(String arg) {
+        currentHttpGetResult.cancel(true);
     }
 
     private File createNewFile(String baseName) throws IOException {

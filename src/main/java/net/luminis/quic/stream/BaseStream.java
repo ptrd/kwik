@@ -119,6 +119,34 @@ public class BaseStream {
     }
 
     /**
+     * Determines whether all data (up to stream end offset) is received (but might have not been read)
+     *
+     * @return  true if all data has been received, false otherwise
+     */
+    protected synchronized boolean allDataReceived() {
+        if (isStreamEnd(processedToOffset)) {
+            return true;
+        }
+        else {
+            int completeUpTo = processedToOffset;
+            Iterator<StreamElement> iterator = frames.iterator();
+
+            while (iterator.hasNext()) {
+                StreamElement nextFrame = iterator.next();
+                if (nextFrame.getOffset() <= completeUpTo) {
+                    if (nextFrame.getUpToOffset() > completeUpTo) {
+                        completeUpTo = nextFrame.getUpToOffset();
+                    }
+                } else {
+                    // There is a hole between
+                    break;
+                }
+            }
+            return isStreamEnd(completeUpTo);
+        }
+    }
+
+    /**
      * Indicates whether the given offset is end of stream.
      * @param offset
      * @return when offset is beyond the last byte of the stream. For example, if offset is equal to the length of the

@@ -23,10 +23,7 @@ import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
@@ -57,13 +54,14 @@ class QuicStreamImplTest {
     private Logger logger;
     private Random randomGenerator = new Random();
 
-    @BeforeAll
-    static void setFiniteWaitForNextFrameTimeout() {
-        setFiniteWaitForNextFrameTimeout(5);
+    @BeforeEach
+    void setFiniteWaitForNextFrameTimeout() {
+        originalWaitForNextFrameTimeoutValue = QuicStreamImpl.waitForNextFrameTimeout;
+        QuicStreamImpl.waitForNextFrameTimeout = 5;
     }
 
-    @AfterAll
-    static void resetWaitForNextFrameTimeout() {
+    @AfterEach
+    void resetWaitForNextFrameTimeout() {
         QuicStreamImpl.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
     }
 
@@ -236,6 +234,27 @@ class QuicStreamImplTest {
         assertThat(inputStream.read()).isEqualTo(-1);
         assertThat(inputStream.available()).isEqualTo(0);
         assertThat(inputStream.read()).isEqualTo(-1);  // Important: read() must keep on returning -1!
+    }
+
+    @Test
+    void closingInputStreamShouldUnblockWatingReader() throws Exception {
+        QuicStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
+        quicStream = new QuicStreamImpl(0, connection, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
+        InputStream inputStream = quicStream.getInputStream();
+
+        Thread blockingReader = new Thread(() -> {
+            try {
+                inputStream.read(new byte[1024]);
+            } catch (IOException e) {}
+        });
+        blockingReader.start();
+
+        Thread.sleep(3);
+        assertThat(blockingReader.getState()).isEqualTo(Thread.State.TIMED_WAITING);
+
+        inputStream.close();
+        Thread.sleep(3);
+        assertThat(blockingReader.getState()).isIn(Thread.State.TERMINATED, Thread.State.RUNNABLE);
     }
 
     @Test
@@ -670,7 +689,7 @@ class QuicStreamImplTest {
 
     @Test
     void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
-        setFiniteWaitForNextFrameTimeout(25);       // Make long enough to have reader thread blocking when new frame arrives
+        QuicStreamImpl.waitForNextFrameTimeout = 25;  // Make long enough to have reader thread blocking when new frame arrives
         // Given
         InputStream inputStream = quicStream.getInputStream();
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));
@@ -690,11 +709,6 @@ class QuicStreamImplTest {
         // Then
         assertThat(firstRead).isEqualTo(4);
         assertThat(secondRead).isEqualTo(-1);
-    }
-
-    static private void setFiniteWaitForNextFrameTimeout(int timeout) {
-        originalWaitForNextFrameTimeoutValue = QuicStreamImpl.waitForNextFrameTimeout;
-        QuicStreamImpl.waitForNextFrameTimeout = timeout;
     }
 
     private byte[] generateByteArray(int size) {
