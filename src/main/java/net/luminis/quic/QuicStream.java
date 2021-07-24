@@ -94,4 +94,10 @@ public interface QuicStream {
      * @param  applicationProtocolErrorCode
      */
     void closeInput(int applicationProtocolErrorCode);
+
+    /**
+     * Reset the (sending part of the) stream.
+     * @param errorCode
+     */
+    void resetStream(int errorCode);
 }

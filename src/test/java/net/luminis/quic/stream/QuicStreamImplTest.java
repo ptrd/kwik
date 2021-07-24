@@ -21,6 +21,7 @@ package net.luminis.quic.stream;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.*;
@@ -598,6 +599,47 @@ class QuicStreamImplTest {
         while (!lastFrame.isFinal());
 
         assertThat(dataSent.array()).isEqualTo(data);
+    }
+
+    @Test
+    void whenOutputIsResetWriteFails() {
+        quicStream.resetStream(9);
+
+        assertThatThrownBy(() ->
+                quicStream.getOutputStream().write(new byte[10])
+        ).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void whenOutputIsResetNoStreamFrameIsSentAnymore() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[10]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9);
+
+        // Then
+        assertThat(sendFunction.apply(100)).isNull();
+    }
+
+    @Test
+    void whenOutputIsResetThanResetStreamFrameIsSent() throws Exception {
+        // Given
+        int dataLength = 49 * 1024;
+        quicStream.getOutputStream().write(new byte[dataLength]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+        sendFunction.apply(1000);
+        captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9);
+        sendFunction = captureSendFunction(connection);
+
+        // Then
+        QuicFrame frame = sendFunction.apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamFrame.class);
+        assertThat(((ResetStreamFrame) frame).getFinalSize()).isBetween(995L, 1005L);
     }
 
     @Test

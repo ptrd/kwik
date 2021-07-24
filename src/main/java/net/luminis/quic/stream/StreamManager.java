@@ -21,6 +21,7 @@ package net.luminis.quic.stream;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 
@@ -195,6 +196,16 @@ public class StreamManager {
             else {
                 log.error("Receiving frame for non-existent stream " + streamId);
             }
+        }
+    }
+
+    public void process(StopSendingFrame stopSendingFrame) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-solicited-state-transitions
+        // "A STOP_SENDING frame requests that the receiving endpoint send a RESET_STREAM frame."
+        QuicStreamImpl stream = streams.get(stopSendingFrame.getStreamId());
+        if (stream != null) {
+            // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
+            stream.resetStream(stopSendingFrame.getErrorCode());
         }
     }
 

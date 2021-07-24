@@ -22,10 +22,7 @@ import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.Version;
-import net.luminis.quic.frame.MaxStreamDataFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StopSendingFrame;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
@@ -161,6 +158,11 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     @Override
     public void closeInput(int applicationProtocolErrorCode) {
         inputStream.stopInput(applicationProtocolErrorCode);
+    }
+
+    @Override
+    public void resetStream(int errorCode) {
+        outputStream.reset(errorCode);
     }
 
     @Override
@@ -321,6 +323,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         // Send request queued indicates whether a request to send a stream frame is queued with the sender. Is used to avoid multiple requests being queued.
         // Thread safety: read/set by caller and by sender thread, so must be synchronized; guarded by lock
         private volatile boolean sendRequestQueued;
+        // Reset indicates whether the OutputStream has been reset.
+        private volatile boolean reset;
+        private volatile int resetErrorCode;
 
         StreamOutputStream() {
             maxBufferSize = sendBufferSize;
@@ -338,10 +343,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            if (closed) {
-                throw new IOException("output stream already closed");
-            }
-
+            checkState();
             if (len > maxBufferSize) {
                 // Buffering all would break the contract (because this method copies _all_ data) but splitting and
                 // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
@@ -398,16 +400,13 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         @Override
         public void flush() throws IOException {
-            if (closed) {
-                throw new IOException("output stream already closed");
-            }
-
+            checkState();
             // No-op, this implementation sends data as soon as possible.
         }
 
         @Override
         public void close() throws IOException {
-            if (! closed) {
+            if (!closed && !reset) {
                 sendQueue.add(END_OF_STREAM_MARKER);
                 closed = true;
                 synchronized (lock) {
@@ -419,7 +418,16 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             }
         }
 
+        private void checkState() throws IOException {
+            if (closed || reset) {
+                throw new IOException("output stream " + (closed? "already closed": "is reset"));
+            }
+        }
+
         QuicFrame sendFrame(int maxFrameSize) {
+            if (reset) {
+                return null;
+            }
             synchronized (lock) {
                 sendRequestQueued = false;
             }
@@ -509,8 +517,11 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
-            connection.send(frame, this::retransmitStreamFrame, true);
-            log.recovery("Retransmitted lost stream frame " + frame);
+            assert(frame instanceof StreamFrame);
+            if (! reset) {
+                connection.send(frame, this::retransmitStreamFrame, true);
+                log.recovery("Retransmitted lost stream frame " + frame);
+            }
         }
 
         protected EncryptionLevel getEncryptionLevel() {
@@ -521,6 +532,31 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             currentOffset = 0;
             sendQueue.clear();
             sendRequestQueued = false;
+        }
+
+        /**
+         * https://www.rfc-editor.org/rfc/rfc9000.html#name-operations-on-streams
+         * "reset the stream (abrupt termination), resulting in a RESET_STREAM frame (Section 19.4) if the stream was
+         *  not already in a terminal state."
+         * @param errorCode
+         */
+        protected void reset(int errorCode) {
+            if (!closed && !reset) {
+                reset = true;
+                resetErrorCode = errorCode;
+                // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
+                connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(streamId, errorCode), App, this::retransmitResetFrame, true);
+            }
+        }
+
+        private QuicFrame createResetFrame(int maxFrameSize) {
+            assert(reset == true);
+            return new ResetStreamFrame(streamId, resetErrorCode, currentOffset);
+        }
+
+        private void retransmitResetFrame(QuicFrame frame) {
+            assert(frame instanceof ResetStreamFrame);
+            connection.send(frame, this::retransmitResetFrame, true);
         }
     }
 
@@ -540,5 +576,4 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             readerBlocking.interrupt();
         }
     }
-
 }
