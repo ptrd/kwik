@@ -186,6 +186,11 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         inputStream.terminate(errorCode, finalSize);
     }
 
+    // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.
+
+    /**
+     * Input stream for reading data received by the QUIC stream.
+     */
     protected class StreamInputStream extends InputStream {
 
         private volatile boolean closed;
@@ -392,6 +397,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 bufferLock.lock();
                 try {
                     while (maxBufferSize - bufferedBytes.get() < len) {
+                        checkState();
                         try {
                             notFull.await();
                         } catch (InterruptedException e) {
@@ -569,6 +575,14 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 resetErrorCode = errorCode;
                 // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
                 connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(streamId, errorCode), App, this::retransmitResetFrame, true);
+                // Ensure write is not blocked because of full write buffer
+                bufferLock.lock();
+                try {
+                    notFull.signal();
+                }
+                finally {
+                    bufferLock.unlock();
+                }
             }
         }
 

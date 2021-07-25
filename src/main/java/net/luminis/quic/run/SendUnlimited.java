@@ -34,28 +34,35 @@ public class SendUnlimited {
 
     public static void main(String[] args) throws Exception {
 
-        // If you want to see what happens under the hood, use a logger like this and add to builder with .logger(log)
-        SysOutLogger log = new SysOutLogger();
-        log.logPackets(true);
-        log.logInfo(true);
+        QuicStream stream = null;
+        try {
+            SysOutLogger log = new SysOutLogger();
+            log.logPackets(true);
+            log.logInfo(true);
 
+            QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
+            QuicClientConnectionImpl connection =
+                    builder.version(Version.IETF_draft_32)
+                            .noServerCertificateCheck()
+                            .logger(log)
+                            .uri(new URI("https://localhost:4433"))
+                            .build();
 
-        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-        QuicClientConnectionImpl connection =
-                builder.version(Version.IETF_draft_32)
-                        .noServerCertificateCheck()
-                        .logger(log)
-                        .uri(new URI("https://localhost:4433"))
-                        .build();
+            connection.connect(10_000, "hq-32");
 
-        connection.connect(10_000, "hq-32");
+            stream = connection.createStream(true);
 
-        QuicStream stream = connection.createStream(true);
-
-        BufferedOutputStream outputStream = new BufferedOutputStream(stream.getOutputStream());
-        outputStream.write("GET ".getBytes(StandardCharsets.UTF_8));
-        while (true) {
-            outputStream.write("abcdefghijklmnopqrstuvwxyz".getBytes(StandardCharsets.UTF_8));
+            BufferedOutputStream outputStream = new BufferedOutputStream(stream.getOutputStream());
+            outputStream.write("GET ".getBytes(StandardCharsets.UTF_8));
+            while (true) {
+                outputStream.write("abcdefghijklmnopqrstuvwxyz".getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        catch (Exception e) {
+            System.out.println("Writing endless request is aborted with an exception " + e);
+            System.out.println("Received number of (response) bytes received: " + stream.getInputStream().available());
+            // Before exiting, allow quic messages to be sent and received
+            Thread.sleep(500);
         }
     }
 

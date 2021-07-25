@@ -644,6 +644,33 @@ class QuicStreamImplTest {
     }
 
     @Test
+    void whenOuputIsResetBlockingWriteIsAborted() throws Exception {
+        // Given
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        new Thread(() -> {
+            try {
+                quicStream.getOutputStream().write(new byte[1_000_000]);
+                writeSucceeded.set(true);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        }).start();
+        Thread.sleep(5);
+        assertThat(writeSucceeded.get()).isFalse();
+
+        // When
+        quicStream.resetStream(9);
+
+        // Then
+        Thread.sleep(55);
+        assertThat(thrownException.get())
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("reset");
+    }
+
+    @Test
     void isUnidirectional() {
         QuicStreamImpl clientInitiatedStream = new QuicStreamImpl(2, mock(QuicConnectionImpl.class), mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();

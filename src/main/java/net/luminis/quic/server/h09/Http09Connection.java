@@ -84,13 +84,15 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
             }
         }
         catch (LimitExceededException requestToLarge) {
+            // Instead of closing the connection, the stream cloud be closed (which currently requires these two calls)
+            // quicStream.closeInput(962);
+            // quicStream.resetStream(785);
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, "Request too large");
         }
         catch (IOException e) {
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, e.getMessage());
             e.printStackTrace();
         }
-
     }
 
     /**
