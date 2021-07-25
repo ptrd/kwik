@@ -21,7 +21,7 @@ package net.luminis.quic.run;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.*;
@@ -31,8 +31,10 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -49,6 +51,7 @@ public class InteractiveShell {
     private TransportParameters params;
     private KwikCli.HttpVersion httpVersion;
     private HttpClient httpClient;
+    private CompletableFuture<HttpResponse<Path>> currentHttpGetResult;
 
     public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn, KwikCli.HttpVersion httpVersion) {
         Objects.requireNonNull(builder);
@@ -75,6 +78,7 @@ public class InteractiveShell {
         commands.put("connect", this::connect);
         commands.put("close", this::close);
         commands.put("get", this::httpGet);
+        commands.put("stop", this::httpStop);
         commands.put("ping", this::sendPing);
         commands.put("params", this::printClientParams);
         commands.put("server_params", this::printServerParams);
@@ -179,11 +183,16 @@ public class InteractiveShell {
                     .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), arg, null, null))
                     .build();
 
-            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+            CompletableFuture<HttpResponse<Path>> sendResult = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+            currentHttpGetResult = sendResult;
         }
-        catch (IOException | URISyntaxException | InterruptedException e) {
+        catch (IOException | URISyntaxException e) {
             System.out.println("Error: " + e);
         }
+    }
+
+    private void httpStop(String arg) {
+        currentHttpGetResult.cancel(true);
     }
 
     private File createNewFile(String baseName) throws IOException {

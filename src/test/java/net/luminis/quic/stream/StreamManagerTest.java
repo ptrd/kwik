@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.QuicConnectionImpl;
-import net.luminis.quic.Role;
-import net.luminis.quic.TransportError;
+import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -252,7 +249,7 @@ class StreamManagerTest {
         assertThat(firstStream).isNotNull();
 
         // When
-        QuicStream earlyDataStream = streamManager.createEarlyDataStream(true);
+        QuicStreamImpl earlyDataStream = streamManager.createEarlyDataStream(true);
 
         // Then
         assertThat(earlyDataStream).isNull();

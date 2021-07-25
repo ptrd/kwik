@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021 Peter Doornbosch
+ * Copyright © 2021 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,30 +16,25 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
-import net.luminis.quic.QuicStream;
+import org.junit.jupiter.api.Test;
 
-import java.util.function.Consumer;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
+class ResetStreamFrameTest {
 
-public interface QuicConnection {
+    @Test
+    void getMaximumFrameSize() {
+        long fourGig = 4L * 1024 * 1024 * 1024;
+        assertThat(fourGig).isGreaterThan(Integer.MAX_VALUE);
 
-    Version getQuicVersion();
+        int streamId = 66;
+        int errorCode = 666;
+        int maximumFrameSize = ResetStreamFrame.getMaximumFrameSize(streamId, errorCode);
+        ResetStreamFrame resetStreamFrame = new ResetStreamFrame(streamId, errorCode, fourGig);
 
-    void setMaxAllowedBidirectionalStreams(int max);
-
-    void setMaxAllowedUnidirectionalStreams(int max);
-
-    void setDefaultStreamReceiveBufferSize(long size);
-
-    QuicStream createStream(boolean bidirectional);
-
-    void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
-
-    void close();
-
-    void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
-
-    Statistics getStats();
+        assertThat(resetStreamFrame.getBytes().length).isLessThanOrEqualTo(maximumFrameSize);
+    }
 }

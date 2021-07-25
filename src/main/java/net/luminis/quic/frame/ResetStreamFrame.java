@@ -26,16 +26,45 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.4
+// https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
 public class ResetStreamFrame extends QuicFrame {
 
     private int streamId;
     private int errorCode;
-    private int finalSize;
+    private long finalSize;
+
+    /**
+     * Returns an upper bound for the size of a frame with the given parameters. A frame created with these parameters
+     * will never have a size larger than this upper bound.
+     * @param streamId
+     * @param errorCode
+     * @return
+     */
+    public static int getMaximumFrameSize(int streamId, int errorCode) {
+        int maxFinalSizeLength = 8;
+        return 1 + VariableLengthInteger.bytesNeeded(streamId) + VariableLengthInteger.bytesNeeded(errorCode) + maxFinalSizeLength;
+    }
+
+    public ResetStreamFrame() {}
+
+    public ResetStreamFrame(int streamId, int errorCode, long finalSize) {
+        this.streamId = streamId;
+        this.errorCode = errorCode;
+        this.finalSize = finalSize;
+    }
 
     @Override
     public byte[] getBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(25);
+        buffer.put((byte) 0x04);
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(errorCode, buffer);
+        VariableLengthInteger.encode(finalSize, buffer);
+
+        byte[] frameBytes = new byte[buffer.position()];
+        buffer.flip();
+        buffer.get(frameBytes);
+        return frameBytes;
     }
 
     public ResetStreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
@@ -64,7 +93,7 @@ public class ResetStreamFrame extends QuicFrame {
         return errorCode;
     }
 
-    public int getFinalSize() {
+    public long getFinalSize() {
         return finalSize;
     }
 }

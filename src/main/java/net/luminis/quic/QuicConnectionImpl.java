@@ -27,7 +27,7 @@ import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
@@ -400,10 +400,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
     @Override
     public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+        getStreamManager().process(resetStreamFrame);
     }
 
     @Override
     public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+        getStreamManager().process(stopSendingFrame);
     }
 
     @Override

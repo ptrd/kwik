@@ -25,7 +25,7 @@ import net.luminis.quic.io.LimitedInputStream;
 import net.luminis.quic.run.KwikCli;
 import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,13 +84,15 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
             }
         }
         catch (LimitExceededException requestToLarge) {
+            // Instead of closing the connection, the stream cloud be closed (which currently requires these two calls)
+            // quicStream.closeInput(962);
+            // quicStream.resetStream(785);
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, "Request too large");
         }
         catch (IOException e) {
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, e.getMessage());
             e.printStackTrace();
         }
-
     }
 
     /**

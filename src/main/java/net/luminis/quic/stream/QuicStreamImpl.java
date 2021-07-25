@@ -20,10 +20,9 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.QuicConnectionImpl;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.Version;
-import net.luminis.quic.frame.MaxStreamDataFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
@@ -46,7 +45,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static net.luminis.quic.EncryptionLevel.App;
 
 
-public class QuicStream extends BaseStream {
+public class QuicStreamImpl extends BaseStream implements QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
@@ -68,19 +67,19 @@ public class QuicStream extends BaseStream {
     private int sendBufferSize = 50 * 1024;
 
     
-    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
     }
 
-    public QuicStream(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(Version.getDefault(), streamId, connection, flowController, log);
     }
 
-    public QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
+    public QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
         this(quicVersion, streamId, connection, flowController, log, null);
     }
 
-    QuicStream(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
+    QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
@@ -99,11 +98,12 @@ public class QuicStream extends BaseStream {
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
-
+    @Override
     public InputStream getInputStream() {
         return inputStream;
     }
 
+    @Override
     public OutputStream getOutputStream() {
         return outputStream;
     }
@@ -129,10 +129,12 @@ public class QuicStream extends BaseStream {
         return lastOffset >= 0 && offset >= lastOffset;
     }
 
+    @Override
     public int getStreamId() {
         return streamId;
     }
 
+    @Override
     public boolean isUnidirectional() {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-23#section-2.1
         // "The second least significant bit (0x2) of the stream ID distinguishes
@@ -141,14 +143,26 @@ public class QuicStream extends BaseStream {
         return (streamId & 0x0002) == 0x0002;
     }
 
+    @Override
     public boolean isClientInitiatedBidirectional() {
         // "Client-initiated streams have even-numbered stream IDs (with the bit set to 0)"
         return (streamId & 0x0003) == 0x0000;
     }
 
+    @Override
     public boolean isServerInitiatedBidirectional() {
         // "server-initiated streams have odd-numbered stream IDs"
         return (streamId & 0x0003) == 0x0001;
+    }
+
+    @Override
+    public void closeInput(int applicationProtocolErrorCode) {
+        inputStream.stopInput(applicationProtocolErrorCode);
+    }
+
+    @Override
+    public void resetStream(int errorCode) {
+        outputStream.reset(errorCode);
     }
 
     @Override
@@ -160,11 +174,31 @@ public class QuicStream extends BaseStream {
         return new StreamOutputStream();
     }
 
+    /**
+     * Terminates the receiving input stream (abruptly). Is called when peer sends a RESET_STREAM frame
+     *
+     * This method is intentionally package-protected, as it should only be called by the StreamManager class.
+     *
+     * @param errorCode
+     * @param finalSize
+     */
+    void terminateStream(int errorCode, long finalSize) {
+        inputStream.terminate(errorCode, finalSize);
+    }
+
+    // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.
+
+    /**
+     * Input stream for reading data received by the QUIC stream.
+     */
     protected class StreamInputStream extends InputStream {
+
+        private volatile boolean closed;
+        private volatile boolean reset;
 
         @Override
         public int available() throws IOException {
-            return Integer.max(0, QuicStream.this.bytesAvailable());
+            return Integer.max(0, QuicStreamImpl.this.bytesAvailable());
         }
 
         // InputStream.read() contract:
@@ -199,15 +233,15 @@ public class QuicStream extends BaseStream {
             Instant readAttemptStarted = Instant.now();
             long waitPeriod = waitForNextFrameTimeout;
             while (true) {
-                if (aborted) {
-                    throw new ProtocolException("Connection aborted");
+                if (aborted || closed || reset) {
+                    throw new IOException(aborted? "Connection closed": closed? "Stream closed": "Stream reset by peer");
                 }
 
                 synchronized (addMonitor) {
                     try {
                         blocking = Thread.currentThread();
 
-                        int bytesRead = QuicStream.this.read(ByteBuffer.wrap(buffer, offset, len));
+                        int bytesRead = QuicStreamImpl.this.read(ByteBuffer.wrap(buffer, offset, len));
                         if (bytesRead > 0) {
                             updateAllowedFlowControl(bytesRead);
                             return bytesRead;
@@ -219,10 +253,9 @@ public class QuicStream extends BaseStream {
                         // Nothing read: block until bytes can be read, read timeout or abort
                         try {
                             addMonitor.wait(waitPeriod);
-                        } catch (InterruptedException e) {
-                            if (aborted) {
-                                throw new ProtocolException("Connection aborted");
-                            }
+                        }
+                        catch (InterruptedException e) {
+                            // Nothing to do here: read will be abort in next loop iteration with IOException
                         }
                     }
                     finally {
@@ -241,6 +274,32 @@ public class QuicStream extends BaseStream {
             }
         }
 
+        @Override
+        public void close() throws IOException {
+            // Note that QUIC specification does not define application protocol error codes.
+            // By absence of an application specified error code, the arbitrary code 0 is used.
+            stopInput(0);
+        }
+
+        private void stopInput(int errorCode) {
+            if (! allDataReceived()) {
+                connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput);
+            }
+            closed = true;
+            Thread blockingReader = blocking;
+            if (blockingReader != null) {
+                blockingReader.interrupt();
+            }
+        }
+
+        private void retransmitStopInput(QuicFrame lostFrame) {
+            assert(lostFrame instanceof StopSendingFrame);
+
+            if (! allDataReceived()) {
+                connection.send(lostFrame, this::retransmitStopInput);
+            }
+        }
+
         private void updateAllowedFlowControl(int bytesRead) {
             // Slide flow control window forward (with as much bytes as are read)
             receiverFlowControlLimit += bytesRead;
@@ -255,6 +314,16 @@ public class QuicStream extends BaseStream {
         private void retransmitMaxData(QuicFrame lostFrame) {
             connection.send(new MaxStreamDataFrame(streamId, receiverFlowControlLimit), this::retransmitMaxData);
             log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
+        }
+
+        void terminate(int errorCode, long finalSize) {
+            if (!aborted && !closed && !reset) {
+                reset = true;
+                Thread blockingReader = blocking;
+                if (blockingReader != null) {
+                    blockingReader.interrupt();
+                }
+            }
         }
     }
 
@@ -282,6 +351,9 @@ public class QuicStream extends BaseStream {
         // Send request queued indicates whether a request to send a stream frame is queued with the sender. Is used to avoid multiple requests being queued.
         // Thread safety: read/set by caller and by sender thread, so must be synchronized; guarded by lock
         private volatile boolean sendRequestQueued;
+        // Reset indicates whether the OutputStream has been reset.
+        private volatile boolean reset;
+        private volatile int resetErrorCode;
 
         StreamOutputStream() {
             maxBufferSize = sendBufferSize;
@@ -289,7 +361,7 @@ public class QuicStream extends BaseStream {
             bufferLock = new ReentrantLock();
             notFull = bufferLock.newCondition();
 
-            flowController.register(QuicStream.this, this);
+            flowController.register(QuicStreamImpl.this, this);
         }
 
         @Override
@@ -299,10 +371,7 @@ public class QuicStream extends BaseStream {
 
         @Override
         public void write(byte[] data, int off, int len) throws IOException {
-            if (closed) {
-                throw new IOException("output stream already closed");
-            }
-
+            checkState();
             if (len > maxBufferSize) {
                 // Buffering all would break the contract (because this method copies _all_ data) but splitting and
                 // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
@@ -328,6 +397,7 @@ public class QuicStream extends BaseStream {
                 bufferLock.lock();
                 try {
                     while (maxBufferSize - bufferedBytes.get() < len) {
+                        checkState();
                         try {
                             notFull.await();
                         } catch (InterruptedException e) {
@@ -359,16 +429,13 @@ public class QuicStream extends BaseStream {
 
         @Override
         public void flush() throws IOException {
-            if (closed) {
-                throw new IOException("output stream already closed");
-            }
-
+            checkState();
             // No-op, this implementation sends data as soon as possible.
         }
 
         @Override
         public void close() throws IOException {
-            if (! closed) {
+            if (!closed && !reset) {
                 sendQueue.add(END_OF_STREAM_MARKER);
                 closed = true;
                 synchronized (lock) {
@@ -380,13 +447,22 @@ public class QuicStream extends BaseStream {
             }
         }
 
+        private void checkState() throws IOException {
+            if (closed || reset) {
+                throw new IOException("output stream " + (closed? "already closed": "is reset"));
+            }
+        }
+
         QuicFrame sendFrame(int maxFrameSize) {
+            if (reset) {
+                return null;
+            }
             synchronized (lock) {
                 sendRequestQueued = false;
             }
 
             if (!sendQueue.isEmpty()) {
-                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStream.this));
+                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStreamImpl.this));
                 assert (flowControlLimit >= currentOffset);
 
                 int maxBytesToSend = bufferedBytes.get();
@@ -394,7 +470,7 @@ public class QuicStream extends BaseStream {
                     int nrOfBytes = 0;
                     StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
                     maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getBytes().length - 1);  // Take one byte extra for length field var int
-                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStream.this, currentOffset + maxBytesToSend) - currentOffset);
+                    int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStreamImpl.this, currentOffset + maxBytesToSend) - currentOffset);
                     maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
                     byte[] dataToSend = new byte[maxBytesToSend];
@@ -448,8 +524,8 @@ public class QuicStream extends BaseStream {
 
                     if (streamFrame.isFinal()) {
                         // Done! Retransmissions may follow, but don't need flow control.
-                        flowController.unregister(QuicStream.this);
-                        flowController.streamClosed(QuicStream.this);
+                        flowController.unregister(QuicStreamImpl.this);
+                        flowController.streamClosed(QuicStreamImpl.this);
                     }
                     return streamFrame;
                 }
@@ -462,6 +538,7 @@ public class QuicStream extends BaseStream {
             return null;
         }
 
+        @Override
         public void streamNotBlocked(int streamId) {
             // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
             // and let sendFrame method determine whether there is more to send or not.
@@ -469,8 +546,11 @@ public class QuicStream extends BaseStream {
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {
-            connection.send(frame, this::retransmitStreamFrame, true);
-            log.recovery("Retransmitted lost stream frame " + frame);
+            assert(frame instanceof StreamFrame);
+            if (! reset) {
+                connection.send(frame, this::retransmitStreamFrame, true);
+                log.recovery("Retransmitted lost stream frame " + frame);
+            }
         }
 
         protected EncryptionLevel getEncryptionLevel() {
@@ -481,6 +561,39 @@ public class QuicStream extends BaseStream {
             currentOffset = 0;
             sendQueue.clear();
             sendRequestQueued = false;
+        }
+
+        /**
+         * https://www.rfc-editor.org/rfc/rfc9000.html#name-operations-on-streams
+         * "reset the stream (abrupt termination), resulting in a RESET_STREAM frame (Section 19.4) if the stream was
+         *  not already in a terminal state."
+         * @param errorCode
+         */
+        protected void reset(int errorCode) {
+            if (!closed && !reset) {
+                reset = true;
+                resetErrorCode = errorCode;
+                // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
+                connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(streamId, errorCode), App, this::retransmitResetFrame, true);
+                // Ensure write is not blocked because of full write buffer
+                bufferLock.lock();
+                try {
+                    notFull.signal();
+                }
+                finally {
+                    bufferLock.unlock();
+                }
+            }
+        }
+
+        private QuicFrame createResetFrame(int maxFrameSize) {
+            assert(reset == true);
+            return new ResetStreamFrame(streamId, resetErrorCode, currentOffset);
+        }
+
+        private void retransmitResetFrame(QuicFrame frame) {
+            assert(frame instanceof ResetStreamFrame);
+            connection.send(frame, this::retransmitResetFrame, true);
         }
     }
 
@@ -495,9 +608,9 @@ public class QuicStream extends BaseStream {
 
     void abort() {
         aborted = true;
-        if (blocking != null) {
-            blocking.interrupt();
+        Thread readerBlocking = blocking;
+        if (readerBlocking != null) {
+            readerBlocking.interrupt();
         }
     }
-
 }

@@ -19,7 +19,8 @@
 package net.luminis.quic.client.h09;
 
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -37,10 +38,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Flow;
+import java.util.concurrent.*;
 
 /**
  * A HTTP client for HTTP 0.9 requests.
@@ -55,10 +53,13 @@ public class Http09Client extends HttpClient {
     private final QuicClientConnection quicConnection;
     private final boolean with0RTT;
     private final int connectionTimeout = 10_000;
+    private final ExecutorService executorService;
 
     public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
         this.quicConnection = quicConnection;
         this.with0RTT = with0RTT;
+
+        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http09"));
     }
 
     @Override
@@ -108,89 +109,146 @@ public class Http09Client extends HttpClient {
 
     @Override
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
-        String requestPath = request.uri().getPath();
-        String httpGetCommand = "GET " + requestPath + "\r\n";
-        QuicStream httpStream = null;
-
-        if (!quicConnection.isConnected()) {
-            String alpn;
-            if (quicConnection.getQuicVersion().equals(net.luminis.quic.Version.QUIC_version_1)) {
-                alpn = "hq-interop";
-            } else {
-                String draftVersion = quicConnection.getQuicVersion().getDraftVersion();
-                alpn = "hq-" + draftVersion;
-            }
-
-            if (with0RTT) {
-                QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
-                httpStream = quicConnection.connect(connectionTimeout, alpn, null, List.of(earlyData)).get(0);
+        AsyncHttpRequest<T> requestTask = new AsyncHttpRequest<>(request, responseBodyHandler);
+        requestTask.run();
+        try {
+            return requestTask.get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException) {
+                throw (IOException) e.getCause();
             }
             else {
-                quicConnection.connect(connectionTimeout, alpn, null, null);
+                throw new IOException(e);
             }
-        }
-        if (httpStream == null) {
-            boolean bidirectional = true;
-            httpStream = quicConnection.createStream(bidirectional);
-            httpStream.getOutputStream().write(httpGetCommand.getBytes());
-            httpStream.getOutputStream().close();
-        }
-
-        HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(new HttpResponse.ResponseInfo() {
-            @Override
-            public int statusCode() {
-                return 200;
-            }
-
-            @Override
-            public HttpHeaders headers() {
-                return HttpHeaders.of(Collections.emptyMap(), (u, v) -> true);
-            }
-
-            @Override
-            public Version version() {
-                return null;
-            }
-        });
-
-        bodySubscriber.onSubscribe(new Flow.Subscription() {
-            @Override
-            public void request(long n) {}
-
-            @Override
-            public void cancel() {}
-        });
-
-        InputStream inputStream = httpStream.getInputStream();
-        while (true) {
-            int available = inputStream.available();
-            if (available == 0) {
-                available = 1;  // Wait for more data
-            }
-            byte[] buffer = new byte[available];
-            int read = inputStream.read(buffer);
-            if (read < 0) {
-                break;
-            }
-            bodySubscriber.onNext(List.of(ByteBuffer.wrap(buffer, 0, read)));
-        }
-        bodySubscriber.onComplete();
-
-        try {
-            T body = bodySubscriber.getBody().toCompletableFuture().get();
-            return new HttpResponseImpl(request, body);
-        } catch (ExecutionException e) {
-            throw new IOException(e);
         }
     }
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-        throw new UnsupportedOperationException();
+        AsyncHttpRequest<T> future = new AsyncHttpRequest<>(request, responseBodyHandler);
+        future.start();
+        return future;
     }
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
+        // HTTP 0.9 does not support server push
         throw new UnsupportedOperationException();
+    }
+
+    private class AsyncHttpRequest<T> extends CompletableFuture<HttpResponse<T>> {
+        private final HttpRequest request;
+        private final HttpResponse.BodyHandler<T> responseBodyHandler;
+        private QuicStream httpStream;
+
+        public AsyncHttpRequest(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
+            this.request = request;
+            this.responseBodyHandler = responseBodyHandler;
+        }
+
+        /**
+         * Run this request asynchronously.
+         */
+        public void start() {
+            executorService.submit(() -> run());
+        }
+
+        /**
+         * Run this request synchronously.
+         */
+        public void run() {
+            try {
+                complete(send(request, responseBodyHandler));
+            }
+            catch (IOException | RuntimeException | InterruptedException ex) {
+                completeExceptionally(ex);
+            }
+            catch (Exception ex) {
+                completeExceptionally(ex);
+            }
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            httpStream.closeInput(9);  // HTTP 0.9 does not define error codes for QUIC streams
+            return super.cancel(mayInterruptIfRunning);
+        }
+
+        private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException, InterruptedException {
+            String requestPath = request.uri().getPath();
+            String httpGetCommand = "GET " + requestPath + "\r\n";
+            httpStream = null;
+
+            if (!quicConnection.isConnected()) {
+                String alpn;
+                if (quicConnection.getQuicVersion().equals(net.luminis.quic.Version.QUIC_version_1)) {
+                    alpn = "hq-interop";
+                } else {
+                    String draftVersion = quicConnection.getQuicVersion().getDraftVersion();
+                    alpn = "hq-" + draftVersion;
+                }
+
+                if (with0RTT) {
+                    QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
+                    httpStream = quicConnection.connect(connectionTimeout, alpn, null, List.of(earlyData)).get(0);
+                }
+                else {
+                    quicConnection.connect(connectionTimeout, alpn, null, null);
+                }
+            }
+            if (httpStream == null) {
+                boolean bidirectional = true;
+                httpStream = quicConnection.createStream(bidirectional);
+                httpStream.getOutputStream().write(httpGetCommand.getBytes());
+                httpStream.getOutputStream().close();
+            }
+
+            HttpResponse.BodySubscriber<T> bodySubscriber = responseBodyHandler.apply(new HttpResponse.ResponseInfo() {
+                @Override
+                public int statusCode() {
+                    return 200;
+                }
+
+                @Override
+                public HttpHeaders headers() {
+                    return HttpHeaders.of(Collections.emptyMap(), (u, v) -> true);
+                }
+
+                @Override
+                public Version version() {
+                    return null;
+                }
+            });
+
+            bodySubscriber.onSubscribe(new Flow.Subscription() {
+                @Override
+                public void request(long n) {}
+
+                @Override
+                public void cancel() {}
+            });
+
+            InputStream inputStream = httpStream.getInputStream();
+            while (true) {
+                int available = inputStream.available();
+                if (available == 0) {
+                    available = 1;  // Wait for more data
+                }
+                byte[] buffer = new byte[available];
+                int read = inputStream.read(buffer);
+                if (read < 0) {
+                    break;
+                }
+                bodySubscriber.onNext(List.of(ByteBuffer.wrap(buffer, 0, read)));
+            }
+            bodySubscriber.onComplete();
+
+            try {
+                T body = bodySubscriber.getBody().toCompletableFuture().get();
+                return new HttpResponseImpl(request, body);
+            } catch (ExecutionException e) {
+                throw new IOException(e);
+            }
+        }
     }
 }

@@ -23,7 +23,7 @@ import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.stream.QuicStream;
+import net.luminis.quic.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;

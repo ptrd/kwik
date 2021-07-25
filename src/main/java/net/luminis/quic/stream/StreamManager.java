@@ -19,9 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.*;
-import net.luminis.quic.frame.MaxStreamsFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
 import java.util.Map;
@@ -36,7 +34,7 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERR
 
 public class StreamManager {
 
-    private final Map<Integer, QuicStream> streams;
+    private final Map<Integer, QuicStreamImpl> streams;
     private final Version quicVersion;
     private final QuicConnectionImpl connection;
     private FlowControl flowController;
@@ -98,10 +96,10 @@ public class StreamManager {
 
     public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
         return createStream(bidirectional, timeout, timeoutUnit,
-                (quicVersion, streamId, connection, flowController, logger) -> new QuicStream(quicVersion, streamId, connection, flowController, logger));
+                (quicVersion, streamId, connection, flowController, logger) -> new QuicStreamImpl(quicVersion, streamId, connection, flowController, logger));
     }
 
-    private QuicStream createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
+    private QuicStreamImpl createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
         try {
             boolean acquired;
             if (bidirectional) {
@@ -119,7 +117,7 @@ public class StreamManager {
         }
 
         int streamId = generateStreamId(bidirectional);
-        QuicStream stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
+        QuicStreamImpl stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
         streams.put(streamId, stream);
         return stream;
     }
@@ -160,7 +158,7 @@ public class StreamManager {
 
     public void process(StreamFrame frame) throws TransportError {
         int streamId = frame.getStreamId();
-        QuicStream stream = streams.get(streamId);
+        QuicStreamImpl stream = streams.get(streamId);
         if (stream != null) {
             stream.add(frame);
             // This implementation maintains a fixed maximum number of open streams, so when the peer closes a stream
@@ -174,7 +172,7 @@ public class StreamManager {
                 synchronized (this) {
                     if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
                         log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
-                        stream = new QuicStream(quicVersion, streamId, connection, flowController, log);
+                        stream = new QuicStreamImpl(quicVersion, streamId, connection, flowController, log);
                         streams.put(streamId, stream);
                         stream.add(frame);
                         if (peerInitiatedStreamCallback != null) {
@@ -195,6 +193,24 @@ public class StreamManager {
             else {
                 log.error("Receiving frame for non-existent stream " + streamId);
             }
+        }
+    }
+
+    public void process(StopSendingFrame stopSendingFrame) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-solicited-state-transitions
+        // "A STOP_SENDING frame requests that the receiving endpoint send a RESET_STREAM frame."
+        QuicStreamImpl stream = streams.get(stopSendingFrame.getStreamId());
+        if (stream != null) {
+            // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
+            stream.resetStream(stopSendingFrame.getErrorCode());
+        }
+    }
+
+    public void process(ResetStreamFrame resetStreamFrame) {
+        QuicStreamImpl stream = streams.get(resetStreamFrame.getStreamId());
+        if (stream != null) {
+            // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
+            stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
 
@@ -336,7 +352,7 @@ public class StreamManager {
     }
 
     interface QuicStreamSupplier {
-        QuicStream apply(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log);
+        QuicStreamImpl apply(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log);
     }
 }
 
