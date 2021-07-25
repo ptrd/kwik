@@ -19,10 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.*;
-import net.luminis.quic.frame.MaxStreamsFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StopSendingFrame;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
 import java.util.Map;
@@ -206,6 +203,14 @@ public class StreamManager {
         if (stream != null) {
             // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
             stream.resetStream(stopSendingFrame.getErrorCode());
+        }
+    }
+
+    public void process(ResetStreamFrame resetStreamFrame) {
+        QuicStreamImpl stream = streams.get(resetStreamFrame.getStreamId());
+        if (stream != null) {
+            // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
+            stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
 

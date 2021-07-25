@@ -400,6 +400,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
     @Override
     public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+        getStreamManager().process(resetStreamFrame);
     }
 
     @Override

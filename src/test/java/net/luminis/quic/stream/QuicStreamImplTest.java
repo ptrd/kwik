@@ -24,6 +24,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import org.assertj.core.internal.AtomicReferenceArrayElementComparisonStrategy;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
@@ -751,6 +752,29 @@ class QuicStreamImplTest {
         // Then
         assertThat(firstRead).isEqualTo(4);
         assertThat(secondRead).isEqualTo(-1);
+    }
+
+    @Test
+    void whenResetIsReceivedReadIsInterruptedWithException() throws Exception {
+        // Given
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        new Thread(() -> {
+            try {
+                quicStream.getInputStream().read(new byte[10]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        }).start();
+
+        // When
+        quicStream.terminateStream(9, 49493);
+
+        // Then
+        Thread.sleep(5);
+        assertThat(thrownException.get())
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("reset by peer");
     }
 
     private byte[] generateByteArray(int size) {

@@ -174,9 +174,22 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         return new StreamOutputStream();
     }
 
+    /**
+     * Terminates the receiving input stream (abruptly). Is called when peer sends a RESET_STREAM frame
+     *
+     * This method is intentionally package-protected, as it should only be called by the StreamManager class.
+     *
+     * @param errorCode
+     * @param finalSize
+     */
+    void terminateStream(int errorCode, long finalSize) {
+        inputStream.terminate(errorCode, finalSize);
+    }
+
     protected class StreamInputStream extends InputStream {
 
         private volatile boolean closed;
+        private volatile boolean reset;
 
         @Override
         public int available() throws IOException {
@@ -215,8 +228,8 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             Instant readAttemptStarted = Instant.now();
             long waitPeriod = waitForNextFrameTimeout;
             while (true) {
-                if (aborted || closed) {
-                    throw new IOException(aborted? "Connection closed": "Stream closed");
+                if (aborted || closed || reset) {
+                    throw new IOException(aborted? "Connection closed": closed? "Stream closed": "Stream reset by peer");
                 }
 
                 synchronized (addMonitor) {
@@ -268,9 +281,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput);
             }
             closed = true;
-            Thread readerBlocking = blocking;
-            if (readerBlocking != null) {
-                readerBlocking.interrupt();
+            Thread blockingReader = blocking;
+            if (blockingReader != null) {
+                blockingReader.interrupt();
             }
         }
 
@@ -296,6 +309,16 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private void retransmitMaxData(QuicFrame lostFrame) {
             connection.send(new MaxStreamDataFrame(streamId, receiverFlowControlLimit), this::retransmitMaxData);
             log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
+        }
+
+        void terminate(int errorCode, long finalSize) {
+            if (!aborted && !closed && !reset) {
+                reset = true;
+                Thread blockingReader = blocking;
+                if (blockingReader != null) {
+                    blockingReader.interrupt();
+                }
+            }
         }
     }
 
