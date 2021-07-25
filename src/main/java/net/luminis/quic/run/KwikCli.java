@@ -460,7 +460,7 @@ public class KwikCli {
                     }
                 }
                 else {
-                    quicConnection.connect(connectionTimeout, alpn, null, null);
+                    quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
                     if (keepAliveTime > 0) {
                         try {
                             Thread.sleep((keepAliveTime + 30) * 1000);
