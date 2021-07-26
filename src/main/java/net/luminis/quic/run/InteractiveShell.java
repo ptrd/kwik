@@ -345,6 +345,7 @@ public class InteractiveShell {
     private void printSupportedParameters() {
         System.out.println("- idle (idle timeout)");
         System.out.println("- cids (active connection id limit)");
+        System.out.println("- maxstreamdata (receive buffer size)");
     }
 
     private void setClientParameter(String name, String value) {
@@ -354,6 +355,10 @@ public class InteractiveShell {
                 break;
             case "cids":
                 params.setActiveConnectionIdLimit(toInt(value));
+                break;
+            case "maxStreamData":
+            case "maxstreamdata":
+                params.setInitialMaxStreamData(toLong(value));
                 break;
             default:
                 System.out.println("Parameter must be one of:");
@@ -402,6 +407,15 @@ public class InteractiveShell {
         } catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0;
+        }
+    }
+
+    private Long toLong(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: value not an integer; using 0");
+            return 0L;
         }
     }
 }
