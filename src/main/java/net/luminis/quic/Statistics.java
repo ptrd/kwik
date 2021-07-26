@@ -33,7 +33,11 @@ public class Statistics {
         return "datagrams sent: " + senderStatistics.datagramsSent() +
                 "\npackets send: " + senderStatistics.packetsSent() +
                 "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets();
+                "\npackets lost: " + senderStatistics.lostPackets() +
+                "\nsmoothed RTT: " + senderStatistics.smoothedRtt() +
+                "\nRTT var: " + senderStatistics.rttVar() +
+                "\nlatest RTT: " + senderStatistics.latestRtt()
+                ;
 
     }
 }

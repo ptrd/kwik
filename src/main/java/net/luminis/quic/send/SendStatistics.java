@@ -24,12 +24,18 @@ public class SendStatistics {
     private final long packetsSent;
     private final long bytesSent;
     private final long lostPackets;
+    private final int smoothedRtt;
+    private final int rttVar;
+    private final int latestRtt;
 
-    public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long lostPackets) {
+    public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long lostPackets, int smoothedRtt, int rttVar, int latestRtt) {
         this.datagramsSent = datagramsSent;
         this.packetsSent = packetsSent;
         this.bytesSent = bytesSent;
         this.lostPackets = lostPackets;
+        this.smoothedRtt = smoothedRtt;
+        this.rttVar = rttVar;
+        this.latestRtt = latestRtt;
     }
 
     public int datagramsSent() {
@@ -46,5 +52,17 @@ public class SendStatistics {
 
     public long packetsSent() {
         return packetsSent;
+    }
+
+    public int smoothedRtt() {
+        return smoothedRtt;
+    }
+
+    public int rttVar() {
+        return rttVar;
+    }
+
+    public int latestRtt() {
+        return latestRtt;
     }
 }

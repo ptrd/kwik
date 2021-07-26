@@ -428,7 +428,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     public SendStatistics getStatistics() {
-        return new SendStatistics(datagramsSent, packetsSent, bytesSent, recoveryManager.getLost());
+        return new SendStatistics(datagramsSent, packetsSent, bytesSent, recoveryManager.getLost(),
+                rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
     }
 
     public int getPto() {
