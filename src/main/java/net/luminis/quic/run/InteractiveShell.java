@@ -31,8 +31,11 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -183,7 +186,21 @@ public class InteractiveShell {
                     .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), arg, null, null))
                     .build();
 
+            final Instant start = Instant.now();
             CompletableFuture<HttpResponse<Path>> sendResult = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
+            sendResult.thenAccept(response -> {
+                Instant done = Instant.now();
+                Duration duration = Duration.between(start, done);
+                String speed;
+                try {
+                    long size = Files.size(response.body());
+                    speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
+                }
+                catch (IOException e) {
+                    speed = "?";
+                }
+                System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
+            });
             currentHttpGetResult = sendResult;
         }
         catch (IOException | URISyntaxException e) {
