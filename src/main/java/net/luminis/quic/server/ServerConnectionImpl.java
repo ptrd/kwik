@@ -449,6 +449,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected void terminate() {
         super.terminate();
         log.getQLog().emitConnectionTerminatedEvent();
+        String statsSummary = getStats().toString().replace("\n", "    ");
+        log.info(String.format("Status for connection %s: %s", ByteUtils.bytesToHex(connectionId), statsSummary));
         closeCallback.accept(connectionId);
     }
 
