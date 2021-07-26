@@ -86,19 +86,26 @@ public class AckGenerator {
     }
 
     /**
-     * Process a received AckFrame.
+     * Process a received AckFrame. If the received ack refers to a (sent) packet that contained acks, it confirms
+     * those sent acks are received by the peer so they don't have to be sent ever again.
+     *
      * @param receivedAck
      */
     public synchronized void process(QuicFrame receivedAck) {
         // Find max packet number that had an ack sent with it...
-        ((AckFrame) receivedAck).getAckedPacketNumbers().stream()
+        Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers().stream()
                 .filter(pn -> ackSentWithPacket.containsKey(pn))
-                .limit(1)
-                .forEach(pn -> {
-                    // ... and for that max pn, all packets that where acked by it don't need to be acked again.
-                    AckFrame ackSent = ackSentWithPacket.get(pn);
-                    ackSent.getAckedPacketNumbers().forEach((Long ackedPacket) -> packetsToAcknowledge.remove(ackedPacket));
-                });
+                .findFirst();
+
+        if (largestWithAck.isPresent()) {
+            // ... and for that max pn, all packets that where acked by it don't need to be acked again.
+            AckFrame latestAcknowledgedAck = ackSentWithPacket.get(largestWithAck.get());
+            latestAcknowledgedAck.getAckedPacketNumbers().forEach((Long ackedPacket) -> packetsToAcknowledge.remove(ackedPacket));
+
+            // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
+            // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
+            ackSentWithPacket.keySet().removeIf(key -> key < largestWithAck.get());
+        }
     }
 
     /**
