@@ -103,6 +103,9 @@ public class LossDetector {
         recoveryManager.setLossDetectionTimer();
 
         rttEstimater.ackReceived(ackFrame, timeReceived, newlyAcked);
+
+        // Cleanup
+        newlyAcked.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
     }
 
     public synchronized void reset() {
@@ -219,6 +222,9 @@ public class LossDetector {
                 });
 
         congestionController.registerLost(filterInFlight(lostPacketsInfo));
+
+        // Cleanup
+        lostPacketsInfo.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
     }
 
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {

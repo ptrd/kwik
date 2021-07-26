@@ -3,6 +3,7 @@ workspace.xml
 checkstyle-idea.xml
 scala_settings.xml
 .gradle
+.java-version
 build
 uiDesigner.xml
 sessionTickets
@@ -17,3 +18,4 @@ sessionTickets
 /data
 .idea/sonarlint
 certs/
+/*.dat
