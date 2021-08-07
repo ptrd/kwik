@@ -190,8 +190,34 @@ class RttEstimatorTest {
             int rtt = (i / 3 % 2) == 0 ? 8 : 3;
             Instant end = start.plusMillis(rtt);
             rttEstimator.addSample(end, start, 0);
-            System.out.println("Smoothed Rtt " + rttEstimator.getSmoothedRtt() + "  Rtt var: " + rttEstimator.getRttVar() + " (" + rtt + ")");
             assertThat(rttEstimator.getRttVar()).isGreaterThanOrEqualTo(1);
         }
     }
+
+    @Test
+    void smoothedRttShouldBeRoundedUpToNearestInteger() throws Exception {
+        for (int rtt: new int[] { 3, 10 } ) {
+            Instant start = Instant.now();
+            Instant end = start.plusMillis(rtt);
+            rttEstimator.addSample(end, start, 0);
+            System.out.println(rttEstimator.getSmoothedRtt());
+        }
+        //  rtt:      3, 8
+        //  smoothed: 3, 3.875
+        assertThat(rttEstimator.getSmoothedRtt()).isGreaterThan(3);
+    }
+
+    @Test
+    void smoothedRttShouldBeRoundedDownToNearestInteger() throws Exception {
+        for (int rtt: new int[] { 3, 6 } ) {
+            Instant start = Instant.now();
+            Instant end = start.plusMillis(rtt);
+            rttEstimator.addSample(end, start, 0);
+            System.out.println(rttEstimator.getSmoothedRtt());
+        }
+        //  rtt:      3, 6
+        //  smoothed: 3, 3.375
+        assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(3);
+    }
+
 }

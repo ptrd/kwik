@@ -90,8 +90,8 @@ public class RttEstimator {
         }
         else {
             int currentRttVar = Math.abs(smoothedRtt - rttSample);
-            rttVar = (3 * rttVar + currentRttVar) / 4;
-            smoothedRtt = (7 * smoothedRtt + rttSample) / 8;
+            rttVar = (3 * rttVar + currentRttVar + 2) / 4;        // Add 2 to round to nearest integer
+            smoothedRtt = (7 * smoothedRtt + rttSample + 4) / 8;  // Add 4 to round to nearest integer
         }
 
         log.debug("RTT: " + previousSmoothed + " + " + rttSample + " -> " + smoothedRtt);
