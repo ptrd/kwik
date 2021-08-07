@@ -24,10 +24,7 @@ import net.luminis.quic.frame.QuicFrame;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -145,24 +142,27 @@ public class SendRequestQueue {
             // Forget it
             return Optional.empty();
         }
-        for (int i = 0; i < requestQueue.size(); i++) {
-            try {
-                if (requestQueue.get(i).getEstimatedSize() <= maxFrameLength) {
-                    return Optional.of(requestQueue.remove(i));
+
+        try {
+            for (Iterator<SendRequest> iterator = requestQueue.iterator(); iterator.hasNext(); ) {
+                SendRequest next = iterator.next();
+                if (next.getEstimatedSize() <= maxFrameLength) {
+                    iterator.remove();
+                    return Optional.of(next);
                 }
             }
-            catch (java.lang.IndexOutOfBoundsException indexError) {
-                if (cleared) {
-                    // Caused by concurrent clear, don't bother
-                    return Optional.empty();
-                }
-                else {
-                    throw indexError;
-                }
+            // Couldn't find one.
+            return Optional.empty();
+        }
+        catch (ConcurrentModificationException concurrentModificationException) {
+            if (cleared) {
+                // Caused by concurrent clear, don't bother
+                return Optional.empty();
+            }
+            else {
+                throw concurrentModificationException;
             }
         }
-        // Couldn't find one.
-        return Optional.empty();
     }
 
     public void clear() {
