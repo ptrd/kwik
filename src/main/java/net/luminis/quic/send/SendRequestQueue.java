@@ -25,20 +25,21 @@ import net.luminis.quic.frame.QuicFrame;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class SendRequestQueue {
 
-    private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
-    private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
+    private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
+    private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
 
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
-        requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
+        requestQueue.addLast(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
     }
 
     public void addAckRequest() {
@@ -57,11 +58,11 @@ public class SendRequestQueue {
     }
 
     public void addProbeRequest() {
-        probeQueue.add(Collections.emptyList());
+        probeQueue.addLast(Collections.emptyList());
     }
 
     public void addProbeRequest(List<QuicFrame> frames) {
-        probeQueue.add(frames);
+        probeQueue.addLast(frames);
     }
 
     public boolean hasProbe() {
@@ -70,14 +71,14 @@ public class SendRequestQueue {
 
     public boolean hasProbeWithData() {
         synchronized (probeQueue) {
-            return !probeQueue.isEmpty() && !probeQueue.get(0).isEmpty();
+            return !probeQueue.isEmpty() && !probeQueue.getFirst().isEmpty();
         }
     }
 
     public List<QuicFrame> getProbe() {
         synchronized (probeQueue) {
             if (hasProbe()) {
-                return probeQueue.remove(0);
+                return probeQueue.removeFirst();
             }
             else {
                 // Even when client first checks for a probe, this might happen due to race condition with clear().
@@ -130,7 +131,7 @@ public class SendRequestQueue {
      * @param lostCallback
      */
     public void addRequest(Function<Integer, QuicFrame> frameSupplier, int estimatedSize, Consumer<QuicFrame> lostCallback) {
-        requestQueue.add(new SendRequest(estimatedSize, frameSupplier, lostCallback));
+        requestQueue.addLast(new SendRequest(estimatedSize, frameSupplier, lostCallback));
     }
 
     public boolean hasRequests() {
