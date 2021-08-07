@@ -450,7 +450,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super.terminate();
         log.getQLog().emitConnectionTerminatedEvent();
         String statsSummary = getStats().toString().replace("\n", "    ");
-        log.info(String.format("Status for connection %s: %s", ByteUtils.bytesToHex(connectionId), statsSummary));
+        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionId), statsSummary));
         closeCallback.accept(connectionId);
     }
 
