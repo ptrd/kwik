@@ -160,4 +160,38 @@ class RttEstimatorTest {
         // Then
         assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(203);
     }
+
+    @Test
+    void evenWithSmallRttSamplesSmoothedRttShouldNotBecomeLessThenMinRtt() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            Instant start = Instant.now();
+            Instant end = start.plusMillis(6);
+            rttEstimator.addSample(end, start, 0);
+            assertThat(rttEstimator.getSmoothedRtt()).isGreaterThanOrEqualTo(6);
+        }
+        for (int i = 0; i < 10; i++) {
+            Instant start = Instant.now();
+            Instant end = start.plusMillis(4);
+            rttEstimator.addSample(end, start, 0);
+            assertThat(rttEstimator.getSmoothedRtt()).isGreaterThanOrEqualTo(4);
+        }
+        for (int i = 0; i < 10; i++) {
+            Instant start = Instant.now();
+            Instant end = start.plusMillis(1);
+            rttEstimator.addSample(end, start, 0);
+            assertThat(rttEstimator.getSmoothedRtt()).isGreaterThanOrEqualTo(1);
+        }
+    }
+
+    @Test
+    void evenWithSmallRttSamplesRttVarShouldNotBeRoundedToZero() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            Instant start = Instant.now();
+            int rtt = (i / 3 % 2) == 0 ? 8 : 3;
+            Instant end = start.plusMillis(rtt);
+            rttEstimator.addSample(end, start, 0);
+            System.out.println("Smoothed Rtt " + rttEstimator.getSmoothedRtt() + "  Rtt var: " + rttEstimator.getRttVar() + " (" + rtt + ")");
+            assertThat(rttEstimator.getRttVar()).isGreaterThanOrEqualTo(1);
+        }
+    }
 }
