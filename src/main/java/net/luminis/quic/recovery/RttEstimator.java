@@ -30,12 +30,14 @@ import java.util.Optional;
 
 public class RttEstimator {
 
+    private static final int NOT_SET = -1;
+
     private final Logger log;
     // All intervals are in milliseconds (1/1000 second)
     private volatile int initialRtt;
     private volatile int minRtt = Integer.MAX_VALUE;
-    private volatile int smoothedRtt = 0;
-    private volatile int rttVar;
+    private volatile int smoothedRtt = NOT_SET;
+    private volatile int rttVar = NOT_SET;
     private volatile int latestRtt;
     private volatile int maxAckDelay;
 
@@ -81,22 +83,22 @@ public class RttEstimator {
         }
         latestRtt = rttSample;
 
-        if (smoothedRtt == 0) {
+        if (smoothedRtt == NOT_SET) {
             // First time
             smoothedRtt = rttSample;
             rttVar = rttSample / 2;
         }
         else {
             int currentRttVar = Math.abs(smoothedRtt - rttSample);
-            rttVar = 3 * rttVar / 4 + currentRttVar / 4;
-            smoothedRtt = 7 * smoothedRtt / 8 + rttSample / 8;
+            rttVar = (3 * rttVar + currentRttVar + 2) / 4;        // Add 2 to round to nearest integer
+            smoothedRtt = (7 * smoothedRtt + rttSample + 4) / 8;  // Add 4 to round to nearest integer
         }
 
         log.debug("RTT: " + previousSmoothed + " + " + rttSample + " -> " + smoothedRtt);
     }
 
     public int getSmoothedRtt() {
-        if (smoothedRtt == 0) {
+        if (smoothedRtt == NOT_SET) {
             return initialRtt;
         }
         else {
@@ -112,7 +114,7 @@ public class RttEstimator {
         // "PTO = smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay"
         // Hence, using an initial rtt-var of initial-rtt / 4, will result in an initial PTO of twice the initial RTT.
         // After the first packet is received, the rttVar will be computed from the real RTT sample.
-        if (rttVar == 0) {
+        if (rttVar == NOT_SET) {
             return initialRtt / 4;
         }
         else {
