@@ -49,6 +49,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -434,14 +435,25 @@ public class KwikCli {
                                 .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
                                 .build();
 
+                        Instant start, done;
+                        long size;
+                        String response;
                         if (outputFile != null) {
                             if (new File(outputFile).isDirectory()) {
                                 outputFile = new File(outputFile, new File(httpRequestPath).getName()).getAbsolutePath();
                             }
-                            httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
+                            start = Instant.now();
+                            HttpResponse<Path> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
+                            response = httpResponse.toString();
+                            done = Instant.now();
+                            size = Files.size(httpResponse.body());
                         }
                         else {
+                            start = Instant.now();
                             HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                            done = Instant.now();
+                            size = httpResponse.body().length();
+                            response = httpResponse.toString();
                             // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
                             try {
                                 Thread.sleep(500);
@@ -450,6 +462,9 @@ public class KwikCli {
 
                             System.out.println("Server returns: \n" + httpResponse.body());
                         }
+                        Duration duration = Duration.between(start, done);
+                        String speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
+                        System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
                     }
                     catch (InterruptedException interruptedException) {
                         System.out.println("HTTP request is interrupted");
