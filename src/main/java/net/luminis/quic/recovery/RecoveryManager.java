@@ -184,7 +184,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 return;
             }
             else if (Instant.now().isBefore(expiration)) {
-                log.warn("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), timerExpiration) + "(" + timerExpiration + ")");
+                log.warn("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
                 return;
             }
             else {
