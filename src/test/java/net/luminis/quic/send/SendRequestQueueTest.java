@@ -73,7 +73,7 @@ class SendRequestQueueTest {
 
         Instant next = sendRequestQueue.nextDelayedSend();
 
-        assertThat(Duration.between(start, next).toMillis()).isLessThan(100);
+        assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(100);
     }
 
     @Test
@@ -86,7 +86,7 @@ class SendRequestQueueTest {
 
         Instant next = sendRequestQueue.nextDelayedSend();
 
-        assertThat(Duration.between(start, next).toMillis()).isLessThan(100);
+        assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(100);
     }
 
     @Test
