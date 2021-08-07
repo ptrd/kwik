@@ -335,14 +335,16 @@ public class Server implements ServerConnectionRegistry {
 
     private void removeConnection(byte[] cid) {
         ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(cid));
-        currentConnections.remove(new ConnectionSource(removed.getOriginalDestinationConnectionId()));
         if (removed == null) {
             log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));
         }
-        else if (! removed.isClosed()) {
-            log.error("Removed connection with cid " + ByteUtils.bytesToHex(cid) + " that is not closed...");
+        else {
+            currentConnections.remove(new ConnectionSource(removed.getOriginalDestinationConnectionId()));
+            if (! removed.isClosed()) {
+                log.error("Removed connection with cid " + ByteUtils.bytesToHex(cid) + " that is not closed...");
+            }
+            removed.terminate();
         }
-        removed.terminate();
     }
 
     private Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
