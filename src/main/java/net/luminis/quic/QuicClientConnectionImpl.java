@@ -736,6 +736,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             log.error("Aborting connection because of error", error);
         }
         handshakeFinishedCondition.countDown();
+        sender.stop();
         terminate();
         streamManager.abortAll();
     }

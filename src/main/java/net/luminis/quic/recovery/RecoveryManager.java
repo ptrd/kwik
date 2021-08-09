@@ -323,13 +323,24 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             log.debug("Cancelling loss detection timer failed");
         }
         timerExpiration = Instant.now().plusMillis(timeout);
-        return scheduler.schedule(() -> {
-            try {
-                runnable.run();
-            } catch (Exception error) {
-                log.error("Runtime exception occurred while processing scheduled task", error);
+        try {
+            return scheduler.schedule(() -> {
+                try {
+                    runnable.run();
+                } catch (Exception error) {
+                    log.error("Runtime exception occurred while processing scheduled task", error);
+                }
+            }, timeout, TimeUnit.MILLISECONDS);
+        }
+        catch (RejectedExecutionException taskRejected) {
+            // Can happen if has been reset concurrently
+            if (!hasBeenReset) {
+                throw taskRejected;
             }
-        }, timeout, TimeUnit.MILLISECONDS);
+            else {
+                return new NullScheduledFuture();
+            }
+        }
     }
 
     void unschedule() {
