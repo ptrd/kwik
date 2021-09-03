@@ -18,14 +18,14 @@
  */
 package net.luminis.quic.qlog;
 
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.json.stream.JsonGenerator;
 import java.time.Instant;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.ListIterator;
 
 public class FrameFormatter implements FrameProcessor3 {
 
@@ -46,29 +46,16 @@ public class FrameFormatter implements FrameProcessor3 {
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "ack")
-                .writeStartArray("acked_ranges")
-                .writeStartArray();
-        List<Long> ackedPacketNumbers = ackFrame.getAckedPacketNumbers().stream().sorted().collect(Collectors.toList());
-        boolean started = false;
-        long previousAdded = -1;
-        for (long ackedPacketNumber: ackedPacketNumbers) {
-            if (ackedPacketNumber != previousAdded + 1) {
-                if (! started) {
-                    jsonGenerator.write(ackedPacketNumber);
-                    started = true;
-                }
-                else {
-                    jsonGenerator.write(previousAdded)
-                            .writeEnd()
-                            .writeStartArray()
-                            .write(ackedPacketNumber);
-                }
-            }
-            previousAdded = ackedPacketNumber;
+                .writeStartArray("acked_ranges");
+        ListIterator<Range> rangeIterator = ackFrame.getAcknowledgedRanges().listIterator(ackFrame.getAcknowledgedRanges().size());
+        while (rangeIterator.hasPrevious()) {
+            Range range = rangeIterator.previous();
+                jsonGenerator.writeStartArray()
+                        .write(range.getSmallest())
+                        .write(range.getLargest())
+                        .writeEnd();
         }
-        jsonGenerator.write(previousAdded)
-                .writeEnd()
-                .writeEnd()
+        jsonGenerator.writeEnd()
                 .writeEnd();
     }
 

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.qlog;
 
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.AckFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ class FrameFormatterTest {
 
     @Test
     void formatAckFrameWithRanges() {
-        AckFrame ackFrame = new AckFrame(List.of(1l, 2l, 3l, 6l, 7l));
+        AckFrame ackFrame = new AckFrame(List.of(new Range(6l, 7l), new Range(1l, 3l)));
         System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();
@@ -56,7 +57,7 @@ class FrameFormatterTest {
 
     @Test
     void formatAckFrameWithSingleElementRanges() {
-        AckFrame ackFrame = new AckFrame(List.of(1l, 2l, 3l, 6l, 8l, 9l));
+        AckFrame ackFrame = new AckFrame(List.of(new Range(8l, 9l), new Range(6l), new Range(1l, 3l)));
         System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();
@@ -66,7 +67,7 @@ class FrameFormatterTest {
 
     @Test
     void formatAckFrameWithSingleElement() {
-        AckFrame ackFrame = new AckFrame(List.of(3l));
+        AckFrame ackFrame = new AckFrame(3l);
         System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();

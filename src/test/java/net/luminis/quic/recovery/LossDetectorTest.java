@@ -19,6 +19,7 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.*;
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
@@ -74,8 +75,8 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)), Instant.now());
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
 
         verify(congestionController, times(2)).registerAcked(any(List.class));
     }
@@ -117,7 +118,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
     }
@@ -130,7 +131,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(packets.get(3), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(2L, 3L, 4L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(2L, 4L)), Instant.now());
 
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(1)));
     }
@@ -144,7 +145,7 @@ class LossDetectorTest extends RecoveryTests {
         packets.forEach(p ->
                 lossDetector.packetSent(p, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket)));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(2L, 3L, 4L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(2L, 4L)), Instant.now());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
     }
@@ -156,7 +157,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(8L)), Instant.now());
 
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
@@ -168,7 +169,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(8L), Instant.now());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
     }
@@ -180,7 +181,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(1), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(3), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(1L), Instant.now());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
     }
@@ -192,7 +193,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(8L), Instant.now());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
         assertThat(lossDetector.getLossTime()).isNotNull();
@@ -211,7 +212,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(5), now, lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(8L), Instant.now());
 
         assertThat(lossDetector.getLossTime()).isNull();
     }
@@ -224,7 +225,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(7), now, lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 7L, 8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(List.of(new Range(7L, 8L), new Range(1L))), Instant.now());
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
@@ -236,10 +237,10 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(7), now, lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(List.of(new Range(8L), new Range(1L))), Instant.now());
         assertThat(lossDetector.getLossTime()).isNotNull();
 
-        lossDetector.onAckReceived(new AckFrame(List.of(1L, 7L, 8L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(List.of(new Range(7L, 8L), new Range(1L))), Instant.now());
 
         assertThat(lossDetector.getLossTime()).isNull();
     }
@@ -249,7 +250,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(createPacket(1, new AckFrame(1)), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
 
-        lossDetector.onAckReceived(new AckFrame(List.of(2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(2L)), Instant.now());
 
         assertThat(lossDetector.getLossTime()).isNull();
     }

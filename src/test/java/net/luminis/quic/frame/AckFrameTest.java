@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.frame;
 
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 
@@ -93,7 +94,7 @@ class AckFrameTest {
 
     @Test
     void testGenerateAckWithSinglePacketNumberAsList() throws Exception {
-        AckFrame ackFrame = new AckFrame(List.of(3L));
+        AckFrame ackFrame = new AckFrame(new Range(3L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(3L);
 
         //                                ackframe largest delay #blocks #acked-below
@@ -105,7 +106,7 @@ class AckFrameTest {
 
     @Test
     void testGenerateAckWithListOfConsecutivePacketNumbers() throws Exception {
-        AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 2L, 3L, 4L));
+        AckFrame ackFrame = new AckFrame(new Range(0L, 4L));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(4L, 3L, 2L, 1L, 0L);
 
         //                                ackframe largest delay #blocks #acked-below
@@ -117,7 +118,7 @@ class AckFrameTest {
 
     @Test
     void testGenerateAckWithListWithOneGap() throws Exception {
-        AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 4L, 5L));
+        AckFrame ackFrame = new AckFrame(List.of(new Range(4L, 5L), new Range(0L, 1L)));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(5L, 4L, 1L, 0L);
 
         //                                ackframe largest delay #blocks #acked-below gap-1 below
@@ -129,7 +130,7 @@ class AckFrameTest {
 
     @Test
     void testGenerateAckWithListWithSmallGap() throws Exception {
-        AckFrame ackFrame = new AckFrame(List.of(0L, 1L, 2L, 4L, 5L));
+        AckFrame ackFrame = new AckFrame(List.of(new Range(4L, 5L), new Range(0L, 2L)));
         assertThat(ackFrame.getAckedPacketNumbers()).containsExactly(5L, 4L, 2L, 1L, 0L);
 
         //                                ackframe largest delay #blocks #acked-below gap-1 below
