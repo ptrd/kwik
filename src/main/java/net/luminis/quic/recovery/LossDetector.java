@@ -83,7 +83,7 @@ public class LossDetector {
 
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
-        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
+        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers()
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
                 .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.

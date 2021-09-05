@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
@@ -25,6 +26,8 @@ import net.luminis.quic.send.Sender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -208,5 +211,123 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(2, 83, EncryptionLevel.App));
         // Then
         verify(sender, timeout(1)).sendAck(PnSpace.App, 0);
+    }
+
+    @Test
+    void removeOneExactlyMatchingAcknowlegdedRange() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        AckFrame ackFrame = new AckFrame(range(7, 10));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(1, 4));
+    }
+
+    @Test
+    void removeMultipleExactlyMatchingAcknowlegdedRanges() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(27, 36), range(25, 25), range(15, 19), range(7, 10), range(1, 4)));
+        AckFrame ackFrame = new AckFrame(List.of(range(25, 25), range(15, 19)));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(27, 36), range(7, 10), range(1, 4));
+    }
+
+    @Test
+    void doNotRemoteNotMatchingAcknowlegdedRange() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(25, 29), range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(List.of(range(21, 23), range(15, 19)));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(25, 29), range(7, 10), range(1, 4));
+    }
+
+    @Test
+    void removeOnePartlyMatchingAcknowlegdedRange1() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(range(7, 11));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(1, 4));
+    }
+
+    @Test
+    void removeOnePartlyMatchingAcknowlegdedRange2() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(range(7, 9));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(10), range(1, 4));
+    }
+
+    @Test
+    void removeOnePartlyMatchingAcknowlegdedRange3() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(range(6, 9));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(10), range(1, 4));
+    }
+
+    @Test
+    void removeOnePartlyMatchingAcknowlegdedRange4() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(range(5, 10));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(1, 4));
+    }
+
+    @Test
+    void removeOnePartlyMatchingAcknowlegdedRange5() {
+        // Given
+        ArrayList<Range> ackedRanges = new ArrayList<>(List.of(range(15, 19), range(7, 10), range(1, 4)));
+        // Overlapping
+        AckFrame ackFrame = new AckFrame(range(2, 6));
+
+        // When
+        ackGenerator.removeAcknowlegdedRanges(ackedRanges, ackFrame);
+
+        // Then
+        assertThat(ackedRanges).containsExactly(range(15, 19), range(7, 10), range(1));
+    }
+
+    Range range(int from, int to) {
+        return new Range(from, to);
+    }
+
+    Range range(int single) {
+        return new Range(single, single);
     }
 }
