@@ -77,7 +77,7 @@ public class MockPacket extends QuicPacket {
 
     public MockPacket(QuicFrame... frames) {
         this.packetNumber = 0;
-        this.packetSize = 10 + Stream.of(frames).mapToInt(f -> f.getBytes().length).sum() + 16;
+        this.packetSize = 10 + Stream.of(frames).mapToInt(f -> f.getFrameLength()).sum() + 16;
         this.encryptionLevel = EncryptionLevel.App;
         this.frames.addAll(List.of(frames));
     }

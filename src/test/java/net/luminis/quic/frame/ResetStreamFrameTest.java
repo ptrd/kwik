@@ -35,6 +35,6 @@ class ResetStreamFrameTest {
         int maximumFrameSize = ResetStreamFrame.getMaximumFrameSize(streamId, errorCode);
         ResetStreamFrame resetStreamFrame = new ResetStreamFrame(streamId, errorCode, fourGig);
 
-        assertThat(resetStreamFrame.getBytes().length).isLessThanOrEqualTo(maximumFrameSize);
+        assertThat(resetStreamFrame.getFrameLength()).isLessThanOrEqualTo(maximumFrameSize);
     }
 }

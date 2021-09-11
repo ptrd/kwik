@@ -35,4 +35,7 @@ public abstract class QuicFrame {
 
     public abstract void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived);
 
+    public int getFrameLength() {
+        return getBytes().length;
+    }
 }

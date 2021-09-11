@@ -41,6 +41,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     private byte[] streamData;
     private boolean isFinal;
     private byte[] frameData;
+    private int frameLength;
 
     public StreamFrame() {
     }
@@ -69,6 +70,12 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         ByteBuffer.wrap(streamData).put(applicationData, dataOffset, dataLength);  // Not necessary, but for testing.
         this.length = dataLength;
         isFinal = fin;
+        
+        frameLength = 1  // frame type
+                + VariableLengthInteger.bytesNeeded(streamId)
+                + VariableLengthInteger.bytesNeeded(offset)
+                + VariableLengthInteger.bytesNeeded(length)
+                + length;
 
         ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.length);
         byte baseType = (byte) 0x08;
@@ -87,7 +94,14 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         buffer.get(frameData);
     }
 
+    @Override
+    public int getFrameLength() {
+        return frameLength;
+    }
+
     public StreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+        int startPosition = buffer.position();
+
         int frameType = buffer.get();
         boolean withOffset = ((frameType & 0x04) == 0x04);
         boolean withLength = ((frameType & 0x02) == 0x02);
@@ -108,6 +122,8 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
 
         streamData = new byte[length];
         buffer.get(streamData);
+        frameLength = buffer.position() - startPosition;
+
         log.decrypted("Stream data", streamData);
 
         return this;

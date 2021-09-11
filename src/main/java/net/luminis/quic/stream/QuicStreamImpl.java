@@ -469,7 +469,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 if (flowControlLimit > currentOffset || maxBytesToSend == 0) {
                     int nrOfBytes = 0;
                     StreamFrame dummy = new StreamFrame(quicVersion, streamId, currentOffset, new byte[0], false);
-                    maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getBytes().length - 1);  // Take one byte extra for length field var int
+                    maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getFrameLength() - 1);  // Take one byte extra for length field var int
                     int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(QuicStreamImpl.this, currentOffset + maxBytesToSend) - currentOffset);
                     maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
