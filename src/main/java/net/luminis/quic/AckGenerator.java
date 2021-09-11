@@ -105,7 +105,7 @@ public class AckGenerator {
 
             // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
             // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
-            ackSentWithPacket.keySet().removeIf(key -> key < largestWithAck.get());
+            ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
         }
     }
 
