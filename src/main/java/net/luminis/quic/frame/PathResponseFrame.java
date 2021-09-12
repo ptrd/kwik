@@ -26,9 +26,10 @@ import net.luminis.tls.util.ByteUtils;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.18
-// "The PATH_RESPONSE frame (type=0x1b) is sent in response to a
-//   PATH_CHALLENGE frame."
+/**
+ * Represents a path response frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-path_response-frames
+ */
 public class PathResponseFrame extends QuicFrame {
 
     private byte[] data;
@@ -45,10 +46,7 @@ public class PathResponseFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        byte[] frameBytes = new byte[1 + 8];
-        frameBytes[0] = 0x1b;
-        System.arraycopy(data, 0, frameBytes, 1, 8);
-        return frameBytes;
+        throw new UnsupportedOperationException();
     }
 
     public PathResponseFrame parse(ByteBuffer buffer, Logger log) {
@@ -56,6 +54,17 @@ public class PathResponseFrame extends QuicFrame {
         data = new byte[8];
         buffer.get(data);
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1 + 8;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x1b);
+        buffer.put(data);
     }
 
     public byte[] getData() {

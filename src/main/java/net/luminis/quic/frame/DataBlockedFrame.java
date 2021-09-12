@@ -26,7 +26,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
+/**
+ * Represents a data blocked frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-data_blocked-frames
+ */
 public class DataBlockedFrame extends QuicFrame {
 
     private int streamDataLimit;
@@ -46,11 +49,19 @@ public class DataBlockedFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(streamDataLimit));
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamDataLimit);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
         buffer.put((byte) 0x14);
         VariableLengthInteger.encode(streamDataLimit, buffer);
-        return buffer.array();
+    }
+
+    @Override
+    public byte[] getBytes() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

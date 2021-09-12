@@ -20,8 +20,10 @@ package net.luminis.quic.frame;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+
 
 class ResetStreamFrameTest {
 
@@ -36,5 +38,19 @@ class ResetStreamFrameTest {
         ResetStreamFrame resetStreamFrame = new ResetStreamFrame(streamId, errorCode, fourGig);
 
         assertThat(resetStreamFrame.getFrameLength()).isLessThanOrEqualTo(maximumFrameSize);
+    }
+
+    @Test
+    void testGetFrameLength() {
+        // Given
+        var resetStreamFrame = new ResetStreamFrame(8, 592, 65_000);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        resetStreamFrame.serialize(buffer);
+        buffer.flip();
+
+        // Then
+        assertThat(resetStreamFrame.getFrameLength()).isEqualTo(buffer.remaining());
     }
 }

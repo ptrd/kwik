@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.frame;
 
-
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.Version;
 import net.luminis.quic.packet.QuicPacket;
@@ -26,6 +25,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+/**
+ * Represents a ping frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-ping-frames
+ */
 public class PingFrame extends QuicFrame {
 
     public PingFrame() {
@@ -40,8 +43,18 @@ public class PingFrame extends QuicFrame {
     }
 
     @Override
+    public int getFrameLength() {
+        return 1;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x01);
+    }
+
+    @Override
     public byte[] getBytes() {
-        return new byte[] { 0x01 };
+        throw new UnsupportedOperationException();
     }
 
     @Override

@@ -35,7 +35,7 @@ public class HandshakeDoneFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[] { 0x1e };
+        throw new UnsupportedOperationException();
     }
 
     public HandshakeDoneFrame parse(ByteBuffer buffer, Logger log) {
@@ -45,6 +45,16 @@ public class HandshakeDoneFrame extends QuicFrame {
         }
 
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x1e);
     }
 
     @Override

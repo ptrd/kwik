@@ -27,9 +27,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://www.rfc-editor.org/rfc/rfc9000.html#name-stop_sending-frames
-// "An endpoint uses a STOP_SENDING frame (type=0x05) to communicate that incoming data is being discarded on receipt
-//  per application request. STOP_SENDING requests that a peer cease transmission on a stream."
+/**
+ * Represents a stop sending frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-stop_sending-frames
+ */
 public class StopSendingFrame extends QuicFrame {
 
     private int streamId;
@@ -45,15 +46,7 @@ public class StopSendingFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(20);
-        buffer.put((byte) 0x05);
-        VariableLengthInteger.encode(streamId, buffer);
-        VariableLengthInteger.encode(errorCode, buffer);
-
-        byte[] frameBytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(frameBytes);
-        return frameBytes;
+        throw new UnsupportedOperationException();
     }
 
     public StopSendingFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
@@ -63,6 +56,19 @@ public class StopSendingFrame extends QuicFrame {
         errorCode = VariableLengthInteger.parse(buffer);
 
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamId)
+                + VariableLengthInteger.bytesNeeded(errorCode);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x05);
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(errorCode, buffer);
     }
 
     @Override

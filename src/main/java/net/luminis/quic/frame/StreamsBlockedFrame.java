@@ -20,6 +20,7 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
@@ -27,11 +28,22 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-19.14
+/**
+ * Represents a streams blocked frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-streams_blocked-frames
+ */
 public class StreamsBlockedFrame extends QuicFrame {
 
     private boolean bidirectional;
     private int streamLimit;
+
+    public StreamsBlockedFrame() {
+    }
+
+    public StreamsBlockedFrame(Version quicVersion, boolean bidirectional, int streamLimit) {
+        this.bidirectional = bidirectional;
+        this.streamLimit = streamLimit;
+    }
 
     public StreamsBlockedFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
@@ -42,8 +54,22 @@ public class StreamsBlockedFrame extends QuicFrame {
     }
 
     @Override
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamLimit);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-streams_blocked-frames
+        // "A STREAMS_BLOCKED frame of type 0x16 is used to indicate reaching the bidirectional stream limit, and a
+        // STREAMS_BLOCKED frame of type 0x17 is used to indicate reaching the unidirectional stream limit."
+        buffer.put(bidirectional? (byte) 0x16: (byte) 0x17);
+        VariableLengthInteger.encode(streamLimit, buffer);
+    }
+
+    @Override
     public byte[] getBytes() {
-        return new byte[0];
+        throw new UnsupportedOperationException();
     }
 
     @Override

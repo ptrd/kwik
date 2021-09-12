@@ -27,13 +27,19 @@ import net.luminis.tls.util.ByteUtils;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+/**
+ * Represents a new token frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-new_token-frames
+ */
 public class NewTokenFrame extends QuicFrame {
 
     private byte[] newToken;
 
-    @Override
-    public byte[] getBytes() {
-        return new byte[0];
+    public NewTokenFrame() {
+    }
+
+    public NewTokenFrame(byte[] token) {
+        newToken = token;
     }
 
     public NewTokenFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
@@ -46,6 +52,23 @@ public class NewTokenFrame extends QuicFrame {
         log.debug("Got New Token: ", newToken);
 
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(newToken.length) + newToken.length;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x07);
+        VariableLengthInteger.encode(newToken.length, buffer);
+        buffer.put(newToken);
+    }
+
+    @Override
+    public byte[] getBytes() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

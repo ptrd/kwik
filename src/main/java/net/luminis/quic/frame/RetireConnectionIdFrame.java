@@ -27,7 +27,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-
+/**
+ * Represents a retire connection id frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-retire_connection_id-frames
+ */
 public class RetireConnectionIdFrame extends QuicFrame {
 
     private int sequenceNr;
@@ -46,15 +49,19 @@ public class RetireConnectionIdFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(10);
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(sequenceNr);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
         buffer.put((byte) 0x19);
         VariableLengthInteger.encode(sequenceNr, buffer);
+    }
 
-        byte[] frameBytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(frameBytes);
-        return frameBytes;
+    @Override
+    public byte[] getBytes() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

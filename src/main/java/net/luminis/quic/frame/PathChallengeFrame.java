@@ -26,13 +26,20 @@ import net.luminis.tls.util.ByteUtils;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.17
-// "Endpoints can use PATH_CHALLENGE frames (type=0x1a) to check
-//   reachability to the peer and for path validation during connection
-//   migration."
+/**
+ * Represents a path challenge frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-path_challenge-frames
+ */
 public class PathChallengeFrame extends QuicFrame {
 
     private byte[] data;
+
+    public PathChallengeFrame(Version quicVersion, byte[] data) {
+        if (data.length != 8) {
+            throw new IllegalArgumentException();
+        }
+        this.data = data;
+    }
 
     public PathChallengeFrame(Version quicVersion) {
     }
@@ -49,11 +56,19 @@ public class PathChallengeFrame extends QuicFrame {
     }
 
     @Override
+    public int getFrameLength() {
+        return 1 + 8;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x1a);
+        buffer.put(data);
+    }
+
+    @Override
     public byte[] getBytes() {
-        byte[] frameBytes = new byte[1 + 8];
-        frameBytes[0] = 0x1a;
-        System.arraycopy(data, 0, frameBytes, 1, 8);
-        return frameBytes;
+        throw new UnsupportedOperationException();
     }
 
     public byte[] getData() {

@@ -40,7 +40,6 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     private int length;
     private byte[] streamData;
     private boolean isFinal;
-    private byte[] frameData;
     private int frameLength;
 
     public StreamFrame() {
@@ -67,31 +66,36 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         this.streamId = streamId;
         this.offset = streamOffset;
         this.streamData = new byte[dataLength];
-        ByteBuffer.wrap(streamData).put(applicationData, dataOffset, dataLength);  // Not necessary, but for testing.
+        // This implementation copies the application data, which would not be necessary if the caller guarantees
+        // it will not reuse the data buffer (or at least, the range that is used by this frame) and its content
+        // will never change.
+        ByteBuffer.wrap(streamData).put(applicationData, dataOffset, dataLength);
         this.length = dataLength;
         isFinal = fin;
-        
+
         frameLength = 1  // frame type
                 + VariableLengthInteger.bytesNeeded(streamId)
                 + VariableLengthInteger.bytesNeeded(offset)
                 + VariableLengthInteger.bytesNeeded(length)
                 + length;
+    }
 
-        ByteBuffer buffer = ByteBuffer.allocate(1 + 3 * 4 + applicationData.length);
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        if (frameLength > buffer.remaining()) {
+            throw new IllegalArgumentException();
+        }
+
         byte baseType = (byte) 0x08;
         byte frameType = (byte) (baseType | 0x04 | 0x02 | 0x00);  // OFF-bit, LEN-bit, (no) FIN-bit
-        if (fin) {
+        if (isFinal) {
             frameType |= 0x01;
         }
         buffer.put(frameType);
         VariableLengthInteger.encode(streamId, buffer);
         VariableLengthInteger.encode(offset, buffer);
         VariableLengthInteger.encode(length, buffer);
-        buffer.put(applicationData, dataOffset, dataLength);
-
-        frameData = new byte[buffer.position()];
-        buffer.rewind();
-        buffer.get(frameData);
+        buffer.put(streamData);
     }
 
     @Override
@@ -131,7 +135,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
 
     @Override
     public byte[] getBytes() {
-        return frameData;
+        throw new UnsupportedOperationException();
     }
 
     @Override

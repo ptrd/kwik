@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.frame;
 
+
+import net.luminis.quic.Version;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -25,27 +27,20 @@ import java.nio.ByteBuffer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 
-class MaxStreamsFrameTest extends FrameTest {
-
-    @Test
-    void serializeAndParse() throws Exception {
-        MaxStreamsFrame frame = new MaxStreamsFrame(58, true);
-        MaxStreamsFrame recreatedFrame = new MaxStreamsFrame().parse(ByteBuffer.wrap(getBytes(frame)), null);
-        assertThat(recreatedFrame.getMaxStreams()).isEqualTo(58);
-        assertThat(recreatedFrame.isAppliesToBidirectional()).isTrue();
-    }
+class StreamsBlockedFrameTest {
 
     @Test
     void testGetFrameLength() {
         // Given
-        var frame = new MaxStreamsFrame(250, false);
+        var streamsBlockedFrame = new StreamsBlockedFrame(Version.getDefault(), true, 2_000_000);
 
         // When
         ByteBuffer buffer = ByteBuffer.allocate(100);
-        frame.serialize(buffer);
+        streamsBlockedFrame.serialize(buffer);
         buffer.flip();
 
         // Then
-        assertThat(frame.getFrameLength()).isEqualTo(buffer.remaining());
+        assertThat(streamsBlockedFrame.getFrameLength()).isEqualTo(buffer.remaining());
     }
+
 }

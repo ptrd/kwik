@@ -821,7 +821,10 @@ class QuicStreamImplTest {
      */
     private StreamFrame resurrect(StreamFrame streamFrame) {
         try {
-            return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
+            ByteBuffer buffer = ByteBuffer.allocate(25 + streamFrame.getLength());
+            streamFrame.serialize(buffer);
+            buffer.flip();
+            return new StreamFrame().parse(buffer, logger);
         } catch (InvalidIntegerEncodingException e) {
             throw new RuntimeException(e);
         }

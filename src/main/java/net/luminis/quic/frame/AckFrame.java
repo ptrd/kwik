@@ -110,6 +110,21 @@ public class AckFrame extends QuicFrame {
         buffer.get(frameBytes);
     }
 
+    @Override
+    public int getFrameLength() {
+        if (frameBytes != null) {
+            return frameBytes.length;
+        }
+        else {
+            throw new IllegalStateException("frame length not known for parsed frames");
+        }
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put(frameBytes);
+    }
+
     public AckFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         log.debug("Parsing AckFrame");
         acknowledgedRanges = new ArrayList<>();
@@ -184,7 +199,7 @@ public class AckFrame extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return frameBytes;
+        throw new UnsupportedOperationException();
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2

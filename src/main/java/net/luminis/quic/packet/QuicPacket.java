@@ -369,7 +369,7 @@ abstract public class QuicPacket {
 
     protected ByteBuffer generatePayloadBytes(int encodedPacketNumberLength) {
         ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
-        frames.stream().forEachOrdered(frame -> frameBytes.put(frame.getBytes()));
+        frames.stream().forEachOrdered(frame -> frame.serialize(frameBytes));
         int serializeFramesLength = frameBytes.position();
         // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
         // "To ensure that sufficient data is available for sampling, packets are
@@ -384,7 +384,7 @@ abstract public class QuicPacket {
         if (encodedPacketNumberLength + serializeFramesLength < 4) {
             Padding padding = new Padding(4 - encodedPacketNumberLength - frameBytes.position());
             frames.add(padding);
-            frameBytes.put(padding.getBytes());
+            padding.serialize(frameBytes);
         }
         frameBytes.flip();
         return frameBytes;

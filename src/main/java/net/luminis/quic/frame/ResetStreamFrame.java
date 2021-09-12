@@ -26,7 +26,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
+/**
+ * Represents a reset stream frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
+ */
 public class ResetStreamFrame extends QuicFrame {
 
     private int streamId;
@@ -53,26 +56,32 @@ public class ResetStreamFrame extends QuicFrame {
         this.finalSize = finalSize;
     }
 
-    @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(25);
-        buffer.put((byte) 0x04);
-        VariableLengthInteger.encode(streamId, buffer);
-        VariableLengthInteger.encode(errorCode, buffer);
-        VariableLengthInteger.encode(finalSize, buffer);
-
-        byte[] frameBytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(frameBytes);
-        return frameBytes;
-    }
-
     public ResetStreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
         streamId = VariableLengthInteger.parse(buffer);
         errorCode = VariableLengthInteger.parse(buffer);
         finalSize = VariableLengthInteger.parse(buffer);
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamId)
+                + VariableLengthInteger.bytesNeeded(errorCode)
+                + VariableLengthInteger.bytesNeeded(finalSize);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x04);
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(errorCode, buffer);
+        VariableLengthInteger.encode(finalSize, buffer);
+    }
+
+    @Override
+    public byte[] getBytes() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

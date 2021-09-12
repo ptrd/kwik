@@ -24,20 +24,32 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-19.1
-// The PADDING frame (type=0x00) has no semantic value.
-// A PADDING frame has no content.  That is, a PADDING frame consists of
-//   the single octet that identifies the frame as a PADDING frame.
+/**
+ * Represents a number of consecutive padding frames.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-padding-frames
+ *
+ * Usually, padding will consist of multiple padding frames, each being exactly one (zero) byte. This class can
+ * represent an arbitrary number of consecutive padding frames, by recording padding length.
+ */
 public class Padding extends QuicFrame {
 
     private int length;
-
 
     public Padding() {
     }
 
     public Padding(int paddingSize) {
         length = paddingSize;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return length;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put(new byte[length]);
     }
 
     /**
@@ -62,7 +74,7 @@ public class Padding extends QuicFrame {
 
     @Override
     public byte[] getBytes() {
-        return new byte[length];
+        throw new UnsupportedOperationException();
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2

@@ -45,17 +45,19 @@ public class MaxDataFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(9);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
-        // "The MAX_DATA frame (type=0x10)..."
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(maxData);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
         buffer.put((byte) 0x10);
         VariableLengthInteger.encode(maxData, buffer);
+    }
 
-        byte[] bytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(bytes);
-        return bytes;
+    @Override
+    public byte[] getBytes() {
+        throw new UnsupportedOperationException();
     }
 
     public long getMaxData() {

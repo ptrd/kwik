@@ -18,38 +18,53 @@
  */
 package net.luminis.quic.frame;
 
-
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 
-class MaxDataFrameTest {
+class MaxDataFrameTest extends FrameTest {
 
     @Test
     void testEncodeSingleByteValue() {
-        byte[] bytes = new MaxDataFrame(60).getBytes();
+        byte[] bytes = getBytes(new MaxDataFrame(60));
 
         assertThat(bytes).isEqualTo(new byte[] { 0x10, 0x3c });
     }
 
     @Test
     void testEncodeTwoBytesValue() {
-        byte[] bytes = new MaxDataFrame(16000).getBytes();
+        byte[] bytes = getBytes(new MaxDataFrame(16000));
 
         assertThat(bytes).isEqualTo(new byte[] { 0x10, 0x7e, (byte) 0x80 });
     }
 
     @Test
     void testEncodeFourBytesValue() {
-        byte[] bytes = new MaxDataFrame(65535).getBytes();
+        byte[] bytes = getBytes(new MaxDataFrame(65535));
 
         assertThat(bytes).isEqualTo(new byte[] { 0x10, (byte) 0x80, 0x00, (byte) 0xff, (byte) 0xff });
     }
     @Test
     void testEncodeEightBytesValue() {
-        byte[] bytes = new MaxDataFrame(2_000_000_000).getBytes();
+        byte[] bytes = getBytes(new MaxDataFrame(2_000_000_000));
 
         assertThat(bytes).isEqualTo(new byte[] { 0x10, (byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00, 0x77, 0x35, (byte) 0x94, 0x00 });
+    }
+
+    @Test
+    void testGetFrameLength() {
+        // Given
+        MaxDataFrame maxDataFrame = new MaxDataFrame(16000);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        maxDataFrame.serialize(buffer);
+        buffer.flip();
+
+        // Then
+        assertThat(maxDataFrame.getFrameLength()).isEqualTo(buffer.remaining());
     }
 }

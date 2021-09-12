@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021 Peter Doornbosch
+ * Copyright © 2021 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,34 +18,16 @@
  */
 package net.luminis.quic.frame;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.ByteBuffer;
 
-import static org.assertj.core.api.Assertions.assertThat;
+public class FrameTest {
 
-
-class MaxStreamsFrameTest extends FrameTest {
-
-    @Test
-    void serializeAndParse() throws Exception {
-        MaxStreamsFrame frame = new MaxStreamsFrame(58, true);
-        MaxStreamsFrame recreatedFrame = new MaxStreamsFrame().parse(ByteBuffer.wrap(getBytes(frame)), null);
-        assertThat(recreatedFrame.getMaxStreams()).isEqualTo(58);
-        assertThat(recreatedFrame.isAppliesToBidirectional()).isTrue();
-    }
-
-    @Test
-    void testGetFrameLength() {
-        // Given
-        var frame = new MaxStreamsFrame(250, false);
-
-        // When
-        ByteBuffer buffer = ByteBuffer.allocate(100);
+    protected byte[] getBytes(QuicFrame frame) {
+        ByteBuffer buffer = ByteBuffer.allocate(1500);
         frame.serialize(buffer);
         buffer.flip();
-
-        // Then
-        assertThat(frame.getFrameLength()).isEqualTo(buffer.remaining());
+        byte[] data = new byte[buffer.remaining()];
+        buffer.get(data);
+        return data;
     }
 }

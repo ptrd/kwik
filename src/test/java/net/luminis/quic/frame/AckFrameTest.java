@@ -28,7 +28,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-class AckFrameTest {
+class AckFrameTest extends FrameTest {
 
     @Test
     void testParse() throws Exception {
@@ -88,7 +88,7 @@ class AckFrameTest {
         //                                ackframe largest delay #blocks #acked-below
         byte[] binaryFrame = new byte[] { 0x02,    0x03,   0x00, 0x00,   0x00 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(3L);
-        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(getBytes(ackFrame)).isEqualTo(binaryFrame);
         assertThat(ackFrame.toString()).contains("[3|");
     }
 
@@ -100,7 +100,7 @@ class AckFrameTest {
         //                                ackframe largest delay #blocks #acked-below
         byte[] binaryFrame = new byte[] { 0x02,    0x03,   0x00, 0x00,   0x00 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(3L);
-        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(getBytes(ackFrame)).isEqualTo(binaryFrame);
         assertThat(ackFrame.toString()).contains("[3|");
     }
 
@@ -112,7 +112,7 @@ class AckFrameTest {
         //                                ackframe largest delay #blocks #acked-below
         byte[] binaryFrame = new byte[] { 0x02,    0x04,   0x00, 0x00,   0x04 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(4L, 3L, 2L, 1L, 0L);
-        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(getBytes(ackFrame)).isEqualTo(binaryFrame);
         assertThat(ackFrame.toString()).contains("[4-0|");
     }
 
@@ -124,7 +124,7 @@ class AckFrameTest {
         //                                ackframe largest delay #blocks #acked-below gap-1 below
         byte[] binaryFrame = new byte[] { 0x02,    0x05,   0x00, 0x01,   0x01,        0x01, 0x01 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(5L, 4L, 1L, 0L);
-        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(getBytes(ackFrame)).isEqualTo(binaryFrame);
         assertThat(ackFrame.toString()).contains("[5-4,1-0|");
     }
 
@@ -136,7 +136,9 @@ class AckFrameTest {
         //                                ackframe largest delay #blocks #acked-below gap-1 below
         byte[] binaryFrame = new byte[] { 0x02,    0x05,   0x00, 0x01,   0x01,        0x00, 0x02 };
         assertThat(new AckFrame().parse(ByteBuffer.wrap(binaryFrame), mock(Logger.class)).getAckedPacketNumbers()).containsExactly(5L, 4L, 2L, 1L, 0L);
-        assertThat(ackFrame.getBytes()).isEqualTo(binaryFrame);
+        assertThat(getBytes(ackFrame)).isEqualTo(binaryFrame);
         assertThat(ackFrame.toString()).contains("[5-4,2-0|");
     }
+
+
 }
