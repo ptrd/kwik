@@ -80,11 +80,6 @@ public class ResetStreamFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "ResetStreamFrame[" + streamId + "|" + errorCode + "|" + finalSize + "]";
     }

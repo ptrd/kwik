@@ -60,11 +60,6 @@ public class RetireConnectionIdFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "RetireConnectionIdFrame[" + sequenceNr + "]";
     }

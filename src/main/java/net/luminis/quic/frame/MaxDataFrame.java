@@ -55,11 +55,6 @@ public class MaxDataFrame extends QuicFrame {
         VariableLengthInteger.encode(maxData, buffer);
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public long getMaxData() {
         return maxData;
     }

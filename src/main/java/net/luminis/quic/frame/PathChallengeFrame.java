@@ -66,11 +66,6 @@ public class PathChallengeFrame extends QuicFrame {
         buffer.put(data);
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public byte[] getData() {
         return data;
     }

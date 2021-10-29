@@ -67,11 +67,6 @@ public class NewTokenFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "NewTokenFrame[" + ByteUtils.bytesToHex(newToken) + "]";
     }

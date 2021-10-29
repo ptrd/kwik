@@ -46,17 +46,7 @@ public abstract class QuicFrame {
 
     public abstract void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived);
 
-    public int getFrameLength() {
-        return getBytes().length;
-    }
+    public abstract int getFrameLength();
 
-    public void serialize(ByteBuffer buffer) {
-        buffer.put(getBytes());
-    }
-
-    @Deprecated
-    /**
-     * Deprecated, use serialize.
-     */
-    protected abstract byte[] getBytes();
+    public abstract void serialize(ByteBuffer buffer);
 }

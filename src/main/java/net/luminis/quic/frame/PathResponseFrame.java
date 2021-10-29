@@ -44,11 +44,6 @@ public class PathResponseFrame extends QuicFrame {
     public PathResponseFrame(Version quicVersion) {
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public PathResponseFrame parse(ByteBuffer buffer, Logger log) {
         buffer.get();
         data = new byte[8];

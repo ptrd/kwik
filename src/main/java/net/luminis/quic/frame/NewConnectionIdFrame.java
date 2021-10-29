@@ -69,11 +69,6 @@ public class NewConnectionIdFrame extends QuicFrame {
         random.ints(16).forEach(i -> buffer.put((byte) i));
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
 

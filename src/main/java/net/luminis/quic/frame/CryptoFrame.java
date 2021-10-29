@@ -97,10 +97,6 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
         return "CryptoFrame[" + offset + "," + length + "]";
     }
 
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public byte[] getStreamData() {
         return cryptoData;
     }

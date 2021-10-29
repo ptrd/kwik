@@ -53,11 +53,6 @@ public class PingFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "PingFrame[]";
     }

@@ -72,11 +72,6 @@ public class MaxStreamDataFrame extends QuicFrame {
         return "MaxStreamDataFrame[" + streamId + ":" + maxData + "]";
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public int getStreamId() {
         return streamId;
     }

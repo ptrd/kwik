@@ -134,11 +134,6 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",f": "") + "]";
     }

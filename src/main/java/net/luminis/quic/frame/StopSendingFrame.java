@@ -44,11 +44,6 @@ public class StopSendingFrame extends QuicFrame {
         this.errorCode = errorCode;
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public StopSendingFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
 

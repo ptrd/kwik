@@ -68,11 +68,6 @@ public class StreamsBlockedFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String toString() {
         return "StreamsBlockedFrame[" + (bidirectional? "B": "U") + "|" + streamLimit + "]";
     }

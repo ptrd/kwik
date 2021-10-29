@@ -73,11 +73,6 @@ public class MaxStreamsFrame extends QuicFrame {
                 + maxStreams + "]";
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public long getMaxStreams() {
         return maxStreams;
     }

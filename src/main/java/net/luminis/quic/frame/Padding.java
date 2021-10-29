@@ -72,11 +72,6 @@ public class Padding extends QuicFrame {
         return this;
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
     // "All frames other than ACK, PADDING, and CONNECTION_CLOSE are considered ack-eliciting."
     @Override

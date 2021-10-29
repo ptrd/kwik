@@ -26,7 +26,6 @@ import net.luminis.quic.packet.QuicPacket;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
@@ -144,11 +143,6 @@ public class ConnectionCloseFrame extends QuicFrame {
         VariableLengthInteger.encode(0, buffer);
         VariableLengthInteger.encode(reasonPhrase.length, buffer);
         buffer.put(reasonPhrase);
-    }
-
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2

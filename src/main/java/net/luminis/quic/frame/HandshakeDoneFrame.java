@@ -33,11 +33,6 @@ public class HandshakeDoneFrame extends QuicFrame {
     public HandshakeDoneFrame(Version quicVersion) {
     }
 
-    @Override
-    public byte[] getBytes() {
-        throw new UnsupportedOperationException();
-    }
-
     public HandshakeDoneFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
         if (frameType != 0x1e) {
