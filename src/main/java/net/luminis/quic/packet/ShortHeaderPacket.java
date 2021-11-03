@@ -31,7 +31,6 @@ import java.util.stream.Collectors;
 
 public class ShortHeaderPacket extends QuicPacket {
 
-    private byte[] packetBytes;
     protected short keyPhaseBit;
 
     /**
@@ -146,7 +145,7 @@ public class ShortHeaderPacket extends QuicPacket {
 
         buffer.limit(buffer.position());
         packetSize = buffer.limit();
-        packetBytes = new byte[packetSize];
+        byte[] packetBytes = new byte[packetSize];
         buffer.rewind();
         buffer.get(packetBytes);
 
