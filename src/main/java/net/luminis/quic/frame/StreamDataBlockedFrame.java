@@ -19,6 +19,7 @@
 package net.luminis.quic.frame;
 
 import net.luminis.quic.InvalidIntegerEncodingException;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.packet.QuicPacket;
@@ -26,11 +27,22 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.13
+/**
+ * Represents a stream data blocked frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-stream_data_blocked-frames
+ */
 public class StreamDataBlockedFrame extends QuicFrame {
 
     private int streamId;
     private int streamDataLimit;
+
+    public StreamDataBlockedFrame() {
+    }
+
+    public StreamDataBlockedFrame(Version quicVersion, int streamId, int streamDataLimit) {
+        this.streamId = streamId;
+        this.streamDataLimit = streamDataLimit;
+    }
 
     public StreamDataBlockedFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
@@ -41,8 +53,16 @@ public class StreamDataBlockedFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        return new byte[0];
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamId)
+                + VariableLengthInteger.bytesNeeded(streamDataLimit);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x15);
+        VariableLengthInteger.encode(streamId, buffer);
+        VariableLengthInteger.encode(streamDataLimit, buffer);
     }
 
     @Override

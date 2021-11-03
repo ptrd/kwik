@@ -24,24 +24,22 @@ import net.luminis.quic.frame.QuicFrame;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class SendRequestQueue {
 
-    private List<SendRequest> requestQueue = Collections.synchronizedList(new ArrayList<>());
-    private List<List<QuicFrame>> probeQueue = Collections.synchronizedList(new ArrayList<>());
+    private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
+    private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
 
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
-        requestQueue.add(new SendRequest(fixedFrame.getBytes().length, actualMaxSize -> fixedFrame, lostCallback));
+        requestQueue.addLast(new SendRequest(fixedFrame.getFrameLength(), actualMaxSize -> fixedFrame, lostCallback));
     }
 
     public void addAckRequest() {
@@ -60,11 +58,11 @@ public class SendRequestQueue {
     }
 
     public void addProbeRequest() {
-        probeQueue.add(Collections.emptyList());
+        probeQueue.addLast(Collections.emptyList());
     }
 
     public void addProbeRequest(List<QuicFrame> frames) {
-        probeQueue.add(frames);
+        probeQueue.addLast(frames);
     }
 
     public boolean hasProbe() {
@@ -73,14 +71,14 @@ public class SendRequestQueue {
 
     public boolean hasProbeWithData() {
         synchronized (probeQueue) {
-            return !probeQueue.isEmpty() && !probeQueue.get(0).isEmpty();
+            return !probeQueue.isEmpty() && !probeQueue.getFirst().isEmpty();
         }
     }
 
     public List<QuicFrame> getProbe() {
         synchronized (probeQueue) {
             if (hasProbe()) {
-                return probeQueue.remove(0);
+                return probeQueue.removeFirst();
             }
             else {
                 // Even when client first checks for a probe, this might happen due to race condition with clear().
@@ -133,7 +131,7 @@ public class SendRequestQueue {
      * @param lostCallback
      */
     public void addRequest(Function<Integer, QuicFrame> frameSupplier, int estimatedSize, Consumer<QuicFrame> lostCallback) {
-        requestQueue.add(new SendRequest(estimatedSize, frameSupplier, lostCallback));
+        requestQueue.addLast(new SendRequest(estimatedSize, frameSupplier, lostCallback));
     }
 
     public boolean hasRequests() {
@@ -145,24 +143,27 @@ public class SendRequestQueue {
             // Forget it
             return Optional.empty();
         }
-        for (int i = 0; i < requestQueue.size(); i++) {
-            try {
-                if (requestQueue.get(i).getEstimatedSize() <= maxFrameLength) {
-                    return Optional.of(requestQueue.remove(i));
+
+        try {
+            for (Iterator<SendRequest> iterator = requestQueue.iterator(); iterator.hasNext(); ) {
+                SendRequest next = iterator.next();
+                if (next.getEstimatedSize() <= maxFrameLength) {
+                    iterator.remove();
+                    return Optional.of(next);
                 }
             }
-            catch (java.lang.IndexOutOfBoundsException indexError) {
-                if (cleared) {
-                    // Caused by concurrent clear, don't bother
-                    return Optional.empty();
-                }
-                else {
-                    throw indexError;
-                }
+            // Couldn't find one.
+            return Optional.empty();
+        }
+        catch (ConcurrentModificationException concurrentModificationException) {
+            if (cleared) {
+                // Caused by concurrent clear, don't bother
+                return Optional.empty();
+            }
+            else {
+                throw concurrentModificationException;
             }
         }
-        // Couldn't find one.
-        return Optional.empty();
     }
 
     public void clear() {

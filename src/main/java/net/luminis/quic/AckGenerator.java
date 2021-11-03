@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
@@ -36,7 +37,7 @@ public class AckGenerator {
     private final Version quicVersion = Version.getDefault();
     private final PnSpace pnSpace;
     private final Sender sender;
-    private List<Long> packetsToAcknowledge = new ArrayList<>();
+    private List<Range> rangesToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
     private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
@@ -48,7 +49,7 @@ public class AckGenerator {
     }
 
     public synchronized boolean hasAckToSend() {
-        return !packetsToAcknowledge.isEmpty();
+        return !rangesToAcknowledge.isEmpty();
     }
 
     public synchronized boolean hasNewAckToSend() {
@@ -57,7 +58,7 @@ public class AckGenerator {
 
     public synchronized void packetReceived(QuicPacket packet) {
         if (packet.canBeAcked()) {
-            packetsToAcknowledge.add(packet.getPacketNumber());
+            Range.extendRangeList(rangesToAcknowledge, packet.getPacketNumber());
             if (packet.isAckEliciting()) {
                 newPacketsToAcknowledge = true;
                 if (newPacketsToAcknowlegdeSince == null) {
@@ -86,19 +87,69 @@ public class AckGenerator {
     }
 
     /**
-     * Process a received AckFrame.
+     * Process a received AckFrame. If the received ack refers to a (sent) packet that contained acks, it confirms
+     * those sent acks are received by the peer so they don't have to be sent ever again.
+     *
      * @param receivedAck
      */
     public synchronized void process(QuicFrame receivedAck) {
         // Find max packet number that had an ack sent with it...
-        ((AckFrame) receivedAck).getAckedPacketNumbers().stream()
+        Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers()
                 .filter(pn -> ackSentWithPacket.containsKey(pn))
-                .limit(1)
-                .forEach(pn -> {
-                    // ... and for that max pn, all packets that where acked by it don't need to be acked again.
-                    AckFrame ackSent = ackSentWithPacket.get(pn);
-                    ackSent.getAckedPacketNumbers().forEach((Long ackedPacket) -> packetsToAcknowledge.remove(ackedPacket));
-                });
+                .findFirst();
+
+        if (largestWithAck.isPresent()) {
+            // ... and for that max pn, all packets that where acked by it don't need to be acked again.
+            AckFrame latestAcknowledgedAck = ackSentWithPacket.get(largestWithAck.get());
+            removeAcknowlegdedRanges(rangesToAcknowledge, latestAcknowledgedAck);
+
+            // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
+            // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
+            ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
+        }
+    }
+
+    /**
+     * Removes the ranges acked by the given ack from the ranges list.
+     * If ranges are not equal but overlap, the range from the list will be replaced by a range that does not contain
+     * the common elements, except for the special case when the range list contains the ack range without any of the
+     * range bounds to match, because this would lead to more ranges in the list, thus making the ack frame larger and
+     * more complex. For example, when the list contains 9..3 and the ack contains 7..5, the list will stay unchanged
+     * and not be modified to the longer list 9..8, 4..3.
+     * @param rangesToAcknowledge
+     * @param ack
+     */
+    void removeAcknowlegdedRanges(List<Range> rangesToAcknowledge, AckFrame ack) {
+        if (rangesToAcknowledge.isEmpty()) {
+            return;
+        }
+
+        ListIterator<Range> rangeListIterator = rangesToAcknowledge.listIterator();
+        ListIterator<Range> ackRangesIterator = ack.getAcknowledgedRanges().listIterator();
+        Range currentListRange = rangeListIterator.next();
+        while (ackRangesIterator.hasNext()) {
+            Range currentAckRange = ackRangesIterator.next();
+            while (currentListRange.greaterThan(currentAckRange)) {
+                if (rangeListIterator.hasNext()) {
+                    currentListRange = rangeListIterator.next();
+                } else {
+                    return;
+                }
+            }
+            if (currentListRange.lessThan(currentAckRange)) {
+                // Ack range not present in list
+                continue;
+            } else {
+                // Ranges overlap.
+                if (currentAckRange.contains(currentListRange)) {  // Contains includes equals.
+                    rangeListIterator.remove();
+                } else if (currentListRange.properlyContains(currentAckRange)) {
+                    // Would lead to splitting current range => ignore
+                } else {
+                    rangeListIterator.set(currentListRange.subtract(currentAckRange));
+                }
+            }
+        }
     }
 
     /**
@@ -125,9 +176,9 @@ public class AckGenerator {
                 delay = 0;
             }
         }
-        List<Long> packetsToAck = this.packetsToAcknowledge;
-        if (!packetsToAck.isEmpty()) {
-            return Optional.of(new AckFrame(quicVersion, this.packetsToAcknowledge, delay));
+        if (!rangesToAcknowledge.isEmpty()) {
+            // Range list must not be modified during frame initialization (guaranteed by this method being sync'd)
+            return Optional.of(new AckFrame(quicVersion, this.rangesToAcknowledge, delay));
         }
         else {
             return Optional.empty();

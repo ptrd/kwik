@@ -200,7 +200,6 @@ class RttEstimatorTest {
             Instant start = Instant.now();
             Instant end = start.plusMillis(rtt);
             rttEstimator.addSample(end, start, 0);
-            System.out.println(rttEstimator.getSmoothedRtt());
         }
         //  rtt:      3, 8
         //  smoothed: 3, 3.875
@@ -213,7 +212,6 @@ class RttEstimatorTest {
             Instant start = Instant.now();
             Instant end = start.plusMillis(rtt);
             rttEstimator.addSample(end, start, 0);
-            System.out.println(rttEstimator.getSmoothedRtt());
         }
         //  rtt:      3, 6
         //  smoothed: 3, 3.375

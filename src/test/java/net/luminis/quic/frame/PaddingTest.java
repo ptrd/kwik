@@ -90,4 +90,20 @@ class PaddingTest {
         assertThat(padding.getLength()).isEqualTo(1);
         assertThat(buffer.remaining()).isEqualTo(0);
     }
+
+    @Test
+    void testGetFrameLength() {
+        // Given
+        var frame = new Padding(80);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        frame.serialize(buffer);
+        buffer.flip();
+
+        // Then
+        assertThat(frame.getFrameLength()).isEqualTo(buffer.remaining());
+    }
+
+
 }

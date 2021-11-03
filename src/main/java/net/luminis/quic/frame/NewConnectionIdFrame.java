@@ -28,6 +28,10 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Random;
 
+/**
+ * Represents a new connection id frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
+ */
 public class NewConnectionIdFrame extends QuicFrame {
 
     private Version quicVersion;
@@ -49,19 +53,20 @@ public class NewConnectionIdFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(30);
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(sequenceNr)
+                + VariableLengthInteger.bytesNeeded(retirePriorTo)
+                + 1 + connectionId.length + 16;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
         buffer.put((byte) 0x18);
         VariableLengthInteger.encode(sequenceNr, buffer);
         VariableLengthInteger.encode(retirePriorTo, buffer);
         buffer.put((byte) connectionId.length);
         buffer.put(connectionId);
         random.ints(16).forEach(i -> buffer.put((byte) i));
-
-        byte[] bytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(bytes);
-        return bytes;
     }
 
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {

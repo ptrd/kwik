@@ -151,7 +151,7 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     public void ensureSize(int minimumSize) {
-        int payloadSize = frames.stream().mapToInt(f -> f.getBytes().length).sum();
+        int payloadSize = frames.stream().mapToInt(f -> f.getFrameLength()).sum();
         int estimatedPacketLength = 1 + 4 + 1
                 + destinationConnectionId.length + sourceConnectionId.length + (token != null? token.length: 1)
                 + 2 + 1 + payloadSize + 16;   // 16 is what encryption adds, note that final length might be larger due to multi-byte packet length

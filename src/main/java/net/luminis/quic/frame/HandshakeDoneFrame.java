@@ -33,11 +33,6 @@ public class HandshakeDoneFrame extends QuicFrame {
     public HandshakeDoneFrame(Version quicVersion) {
     }
 
-    @Override
-    public byte[] getBytes() {
-        return new byte[] { 0x1e };
-    }
-
     public HandshakeDoneFrame parse(ByteBuffer buffer, Logger log) {
         byte frameType = buffer.get();
         if (frameType != 0x1e) {
@@ -45,6 +40,16 @@ public class HandshakeDoneFrame extends QuicFrame {
         }
 
         return this;
+    }
+
+    @Override
+    public int getFrameLength() {
+        return 1;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x1e);
     }
 
     @Override

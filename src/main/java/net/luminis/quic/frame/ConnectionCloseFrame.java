@@ -26,10 +26,13 @@ import net.luminis.quic.packet.QuicPacket;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
+/**
+ * Represents a connection close frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-connection_close-frames
+ */
 public class ConnectionCloseFrame extends QuicFrame {
 
     private int errorCode;
@@ -125,18 +128,21 @@ public class ConnectionCloseFrame extends QuicFrame {
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
+    public int getFrameLength() {
+        return 1
+                + VariableLengthInteger.bytesNeeded(errorCode)
+                + VariableLengthInteger.bytesNeeded(0)
+                + VariableLengthInteger.bytesNeeded(reasonPhrase.length)
+                + reasonPhrase.length;
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
         buffer.put((byte) 0x1c);
         VariableLengthInteger.encode(errorCode, buffer);
         VariableLengthInteger.encode(0, buffer);
         VariableLengthInteger.encode(reasonPhrase.length, buffer);
         buffer.put(reasonPhrase);
-
-        byte[] bytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(bytes);
-        return bytes;
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2

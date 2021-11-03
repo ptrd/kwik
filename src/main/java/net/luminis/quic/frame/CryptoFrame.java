@@ -29,12 +29,23 @@ import net.luminis.quic.stream.StreamElement;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+/**
+ * Represents a crypto frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-crypto-frames
+ */
 public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
 
     private int offset;
     private int length;
     private byte[] cryptoData;
     private byte[] bytes;
+
+    public CryptoFrame() {
+    }
+
+    public CryptoFrame(Version quicVersion, byte[] payload) {
+        this(quicVersion, 0, payload);
+    }
 
     public CryptoFrame(Version quicVersion, int offset, byte[] payload) {
         this.offset = offset;
@@ -51,11 +62,20 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
         frameBuffer.get(bytes);
     }
 
-    public CryptoFrame() {
+    @Override
+    public int getFrameLength() {
+        return 1
+                + VariableLengthInteger.bytesNeeded(offset)
+                + VariableLengthInteger.bytesNeeded(cryptoData.length)
+                + cryptoData.length;
     }
 
-    public CryptoFrame(Version quicVersion, byte[] payload) {
-        this(quicVersion, 0, payload);
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) 0x06);
+        VariableLengthInteger.encode(offset, buffer);
+        VariableLengthInteger.encode(cryptoData.length, buffer);
+        buffer.put(cryptoData);
     }
 
     public CryptoFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
@@ -75,10 +95,6 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
     @Override
     public String toString() {
         return "CryptoFrame[" + offset + "," + length + "]";
-    }
-
-    public byte[] getBytes() {
-        return bytes;
     }
 
     public byte[] getStreamData() {

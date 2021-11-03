@@ -21,18 +21,32 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.packet.QuicPacket;
 
+import java.nio.ByteBuffer;
 import java.time.Instant;
 
+/**
+ * Base class for all classes that represent a QUIC frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#frames
+ */
 public abstract class QuicFrame {
 
-    public abstract byte[] getBytes();
-
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-terms-and-definitions
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
     // "All frames other than ACK, PADDING, and CONNECTION_CLOSE are considered ack-eliciting."
+
+    /**
+     * Returns whether the frame is ack eliciting
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-terms-and-definitions
+     * "Ack-eliciting packet: A QUIC packet that contains frames other than ACK, PADDING, and CONNECTION_CLOSE."
+     * @return  true when the frame is ack-eliciting
+     */
     public boolean isAckEliciting() {
         return true;
     }
 
     public abstract void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived);
 
+    public abstract int getFrameLength();
+
+    public abstract void serialize(ByteBuffer buffer);
 }

@@ -26,7 +26,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.10
+/**
+ * Represents a max stream data frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-max_stream_data-frames
+ */
 public class MaxStreamDataFrame extends QuicFrame {
 
     private int streamId;
@@ -51,23 +54,22 @@ public class MaxStreamDataFrame extends QuicFrame {
     }
 
     @Override
-    public String toString() {
-        return "MaxStreamDataFrame[" + streamId + ":" + maxData + "]";
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(streamId) + VariableLengthInteger.bytesNeeded(maxData);
     }
 
     @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(17);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.10
+    public void serialize(ByteBuffer buffer) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-max_stream_data-frames
         // "The MAX_STREAM_DATA frame (type=0x11)..."
         buffer.put((byte) 0x11);
         VariableLengthInteger.encode(streamId, buffer);
         VariableLengthInteger.encode(maxData, buffer);
+    }
 
-        byte[] bytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(bytes);
-        return bytes;
+    @Override
+    public String toString() {
+        return "MaxStreamDataFrame[" + streamId + ":" + maxData + "]";
     }
 
     public int getStreamId() {

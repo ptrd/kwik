@@ -16,13 +16,16 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.frame;
 
+import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.awt.*;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,7 +38,7 @@ class StreamFrameTest {
         byte[] data = generateByteArray(10);
         StreamFrame frame = new StreamFrame(16, 0, data, true);
         // Generate frame bytes and parse
-        frame = new StreamFrame().parse(ByteBuffer.wrap(frame.getBytes()), Mockito.mock(Logger.class));
+        frame = new StreamFrame().parse(ByteBuffer.wrap(getBytes(frame)), Mockito.mock(Logger.class));
         assertThat(frame.getStreamId()).isEqualTo(16);
         assertThat(frame.getOffset()).isEqualTo(0);
         assertThat(frame.getStreamData()).isEqualTo("0123456789".getBytes());
@@ -60,8 +63,17 @@ class StreamFrameTest {
         byte[] data = generateByteArray(26);
         StreamFrame frame = new StreamFrame(0, 0, data, 3, 5, true);
         // Generate frame bytes and parse to get access to copied data bytes.
-        frame = new StreamFrame().parse(ByteBuffer.wrap(frame.getBytes()), Mockito.mock(Logger.class));
+        frame = new StreamFrame().parse(ByteBuffer.wrap(getBytes(frame)), Mockito.mock(Logger.class));
         assertThat(frame.getStreamData()).isEqualTo("34567".getBytes());
+    }
+
+    private byte[] getBytes(QuicFrame frame) {
+        ByteBuffer buffer = ByteBuffer.allocate(1500);
+        frame.serialize(buffer);
+        buffer.flip();
+        byte[] data = new byte[buffer.remaining()];
+        buffer.get(data);
+        return data;
     }
 
     private byte[] generateByteArray(int size) throws Exception {

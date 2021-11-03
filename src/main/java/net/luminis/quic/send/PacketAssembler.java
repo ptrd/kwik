@@ -86,7 +86,7 @@ public class PacketAssembler {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2
                 // "... packets containing only ACK frames are not congestion controlled ..."
                 // So: only check if it fits within available packet space
-                if (packet.get().estimateLength(ackFrame.getBytes().length) <= availablePacketSize) {
+                if (packet.get().estimateLength(ackFrame.getFrameLength()) <= availablePacketSize) {
                     packet.get().addFrame(ackFrame);
                     callbacks.add(EMPTY_CALLBACK);
                     ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
@@ -110,7 +110,7 @@ public class PacketAssembler {
                 packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
                 ackFrame = ackGenerator.generateAck().orElse(null);
                 if (ackFrame != null) {
-                    optionalAckSize = ackFrame.getBytes().length;
+                    optionalAckSize = ackFrame.getFrameLength();
                 }
             }
         }
@@ -119,10 +119,10 @@ public class PacketAssembler {
             List<QuicFrame> probeData = requestQueue.getProbe();
             // Probe is not limited by congestion control, but it is limited by max packet size.
             packet = packet.or(() -> Optional.of(createPacket(sourceConnectionId, destinationConnectionId, null)));
-            int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getBytes().length).sum());
+            int estimatedSize = packet.get().estimateLength(probeData.stream().mapToInt(f -> f.getFrameLength()).sum());
             if (estimatedSize > availablePacketSize) {
                 QuicFrame probeFrame = new PingFrame();
-                if (packet.get().estimateLength(probeFrame.getBytes().length) > availablePacketSize) {
+                if (packet.get().estimateLength(probeFrame.getFrameLength()) > availablePacketSize) {
                     return Optional.empty();
                 }
                 probeData = List.of(probeFrame);
@@ -153,11 +153,11 @@ public class PacketAssembler {
                 }
                 QuicFrame nextFrame = next.get().getFrameSupplier().apply(proposedSize);
                 if (nextFrame != null) {
-                    if (nextFrame.getBytes().length > proposedSize) {
-                        throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getBytes().length + " > " + (proposedSize) + " frame: " + nextFrame);
+                    if (nextFrame.getFrameLength() > proposedSize) {
+                        throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getFrameLength() + " > " + (proposedSize) + " frame: " + nextFrame);
                     }
 
-                    estimatedSize += nextFrame.getBytes().length;
+                    estimatedSize += nextFrame.getFrameLength();
                     packet.get().addFrame(nextFrame);
                     callbacks.add(next.get().getLostCallback());
 
@@ -167,7 +167,7 @@ public class PacketAssembler {
                         packet.get().addFrame(ackFrame);
                         callbacks.add(EMPTY_CALLBACK);
                         ackGenerator.registerAckSendWithPacket(ackFrame, packet.get().getPacketNumber());
-                        estimatedSize += ackFrame.getBytes().length;
+                        estimatedSize += ackFrame.getFrameLength();
                         // Adding once will do ;-)
                         optionalAckSize = 0;
                     }

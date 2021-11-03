@@ -83,7 +83,7 @@ public class LossDetector {
 
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
-        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers().stream()
+        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers()
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
                 .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
@@ -103,6 +103,9 @@ public class LossDetector {
         recoveryManager.setLossDetectionTimer();
 
         rttEstimater.ackReceived(ackFrame, timeReceived, newlyAcked);
+
+        // Cleanup
+        newlyAcked.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
     }
 
     public synchronized void reset() {
@@ -219,6 +222,9 @@ public class LossDetector {
                 });
 
         congestionController.registerLost(filterInFlight(lostPacketsInfo));
+
+        // Cleanup
+        lostPacketsInfo.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
     }
 
     private List<PacketStatus> filterInFlight(List<PacketStatus> packets) {

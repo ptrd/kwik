@@ -21,18 +21,20 @@ package net.luminis.quic.frame;
 import net.luminis.quic.InvalidIntegerEncodingException;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
+import net.luminis.quic.ack.Range;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
- * https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-ack-frames
  */
 public class AckFrame extends QuicFrame {
 
@@ -41,80 +43,66 @@ public class AckFrame extends QuicFrame {
     private byte[] frameBytes;
     private long largestAcknowledged;
     private int ackDelay;
-    private List<Long> acknowledgedPacketNumbers;
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-19.3
-    // "The "ack_delay_exponent" defaults to 3, or a multiplier of 8"
+    private List<Range> acknowledgedRanges;
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+    // "...  a default value of 3 is assumed (indicating a multiplier of 8)."
     private int delayScale = 8;
-    private String stringRepresentation = "";
+    private String stringRepresentation = null;
 
     public AckFrame() {
     }
 
     public AckFrame(long packetNumber) {
-        this(Version.getDefault(), packetNumber);
+        this(Version.getDefault(), List.of(new Range(packetNumber)), 0);
     }
 
-    public AckFrame(Version quicVersion, long packetNumber) {
-        largestAcknowledged = (int) packetNumber;
-        acknowledgedPacketNumbers = List.of(largestAcknowledged);
-        stringRepresentation = String.valueOf(largestAcknowledged);
-
-        ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
-        buffer.put((byte) 0x02);
-
-        VariableLengthInteger.encode(packetNumber, buffer);
-        VariableLengthInteger.encode(0, buffer);
-        VariableLengthInteger.encode(0, buffer);
-        VariableLengthInteger.encode(0, buffer);
-
-        frameBytes = new byte[buffer.position()];
-        buffer.flip();
-        buffer.get(frameBytes);
+    public AckFrame(Range ackRange) {
+        this(Version.getDefault(), List.of(ackRange), 0);
     }
 
-    public AckFrame(List<Long> packetNumbers) {
-        this(Version.getDefault(), packetNumbers);
+    public AckFrame(List<Range> ackRanges) {
+        this(Version.getDefault(), ackRanges, 0);
     }
 
-    public AckFrame(Version quicVersion, List<Long> packetNumbers) {
-        this(quicVersion, packetNumbers, 0);
-    }
-
-    public AckFrame(Version quicVersion, List<Long> packetNumbers, int ackDelay) {
-        this.ackDelay = ackDelay * 1000 / delayScale;
-        if (packetNumbers.isEmpty()) {
-            throw new IllegalArgumentException();
+    /**
+     * Creates an AckFrame given a (sorted, non-adjacent) list of ranges and an ack delay.
+     * @param quicVersion
+     * @param ackRanges
+     * @param ackDelay   the ack delay in milliseconds
+     */
+    public AckFrame(Version quicVersion, List<Range> ackRanges, int ackDelay) {
+        if (! Range.validRangeList(ackRanges)) {
+            throw new IllegalArgumentException("invalid range");  // TODO: replace by assert?
         }
-        acknowledgedPacketNumbers = packetNumbers.stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
-        largestAcknowledged = acknowledgedPacketNumbers.get(0);
+
+        acknowledgedRanges = List.copyOf(ackRanges);
+        this.ackDelay = ackDelay * 1000 / delayScale;
+
+        Iterator<Range> rangeIterator = ackRanges.iterator();
+        Range firstRange = rangeIterator.next();
+        largestAcknowledged = firstRange.getLargest();
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_FRAME_SIZE);
         buffer.put((byte) 0x02);
-
         VariableLengthInteger.encode(largestAcknowledged, buffer);
         VariableLengthInteger.encode(ackDelay, buffer);
-        ArrayList<List<Long>> ranges = split(acknowledgedPacketNumbers);
-        VariableLengthInteger.encode(ranges.size() - 1, buffer);
-        VariableLengthInteger.encode(ranges.get(0).size() - 1, buffer);
+        VariableLengthInteger.encode(ackRanges.size() - 1, buffer);
+        VariableLengthInteger.encode(firstRange.size() - 1, buffer);
 
-        for (int i = 1; i < ranges.size(); i++) {
-            long prev = getLastElement(ranges.get(i-1));
-            long next = ranges.get(i).get(0);
-            int gap = (int) (prev - next - 2);
-            int block = ranges.get(i).size() - 1;
+        long smallest = firstRange.getSmallest();
+        while (rangeIterator.hasNext()) {
+            Range next = rangeIterator.next();
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-ack-frames
+            // "Gap: A variable-length integer indicating the number of contiguous unacknowledged packets preceding the
+            //  packet number one lower than the smallest in the preceding ACK Range."
+            int gap = (int) (smallest - next.getLargest() - 2);  // e.g. 9..9, 5..4 => un-acked: 8, 7, 6; gap: 2
+            // "ACK Range Length: A variable-length integer indicating the number of contiguous acknowledged packets
+            //  preceding the largest packet number, as determined by the preceding Gap."
+            int ackRangeLength = next.size() - 1;
             VariableLengthInteger.encode(gap, buffer);
-            VariableLengthInteger.encode(block, buffer);
-        }
+            VariableLengthInteger.encode(ackRangeLength, buffer);
 
-        if (!ranges.isEmpty()) {
-            stringRepresentation = ranges.stream().map(range ->
-                    range.size() == 1 ?
-                            range.get(0).toString() :
-                            range.get(0).toString() + "-" + range.get(range.size() - 1).toString())
-                    .collect(Collectors.joining(","));
-        }
-        else {
-            stringRepresentation = String.valueOf(largestAcknowledged);
+            smallest = next.getSmallest();
         }
 
         frameBytes = new byte[buffer.position()];
@@ -122,33 +110,24 @@ public class AckFrame extends QuicFrame {
         buffer.get(frameBytes);
     }
 
-    private ArrayList<List<Long>> split(List<Long> packetNumbers) {
-        return packetNumbers.stream().collect(
-                ArrayList::new,
-                (result, element) -> {
-                    if (result.isEmpty()) {
-                        result.add(new ArrayList<>());
-                        getLastElement(result).add(element);
-                    }
-                    else if (getLastElement(getLastElement(result)) == element + 1) {
-                        getLastElement(result).add(element);
-                    }
-                    else {
-                        result.add(new ArrayList<>());
-                        getLastElement(result).add(element);
-                    }
-                },
-                ArrayList::addAll
-                );
+    @Override
+    public int getFrameLength() {
+        if (frameBytes != null) {
+            return frameBytes.length;
+        }
+        else {
+            throw new IllegalStateException("frame length not known for parsed frames");
+        }
     }
 
-    private static <E> E getLastElement(List<E> list) {
-        return list.get(list.size()-1);
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put(frameBytes);
     }
 
     public AckFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         log.debug("Parsing AckFrame");
-        acknowledgedPacketNumbers = new ArrayList<>();
+        acknowledgedRanges = new ArrayList<>();
 
         buffer.get();  // Eat type.
 
@@ -188,32 +167,34 @@ public class AckFrame extends QuicFrame {
     }
 
     private int addAcknowledgeRange(long largestOfRange, int rangeSize) {
-        for (int i = 0; i < rangeSize; i++) {
-            acknowledgedPacketNumbers.add(largestOfRange - i);
-        }
-
-        if (! stringRepresentation.isEmpty()) {
-            stringRepresentation += ",";
-        }
-        stringRepresentation += rangeSize > 1?
-                largestOfRange + "-" + (largestOfRange - rangeSize + 1):
-                largestOfRange;
-
+        acknowledgedRanges.add(new Range(largestOfRange - rangeSize + 1, largestOfRange));
         return rangeSize;
     }
 
-    public List<Long> getAckedPacketNumbers() {
-        return acknowledgedPacketNumbers;
+    /**
+     * Returns the acked packet numbers in reverse sorted order (so largest first)
+     * @return
+     */
+    public Stream<Long> getAckedPacketNumbers() {
+        return acknowledgedRanges.stream().flatMap(r -> r.stream());
+    }
+
+    /**
+     * Returns the acked ranges in reverse sorted order (so largest first)
+     * @return
+     */
+    public List<Range> getAcknowledgedRanges() {
+        return acknowledgedRanges;
     }
 
     @Override
     public String toString() {
+        if (stringRepresentation == null) {
+            stringRepresentation = acknowledgedRanges.stream()
+                    .map(r -> r.size() == 1? "" + r.getLargest(): "" + r.getLargest() + "-" + r.getSmallest())
+                    .collect(Collectors.joining(","));
+        }
         return "AckFrame[" + stringRepresentation + "|\u0394" + (ackDelay * delayScale) / 1000  + "]";
-    }
-
-    @Override
-    public byte[] getBytes() {
-        return frameBytes;
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2

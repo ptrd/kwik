@@ -22,15 +22,46 @@ import net.luminis.quic.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SendRequestQueueTest {
+
+    @Test
+    void nextReturnsFirstItemSmallerThanGivenFrameLength() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[67]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+
+        // When
+        Optional<SendRequest> sendRequest = sendRequestQueue.next(100);
+        // Then
+        assertThat(sendRequest).isPresent();
+        assertThat(sendRequest.get().getEstimatedSize()).isLessThanOrEqualTo(100);
+    }
+
+    @Test
+    void whenNoFrameIsSmallerThanGivenFrameLengthNextShouldReturnNothing() {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[572]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[167]), f -> {});
+        sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
+
+        // When
+        Optional<SendRequest> sendRequest = sendRequestQueue.next(100);
+        // Then
+        assertThat(sendRequest).isNotPresent();
+    }
 
     @Test
     void whenSecondAckHasMoreDelayFirstDelayWillBeUsed() throws Exception {
@@ -42,7 +73,7 @@ class SendRequestQueueTest {
 
         Instant next = sendRequestQueue.nextDelayedSend();
 
-        assertThat(Duration.between(start, next).toMillis()).isLessThan(100);
+        assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(100);
     }
 
     @Test
@@ -55,7 +86,7 @@ class SendRequestQueueTest {
 
         Instant next = sendRequestQueue.nextDelayedSend();
 
-        assertThat(Duration.between(start, next).toMillis()).isLessThan(100);
+        assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(100);
     }
 
     @Test

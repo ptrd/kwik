@@ -335,7 +335,7 @@ class QuicStreamImplTest {
         StreamFrame secondFrame = (StreamFrame) captor.getAllValues().get(1).apply(1200);
 
         // This is what the test is about: the first frame should be less than max packet size.
-        assertThat(firstFrame.getBytes().length).isLessThanOrEqualTo(1200);
+        assertThat(firstFrame.getFrameLength()).isLessThanOrEqualTo(1200);
         // And of course, the remaining bytes should be in the second frame.
         int totalFrameLength = firstFrame.getLength() + secondFrame.getLength();
         assertThat(totalFrameLength).isEqualTo(data.length);
@@ -821,7 +821,10 @@ class QuicStreamImplTest {
      */
     private StreamFrame resurrect(StreamFrame streamFrame) {
         try {
-            return new StreamFrame().parse(ByteBuffer.wrap(streamFrame.getBytes()), logger);
+            ByteBuffer buffer = ByteBuffer.allocate(25 + streamFrame.getLength());
+            streamFrame.serialize(buffer);
+            buffer.flip();
+            return new StreamFrame().parse(buffer, logger);
         } catch (InvalidIntegerEncodingException e) {
             throw new RuntimeException(e);
         }

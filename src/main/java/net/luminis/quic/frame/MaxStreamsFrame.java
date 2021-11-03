@@ -26,6 +26,10 @@ import net.luminis.quic.packet.QuicPacket;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+/**
+ * Represents a max streams frame.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-max_streams-frames
+ */
 public class MaxStreamsFrame extends QuicFrame {
 
     private long maxStreams;
@@ -52,18 +56,21 @@ public class MaxStreamsFrame extends QuicFrame {
     }
 
     @Override
+    public int getFrameLength() {
+        return 1 + VariableLengthInteger.bytesNeeded(maxStreams);
+    }
+
+    @Override
+    public void serialize(ByteBuffer buffer) {
+        buffer.put((byte) (appliesToBidirectional? 0x12: 0x13));
+        VariableLengthInteger.encode(maxStreams, buffer);
+    }
+
+    @Override
     public String toString() {
         return "MaxStreamsFrame["
                 + (appliesToBidirectional? "B": "U") + ","
                 + maxStreams + "]";
-    }
-
-    @Override
-    public byte[] getBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(1 + VariableLengthInteger.bytesNeeded(maxStreams));
-        buffer.put((byte) (appliesToBidirectional? 0x12: 0x13));
-        VariableLengthInteger.encode(maxStreams, buffer);
-        return buffer.array();
     }
 
     public long getMaxStreams() {
