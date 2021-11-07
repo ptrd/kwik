@@ -632,7 +632,7 @@ public class KwikCli {
             }
 
             if (quicConnection.getNewSessionTickets().isEmpty()) {
-                System.out.println("There are new new session tickets to store.");
+                System.out.println("There are no new session tickets to store.");
             }
         }
 
