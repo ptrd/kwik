@@ -42,7 +42,6 @@ import net.luminis.tls.handshake.*;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
@@ -103,7 +102,7 @@ class ServerConnectionImplTest {
         // When
         List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
-                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), TlsConstants.NamedGroup.secp256r1, clientExtensions);
+                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), TlsConstants.NamedGroup.secp256r1, clientExtensions, null, ClientHello.PskKeyEstablishmentMode.both);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
@@ -535,7 +534,7 @@ class ServerConnectionImplTest {
         private Supplier<TlsProtocolException> exceptionSupplier;
 
         public MockTlsServerEngine(X509Certificate serverCertificate, PrivateKey certificateKey, ServerMessageSender serverMessageSender, TlsStatusEventHandler tlsStatusHandler) {
-            super(serverCertificate, certificateKey, serverMessageSender, tlsStatusHandler);
+            super(serverCertificate, certificateKey, serverMessageSender, tlsStatusHandler, null);
         }
 
         @Override

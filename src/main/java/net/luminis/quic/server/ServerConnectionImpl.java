@@ -525,6 +525,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             cryptoStream.write(finished, false);
             log.sentPacketInfo(cryptoStream.toStringSent());
         }
+
+        @Override
+        public void send(NewSessionTicketMessage newSessionTicket) throws IOException {
+            CryptoStream cryptoStream = getCryptoStream(EncryptionLevel.App);
+            cryptoStream.write(newSessionTicket, true);
+        }
     }
 
     public boolean isClosed() {
