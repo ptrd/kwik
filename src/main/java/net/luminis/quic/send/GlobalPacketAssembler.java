@@ -26,6 +26,8 @@ import net.luminis.quic.packet.InitialPacket;
 
 import java.util.*;
 
+import static net.luminis.quic.EncryptionLevel.*;
+
 /**
  * Assembles QUIC packets for sending.
  */
@@ -43,7 +45,7 @@ public class GlobalPacketAssembler {
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
             AckGenerator ackGenerator =
-                    (level != EncryptionLevel.ZeroRTT)?
+                    (level != ZeroRTT)?
                             globalAckGenerator.getAckGenerator(level.relatedPnSpace()):
                             // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-17.2.3
                             // "... a client cannot send an ACK frame in a 0-RTT packet, ..."
@@ -89,7 +91,7 @@ public class GlobalPacketAssembler {
                     int packetSize = item.get().getPacket().estimateLength(0);
                     size += packetSize;
                     remaining -= packetSize;
-                    if (level == EncryptionLevel.Initial) {
+                    if (level == Initial) {
                         hasInitial = true;
                     }
                     if (item.get().getPacket().getFrames().stream().anyMatch(f -> f instanceof PathChallengeFrame || f instanceof PathResponseFrame)) {
@@ -141,7 +143,7 @@ public class GlobalPacketAssembler {
     }
 
     public void setInitialToken(byte[] token) {
-        ((InitialPacketAssembler) packetAssembler[EncryptionLevel.Initial.ordinal()]).setInitialToken(token);
+        ((InitialPacketAssembler) packetAssembler[Initial.ordinal()]).setInitialToken(token);
     }
 }
 
