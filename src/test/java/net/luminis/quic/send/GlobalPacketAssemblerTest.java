@@ -21,6 +21,7 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -154,6 +155,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void zeroRttPacketsShouldNeverContainAckFrames() throws Exception {
         // Given
         ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.App));
+        globalPacketAssembler.enableZeroRttLevel();
 
         // When
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
@@ -167,6 +169,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     @Test
     void zeroRttAndOneRttShouldNotUseSamePacketNumbers() {
         // Given
+        globalPacketAssembler.enableZeroRttLevel();
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
 
@@ -259,6 +262,32 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         int maxDatagramSize = 30;
         List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
         assertThat(packets).isEmpty();
+    }
+
+    @Test
+    void whenAppLevelNotEnabledAssemblerShouldNotCreateZeroRttPackets() {
+        // Given
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(0, new byte[0], true), f -> {});
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(packets).isEmpty();
+    }
+
+    @Test
+    void whenAppLevelEnabledAssemblerShouldCreateZeroRttPackets() {
+        // Given
+        sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(0, new byte[0], true), f -> {});
+        globalPacketAssembler.enableZeroRttLevel();
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(packets).hasSize(1);
+        assertThat(packets.get(0).getPacket()).isInstanceOf(ZeroRttPacket.class);
     }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {

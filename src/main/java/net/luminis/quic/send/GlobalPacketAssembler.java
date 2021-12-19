@@ -23,6 +23,7 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 
 import java.util.*;
 
@@ -35,6 +36,7 @@ public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
     private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
+    private volatile EncryptionLevel[] enabledLevels;
 
 
     public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
@@ -62,6 +64,8 @@ public class GlobalPacketAssembler {
                     packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator);
             }
         });
+
+        enabledLevels = new EncryptionLevel[] { Initial, ZeroRTT, Handshake };
     }
 
     /**
@@ -82,7 +86,7 @@ public class GlobalPacketAssembler {
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
         int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
 
-        for (EncryptionLevel level: EncryptionLevel.values()) {
+        for (EncryptionLevel level: enabledLevels) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
                 Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, sourceConnectionId, destinationConnectionId);
@@ -144,6 +148,10 @@ public class GlobalPacketAssembler {
 
     public void setInitialToken(byte[] token) {
         ((InitialPacketAssembler) packetAssembler[Initial.ordinal()]).setInitialToken(token);
+    }
+
+    public void enableZeroRttLevel() {
+        enabledLevels = EncryptionLevel.values();
     }
 }
 
