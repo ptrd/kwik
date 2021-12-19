@@ -23,12 +23,7 @@ public class MissingKeysException extends Exception {
     private final EncryptionLevel encryptionLevel;
 
     public MissingKeysException(EncryptionLevel encryptionLevel) {
+        super("Missing keys for encryption level " + encryptionLevel);
         this.encryptionLevel = encryptionLevel;
     }
-
-    @Override
-    public String toString() {
-        return "Missing keys for encryption level " + encryptionLevel;
-    }
-
 }
