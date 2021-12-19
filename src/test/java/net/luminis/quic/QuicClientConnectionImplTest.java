@@ -639,6 +639,13 @@ class QuicClientConnectionImplTest {
         ).isInstanceOf(InvalidPacketException.class);
     }
 
+    @Test
+    void clientParsingZeroRttPacketShouldThrow() throws Exception {
+        assertThatThrownBy(() ->
+                connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }))
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
     void connectionShouldBeSilentlyClosedAfterIdleTimeout() throws Exception {
 
         // Given

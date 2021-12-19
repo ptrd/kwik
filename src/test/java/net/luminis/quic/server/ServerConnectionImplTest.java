@@ -462,6 +462,19 @@ class ServerConnectionImplTest {
         assertThat(antiAmplicationLimitCaptor.getValue()).isEqualTo(3 * 1200);
     }
 
+    @Test
+    void whenParsingZeroRttPacketItShouldFailOnMissingKeys() throws Exception {
+        // Given
+        byte[] data = { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+
+        assertThatThrownBy(() ->
+                // When
+                connection.parsePacket(ByteBuffer.wrap(data))
+        )
+                // Then
+                .isInstanceOf(MissingKeysException.class)
+                .hasMessageContaining("ZeroRTT");
+    }
 
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();

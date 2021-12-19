@@ -31,6 +31,10 @@ import java.util.stream.Collectors;
 
 public class ZeroRttPacket extends LongHeaderPacket {
 
+    public ZeroRttPacket(Version quicVersion) {
+        super(quicVersion);
+    }
+
     public ZeroRttPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, QuicFrame frame) {
         super(quicVersion, sourceConnectionId, destConnectionId, frame);
     }
