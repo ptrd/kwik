@@ -80,6 +80,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
     private volatile boolean addressValidated;
+    private boolean acceptEarlyData = true;
+    private boolean acceptedEarlyData = false;
 
 
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
@@ -193,6 +195,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void earlySecretsKnown() {
+        connectionSecrets.computeEarlySecrets(tlsEngine);
     }
 
     @Override
@@ -203,6 +206,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public void handshakeFinished() {
         connectionSecrets.computeApplicationSecrets(tlsEngine);
+        sender.enableAppLevel();
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.1.2
@@ -224,7 +228,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             }
         }
 
-        applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+        if (!acceptedEarlyData) {
+            applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+        }
     }
 
     private void sendHandshakeDone(QuicFrame frame) {
@@ -282,7 +288,23 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (retryRequired) {
             serverTransportParams.setRetrySourceConnectionId(connectionId);
         }
+        tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
+    }
+
+    @Override
+    public boolean isEarlyDataAccepted() {
+        if (acceptEarlyData) {
+            // Remember that server connection actually accepted early data
+            acceptedEarlyData = true;
+            applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+
+            log.info("Server accepted early data");
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     @Override
@@ -411,7 +433,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(ZeroRttPacket packet, Instant time) {
-        // TODO
+       if (acceptedEarlyData) {
+            processFrames(packet, time);
+        }
+        else {
+            log.warn("Ignoring 0-RTT packet because server connection does not accept early data.");
+        }
         return ProcessResult.Continue;
     }
 

@@ -366,6 +366,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     .map(item -> item.getPacket())
                     .forEach(packet -> {
                         Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
+                        if (keys == null) {
+                            throw new IllegalStateException("Missing keys for encryption level " + packet.getEncryptionLevel());
+                        }
                         byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
                         buffer.put(packetData);
                         log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
@@ -455,6 +458,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public void unsetAntiAmplificationLimit() {
         antiAmplificationLimit = -1;
+    }
+
+    public void enableAllLevels() {
+        packetAssembler.enableZeroRttLevel();
+    }
+
+    public void enableAppLevel() {
+        packetAssembler.enableZeroRttLevel();
     }
 }
 
