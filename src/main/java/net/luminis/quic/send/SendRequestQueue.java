@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 
+import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 
@@ -31,12 +32,20 @@ import java.util.function.Function;
 
 public class SendRequestQueue {
 
+    private final EncryptionLevel encryptionLevel;
     private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
     private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
 
+    public SendRequestQueue(EncryptionLevel level) {
+        encryptionLevel = level;
+    }
+
+    public SendRequestQueue() {
+        encryptionLevel = null;
+    }
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
         requestQueue.addLast(new SendRequest(fixedFrame.getFrameLength(), actualMaxSize -> fixedFrame, lostCallback));
@@ -173,6 +182,11 @@ public class SendRequestQueue {
         synchronized (ackLock) {
             nextAckTime = null;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "SendRequestQueue[" + encryptionLevel + "]";
     }
 }
 

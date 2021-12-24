@@ -52,7 +52,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
     
     @BeforeEach
     void initObjectUnderTest() {
-        sendRequestQueue = new SendRequestQueue();
+        sendRequestQueue = new SendRequestQueue(null);
         initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
         initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), sendRequestQueue, initialAckGenerator);
         handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
