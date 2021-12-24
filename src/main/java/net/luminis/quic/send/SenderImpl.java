@@ -232,7 +232,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
                     log.warn("Discarding space " + space + " that has a probe queued.");
                 }
-                sendRequestQueue[space.ordinal()].clear();
+                sendRequestQueue[space.relatedEncryptionLevel().ordinal()].clear();
                 globalAckGenerator.discard(space);
                 discardedSpaces[space.ordinal()] = true;
             }
