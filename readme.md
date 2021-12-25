@@ -159,11 +159,16 @@ To run the server, execute `java -cp kwik.jar net.luminis.quic.server.Server` wi
 This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc9000.html#name-address-validation-using-re).
 To run without retry-mode, add the `--noRetry` flag as first argument.  
 
+
+## Adding HTTP/3 Support to the KWIK Server
+
 A plain Kwik server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
 have been using for early testing. 
-To add HTTP/3 to Kwik, just grab the latest `flupke-plugin.jar` from the [Flupke](https://bitbucket.org/pjtr/flupke) project
-and it to the classpath, e.g. `java -cp kwik.jar:flupke-plugin.jar net.luminis.quic.server.Server`.
 
+To add HTTP/3 to Kwik,
+- Clone the repo [Flupke](https://bitbucket.org/pjtr/flupke).
+- Build the flupke repo cloned above.
+- Add the flupke.jar generated to server's class path For e.g. `java -cp kwik.jar:flupke.jar net.luminis.quic.server.Server`.
                                 
 ## Contact
 
