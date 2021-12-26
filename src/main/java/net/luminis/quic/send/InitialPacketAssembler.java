@@ -58,8 +58,8 @@ public class InitialPacketAssembler extends PacketAssembler {
     }
 
     @Override
-    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId, QuicFrame frame) {
-        InitialPacket packet = new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, initialToken, frame);
+    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId) {
+        InitialPacket packet = new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, initialToken, (QuicFrame) null);
         packet.setPacketNumber(nextPacketNumber());
         return packet;
     }
