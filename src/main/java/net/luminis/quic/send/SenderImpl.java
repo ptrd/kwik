@@ -226,13 +226,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     public void discard(PnSpace space, String reason) {
         synchronized (discardedSpaces) {
             if (!discardedSpaces[space.ordinal()]) {
-                log.recovery("Discarding pn space " + space + " because " + reason);
                 packetAssembler.stop(space);
                 recoveryManager.stopRecovery(space);
-                if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
-                    log.warn("Discarding space " + space + " that has a probe queued.");
-                }
-                sendRequestQueue[space.relatedEncryptionLevel().ordinal()].clear();
+                log.recovery("Discarding pn space " + space + " because " + reason);
                 globalAckGenerator.discard(space);
                 discardedSpaces[space.ordinal()] = true;
             }
@@ -339,10 +335,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             else {
                 if (lastDelayWasZero) {
                     int count = subsequentZeroDelays.incrementAndGet();
-                    if (count % 100 == 3) {
+                    if (count % 20 == 3) {
                         log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
                     }
-                    if (count > 100003) {
+                    if (count > 10003) {
                         return 8000;
                     }
                 }

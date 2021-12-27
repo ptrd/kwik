@@ -176,11 +176,32 @@ public class SendRequestQueue {
     }
 
     public void clear() {
+        clear(true);
+    }
+
+    public void clear(boolean dropAcks) {
         cleared = true;
         requestQueue.clear();
         probeQueue.clear();
-        synchronized (ackLock) {
-            nextAckTime = null;
+        if (dropAcks) {
+            synchronized (ackLock) {
+                nextAckTime = null;
+            }
+        }
+    }
+
+    public boolean isEmpty() {
+        return isEmpty(false);
+    }
+
+    public boolean isEmpty(boolean ignoreAcks) {
+        if (ignoreAcks) {
+            return requestQueue.isEmpty();
+        }
+        else {
+            synchronized (ackLock) {
+                return requestQueue.isEmpty() && nextAckTime == null;
+            }
         }
     }
 
@@ -188,5 +209,6 @@ public class SendRequestQueue {
     public String toString() {
         return "SendRequestQueue[" + encryptionLevel + "]";
     }
+
 }
 
