@@ -89,6 +89,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
     private volatile boolean running;
+    private volatile boolean stopping;
     private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
     private volatile int datagramsSent;
@@ -206,7 +207,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void packetProcessed(boolean expectingMore) {
-        wakeUpSenderLoop();  // If you change this, review sendAck!
+        wakeUpSenderLoop();  // If you change this, review this.sendAck()!
     }
 
     @Override
@@ -252,7 +253,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         assert(stopped);  // Stopped should have be called before.
         // Stop cannot be called here (again), because it would drop ConnectionCloseFrame still waiting to be sent.
 
-        running = false;
+        stopping = true;
         senderThread.interrupt();
     }
 
@@ -269,7 +270,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         try {
             running = true;
             while (running) {
-                boolean interrupted = false;
                 synchronized (condition) {
                     try {
                         if (! signalled) {
@@ -281,13 +281,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                         signalled = false;
                     }
                     catch (InterruptedException e) {
-                        interrupted = true;
-                        log.debug("Sender thread is interrupted; shutting down? " + running);
+                        log.debug("Sender thread is interrupted; probably shutting down? " + running);
                     }
                 }
-                if (! interrupted) {
-                    sendIfAny();
+
+                // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
+                // items being queued just after the packet assembler (for that level) has executed.
+                if (stopping) {
+                    running = false;
                 }
+
+                sendIfAny();
             }
         }
         catch (Throwable fatalError) {
