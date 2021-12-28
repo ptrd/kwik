@@ -461,11 +461,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     public void enableAllLevels() {
-        packetAssembler.enableZeroRttLevel();
+        packetAssembler.enableAppLevel();
     }
 
     public void enableAppLevel() {
-        packetAssembler.enableZeroRttLevel();
+        packetAssembler.enableAppLevel();
     }
 }
 

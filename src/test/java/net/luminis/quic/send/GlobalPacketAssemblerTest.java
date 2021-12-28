@@ -80,7 +80,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void nonInitialPacketHasMiniumSize() {
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
@@ -157,7 +157,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void zeroRttPacketsShouldNeverContainAckFrames() throws Exception {
         // Given
         ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.App));
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
 
         // When
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
@@ -171,7 +171,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     @Test
     void zeroRttAndOneRttShouldNotUseSamePacketNumbers() {
         // Given
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
 
@@ -225,7 +225,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void packetContainingPathResponseMustBeAtLeast1200Bytes() {
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new PathResponseFrame(Version.getDefault(), new byte[8]), f -> {});
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
@@ -248,7 +248,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void generatedDatagramShouldBeSmallerThanMaxDatagramSize() {
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(maxSize -> new StreamFrame(4, new byte[maxSize - 10], false), 10, f -> {});
 
         int maxDatagramSize = 700;
@@ -285,7 +285,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void whenAppLevelEnabledAssemblerShouldCreateAppPackets() {
         // Given
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(0, new byte[0], true), f -> {});
-        globalPacketAssembler.enableZeroRttLevel();
+        globalPacketAssembler.enableAppLevel();
 
         // When
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);

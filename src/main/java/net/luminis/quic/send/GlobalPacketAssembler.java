@@ -152,7 +152,7 @@ public class GlobalPacketAssembler {
         ((InitialPacketAssembler) packetAssembler[Initial.ordinal()]).setInitialToken(token);
     }
 
-    public void enableZeroRttLevel() {
+    public void enableAppLevel() {
         enabledLevels = EncryptionLevel.values();
     }
 }
