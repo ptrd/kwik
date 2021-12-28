@@ -324,11 +324,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     private long determineMinimalDelay() {
-        Optional<Instant> nextDelayedSendTime = Arrays.stream(sendRequestQueue)
-                .map(q -> q.nextDelayedSend())
-                .filter(Objects::nonNull)     // Filter after mapping because value can become null during iteration
-                .findFirst();
-
+        Optional<Instant> nextDelayedSendTime = packetAssembler.nextDelayedSendTime();
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {

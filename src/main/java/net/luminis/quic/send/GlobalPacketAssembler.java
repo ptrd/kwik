@@ -25,6 +25,7 @@ import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
 
+import java.time.Instant;
 import java.util.*;
 
 import static net.luminis.quic.EncryptionLevel.*;
@@ -142,6 +143,14 @@ public class GlobalPacketAssembler {
         return packets;
     }
 
+    public Optional<Instant> nextDelayedSendTime() {
+        return Arrays.stream(enabledLevels)
+                .map(level -> sendRequestQueue[level.ordinal()])
+                .map(q -> q.nextDelayedSend())
+                .filter(Objects::nonNull)     // Filter after mapping because value can become null during iteration
+                .findFirst();
+    }
+
     public void stop(PnSpace pnSpace) {
         packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()].stop(assembler -> {
             packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()] = null;
@@ -155,5 +164,5 @@ public class GlobalPacketAssembler {
     public void enableAppLevel() {
         enabledLevels = EncryptionLevel.values();
     }
-}
 
+}
