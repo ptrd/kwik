@@ -71,6 +71,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
      * @param frames
      */
     public LongHeaderPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, List<QuicFrame> frames) {
+        if (frames == null) {
+            throw new IllegalArgumentException();
+        }
         this.quicVersion = quicVersion;
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destConnectionId;

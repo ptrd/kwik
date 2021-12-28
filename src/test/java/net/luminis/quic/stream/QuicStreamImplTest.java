@@ -583,9 +583,12 @@ class QuicStreamImplTest {
             }
         });
         asyncWriter.start();
+        // Give writer/sender a change to start sending.
+        Thread.sleep(10);
 
         ByteBuffer dataSent = ByteBuffer.allocate(1000);
         StreamFrame lastFrame = null;
+        // Then: collect data that is sent (when frame supplier function is called); should result in same data that is sent.
         do {
             ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
             verify(connection, atLeastOnce()).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
