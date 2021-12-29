@@ -33,7 +33,7 @@ import java.time.Instant;
 public class ResetStreamFrame extends QuicFrame {
 
     private int streamId;
-    private int errorCode;
+    private long errorCode;
     private long finalSize;
 
     /**
@@ -43,14 +43,14 @@ public class ResetStreamFrame extends QuicFrame {
      * @param errorCode
      * @return
      */
-    public static int getMaximumFrameSize(int streamId, int errorCode) {
+    public static int getMaximumFrameSize(int streamId, long errorCode) {
         int maxFinalSizeLength = 8;
         return 1 + VariableLengthInteger.bytesNeeded(streamId) + VariableLengthInteger.bytesNeeded(errorCode) + maxFinalSizeLength;
     }
 
     public ResetStreamFrame() {}
 
-    public ResetStreamFrame(int streamId, int errorCode, long finalSize) {
+    public ResetStreamFrame(int streamId, long errorCode, long finalSize) {
         this.streamId = streamId;
         this.errorCode = errorCode;
         this.finalSize = finalSize;
@@ -59,7 +59,7 @@ public class ResetStreamFrame extends QuicFrame {
     public ResetStreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
         streamId = VariableLengthInteger.parse(buffer);
-        errorCode = VariableLengthInteger.parse(buffer);
+        errorCode = VariableLengthInteger.parseLong(buffer);
         finalSize = VariableLengthInteger.parse(buffer);
         return this;
     }
@@ -93,7 +93,7 @@ public class ResetStreamFrame extends QuicFrame {
         return streamId;
     }
 
-    public int getErrorCode() {
+    public long getErrorCode() {
         return errorCode;
     }
 

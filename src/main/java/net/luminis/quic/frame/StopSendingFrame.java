@@ -34,12 +34,12 @@ import java.time.Instant;
 public class StopSendingFrame extends QuicFrame {
 
     private int streamId;
-    private int errorCode;
+    private long errorCode;
 
     public StopSendingFrame(Version quicVersion) {
     }
 
-    public StopSendingFrame(Version quicVersion, Integer streamId, Integer errorCode) {
+    public StopSendingFrame(Version quicVersion, Integer streamId, Long errorCode) {
         this.streamId = streamId;
         this.errorCode = errorCode;
     }
@@ -48,7 +48,7 @@ public class StopSendingFrame extends QuicFrame {
         buffer.get();
 
         streamId = VariableLengthInteger.parse(buffer);
-        errorCode = VariableLengthInteger.parse(buffer);
+        errorCode = VariableLengthInteger.parseLong(buffer);
 
         return this;
     }
@@ -80,7 +80,7 @@ public class StopSendingFrame extends QuicFrame {
         return streamId;
     }
 
-    public int getErrorCode() {
+    public long getErrorCode() {
         return errorCode;
     }
 }

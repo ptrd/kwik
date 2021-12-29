@@ -31,7 +31,7 @@ class StopSendingFrameTest {
     @Test
     void testGetFrameLength() {
         // Given
-        var stopSendingFrame = new StopSendingFrame(Version.getDefault(), 28, 683);
+        var stopSendingFrame = new StopSendingFrame(Version.getDefault(), 28, 683L);
 
         // When
         ByteBuffer buffer = ByteBuffer.allocate(100);

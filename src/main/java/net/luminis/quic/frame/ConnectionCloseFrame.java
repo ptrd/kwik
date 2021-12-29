@@ -35,7 +35,7 @@ import java.time.Instant;
  */
 public class ConnectionCloseFrame extends QuicFrame {
 
-    private int errorCode;
+    private long errorCode;
     private int triggeringFrameType;
     private byte[] reasonPhrase = new byte[0];
     private int tlsError = -1;
@@ -54,9 +54,12 @@ public class ConnectionCloseFrame extends QuicFrame {
         errorCode = 0x00;
     }
 
-    public ConnectionCloseFrame(Version quicVersion, int error, String reason) {
+    public ConnectionCloseFrame(Version quicVersion, long error, String reason) {
         frameType = 0x1c;
         errorCode = error;
+        if (errorCode >= 0x0100 && errorCode < 0x0200) {
+            tlsError = (int) (errorCode - 256);
+        }
         if (reason != null && !reason.isBlank()) {
             reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
         }
@@ -68,7 +71,7 @@ public class ConnectionCloseFrame extends QuicFrame {
             throw new RuntimeException();  // Programming error
         }
 
-        errorCode = VariableLengthInteger.parse(buffer);
+        errorCode = VariableLengthInteger.parseLong(buffer);
         if (frameType == 0x1c) {
             triggeringFrameType = VariableLengthInteger.parse(buffer);
         }
@@ -78,8 +81,8 @@ public class ConnectionCloseFrame extends QuicFrame {
             buffer.get(reasonPhrase);
         }
 
-        if (errorCode > 256) {
-            tlsError = errorCode - 256;
+        if (frameType == 0x1c && errorCode >= 0x0100 && errorCode < 0x0200) {
+            tlsError = (int) (errorCode - 256);
         }
 
         return this;
@@ -90,19 +93,19 @@ public class ConnectionCloseFrame extends QuicFrame {
     }
 
     public boolean hasTlsError() {
-        return errorCode >= 0x0100 && errorCode < 0x0200;
+        return tlsError != -1;
     }
 
     public long getTlsError() {
         if (hasTlsError()) {
-            return errorCode - 0x0100;
+            return tlsError;
         }
         else {
             throw new IllegalStateException("Close does not have a TLS error");
         }
     }
 
-    public int getErrorCode() {
+    public long getErrorCode() {
         return errorCode;
     }
 
@@ -155,7 +158,7 @@ public class ConnectionCloseFrame extends QuicFrame {
     @Override
     public String toString() {
         return "ConnectionCloseFrame["
-                + (tlsError >= 0? "TLS " + tlsError: errorCode) + "|"
+                + (hasTlsError()? "TLS " + tlsError: errorCode) + "|"
                 + triggeringFrameType + "|"
                 + (reasonPhrase != null? new String(reasonPhrase): "-") + "]";
     }

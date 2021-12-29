@@ -156,12 +156,12 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     }
 
     @Override
-    public void closeInput(int applicationProtocolErrorCode) {
+    public void closeInput(long applicationProtocolErrorCode) {
         inputStream.stopInput(applicationProtocolErrorCode);
     }
 
     @Override
-    public void resetStream(int errorCode) {
+    public void resetStream(long errorCode) {
         outputStream.reset(errorCode);
     }
 
@@ -182,7 +182,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
      * @param errorCode
      * @param finalSize
      */
-    void terminateStream(int errorCode, long finalSize) {
+    void terminateStream(long errorCode, long finalSize) {
         inputStream.terminate(errorCode, finalSize);
     }
 
@@ -281,7 +281,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             stopInput(0);
         }
 
-        private void stopInput(int errorCode) {
+        private void stopInput(long errorCode) {
             if (! allDataReceived()) {
                 connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput, true);
             }
@@ -316,7 +316,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
         }
 
-        void terminate(int errorCode, long finalSize) {
+        void terminate(long errorCode, long finalSize) {
             if (!aborted && !closed && !reset) {
                 reset = true;
                 Thread blockingReader = blocking;
@@ -353,7 +353,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private volatile boolean sendRequestQueued;
         // Reset indicates whether the OutputStream has been reset.
         private volatile boolean reset;
-        private volatile int resetErrorCode;
+        private volatile long resetErrorCode;
 
         StreamOutputStream() {
             maxBufferSize = sendBufferSize;
@@ -569,7 +569,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
          *  not already in a terminal state."
          * @param errorCode
          */
-        protected void reset(int errorCode) {
+        protected void reset(long errorCode) {
             if (!closed && !reset) {
                 reset = true;
                 resetErrorCode = errorCode;
