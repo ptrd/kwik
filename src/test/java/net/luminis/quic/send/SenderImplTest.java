@@ -32,7 +32,9 @@ import org.mockito.internal.util.reflection.FieldSetter;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -59,11 +61,16 @@ class SenderImplTest extends AbstractSenderTest {
         sender.start(connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);
+        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
+
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
 
     @Test
     void assemblePacketIsCalledBeforeAckDelayHasPassed() throws Exception {
+        Instant ackSendTime = Instant.now().plusMillis(50);
+        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.of(ackSendTime));
+
         sender.sendAck(PnSpace.App, 50);
         sender.packetProcessed(false);
 

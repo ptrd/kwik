@@ -23,8 +23,12 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 
+import java.time.Instant;
 import java.util.*;
+
+import static net.luminis.quic.EncryptionLevel.*;
 
 /**
  * Assembles QUIC packets for sending.
@@ -33,6 +37,7 @@ public class GlobalPacketAssembler {
 
     private SendRequestQueue[] sendRequestQueue;
     private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
+    private volatile EncryptionLevel[] enabledLevels;
 
 
     public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
@@ -43,7 +48,7 @@ public class GlobalPacketAssembler {
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
             AckGenerator ackGenerator =
-                    (level != EncryptionLevel.ZeroRTT)?
+                    (level != ZeroRTT)?
                             globalAckGenerator.getAckGenerator(level.relatedPnSpace()):
                             // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-17.2.3
                             // "... a client cannot send an ACK frame in a 0-RTT packet, ..."
@@ -60,6 +65,8 @@ public class GlobalPacketAssembler {
                     packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator);
             }
         });
+
+        enabledLevels = new EncryptionLevel[] { Initial, ZeroRTT, Handshake };
     }
 
     /**
@@ -80,7 +87,7 @@ public class GlobalPacketAssembler {
         int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
         int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
 
-        for (EncryptionLevel level: EncryptionLevel.values()) {
+        for (EncryptionLevel level: enabledLevels) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
                 Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, sourceConnectionId, destinationConnectionId);
@@ -89,7 +96,7 @@ public class GlobalPacketAssembler {
                     int packetSize = item.get().getPacket().estimateLength(0);
                     size += packetSize;
                     remaining -= packetSize;
-                    if (level == EncryptionLevel.Initial) {
+                    if (level == Initial) {
                         hasInitial = true;
                     }
                     if (item.get().getPacket().getFrames().stream().anyMatch(f -> f instanceof PathChallengeFrame || f instanceof PathResponseFrame)) {
@@ -136,12 +143,26 @@ public class GlobalPacketAssembler {
         return packets;
     }
 
+    public Optional<Instant> nextDelayedSendTime() {
+        return Arrays.stream(enabledLevels)
+                .map(level -> sendRequestQueue[level.ordinal()])
+                .map(q -> q.nextDelayedSend())
+                .filter(Objects::nonNull)     // Filter after mapping because value can become null during iteration
+                .findFirst();
+    }
+
     public void stop(PnSpace pnSpace) {
-        packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()] = null;
+        packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()].stop(assembler -> {
+            packetAssembler[pnSpace.relatedEncryptionLevel().ordinal()] = null;
+        });
     }
 
     public void setInitialToken(byte[] token) {
-        ((InitialPacketAssembler) packetAssembler[EncryptionLevel.Initial.ordinal()]).setInitialToken(token);
+        ((InitialPacketAssembler) packetAssembler[Initial.ordinal()]).setInitialToken(token);
     }
-}
 
+    public void enableAppLevel() {
+        enabledLevels = EncryptionLevel.values();
+    }
+
+}

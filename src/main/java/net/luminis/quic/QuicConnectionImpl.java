@@ -326,9 +326,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "It is used to carry "early"
             //   data from the client to the server as part of the first flight, prior
             //   to handshake completion."
-            // As this library is client-only, this cannot happen.
-            // When such a packet arrives, consider it to be caused by network corruption, so
-            throw new InvalidPacketException();
+            if (role == Role.Client) {
+                // When such a packet arrives, consider it to be caused by network corruption, so
+                throw new InvalidPacketException();
+            }
+            else {
+                return new ZeroRttPacket(quicVersion);
+            }
         }
         else {
             // Should not happen, all cases should be covered above, but just in case...

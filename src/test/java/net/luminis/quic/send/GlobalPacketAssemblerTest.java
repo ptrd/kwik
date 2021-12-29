@@ -21,6 +21,8 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,6 +80,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void nonInitialPacketHasMiniumSize() {
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
@@ -154,6 +157,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     void zeroRttPacketsShouldNeverContainAckFrames() throws Exception {
         // Given
         ackGenerator.packetReceived(new MockPacket(0, 10, EncryptionLevel.App));
+        globalPacketAssembler.enableAppLevel();
 
         // When
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
@@ -167,6 +171,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     @Test
     void zeroRttAndOneRttShouldNotUseSamePacketNumbers() {
         // Given
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.ZeroRTT.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(140, new byte[257], false), f -> {});
 
@@ -220,6 +225,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void packetContainingPathResponseMustBeAtLeast1200Bytes() {
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new PathResponseFrame(Version.getDefault(), new byte[8]), f -> {});
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
@@ -242,6 +248,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @Test
     void generatedDatagramShouldBeSmallerThanMaxDatagramSize() {
+        globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(maxSize -> new StreamFrame(4, new byte[maxSize - 10], false), 10, f -> {});
 
         int maxDatagramSize = 700;
@@ -259,6 +266,33 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         int maxDatagramSize = 30;
         List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
         assertThat(packets).isEmpty();
+    }
+
+    @Test
+    void whenAppLevelNotEnabledAssemblerShouldNotCreateAppPackets() {
+        // Given
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addAckRequest();
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(0, new byte[0], true), f -> {});
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(packets).isEmpty();
+    }
+
+    @Test
+    void whenAppLevelEnabledAssemblerShouldCreateAppPackets() {
+        // Given
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new StreamFrame(0, new byte[0], true), f -> {});
+        globalPacketAssembler.enableAppLevel();
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(packets).hasSize(1);
+        assertThat(packets.get(0).getPacket()).isInstanceOf(ShortHeaderPacket.class);
     }
 
     private void setInitialPacketNumber(EncryptionLevel level, int pn) throws Exception {

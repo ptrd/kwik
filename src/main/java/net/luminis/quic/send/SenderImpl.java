@@ -89,6 +89,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
     private volatile boolean running;
+    private volatile boolean stopping;
     private volatile boolean stopped;
     private volatile int receiverMaxAckDelay;
     private volatile int datagramsSent;
@@ -110,7 +111,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
-            sendRequestQueue[levelIndex] = new SendRequestQueue();
+            sendRequestQueue[levelIndex] = new SendRequestQueue(level);
         });
         globalAckGenerator = new GlobalAckGenerator(this);
         packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
@@ -206,7 +207,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void packetProcessed(boolean expectingMore) {
-        wakeUpSenderLoop();  // If you change this, review sendAck!
+        wakeUpSenderLoop();  // If you change this, review this.sendAck()!
     }
 
     @Override
@@ -226,13 +227,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     public void discard(PnSpace space, String reason) {
         synchronized (discardedSpaces) {
             if (!discardedSpaces[space.ordinal()]) {
-                log.recovery("Discarding pn space " + space + " because " + reason);
                 packetAssembler.stop(space);
                 recoveryManager.stopRecovery(space);
-                if (sendRequestQueue[space.relatedEncryptionLevel().ordinal()].hasProbe()) {
-                    log.warn("Discarding space " + space + " that has a probe queued.");
-                }
-                sendRequestQueue[space.ordinal()].clear();
+                log.recovery("Discarding pn space " + space + " because " + reason);
                 globalAckGenerator.discard(space);
                 discardedSpaces[space.ordinal()] = true;
             }
@@ -256,7 +253,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         assert(stopped);  // Stopped should have be called before.
         // Stop cannot be called here (again), because it would drop ConnectionCloseFrame still waiting to be sent.
 
-        running = false;
+        stopping = true;
         senderThread.interrupt();
     }
 
@@ -273,7 +270,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         try {
             running = true;
             while (running) {
-                boolean interrupted = false;
                 synchronized (condition) {
                     try {
                         if (! signalled) {
@@ -285,13 +281,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                         signalled = false;
                     }
                     catch (InterruptedException e) {
-                        interrupted = true;
-                        log.debug("Sender thread is interrupted; shutting down? " + running);
+                        log.debug("Sender thread is interrupted; probably shutting down? " + running);
                     }
                 }
-                if (! interrupted) {
-                    sendIfAny();
+
+                // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
+                // items being queued just after the packet assembler (for that level) has executed.
+                if (stopping) {
+                    running = false;
                 }
+
+                sendIfAny();
             }
         }
         catch (Throwable fatalError) {
@@ -324,11 +324,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     private long determineMinimalDelay() {
-        Optional<Instant> nextDelayedSendTime = Arrays.stream(sendRequestQueue)
-                .map(q -> q.nextDelayedSend())
-                .filter(Objects::nonNull)     // Filter after mapping because value can become null during iteration
-                .findFirst();
-
+        Optional<Instant> nextDelayedSendTime = packetAssembler.nextDelayedSendTime();
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
@@ -339,10 +335,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             else {
                 if (lastDelayWasZero) {
                     int count = subsequentZeroDelays.incrementAndGet();
-                    if (count % 100 == 3) {
+                    if (count % 20 == 3) {
                         log.error("possible bug: sender is looping in busy wait; got " + count + " iterations");
                     }
-                    if (count > 100003) {
+                    if (count > 10003) {
                         return 8000;
                     }
                 }
@@ -366,6 +362,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     .map(item -> item.getPacket())
                     .forEach(packet -> {
                         Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
+                        if (keys == null) {
+                            throw new IllegalStateException("Missing keys for encryption level " + packet.getEncryptionLevel());
+                        }
                         byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
                         buffer.put(packetData);
                         log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
@@ -455,6 +454,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public void unsetAntiAmplificationLimit() {
         antiAmplificationLimit = -1;
+    }
+
+    public void enableAllLevels() {
+        packetAssembler.enableAppLevel();
+    }
+
+    public void enableAppLevel() {
+        packetAssembler.enableAppLevel();
     }
 }
 

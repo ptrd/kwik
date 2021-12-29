@@ -26,7 +26,7 @@ Kwik is created and maintained by Peter Doornbosch. The latest greatest can alwa
 
 The status of the project is different for client and server. 
 For the client role, most QUIC features are implemented. For server role, the essential features necessary for connecting
-and transfering data in both directions are implemented; see below for more details.
+and transferring data in both directions are implemented; see below for more details.
 For both roles, interoperability is tested with a large number of other implementations, see [automated interoperability tests](https://interop.seemann.io/). 
 Due the to fact that most implementations are still in active development, and that some test cases
 (specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
@@ -51,12 +51,12 @@ Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)) 
 * stateless retry
 * cipher suites TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256
 * key update
+* session resumption
+* 0-RTT
   
 Client only:
 
-* session resumption (see -S and -R options of the sample client)
 * connection migration (use the interactive mode of the sample client to try it)
-* 0-RTT
 
 
 ### Is Kwik ready for production use?
@@ -67,8 +67,8 @@ Having said that, interoperability with other implementations is heavily tested 
 However, Kwik is not tested in various or extreme networking conditions, so your mileage may vary.  
 As development focus has been on correctness and features (in that order), performance is not optimal yet.
 
-Kwik does not yet implement all QUIC features. The server does not support session resumption and 0-RTT (the client does) 
-which might make the server less suitable for production use at this moment.
+Kwik does not yet implement all QUIC features. Specially, the server does not yet respond to NEW_CONNECTION_ID, 
+RETIRE_CONNECTION_ID and PATH_CHALLENGE frames.
 In both roles, you cannot set priority on streams, so the division of network capacity over streams cannot be influenced
 and might not even be fair.
 When wondering whether limitations would harm your use case: just go ahead and test it! When in doubt, you can 
@@ -97,7 +97,7 @@ Gradle will write the output to `build/libs`.
 
 ### Client
 
-Kwik is both a library that can be used in any Java application to setup and use a QUIC connection, 
+Kwik is both a library that can be used in any Java application to set up and use a QUIC connection, 
 and a (sample) command line client that can be used to experiment with the QUIC protocol. 
 If you want to use Kwik as a library, consider the various classes in 
 the [run package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/) as samples

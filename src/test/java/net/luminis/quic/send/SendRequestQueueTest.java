@@ -35,7 +35,7 @@ class SendRequestQueueTest {
     @Test
     void nextReturnsFirstItemSmallerThanGivenFrameLength() throws Exception {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[67]), f -> {});
@@ -51,7 +51,7 @@ class SendRequestQueueTest {
     @Test
     void whenNoFrameIsSmallerThanGivenFrameLengthNextShouldReturnNothing() {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[572]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[167]), f -> {});
@@ -65,7 +65,7 @@ class SendRequestQueueTest {
 
     @Test
     void whenSecondAckHasMoreDelayFirstDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
 
         sendRequestQueue.addAckRequest(100);
         Instant start = Instant.now();

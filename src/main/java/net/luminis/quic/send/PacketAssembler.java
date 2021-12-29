@@ -48,6 +48,8 @@ public class PacketAssembler {
     protected final AckGenerator ackGenerator;
     private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
+    private volatile boolean stopping;
+    private Consumer<PacketAssembler> finalizerCallback;
 
 
     public PacketAssembler(Version version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
@@ -177,14 +179,23 @@ public class PacketAssembler {
             callbacks.add(EMPTY_CALLBACK);
         }
 
+        Optional<SendItem> assembledItem;
         if (packet.getFrames().isEmpty()) {
             // Nothing could be added, discard packet and mark packet number as not used
             restorePacketNumber();
-            return Optional.empty();
+            assembledItem = Optional.empty();
         }
         else {
-            return Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
+            assembledItem = Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
         }
+
+        if (stopping && requestQueue.isEmpty(false)) {
+            if (finalizerCallback != null) {
+                finalizerCallback.accept(this);
+            }
+        }
+
+        return assembledItem;
     }
 
     protected long nextPacketNumber() {
@@ -226,6 +237,17 @@ public class PacketAssembler {
         }
         packet.setPacketNumber(nextPacketNumber());
         return packet;
+    }
+
+    public void stop(Consumer<PacketAssembler> finalizer) {
+        this.finalizerCallback = finalizer;
+        requestQueue.clear(false);
+        stopping = true;
+    }
+
+    @Override
+    public String toString() {
+        return "PacketAssembler[" + level + "]";
     }
 }
 
