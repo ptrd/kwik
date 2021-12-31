@@ -38,6 +38,7 @@ public class LossDetector {
     private final RecoveryManager recoveryManager;
     private final RttEstimator rttEstimater;
     private final CongestionController congestionController;
+    private final Runnable postProcessLostCallback;
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
@@ -49,10 +50,11 @@ public class LossDetector {
     private volatile boolean isReset;
 
 
-    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController) {
+    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController, Runnable postProcessLostCallback) {
         this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
         this.congestionController = congestionController;
+        this.postProcessLostCallback = postProcessLostCallback;
 
         ackElicitingInFlight = new AtomicInteger();
         packetSentLog = new ConcurrentHashMap<>();
@@ -220,6 +222,7 @@ public class LossDetector {
                     packetStatus.lostPacketCallback().accept(packetStatus.packet());
                     lost++;
                 });
+        postProcessLostCallback.run();
 
         congestionController.registerLost(filterInFlight(lostPacketsInfo));
 

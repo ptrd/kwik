@@ -548,7 +548,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private void retransmitStreamFrame(QuicFrame frame) {
             assert(frame instanceof StreamFrame);
             if (! reset) {
-                connection.send(frame, this::retransmitStreamFrame, true);
+                connection.send(frame, this::retransmitStreamFrame);
                 log.recovery("Retransmitted lost stream frame " + frame);
             }
         }
@@ -593,7 +593,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         private void retransmitResetFrame(QuicFrame frame) {
             assert(frame instanceof ResetStreamFrame);
-            connection.send(frame, this::retransmitResetFrame, true);
+            connection.send(frame, this::retransmitResetFrame);
         }
     }
 

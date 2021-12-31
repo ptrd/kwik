@@ -27,7 +27,6 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
@@ -57,9 +56,9 @@ class LossDetectorTest extends RecoveryTests {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class));
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class), () -> {});
         congestionController = mock(CongestionController.class);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController);
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController, () -> {});
         rttEstimater = mock(RttEstimator.class);
     }
 
