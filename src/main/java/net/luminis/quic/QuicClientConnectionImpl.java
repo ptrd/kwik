@@ -791,6 +791,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             ConnectionIdInfo cid = sourceConnectionIds.generateNew();
             newConnectionIds[i] = cid.getConnectionId();
             log.debug("New generated source connection id", cid.getConnectionId());
+            // Send frame; flushing sender is not necessary (and not even wanted) because this is part of processing received packet.
             sender.send(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()), App);
         }
         sender.flush();

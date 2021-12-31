@@ -120,11 +120,19 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     public void updateConnectionFlowControl(int size) {
         flowControlMax += size;
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
-            send(new MaxDataFrame(flowControlMax), f -> {});
+            send(new MaxDataFrame(flowControlMax), f -> {}, true);
             flowControlLastAdvertised = flowControlMax;
         }
     }
 
+    /**
+     * Queues a frame for sending.
+     * As this method does not flush the sender, it should only be called from a context that ensures the sender is
+     * flushed, e.g. from a method that processes a received packet (because this class will flush the sender when
+     * all frames in a packet have been processed, by calling Sender.packetProcessed()).
+     * @param frame  the frame to send
+     * @param lostFrameCallback  function called when packet that contains the frame is lost
+     */
     public void send(QuicFrame frame, Consumer<QuicFrame> lostFrameCallback) {
         send(frame, lostFrameCallback, false);
     }
@@ -499,8 +507,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
      * Immediately closes the connection (with or without error) and enters the "closing state".
      * Connection close frame with indicated error (or "NO_ERROR") is send to peer and after 3 x PTO, the closing state
      * is ended and all connection state is discarded.
-     * If this method is called outside received-message-processing, post-processing actions should
-     * be performed by the caller.
+     * If this method is called outside received-message-processing, post-processing actions (including flushing the
+     * sender) should be performed by the caller.
      * @param level         The level that should be used for sending the connection close frame
      * @param error         The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
      * @param errorReason
@@ -550,7 +558,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), packet.getEncryptionLevel(), NO_RETRANSMIT, false));
+            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
         }
     }
 
@@ -571,7 +579,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
-            send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);
+            send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);  // No flush necessary, as this method is called while processing a received packet.
 
             drain();
         }
@@ -673,6 +681,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public void close(QuicConstants.TransportErrorCode applicationError, String errorReason) {
         immediateCloseWithError(App, applicationError.value, errorReason);
+        // Because this method is not called in the context of processing received messages,
+        // sender flush must be called explicitly.
+        getSender().flush();
     }
 
     private void schedule(Runnable command, int delay, TimeUnit unit) {

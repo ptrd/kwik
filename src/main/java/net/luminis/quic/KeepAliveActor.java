@@ -55,6 +55,7 @@ public class KeepAliveActor {
 
     private void ping() {
         sender.send(new PingFrame(quicVersion), App);
+        sender.flush();
 
         scheduleNextPing();
     }

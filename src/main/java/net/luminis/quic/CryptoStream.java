@@ -183,7 +183,7 @@ public class CryptoStream extends BaseStream {
     void write(byte[] data) {
         dataToSend.add(ByteBuffer.wrap(data));
         sendStreamSize += data.length;
-        sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
+        sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);  // Caller should flush sender.
     }
 
     private QuicFrame sendFrame(int maxSize) {
@@ -193,7 +193,7 @@ public class CryptoStream extends BaseStream {
             return null;
         }
         if (bytesToSend < leftToSend) {
-            // Need (at least) another frame to send all data.
+            // Need (at least) another frame to send all data. Because current method is the sender callback, flushing sender is not necessary.
             sender.send(this::sendFrame, 10, encryptionLevel, this::retransmitCrypto);
         }
 

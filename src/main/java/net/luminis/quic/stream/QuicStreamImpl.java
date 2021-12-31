@@ -283,7 +283,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         private void stopInput(int errorCode) {
             if (! allDataReceived()) {
-                connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput);
+                connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput, true);
             }
             closed = true;
             Thread blockingReader = blocking;
@@ -306,7 +306,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             connection.updateConnectionFlowControl(bytesRead);
             // Avoid sending flow control updates with every single read; check diff with last send max data
             if (receiverFlowControlLimit - lastCommunicatedMaxData > receiverMaxDataIncrement) {
-                connection.send(new MaxStreamDataFrame(streamId, receiverFlowControlLimit), this::retransmitMaxData);
+                connection.send(new MaxStreamDataFrame(streamId, receiverFlowControlLimit), this::retransmitMaxData, true);
                 lastCommunicatedMaxData = receiverFlowControlLimit;
             }
         }
@@ -542,7 +542,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         public void streamNotBlocked(int streamId) {
             // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
             // and let sendFrame method determine whether there is more to send or not.
-            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);
+            connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);  // No need to flush, as this is called while processing received message
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {

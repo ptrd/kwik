@@ -365,17 +365,17 @@ class QuicStreamImplTest {
         verify(connection, never()).send(any(QuicFrame.class), any(Consumer.class));
 
         inputStream.read(new byte[2]);
-        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class), anyBoolean());
 
         inputStream.read(new byte[(int) (initialWindow * factor)]);
-        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
+        verify(connection, times(1)).send(any(MaxStreamDataFrame.class), any(Consumer.class), anyBoolean());
 
         inputStream.read(new byte[2]);
-        verify(connection, times(2)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
+        verify(connection, times(2)).send(any(MaxStreamDataFrame.class), any(Consumer.class), anyBoolean());
 
         clearInvocations();
         inputStream.read(new byte[(int) (initialWindow * factor * 3.1)]);
-        verify(connection, times(3)).send(any(MaxStreamDataFrame.class), any(Consumer.class));
+        verify(connection, times(3)).send(any(MaxStreamDataFrame.class), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -432,8 +432,9 @@ class QuicStreamImplTest {
 
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         ArgumentCaptor<QuicFrame> sendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture());
+        verify(connection, times(1)).send(sendFrameCaptor.capture(), lostFrameCallbackCaptor.capture(), anyBoolean());
         MaxStreamDataFrame lostFrame = (MaxStreamDataFrame) sendFrameCaptor.getValue();
+        clearInvocations(connection);
 
         // Advance flow control window (but not so much a new MaxStreamDataFrame is sent...)
         inputStream.read(new byte[(int) (initialWindow * factor / 2)]);
@@ -442,7 +443,7 @@ class QuicStreamImplTest {
         lostFrameCallbackCaptor.getValue().accept(lostFrame);
 
         ArgumentCaptor<QuicFrame> resendFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(connection, times(2)).send(resendFrameCaptor.capture(), any(Consumer.class));
+        verify(connection, times(1)).send(resendFrameCaptor.capture(), any(Consumer.class));
 
         MaxStreamDataFrame retransmittedFrame = (MaxStreamDataFrame) resendFrameCaptor.getValue();
         assertThat(retransmittedFrame).isInstanceOf(MaxStreamDataFrame.class);

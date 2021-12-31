@@ -219,13 +219,13 @@ public class StreamManager {
             if (isUni(streamId)) {
                 maxOpenStreamIdUni += 4;
                 if (! maxOpenStreamsUniUpdateQueued) {
-                    connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsUniUpdateQueued = true;
                 }
             } else {
                 maxOpenStreamIdBidi += 4;
                 if (! maxOpenStreamsBidiUpdateQueued) {
-                    connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);
+                    connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsBidiUpdateQueued = true;
                 }
             }

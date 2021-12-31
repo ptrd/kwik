@@ -37,6 +37,8 @@ import java.util.function.Function;
  *
  * The notification methods <code>packetProcessed</code> and <code>datagramProcessed</code> should be used to notify
  * the sender implementation of these events, which enables the sender to coalesce packets efficiently.
+ * For cases where sending is not triggered by processing a packet and these methods are not called, the caller must
+ * call <code>flush</code> instead, to trigger the sender implementation to start packaging.
  */
 public interface Sender {
 
