@@ -48,7 +48,7 @@ public class MaxStreamDataFrame extends QuicFrame {
         buffer.get();
 
         streamId = VariableLengthInteger.parse(buffer);
-        maxData = VariableLengthInteger.parse(buffer);
+        maxData = VariableLengthInteger.parseLong(buffer);
 
         return this;
     }

@@ -60,7 +60,7 @@ public class ResetStreamFrame extends QuicFrame {
         byte frameType = buffer.get();
         streamId = VariableLengthInteger.parse(buffer);
         errorCode = VariableLengthInteger.parseLong(buffer);
-        finalSize = VariableLengthInteger.parse(buffer);
+        finalSize = VariableLengthInteger.parseLong(buffer);
         return this;
     }
 

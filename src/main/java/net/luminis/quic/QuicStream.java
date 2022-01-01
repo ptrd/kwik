@@ -52,7 +52,7 @@ public interface QuicStream {
      * "Streams are identified within a connection by a numeric value, referred to as the stream ID. A stream ID is
      *  a 62-bit integer (0 to 2^62-1) that is unique for all streams on a connection."
      *
-     * @return  the stream id
+     * @return  the stream id; this is an int because Kwik cannot handle more than 2147483647 (<code>Integer.MAX_INT</code>) streams in one connection.
      */
     int getStreamId();
 

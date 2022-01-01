@@ -34,7 +34,7 @@ import java.time.Instant;
 public class StreamDataBlockedFrame extends QuicFrame {
 
     private int streamId;
-    private int streamDataLimit;
+    private long streamDataLimit;
 
     public StreamDataBlockedFrame() {
     }
@@ -47,7 +47,7 @@ public class StreamDataBlockedFrame extends QuicFrame {
     public StreamDataBlockedFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
         streamId = VariableLengthInteger.parse(buffer);
-        streamDataLimit = VariableLengthInteger.parse(buffer);
+        streamDataLimit = VariableLengthInteger.parseLong(buffer);
 
         return this;
     }
@@ -79,7 +79,7 @@ public class StreamDataBlockedFrame extends QuicFrame {
         return streamId;
     }
 
-    public int getStreamDataLimit() {
+    public long getStreamDataLimit() {
         return streamDataLimit;
     }
 }

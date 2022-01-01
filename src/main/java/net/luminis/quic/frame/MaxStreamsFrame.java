@@ -50,7 +50,7 @@ public class MaxStreamsFrame extends QuicFrame {
         }
 
         appliesToBidirectional = frameType == 0x12;
-        maxStreams = VariableLengthInteger.parse(buffer);
+        maxStreams = VariableLengthInteger.parseLong(buffer);
 
         return this;
     }

@@ -31,7 +31,10 @@ import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 
-
+/**
+ * Manages QUIC streams.
+ * Note that Kwik cannot handle more than 2147483647 (<code>Integer.MAX_INT</code>) streams in one connection.
+ */
 public class StreamManager {
 
     private final Map<Integer, QuicStreamImpl> streams;

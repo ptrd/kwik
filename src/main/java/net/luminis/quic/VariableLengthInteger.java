@@ -29,6 +29,15 @@ import java.nio.ByteBuffer;
 // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
 public class VariableLengthInteger {
 
+    /**
+     * Parses a variable length integer and returns the value as in int. Throws an exception when the actual value is
+     * larger than <code>Integer.MAX_VALUE</code>, so only use it in cases where a large value can be considered an
+     * error, e.g. when the QUIC specification defines a smaller range for a specific integer.
+     * Note that smaller values (needlessly) encoded in eight bytes, are parsed correctly.
+     * @param buffer
+     * @return
+     * @throws InvalidIntegerEncodingException
+     */
     public static int parse(ByteBuffer buffer) throws InvalidIntegerEncodingException {
         long value = parseLong(buffer);
         if (value <= Integer.MAX_VALUE) {

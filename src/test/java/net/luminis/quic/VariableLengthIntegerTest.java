@@ -111,6 +111,14 @@ class VariableLengthIntegerTest {
     }
 
     @Test
+    void parseIntegerValueEncodedInEightBytes() throws Exception {
+        int value = VariableLengthInteger.parse(wrap((byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+                (byte) 0x7f, (byte) 0xff, (byte) 0xff, (byte) 0xff));
+
+        assertThat(value).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void parseValueGreaterThanMaxInteger() {
         byte[] rawBytes = { (byte) 0xc0, (byte) 0x00, (byte) 0x00, (byte) 0x00,
                 (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };

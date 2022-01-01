@@ -32,7 +32,7 @@ import java.time.Instant;
  */
 public class DataBlockedFrame extends QuicFrame {
 
-    private int streamDataLimit;
+    private long streamDataLimit;
 
     public DataBlockedFrame() {
     }
@@ -43,7 +43,7 @@ public class DataBlockedFrame extends QuicFrame {
 
     public DataBlockedFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         byte frameType = buffer.get();
-        streamDataLimit = VariableLengthInteger.parse(buffer);
+        streamDataLimit = VariableLengthInteger.parseLong(buffer);
 
         return this;
     }

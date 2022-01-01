@@ -40,7 +40,7 @@ public class MaxDataFrame extends QuicFrame {
 
     public MaxDataFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         buffer.get();
-        maxData = VariableLengthInteger.parse(buffer);
+        maxData = VariableLengthInteger.parseLong(buffer);
         return this;
     }
 

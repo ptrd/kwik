@@ -266,7 +266,7 @@ public class QuicTransportParametersExtension extends Extension {
             params.setInitialMaxData(maxData);
         }
         else if (parameterId == initial_max_stream_data_bidi_local.value) {
-            int maxStreamDataBidiLocal = VariableLengthInteger.parse(buffer);
+            long maxStreamDataBidiLocal = VariableLengthInteger.parseLong(buffer);
             log.debug("- initial max stream data bidi local: " + maxStreamDataBidiLocal);
             params.setInitialMaxStreamDataBidiLocal(maxStreamDataBidiLocal);
         }
@@ -315,9 +315,9 @@ public class QuicTransportParametersExtension extends Extension {
             parsePreferredAddress(buffer, log);
         }
         else if (parameterId == active_connection_id_limit.value) {
-            int activeConnectionIdLimit = VariableLengthInteger.parse(buffer);
+            long activeConnectionIdLimit = VariableLengthInteger.parseLong(buffer);
             log.debug("- active connection id limit: " + activeConnectionIdLimit);
-            params.setActiveConnectionIdLimit(activeConnectionIdLimit);
+            params.setActiveConnectionIdLimit((int) activeConnectionIdLimit);
         }
         else if (parameterId == initial_source_connection_id.value) {
             byte[] initialSourceCid = new byte[size];
