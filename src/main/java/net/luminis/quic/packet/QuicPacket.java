@@ -23,6 +23,7 @@ import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -182,11 +183,7 @@ abstract public class QuicPacket {
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
-        try {
-            parseFrames(frameBytes, log);
-        } catch (InvalidIntegerEncodingException e) {
-            throw new InvalidPacketException();
-        }
+        parseFrames(frameBytes, log);
     }
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
@@ -266,87 +263,104 @@ abstract public class QuicPacket {
         return candidatePn;
     }
 
-    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidIntegerEncodingException {
+    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidPacketException {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
-        while (buffer.remaining() > 0) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
-            // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
-            buffer.mark();
-            int frameType = buffer.get();
-            buffer.reset();
-            switch (frameType) {
-                case 0x00:
-                    frames.add(new Padding().parse(buffer, log));
-                    break;
-                case 0x01:
-                    frames.add(new PingFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x02:
-                case 0x03:
-                    frames.add(new AckFrame().parse(buffer, log));
-                    break;
-                case 0x04:
-                    frames.add(new ResetStreamFrame().parse(buffer, log));
-                    break;
-                case 0x05:
-                    frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x06:
-                    frames.add(new CryptoFrame().parse(buffer, log));
-                    break;
-                case 0x07:
-                    frames.add(new NewTokenFrame().parse(buffer, log));
-                    break;
-                case 0x10:
-                    frames.add(new MaxDataFrame().parse(buffer, log));
-                    break;
-                case 0x011:
-                    frames.add(new MaxStreamDataFrame().parse(buffer, log));
-                    break;
-                case 0x12:
-                case 0x13:
-                    frames.add(new MaxStreamsFrame().parse(buffer, log));
-                    break;
-                case 0x14:
-                    frames.add(new DataBlockedFrame().parse(buffer, log));
-                    break;
-                case 0x15:
-                    frames.add(new StreamDataBlockedFrame().parse(buffer, log));
-                    break;
-                case 0x16:
-                case 0x17:
-                    frames.add(new StreamsBlockedFrame().parse(buffer, log));
-                    break;
-                case 0x18:
-                    frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x19:
-                    frames.add(new RetireConnectionIdFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x1a:
-                    frames.add(new PathChallengeFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x1b:
-                    frames.add(new PathResponseFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x1c:
-                case 0x1d:
-                    frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
-                    break;
-                case 0x1e:
-                    frames.add(new HandshakeDoneFrame(quicVersion).parse(buffer, log));
-                    break;
-                default:
-                    if ((frameType >= 0x08) && (frameType <= 0x0f)) {
-                        frames.add(new StreamFrame().parse(buffer, log));
-                    }
-                    else {
-                        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
-                        // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
-                        throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
-                    }
+        int frameType = -1;
+        try {
+            while (buffer.remaining() > 0) {
+                // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-12.4
+                // "Each frame begins with a Frame Type, indicating its type, followed by additional type-dependent fields"
+                buffer.mark();
+                frameType = buffer.get();
+                buffer.reset();
+                switch (frameType) {
+                    case 0x00:
+                        frames.add(new Padding().parse(buffer, log));
+                        break;
+                    case 0x01:
+                        frames.add(new PingFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x02:
+                    case 0x03:
+                        frames.add(new AckFrame().parse(buffer, log));
+                        break;
+                    case 0x04:
+                        frames.add(new ResetStreamFrame().parse(buffer, log));
+                        break;
+                    case 0x05:
+                        frames.add(new StopSendingFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x06:
+                        frames.add(new CryptoFrame().parse(buffer, log));
+                        break;
+                    case 0x07:
+                        frames.add(new NewTokenFrame().parse(buffer, log));
+                        break;
+                    case 0x10:
+                        frames.add(new MaxDataFrame().parse(buffer, log));
+                        break;
+                    case 0x011:
+                        frames.add(new MaxStreamDataFrame().parse(buffer, log));
+                        break;
+                    case 0x12:
+                    case 0x13:
+                        frames.add(new MaxStreamsFrame().parse(buffer, log));
+                        break;
+                    case 0x14:
+                        frames.add(new DataBlockedFrame().parse(buffer, log));
+                        break;
+                    case 0x15:
+                        frames.add(new StreamDataBlockedFrame().parse(buffer, log));
+                        break;
+                    case 0x16:
+                    case 0x17:
+                        frames.add(new StreamsBlockedFrame().parse(buffer, log));
+                        break;
+                    case 0x18:
+                        frames.add(new NewConnectionIdFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x19:
+                        frames.add(new RetireConnectionIdFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x1a:
+                        frames.add(new PathChallengeFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x1b:
+                        frames.add(new PathResponseFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x1c:
+                    case 0x1d:
+                        frames.add(new ConnectionCloseFrame(quicVersion).parse(buffer, log));
+                        break;
+                    case 0x1e:
+                        frames.add(new HandshakeDoneFrame(quicVersion).parse(buffer, log));
+                        break;
+                    default:
+                        if ((frameType >= 0x08) && (frameType <= 0x0f)) {
+                            frames.add(new StreamFrame().parse(buffer, log));
+                        }
+                        else {
+                            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
+                            // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
+                            throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
+                        }
+                }
             }
+        }
+        catch (InvalidIntegerEncodingException e) {
+            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
+            throw new InvalidPacketException("invalid integer encoding");
+        }
+        catch (IllegalArgumentException e) {
+            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
+            // Could happen when a frame contains a large int (> 2^32-1) where an int value is expected (see VariableLengthInteger.parse()).
+            // Strictly speaking, this would not be an invalid packet, but Kwik cannot handle it.
+            throw new InvalidPacketException("unexpected large int value");
+        }
+        catch (BufferUnderflowException e) {
+            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
+            throw new InvalidPacketException("invalid frame encoding");
         }
     }
 

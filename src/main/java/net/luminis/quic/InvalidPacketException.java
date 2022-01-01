@@ -19,7 +19,7 @@
 package net.luminis.quic;
 
 /**
- * Indicates an invalid packet.
+ * Indicates an invalid packet, i.e. a packet that could not be parsed correctly.
  */
 public class InvalidPacketException extends Exception {
 
