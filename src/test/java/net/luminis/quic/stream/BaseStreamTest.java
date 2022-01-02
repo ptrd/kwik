@@ -38,7 +38,7 @@ class BaseStreamTest {
     @Test
     void availableReturnsZeroWhenNoBytesAvailable() {
         ByteBuffer buffer = ByteBuffer.allocate(50);
-        int bytesAvailable = baseStream.bytesAvailable();
+        long bytesAvailable = baseStream.bytesAvailable();
 
         assertThat(bytesAvailable).isEqualTo(0);
     }
@@ -54,7 +54,8 @@ class BaseStreamTest {
     @Test
     void missingStartShouldFailAllDataReceived() {
         baseStream = new BaseStream() {
-            protected boolean isStreamEnd(int offset) {
+            @Override
+            protected boolean isStreamEnd(long offset) {
                 return offset == 1000;
             }
         };
@@ -72,7 +73,8 @@ class BaseStreamTest {
     @Test
     void missingPartsShouldFailAllDataReceived() {
         baseStream = new BaseStream() {
-            protected boolean isStreamEnd(int offset) {
+            @Override
+            protected boolean isStreamEnd(long offset) {
                 return offset == 1000;
             }
         };
@@ -95,7 +97,7 @@ class BaseStreamTest {
 
     static class SimpleStreamElement implements StreamElement {
 
-        private int offset;
+        private long offset;
         private int length;
         private byte[] data;
 
@@ -106,7 +108,7 @@ class BaseStreamTest {
         }
 
         @Override
-        public int getOffset() {
+        public long getOffset() {
             return offset;
         }
 
@@ -121,13 +123,13 @@ class BaseStreamTest {
         }
 
         @Override
-        public int getUpToOffset() {
+        public long getUpToOffset() {
             return offset + length;
         }
 
         @Override
         public int compareTo(StreamElement o) {
-            return Integer.compare(this.offset, o.getOffset());
+            return Long.compare(this.offset, o.getOffset());
         }
     }
 }

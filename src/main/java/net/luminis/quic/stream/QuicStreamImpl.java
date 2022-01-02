@@ -63,7 +63,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private long receiverFlowControlLimit;
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
-    private volatile int lastOffset = -1;
+    private volatile long lastOffset = -1;
     private int sendBufferSize = 50 * 1024;
 
     
@@ -125,7 +125,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     }
 
     @Override
-    protected boolean isStreamEnd(int offset) {
+    protected boolean isStreamEnd(long offset) {
         return lastOffset >= 0 && offset >= lastOffset;
     }
 
@@ -344,7 +344,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private final Condition notFull;
         // Current offset is the offset of the next byte in the stream that will be sent.
         // Thread safety: only used by sender thread, so no synchronization needed.
-        private int currentOffset;
+        private long currentOffset;
         // Closed indicates whether the OutputStream is closed, meaning that no more bytes can be written by caller.
         // Thread safety: only use by caller
         private boolean closed;
@@ -462,7 +462,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             }
 
             if (!sendQueue.isEmpty()) {
-                int flowControlLimit = (int) (flowController.getFlowControlLimit(QuicStreamImpl.this));
+                long flowControlLimit = flowController.getFlowControlLimit(QuicStreamImpl.this);
                 assert (flowControlLimit >= currentOffset);
 
                 int maxBytesToSend = bufferedBytes.get();

@@ -27,7 +27,7 @@ import java.util.TreeSet;
 public class BaseStream {
 
     private SortedSet<StreamElement> frames = new TreeSet<>();
-    private int processedToOffset = 0;
+    private long processedToOffset = 0;
 
     /**
      * Add a stream frame to this stream. The frame can contain any number of bytes positioned anywhere in the stream;
@@ -59,7 +59,7 @@ public class BaseStream {
         }
         else {
             int available = 0;
-            int countedUpTo = processedToOffset;
+            long countedUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext()) {
@@ -94,16 +94,16 @@ public class BaseStream {
         }
         else {
             int read = 0;
-            int readUpTo = processedToOffset;
+            long readUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext() && buffer.remaining() > 0) {
                 StreamElement nextFrame = iterator.next();
                 if (nextFrame.getOffset() <= readUpTo) {
                     if (nextFrame.getUpToOffset() > readUpTo) {
-                        int available = nextFrame.getOffset() - readUpTo + nextFrame.getLength();
-                        int bytesToRead = Integer.min(buffer.limit() - buffer.position(), available);
-                        buffer.put(nextFrame.getStreamData(), readUpTo - nextFrame.getOffset(), bytesToRead);
+                        long available = nextFrame.getOffset() - readUpTo + nextFrame.getLength();
+                        int bytesToRead = (int) Long.min(buffer.limit() - buffer.position(), available);
+                        buffer.put(nextFrame.getStreamData(), (int) (readUpTo - nextFrame.getOffset()), bytesToRead);
                         readUpTo += bytesToRead;
                         read += bytesToRead;
                     }
@@ -128,7 +128,7 @@ public class BaseStream {
             return true;
         }
         else {
-            int completeUpTo = processedToOffset;
+            long completeUpTo = processedToOffset;
             Iterator<StreamElement> iterator = frames.iterator();
 
             while (iterator.hasNext()) {
@@ -152,7 +152,7 @@ public class BaseStream {
      * @return when offset is beyond the last byte of the stream. For example, if offset is equal to the length of the
      * stream, return value should be true.
      */
-    protected boolean isStreamEnd(int offset) {
+    protected boolean isStreamEnd(long offset) {
         return false;
     }
 

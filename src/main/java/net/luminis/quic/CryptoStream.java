@@ -81,7 +81,7 @@ public class CryptoStream extends BaseStream {
     public void add(CryptoFrame cryptoFrame) throws TlsProtocolException {
         try {
             if (super.add(cryptoFrame)) {
-                int availableBytes = bytesAvailable();
+                long availableBytes = bytesAvailable();
                 // Because the stream may not have enough bytes available to read the whole message, but enough to
                 // read the size, the msg size read must be remembered for the next invocation of this method.
                 // So, when this method is called, either one of the following cases holds:

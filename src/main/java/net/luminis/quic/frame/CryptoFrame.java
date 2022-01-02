@@ -35,7 +35,7 @@ import java.time.Instant;
  */
 public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
 
-    private int offset;
+    private long offset;
     private int length;
     private byte[] cryptoData;
     private byte[] bytes;
@@ -47,7 +47,7 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
         this(quicVersion, 0, payload);
     }
 
-    public CryptoFrame(Version quicVersion, int offset, byte[] payload) {
+    public CryptoFrame(Version quicVersion, long offset, byte[] payload) {
         this.offset = offset;
         cryptoData = payload;
         length = payload.length;
@@ -82,7 +82,7 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
         log.debug("Parsing Crypto frame");
         buffer.get();
 
-        offset = VariableLengthInteger.parse(buffer);
+        offset = VariableLengthInteger.parseLong(buffer);
         length = VariableLengthInteger.parse(buffer);
 
         cryptoData = new byte[length];
@@ -101,25 +101,28 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
         return cryptoData;
     }
 
-    public int getOffset() {
+    @Override
+    public long getOffset() {
         return offset;
     }
 
+    @Override
     public int getLength() {
         return length;
     }
 
-    public int getUpToOffset() {
+    @Override
+    public long getUpToOffset() {
         return offset + length;
     }
 
     @Override
     public int compareTo(StreamElement other) {
         if (this.offset != other.getOffset()) {
-            return Integer.compare(this.offset, other.getOffset());
+            return Long.compare(this.offset, other.getOffset());
         }
         else {
-            return Integer.compare(this.length, other.getLength());
+            return Long.compare(this.length, other.getLength());
         }
     }
 

@@ -21,11 +21,11 @@ package net.luminis.quic.stream;
 
 public interface StreamElement extends Comparable<StreamElement> {
 
-    int getOffset();
+    long getOffset();
 
     int getLength();
 
     byte[] getStreamData();
 
-    int getUpToOffset();
+    long getUpToOffset();
 }

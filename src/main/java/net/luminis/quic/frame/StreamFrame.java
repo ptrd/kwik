@@ -36,7 +36,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
 
     private StreamType streamType;
     private int streamId;
-    private int offset;
+    private long offset;
     private int length;
     private byte[] streamData;
     private boolean isFinal;
@@ -49,19 +49,19 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         this(Version.getDefault(), streamId, 0, applicationData, 0, applicationData.length, fin);
     }
 
-    public StreamFrame(int streamId, int offset, byte[] applicationData, boolean fin) {
+    public StreamFrame(int streamId, long offset, byte[] applicationData, boolean fin) {
         this(Version.getDefault(), streamId, offset, applicationData, 0, applicationData.length, fin);
     }
 
-    public StreamFrame(Version quicVersion, int streamId, int offset, byte[] applicationData, boolean fin) {
+    public StreamFrame(Version quicVersion, int streamId, long offset, byte[] applicationData, boolean fin) {
         this(quicVersion, streamId, offset, applicationData, 0, applicationData.length, fin);
     }
 
-    public StreamFrame(int streamId, int offset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
+    public StreamFrame(int streamId, long offset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
         this(Version.getDefault(), streamId, offset, applicationData, dataOffset, dataLength, fin);
     }
 
-    public StreamFrame(Version quicVersion, int streamId, int streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
+    public StreamFrame(Version quicVersion, int streamId, long streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
         this.streamId = streamId;
         this.offset = streamOffset;
@@ -115,7 +115,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
 
         if (withOffset) {
-            offset = VariableLengthInteger.parse(buffer);
+            offset = VariableLengthInteger.parseLong(buffer);
         }
         if (withLength) {
             length = VariableLengthInteger.parse(buffer);
@@ -158,10 +158,10 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     @Override
     public int compareTo(StreamElement other) {
         if (this.offset != other.getOffset()) {
-            return Integer.compare(this.offset, other.getOffset());
+            return Long.compare(this.offset, other.getOffset());
         }
         else {
-            return Integer.compare(this.length, other.getLength());
+            return Long.compare(this.length, other.getLength());
         }
     }
 
@@ -169,7 +169,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
         return streamId;
     }
 
-    public int getOffset() {
+    public long getOffset() {
         return offset;
     }
 
@@ -182,7 +182,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     }
 
     @Override
-    public int getUpToOffset() {
+    public long getUpToOffset() {
         return offset + length;
     }
 
