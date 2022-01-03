@@ -52,7 +52,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private final Logger log;
     private final ScheduledExecutorService scheduler;
     private int receiverMaxAckDelay;
-    private volatile ScheduledFuture<?> lossDetectionTimer;
+    private ScheduledFuture<?> lossDetectionFuture;  // Concurrency: guarded by scheduleLock
+    private final Object scheduleLock = new Object();
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
@@ -69,16 +70,17 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         processorRegistry.registerProcessor(this);
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
-        lossDetectionTimer = new NullScheduledFuture();
+        synchronized (scheduleLock) {
+            lossDetectionFuture = new NullScheduledFuture();
+        }
     }
 
     void setLossDetectionTimer() {
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
-            lossDetectionTimer.cancel(false);
             int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
-            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
+            rescheduleLossDetectionTimeout(timeout);
         }
         else {
             boolean ackElicitingInFlight = ackElicitingInFlight();
@@ -104,8 +106,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                             + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
                             + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
 
-                    lossDetectionTimer.cancel(false);
-                    lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
+                    rescheduleLossDetectionTimeout(timeout);
                 }
             }
             else {
@@ -170,7 +171,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         }
         else if (Instant.now().isBefore(expiration)) {
             // Old timer task was cancelled, but it still fired; just ignore.
-            log.warn("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
+            log.warn("Scheduled task running " + Duration.between(Instant.now(), expiration).toMillis() + "ms early (" + expiration + ")");
             // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary to avoid that after the sleep, it's still too early
             long remainingWaitTime = Duration.between(Instant.now(), expiration).toMillis() + 1;
             if (remainingWaitTime > 0) {  // Time goes on, so remaining time could have become negative in the mean time
@@ -318,33 +319,33 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         return earliestLossTime;
     }
 
-    ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
-        if (! lossDetectionTimer.cancel(false)) {
-            log.debug("Cancelling loss detection timer failed");
-        }
-        timerExpiration = Instant.now().plusMillis(timeout);
+    void rescheduleLossDetectionTimeout(int timeout) {
         try {
-            return scheduler.schedule(() -> {
-                try {
-                    runnable.run();
-                } catch (Exception error) {
-                    log.error("Runtime exception occurred while processing scheduled task", error);
-                }
-            }, timeout, TimeUnit.MILLISECONDS);
+            synchronized (scheduleLock) {
+                // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
+                lossDetectionFuture.cancel(false);
+                timerExpiration = Instant.now().plusMillis(timeout);
+                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, timeout, TimeUnit.MILLISECONDS);
+            }
         }
         catch (RejectedExecutionException taskRejected) {
             // Can happen if has been reset concurrently
             if (!hasBeenReset) {
                 throw taskRejected;
             }
-            else {
-                return new NullScheduledFuture();
-            }
+        }
+    }
+
+    private void runLossDetectionTimeout() {
+        try {
+            lossDetectionTimeout();
+        } catch (Exception error) {
+            log.error("Runtime exception occurred while running loss detection timeout handler", error);
         }
     }
 
     void unschedule() {
-        lossDetectionTimer.cancel(true);
+        lossDetectionFuture.cancel(true);
         timerExpiration = null;
     }
 
