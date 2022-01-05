@@ -79,8 +79,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
-            int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
-            rescheduleLossDetectionTimeout(timeout);
+            rescheduleLossDetectionTimeout(lossTime);
         }
         else {
             boolean ackElicitingInFlight = ackElicitingInFlight();
@@ -95,18 +94,14 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                     unschedule();
                 }
                 else {
-                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
-                    if (timeout < 1) {
-                        timeout = 0;
-                    }
+                    rescheduleLossDetectionTimeout(ptoTimeAndSpace.lossTime);
 
+                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
                     log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
                             + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
                             + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
                             + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
                             + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
-
-                    rescheduleLossDetectionTimeout(timeout);
                 }
             }
             else {
@@ -319,13 +314,15 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         return earliestLossTime;
     }
 
-    void rescheduleLossDetectionTimeout(int timeout) {
+    void rescheduleLossDetectionTimeout(Instant scheduledTime) {
         try {
             synchronized (scheduleLock) {
                 // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
                 lossDetectionFuture.cancel(false);
-                timerExpiration = Instant.now().plusMillis(timeout);
-                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, timeout, TimeUnit.MILLISECONDS);
+                timerExpiration = scheduledTime;
+                long delay = Duration.between(Instant.now(), scheduledTime).toMillis();
+                // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
+                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
             }
         }
         catch (RejectedExecutionException taskRejected) {
