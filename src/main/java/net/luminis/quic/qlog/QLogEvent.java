@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.qlog;
 
-import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.QLogEventProcessor;
 
 import java.time.Instant;
@@ -31,6 +30,12 @@ public abstract class QLogEvent {
 
 
     public QLogEvent(byte[] cid, Instant time) {
+        if (cid == null) {
+            throw new IllegalArgumentException();
+        }
+        if (time == null) {
+            throw new IllegalArgumentException();
+        }
         this.cid = cid;
         this.time = time;
     }

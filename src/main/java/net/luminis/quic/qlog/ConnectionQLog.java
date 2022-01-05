@@ -22,7 +22,6 @@ import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.qlog.event.*;
-import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
@@ -57,7 +56,7 @@ public class ConnectionQLog implements QLogEventProcessor {
         this.startTime = event.getTime();
         // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
         String qlogDir = System.getenv("QLOGDIR");
-        OutputStream output = new FileOutputStream(new File(qlogDir, format(cid) + ".qlog"));
+        OutputStream output = new FileOutputStream(new File(qlogDir, format(cid, null) + ".qlog"));
 
         boolean prettyPrinting = false;
         Map<String, ?> configuration = prettyPrinting ? Map.of(PRETTY_PRINTING, "whatever") : emptyMap();
@@ -132,9 +131,9 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeStartObject("header")
                 .write("packet_type", formatPacketType(packet))
                 .write("packet_number", packet.getPacketNumber() != null? packet.getPacketNumber(): 0)
-                .write("dcid", format(packet.getDestinationConnectionId()));
+                .write("dcid", format(packet.getDestinationConnectionId(), ""));
         if (packet instanceof LongHeaderPacket) {
-            jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId()));
+            jsonGenerator.write("scid", format(((LongHeaderPacket) packet).getSourceConnectionId(), ""));
         }
         jsonGenerator.writeEnd();  // header
 
@@ -189,8 +188,8 @@ public class ConnectionQLog implements QLogEventProcessor {
         }
     }
 
-    private String format(byte[] data) {
-        return ByteUtils.bytesToHex(data);
+    private String format(byte[] data, String defaultValue) {
+        return data != null? ByteUtils.bytesToHex(data): defaultValue;
     }
 
     private void writeFooter() {
@@ -199,7 +198,7 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeEnd()       // traces
                 .writeEnd();
         jsonGenerator.close();
-        System.out.println("QLog: done with " + format(cid) + ".qlog");
+        System.out.println("QLog: done with " + format(cid, "") + ".qlog");
     }
 
 }
