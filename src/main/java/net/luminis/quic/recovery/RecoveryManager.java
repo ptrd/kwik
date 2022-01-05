@@ -322,7 +322,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 timerExpiration = scheduledTime;
                 long delay = Duration.between(Instant.now(), scheduledTime).toMillis();
                 // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
-                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
+                lossDetectionFuture = scheduler.schedule(createLossDetectionTimeoutRunnerWithTooEarlyDetection(scheduledTime), delay, TimeUnit.MILLISECONDS);
             }
         }
         catch (RejectedExecutionException taskRejected) {
@@ -339,6 +339,23 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         } catch (Exception error) {
             log.error("Runtime exception occurred while running loss detection timeout handler", error);
         }
+    }
+
+    /**
+     * Creates a Runnable to run the lossDetectionTimeout method, but first checks whether it is not running to early.
+     * For debugging purposes only: it is / can be used to prove that scheduled tasks sometimes run 30 ~ 40 milliseconds too early.
+     * @param scheduledTime
+     * @return
+     */
+    private Runnable createLossDetectionTimeoutRunnerWithTooEarlyDetection(final Instant scheduledTime) {
+        return () -> {
+            Instant now = Instant.now();
+            // Allow for 1 ms difference, as Instant has much more precision than the ScheduledExecutorService
+            if (now.plusMillis(1).isBefore(scheduledTime)) {
+                log.error(String.format("Task scheduled for %s is running already at %s (%s ms too early)", scheduledTime, now, Duration.between(now, scheduledTime).toMillis()));
+            }
+            runLossDetectionTimeout();
+        };
     }
 
     void unschedule() {
