@@ -119,11 +119,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (! ackElicitingInFlight()) {
             // Must be peer awaiting address validation
             if (handshakeState.hasNoHandshakeKeys()) {
-                log.info("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
                 return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
             }
             else {
-                log.info("getPtoTimeAndSpace: no ack eliciting in flight and but handshake keys -> H");
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight but handshake keys -> H");
                 return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
             }
         }
