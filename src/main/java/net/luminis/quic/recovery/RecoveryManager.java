@@ -164,28 +164,14 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             log.warn("Loss detection timeout: Timer was cancelled.");
             return;
         }
-        else if (Instant.now().isBefore(expiration)) {
-            // Old timer task was cancelled, but it still fired; just ignore.
-            log.warn("Scheduled task running " + Duration.between(Instant.now(), expiration).toMillis() + "ms early (" + expiration + ")");
-            // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary to avoid that after the sleep, it's still too early
-            long remainingWaitTime = Duration.between(Instant.now(), expiration).toMillis() + 1;
-            if (remainingWaitTime > 0) {  // Time goes on, so remaining time could have become negative in the mean time
-                try {
-                    Thread.sleep(remainingWaitTime);
-                } catch (InterruptedException e) {}
-            }
-            expiration = timerExpiration;
-            if (expiration == null) {
-                log.warn("Delayed task: timer expiration is now null, cancelled");
-                return;
-            }
-            else if (Instant.now().isBefore(expiration)) {
-                log.warn("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
-                return;
-            }
-            else {
-                log.warn("Delayed task running now");
-            }
+        else if (Instant.now().isBefore(expiration) && Duration.between(Instant.now(), expiration).toMillis() > 0) {
+            // Might be due to an old task that was cancelled, but unfortunately, it also happens that the scheduler
+            // executes tasks much earlier than requested (30 ~ 40 ms). In that case, rescheduling is necessary to avoid
+            // losing the loss detection timeout event.
+            // To be sure the latest timer expiration is used, use timerExpiration i.s.o. the expiration of this call.
+            log.warn(String.format("Loss detection timeout running (at %s) is %s ms too early; rescheduling to %s",
+                    Instant.now(), Duration.between(Instant.now(), expiration).toMillis(), timerExpiration));
+            rescheduleLossDetectionTimeout(timerExpiration);
         }
         else {
             log.recovery("%s loss detection timeout handler running", Instant.now());
@@ -322,7 +308,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 timerExpiration = scheduledTime;
                 long delay = Duration.between(Instant.now(), scheduledTime).toMillis();
                 // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
-                lossDetectionFuture = scheduler.schedule(createLossDetectionTimeoutRunnerWithTooEarlyDetection(scheduledTime), delay, TimeUnit.MILLISECONDS);
+                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
             }
         }
         catch (RejectedExecutionException taskRejected) {
