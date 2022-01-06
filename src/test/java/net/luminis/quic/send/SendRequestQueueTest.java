@@ -120,4 +120,13 @@ class SendRequestQueueTest {
                 .isNotNull()
                 .isNotEmpty();
     }
+
+    @Test
+    void testProbeWithData() throws Exception {
+        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        sendRequestQueue.addProbeRequest();
+
+        assertThat(sendRequestQueue.hasProbeWithData()).isFalse();
+        assertThat(sendRequestQueue.hasProbe()).isTrue();
+    }
 }

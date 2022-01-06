@@ -79,21 +79,19 @@ public class SendRequestQueue {
     }
 
     public boolean hasProbeWithData() {
-        synchronized (probeQueue) {
-            return !probeQueue.isEmpty() && !probeQueue.getFirst().isEmpty();
-        }
+        List<QuicFrame> firstProbe = probeQueue.peekFirst();
+        return firstProbe != null && !firstProbe.isEmpty();
     }
 
     public List<QuicFrame> getProbe() {
-        synchronized (probeQueue) {
-            if (hasProbe()) {
-                return probeQueue.removeFirst();
-            }
-            else {
-                // Even when client first checks for a probe, this might happen due to race condition with clear().
-                // (and don't bother to much about the chance of an unnecessary probe)
-                return List.of(new PingFrame());
-            }
+        List<QuicFrame> probe = probeQueue.pollFirst();
+        if (probe != null) {
+            return probe;
+        }
+        else {
+            // Even when client first checks for a probe, this might happen due to race condition with clear().
+            // (and don't bother too much about the chance of an unnecessary probe)
+            return List.of(new PingFrame());
         }
     }
 
