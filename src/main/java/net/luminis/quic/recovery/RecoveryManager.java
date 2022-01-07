@@ -113,19 +113,22 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         }
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+    /**
+     * Determines the current probe timeout.
+     * This method is defined in https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-.
+     * @return a <code>PnSpaceTime</code> object defining the next probe: its time and for which packet number space.
+     */
     private PnSpaceTime getPtoTimeAndSpace() {
         int ptoDuration = rttEstimater.getSmoothedRtt() + Integer.max(1, 4 * rttEstimater.getRttVar());
         ptoDuration *= (int) (Math.pow(2, ptoCount));
 
         if (! ackElicitingInFlight()) {
-            // Must be peer awaiting address validation
+            // Must be the peer awaiting address validation
             if (handshakeState.hasNoHandshakeKeys()) {
-                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> probe Initial");
                 return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
-            }
-            else {
-                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight but handshake keys -> H");
+            } else {
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight but handshake keys -> probe Handshake");
                 return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
             }
         }
@@ -136,12 +139,14 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         for (PnSpace pnSpace: PnSpace.values()) {
             if (lossDetectors[pnSpace.ordinal()].ackElicitingInFlight()) {
                 if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
-                    // Skip Application Data until handshake confirmed
+                    // https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-
+                    // "Skip Application Data until handshake confirmed"
                     log.recovery("getPtoTimeAndSpace is skipping level App, because handshake not yet confirmed!");
-                    continue;
+                    continue;  // Because App is the last, this is effectively a return.
                 }
                 if (pnSpace == PnSpace.App) {
+                    // https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-
+                    // "Include max_ack_delay and backoff for Application Data"
                     ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
                 }
                 Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
@@ -151,6 +156,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 }
             }
         }
+
         return new PnSpaceTime(ptoSpace, ptoTime);
     }
 
@@ -210,7 +216,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
             sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
         } else {
-            // Must be peer awaiting address validation
+            // Must be the peer awaiting address validation
             log.recovery("Sending probe because peer awaiting address validation");
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
             // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
