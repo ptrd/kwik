@@ -18,6 +18,15 @@
  */
 package net.luminis.quic;
 
+/**
+ * Packet numbers are divided into three spaces in QUIC.
+ *
+ * See https://www.rfc-editor.org/rfc/rfc9000.html#name-packet-numbers:
+ * Initial space: All Initial packets (Section 17.2.2) are in this space.
+ * Handshake space: All Handshake packets (Section 17.2.4) are in this space.
+ * Application data space: All 0-RTT (Section 17.2.3) and 1-RTT (Section 17.3.1) packets are in this space.
+ *
+ */
 public enum PnSpace {
 
     Initial,

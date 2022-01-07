@@ -29,6 +29,7 @@ class PnSpaceTest {
     void valuesMethodShouldReturnPnSpacesInOrder() {
         PnSpace[] pnSpaces = PnSpace.values();
 
+        // containsExactly checks for same order also
         assertThat(pnSpaces).containsExactly(PnSpace.Initial, PnSpace.Handshake, PnSpace.App);
     }
 }

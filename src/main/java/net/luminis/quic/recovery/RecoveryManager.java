@@ -96,12 +96,14 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 else {
                     rescheduleLossDetectionTimeout(ptoTimeAndSpace.lossTime);
 
-                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
-                    log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
-                            + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
-                            + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
-                            + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
-                            + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
+                    if (log.logRecovery()) {
+                        int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
+                        log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
+                                + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
+                                + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
+                                + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
+                                + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
+                    }
                 }
             }
             else {
@@ -192,15 +194,16 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     private void sendProbe() {
-        PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-
-        if (earliestLastAckElicitingSentTime != null) {
-            log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
-        } else {
-            log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        if (log.logRecovery()) {
+            PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+            if (earliestLastAckElicitingSentTime != null) {
+                log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
+            } else {
+                log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+            }
         }
-        ptoCount++;
 
+        ptoCount++;
         int nrOfProbes = ptoCount > 1 ? 2 : 1;
 
         if (ackElicitingInFlight()) {
