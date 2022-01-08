@@ -20,8 +20,10 @@ package net.luminis.quic;
 
 public class DecryptionException extends Exception {
 
-    @Override
-    public String toString() {
-        return "Decryption Error";
+    public DecryptionException() {
+    }
+
+    public DecryptionException(String message) {
+        super(message);
     }
 }

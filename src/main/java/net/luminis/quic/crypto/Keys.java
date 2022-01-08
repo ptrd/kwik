@@ -323,6 +323,11 @@ public class Keys {
     }
 
     public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
+        if (message.length <= 16) {
+            // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+            // "These cipher suites have a 16-byte authentication tag and produce an output 16 bytes larger than their input."
+            throw new DecryptionException("ciphertext must be longer than 16 bytes");
+        }
         SecretKeySpec secretKey = getWriteKeySpec();
         Cipher aeadCipher = getWriteCipher();
         try {
