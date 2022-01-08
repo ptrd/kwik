@@ -43,6 +43,50 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * QUIC Loss Detection is specified in https://www.rfc-editor.org/rfc/rfc9002.html.
+ *
+ * "QUIC senders use acknowledgments to detect lost packets and a PTO to ensure acknowledgments are received"
+ * It uses a single timer, because either there are lost packets to detect, or a probe must be scheduled, never both.
+ *
+ * <b>Ack based loss detection</b>
+ * When an Ack is received, packets that are sent "long enough" before the largest acked, are deemed lost; for the
+ * packets not send "long enough", a timer is set to mark them as lost when "long enough" time has been passed.
+ *
+ * An example:
+ *         -----------------------time------------------->>
+ * sent:   1           2      3        4
+ * acked:                                    4
+ *         \--- long enough before 4 --/                       => 1 is marked lost immediately
+ *                     \--not long enough before 4 --/
+ *                                                   |
+ *                                                   Set timer at this point in time, as that will be "long enough".
+ *                                                   At that time, a new timer will be set for 3, unless acked meanwhile.
+ *
+ * <b>Detecting tail loss with probe timeout</b>
+ * When no Acks arrive, no packets will be marked as lost. To trigger the peer to send an ack (so loss detection can do
+ * its job again), a probe (ack-eliciting packet) will be sent after the probe timeout. If the situation does not change
+ * (i.e. no Acks received), additional probes will be sent, but with an exponentially growing delay.
+ *
+ * An example:
+ *         -----------------------time------------------->>
+ * sent:   1           2      3        4
+ * acked:                                    4
+ *                            \-- timer set at loss time  --/
+ *                                                          |
+ *                                                          When the timer fires, there is no new ack received, so
+ *                                                          nothing can be marked as lost. A probe is scheduled for
+ *                                                          "probe timeout" time after the time 3 was sent:
+ *                            \-- timer set at "probe timeout" time after 3 was sent --\
+ *                                                                                     |
+ *                                                                                     Send probe!
+ *
+ * Note that packet 3 will not be marked as lost as long no ack is received!
+ *
+ * <b>Exceptions</b>
+ * Because a server might be blocked by the anti-amplification limit, a client must also send probes when it has no
+ * ack eliciting packets in flight, but is not sure whether the peer has validated the client address.
+ */
 public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
     private final Role role;
@@ -89,8 +133,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             //  its Handshake packets and the handshake is not confirmed (...), even if there are no packets in flight."
             if (ackElicitingInFlight || peerAwaitingAddressValidation) {
                 PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
-                if (ptoTimeAndSpace.lossTime.equals(Instant.MAX)) {
-                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight for I/H, peer not awaiting address validation)");
+                if (ptoTimeAndSpace == null) {
+                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
                     unschedule();
                 }
                 else {
@@ -107,7 +151,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 }
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2))");
                 unschedule();
             }
         }
@@ -122,8 +166,10 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         int ptoDuration = rttEstimater.getSmoothedRtt() + Integer.max(1, 4 * rttEstimater.getRttVar());
         ptoDuration *= (int) (Math.pow(2, ptoCount));
 
-        if (! ackElicitingInFlight()) {
-            // Must be the peer awaiting address validation
+        // The pseudo code in https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection- test for
+        // ! ackElicitingInFlight() to determine whether peer is awaiting address validation. In a multi-threaded
+        // implementation, that solution is subject to all kinds of race conditions, so its better to just check:
+        if (peerAwaitingAddressValidation()) {
             if (handshakeState.hasNoHandshakeKeys()) {
                 log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> probe Initial");
                 return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
@@ -149,15 +195,20 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                     // "Include max_ack_delay and backoff for Application Data"
                     ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
                 }
-                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
-                if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
+                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();
+                if (lastAckElicitingSent != null && lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
                     ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
                     ptoSpace = pnSpace;
                 }
             }
         }
 
-        return new PnSpaceTime(ptoSpace, ptoTime);
+        if (ptoSpace != null) {
+            return new PnSpaceTime(ptoSpace, ptoTime);
+        }
+        else {
+            return null;
+        }
     }
 
     private boolean peerAwaitingAddressValidation() {
@@ -214,17 +265,28 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         if (ackElicitingInFlight()) {
             PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+            if (ptoTimeAndSpace == null) {
+                // So, the "ack eliciting in flight" has just been acked; a new timeout will be set, no need to send a probe now
+                log.recovery("Refraining from sending probe because received ack meanwhile");
+                return;
+            }
             sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
-        } else {
-            // Must be the peer awaiting address validation
-            log.recovery("Sending probe because peer awaiting address validation");
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
-            // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
-            //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
-            if (handshakeState.hasNoHandshakeKeys()) {
-                sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
-            } else {
-                sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+        }
+        else {
+            // Must be the peer awaiting address validation or race condition
+            if (peerAwaitingAddressValidation()) {
+                log.recovery("Sending probe because peer awaiting address validation");
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
+                // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
+                //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
+                if (handshakeState.hasNoHandshakeKeys()) {
+                    sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
+                } else {
+                    sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+                }
+            }
+            else {
+                log.recovery("Refraining from sending probe as no ack eliciting in flight and no peer awaiting address validation");
             }
         }
     }
