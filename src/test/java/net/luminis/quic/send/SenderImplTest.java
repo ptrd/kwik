@@ -100,7 +100,7 @@ class SenderImplTest extends AbstractSenderTest {
     }
 
     @Test
-    void addingProbeToDiscardedSpaceMovesItToNext() throws Exception {
+    void addingProbeToDiscardedSpaceDiscardsIt() throws Exception {
         // Given
         SendRequestQueue[] senderQueues = (SendRequestQueue[]) new FieldReader(sender, sender.getClass().getDeclaredField("sendRequestQueue")).read();
 
@@ -111,7 +111,7 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then
         assertThat(senderQueues[EncryptionLevel.Initial.ordinal()].hasProbe()).isFalse();
-        assertThat(senderQueues[EncryptionLevel.Handshake.ordinal()].hasProbe()).isTrue();
+        assertThat(senderQueues[EncryptionLevel.Handshake.ordinal()].hasProbe()).isFalse();
     }
 
     @Test
