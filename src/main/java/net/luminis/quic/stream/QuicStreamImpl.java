@@ -354,6 +354,8 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         // Reset indicates whether the OutputStream has been reset.
         private volatile boolean reset;
         private volatile long resetErrorCode;
+        // Stream offset at which the stream was last blocked, for detecting the first time stream is blocked at a certain offset.
+        private long blockedOffset;
 
         StreamOutputStream() {
             maxBufferSize = sendBufferSize;
@@ -531,8 +533,16 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 }
                 else {
                     // So flowControlLimit <= currentOffset
-                    // TODO: Should send DATA_BLOCKED or STREAM_DATA_BLOCKED.
-                    log.info("Stream " + streamId + " is blocked by flow control at " + flowControlLimit + " (note to self: should send DATA_BLOCKED or STREAM_DATA_BLOCKED ;-))");
+                    // Check if this condition hasn't been handled before
+                    if (currentOffset != blockedOffset) {
+                        // Not handled before, remember this offset, so this isn't executed twice for the same offset
+                        blockedOffset = currentOffset;
+                        // And let peer know
+                        // https://www.rfc-editor.org/rfc/rfc9000.html#name-data-flow-control
+                        // "A sender SHOULD send a STREAM_DATA_BLOCKED or DATA_BLOCKED frame to indicate to the receiver
+                        //  that it has data to write but is blocked by flow control limits."
+                        connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(streamId), App, this::retransmitSendBlockReason, true);
+                    }
                 }
             }
             return null;
@@ -543,6 +553,30 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
             // and let sendFrame method determine whether there is more to send or not.
             connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);  // No need to flush, as this is called while processing received message
+        }
+
+        /**
+         * Sends StreamDataBlockedFrame or DataBlockedFrame to the peer, provided the blocked condition is still true.
+         * @param maxFrameSize
+         * @return
+         */
+        private QuicFrame sendBlockReason(int maxFrameSize) {
+            // Retrieve actual block reason; could be "none" when an update has been received in the meantime.
+            BlockReason blockReason = flowController.getFlowControlBlockReason(QuicStreamImpl.this);
+            QuicFrame frame = null;
+            switch (blockReason) {
+                case STREAM_DATA_BLOCKED:
+                    frame = new StreamDataBlockedFrame(quicVersion, streamId, currentOffset);
+                    break;
+                case DATA_BLOCKED:
+                    frame = new DataBlockedFrame(flowController.getConnectionDataLimit());
+                    break;
+            }
+            return frame;
+        }
+
+        private void retransmitSendBlockReason(QuicFrame quicFrame) {
+            connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(streamId), App, this::retransmitSendBlockReason, true);
         }
 
         private void retransmitStreamFrame(QuicFrame frame) {

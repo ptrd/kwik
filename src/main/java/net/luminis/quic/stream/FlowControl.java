@@ -59,7 +59,9 @@ public class FlowControl {
     private long maxDataAllowed;
     // The maximum amount of data that can be sent on the connection, that is already assigned to a particular stream
     private long maxDataAssigned;
+    // The maximum amount of data that a stream would be allowed to send (to the peer), ignoring possible connection limit
     private Map<Integer, Long> maxStreamDataAllowed;
+    // The maximum amount of data that is already assigned to a stream (i.e. already sent, or upon being sent)
     private Map<Integer, Long> maxStreamDataAssigned;
     private final Logger log;
     private final Map<Integer, FlowControlUpdateListener> streamListeners;
@@ -122,6 +124,32 @@ public class FlowControl {
         synchronized (this) {
             return maxStreamDataAssigned.get(stream.getStreamId()) + currentStreamCredits(stream);
         }
+    }
+
+    /**
+     * Returns the reason why a given stream is blocked, which can be due that the stream flow control limit is reached
+     * or the connection data limit is reached.
+     * @param stream
+     * @return
+     */
+    public BlockReason getFlowControlBlockReason(QuicStream stream) {
+        int streamId = stream.getStreamId();
+        if (maxStreamDataAssigned.get(streamId).equals(maxStreamDataAllowed.get(streamId))) {
+            return BlockReason.STREAM_DATA_BLOCKED;
+        }
+        if (maxDataAllowed == maxDataAssigned) {
+            return BlockReason.DATA_BLOCKED;
+        }
+
+        return BlockReason.NOT_BLOCKED;
+    }
+
+    /**
+     * Returns the current connection flow control limit.
+     * @return  current connection flow control limit
+     */
+    public long getConnectionDataLimit() {
+        return maxDataAllowed;
     }
 
     /**

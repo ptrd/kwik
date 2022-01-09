@@ -37,7 +37,7 @@ public class DataBlockedFrame extends QuicFrame {
     public DataBlockedFrame() {
     }
 
-    public DataBlockedFrame(int streamDataLimit) {
+    public DataBlockedFrame(long streamDataLimit) {
         this.streamDataLimit = streamDataLimit;
     }
 

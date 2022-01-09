@@ -477,4 +477,47 @@ class FlowControlTest {
         verify(listener1, never()).streamNotBlocked(anyInt());
         verify(listener2, times(1)).streamNotBlocked(anyInt());
     }
+
+    @Test
+    void initiallyStreamIsNotBlocked() {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 100, 100, 100, 100);
+        QuicStreamImpl stream = new QuicStreamImpl(1, conn, fc);
+
+        // When
+        // (nothing)
+
+        // Then
+        BlockReason blockReason = fc.getFlowControlBlockReason(stream);
+        assertThat(blockReason).isEqualTo(BlockReason.NOT_BLOCKED);
+    }
+
+    @Test
+    void testBlockReasonWhenStreamLimitIsReached() {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 1000, 100, 100, 100);
+        QuicStreamImpl stream = new QuicStreamImpl(1, conn, fc);
+
+        // When
+        fc.increaseFlowControlLimit(stream, 345);
+
+        // Then
+        BlockReason blockReason = fc.getFlowControlBlockReason(stream);
+        assertThat(blockReason).isEqualTo(BlockReason.STREAM_DATA_BLOCKED);
+    }
+
+    @Test
+    void testBlockReasonWhenConnectionLimitIsReached() {
+        // Given
+        FlowControl fc = new FlowControl(Role.Client, 100, 1000, 1000, 1000);
+        QuicStreamImpl stream = new QuicStreamImpl(1, conn, fc);
+
+        // When
+        fc.increaseFlowControlLimit(stream, 345);
+
+        // Then
+        BlockReason blockReason = fc.getFlowControlBlockReason(stream);
+        assertThat(blockReason).isEqualTo(BlockReason.DATA_BLOCKED);
+        assertThat(fc.getConnectionDataLimit()).isEqualTo(100);
+    }
 }

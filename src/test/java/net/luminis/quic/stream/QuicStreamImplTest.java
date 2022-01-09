@@ -727,7 +727,7 @@ class QuicStreamImplTest {
         flowController.process(new MaxStreamDataFrame(1, 233));
 
         // Then
-        StreamFrame frame2 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        StreamFrame frame2 = (StreamFrame) captureSendFunction(connection, 2).apply(1000);
         assertThat(frame2.getLength()).isLessThanOrEqualTo(233);
     }
 
@@ -835,8 +835,12 @@ class QuicStreamImplTest {
     }
 
     private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
+        return captureSendFunction(connection, 1);
+    }
+
+    private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection, int expectedInvocations) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
-        verify(connection, times(1)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
+        verify(connection, times(expectedInvocations)).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
         clearInvocations(connection);
         return captor.getValue();
     }

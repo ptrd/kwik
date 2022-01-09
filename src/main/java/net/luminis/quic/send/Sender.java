@@ -67,8 +67,17 @@ public interface Sender {
     /**
      * Sends a frame that is produced by the given frame supplier at the time the frame is actually being sent.
      * Producing the frame "just in time" has two advantages: the frame can be created with up-to-date data (e.g.
-     * flow control level), avoid sending out-of-date values when the send has been queued for a while, and the frame
-     * can take the maximum size that is available in the QUIC packet being constructed.
+     * flow control level), avoid sending out-of-date values when the send-request has been queued for a while, and the
+     * frame can take the maximum size that is available in the QUIC packet being constructed (which is especially
+     * useful for stream frames).
+     *
+     * The mininum size is the minimal maximum frame size the frame supplier callback is able to produce; it must
+     * guarantee that it can produce a frame that is not larger than this value. For fixed frames, this is simply the
+     * max frame size, but for frames with varying size (e.g. stream frames), it is the max size when creating the
+     * smallest frame possible (or useful) in the given circumstances. E.g. if frame size is uncertain due
+     * to variable length integer encoding, this minimum should take worst case into account.
+     * Note that when the frame supplier is called, it may be allowed to produce a larger frame, if packet size permits.
+     *
      * When packet used to send the frame is lost, the callback will be executed to give the caller the opportunity
      * to retransmit.
      *

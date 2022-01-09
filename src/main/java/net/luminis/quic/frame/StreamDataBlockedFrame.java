@@ -39,7 +39,7 @@ public class StreamDataBlockedFrame extends QuicFrame {
     public StreamDataBlockedFrame() {
     }
 
-    public StreamDataBlockedFrame(Version quicVersion, int streamId, int streamDataLimit) {
+    public StreamDataBlockedFrame(Version quicVersion, int streamId, long streamDataLimit) {
         this.streamId = streamId;
         this.streamDataLimit = streamDataLimit;
     }
@@ -63,6 +63,10 @@ public class StreamDataBlockedFrame extends QuicFrame {
         buffer.put((byte) 0x15);
         VariableLengthInteger.encode(streamId, buffer);
         VariableLengthInteger.encode(streamDataLimit, buffer);
+    }
+
+    public static int getMaxSize(int streamId) {
+        return 1 + VariableLengthInteger.bytesNeeded(streamId) + 8;
     }
 
     @Override
