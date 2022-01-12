@@ -23,6 +23,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.Version;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -50,6 +51,8 @@ public class NewConnectionIdFrame extends QuicFrame {
         this.sequenceNr = sequenceNr;
         this.retirePriorTo = retirePriorTo;
         connectionId = newSourceConnectionId;
+        statelessResetToken = new byte[128 / 8];
+        random.nextBytes(statelessResetToken);
     }
 
     @Override
@@ -66,7 +69,7 @@ public class NewConnectionIdFrame extends QuicFrame {
         VariableLengthInteger.encode(retirePriorTo, buffer);
         buffer.put((byte) connectionId.length);
         buffer.put(connectionId);
-        random.ints(16).forEach(i -> buffer.put((byte) i));
+        buffer.put(statelessResetToken);
     }
 
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
@@ -86,7 +89,7 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewConnectionIdFrame[" + sequenceNr + "," + retirePriorTo + "]";
+        return "NewConnectionIdFrame[" + sequenceNr + ",<" + retirePriorTo + "|" + ByteUtils.bytesToHex(connectionId) + "|" + ByteUtils.bytesToHex(statelessResetToken) + "]";
     }
 
     public int getSequenceNr() {
