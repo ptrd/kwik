@@ -79,6 +79,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected final ConnectionSecrets connectionSecrets;
     protected volatile TransportParameters transportParams;
     protected volatile HandshakeState handshakeState = HandshakeState.Initial;
+    protected final Object handshakeStateLock = new Object();
     protected List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();

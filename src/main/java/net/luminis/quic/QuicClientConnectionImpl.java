@@ -379,7 +379,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void hasHandshakeKeys() {
-        synchronized (handshakeState) {
+        synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.HasHandshakeKeys)) {
                 handshakeState = HandshakeState.HasHandshakeKeys;
                 handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
@@ -401,7 +401,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public void handshakeFinished() {
             connectionSecrets.computeApplicationSecrets(tlsEngine);
-            synchronized (handshakeState) {
+            synchronized (handshakeStateLock) {
                 if (handshakeState.transitionAllowed(HandshakeState.HasAppKeys)) {
                     handshakeState = HandshakeState.HasAppKeys;
                     handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
@@ -543,7 +543,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
-        synchronized (handshakeState) {
+        synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                 handshakeState = HandshakeState.Confirmed;
                 handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));

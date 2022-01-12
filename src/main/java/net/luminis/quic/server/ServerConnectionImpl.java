@@ -218,7 +218,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
         connectionState = Connected;
 
-        synchronized (handshakeState) {
+        synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                 handshakeState = HandshakeState.Confirmed;
                 handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
