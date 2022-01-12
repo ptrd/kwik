@@ -143,13 +143,10 @@ public class Chacha20Keys extends Keys {
             // Programming error
             throw new RuntimeException();
         } catch (BadPaddingException e) {
-            e.printStackTrace();
             throw new RuntimeException();
         } catch (IllegalBlockSizeException e) {
-            e.printStackTrace();
             throw new RuntimeException();
         } catch (InvalidAlgorithmParameterException e) {
-            e.printStackTrace();
             throw new RuntimeException();
         }
     }
