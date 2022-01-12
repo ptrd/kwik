@@ -184,8 +184,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 wakeUpSenderLoop();
             }
             else {
-                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => moving to next");
-                level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
+                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => ignoring");
             }
         }
     }
@@ -198,9 +197,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 wakeUpSenderLoop();
             }
             else {
-                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => moving to next");
-                // Do not move frames from one level to another, just create a ping probe.
-                level.next().ifPresent(nextLevel -> sendProbe(nextLevel));
+                log.warn("Attempt to send probe on discarded space (" + level.relatedPnSpace() + ") => ignoring");
             }
         }
     }

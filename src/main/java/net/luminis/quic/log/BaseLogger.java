@@ -101,6 +101,11 @@ public abstract class BaseLogger implements Logger {
     }
 
     @Override
+    public boolean logRecovery() {
+        return logRecovery;
+    }
+
+    @Override
     public void logCongestionControl(boolean enabled) {
         logCongestionControl = enabled;
     }

@@ -83,6 +83,11 @@ public class LogProxy implements Logger {
     }
 
     @Override
+    public boolean logRecovery() {
+        return proxiedLogger.logRecovery();
+    }
+
+    @Override
     public void logCongestionControl(boolean enabled) {
         proxiedLogger.logCongestionControl(enabled);
     }

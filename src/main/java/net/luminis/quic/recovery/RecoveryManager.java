@@ -43,6 +43,50 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * QUIC Loss Detection is specified in https://www.rfc-editor.org/rfc/rfc9002.html.
+ *
+ * "QUIC senders use acknowledgments to detect lost packets and a PTO to ensure acknowledgments are received"
+ * It uses a single timer, because either there are lost packets to detect, or a probe must be scheduled, never both.
+ *
+ * <b>Ack based loss detection</b>
+ * When an Ack is received, packets that are sent "long enough" before the largest acked, are deemed lost; for the
+ * packets not send "long enough", a timer is set to mark them as lost when "long enough" time has been passed.
+ *
+ * An example:
+ *         -----------------------time------------------->>
+ * sent:   1           2      3        4
+ * acked:                                    4
+ *         \--- long enough before 4 --/                       => 1 is marked lost immediately
+ *                     \--not long enough before 4 --/
+ *                                                   |
+ *                                                   Set timer at this point in time, as that will be "long enough".
+ *                                                   At that time, a new timer will be set for 3, unless acked meanwhile.
+ *
+ * <b>Detecting tail loss with probe timeout</b>
+ * When no Acks arrive, no packets will be marked as lost. To trigger the peer to send an ack (so loss detection can do
+ * its job again), a probe (ack-eliciting packet) will be sent after the probe timeout. If the situation does not change
+ * (i.e. no Acks received), additional probes will be sent, but with an exponentially growing delay.
+ *
+ * An example:
+ *         -----------------------time------------------->>
+ * sent:   1           2      3        4
+ * acked:                                    4
+ *                            \-- timer set at loss time  --/
+ *                                                          |
+ *                                                          When the timer fires, there is no new ack received, so
+ *                                                          nothing can be marked as lost. A probe is scheduled for
+ *                                                          "probe timeout" time after the time 3 was sent:
+ *                            \-- timer set at "probe timeout" time after 3 was sent --\
+ *                                                                                     |
+ *                                                                                     Send probe!
+ *
+ * Note that packet 3 will not be marked as lost as long no ack is received!
+ *
+ * <b>Exceptions</b>
+ * Because a server might be blocked by the anti-amplification limit, a client must also send probes when it has no
+ * ack eliciting packets in flight, but is not sure whether the peer has validated the client address.
+ */
 public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
     private final Role role;
@@ -52,7 +96,8 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private final Logger log;
     private final ScheduledExecutorService scheduler;
     private int receiverMaxAckDelay;
-    private volatile ScheduledFuture<?> lossDetectionTimer;
+    private ScheduledFuture<?> lossDetectionFuture;  // Concurrency: guarded by scheduleLock
+    private final Object scheduleLock = new Object();
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
@@ -69,16 +114,16 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
 
         processorRegistry.registerProcessor(this);
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
-        lossDetectionTimer = new NullScheduledFuture();
+        synchronized (scheduleLock) {
+            lossDetectionFuture = new NullScheduledFuture();
+        }
     }
 
     void setLossDetectionTimer() {
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
-            lossDetectionTimer.cancel(false);
-            int timeout = (int) Duration.between(Instant.now(), lossTime).toMillis();
-            lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
+            rescheduleLossDetectionTimeout(lossTime);
         }
         else {
             boolean ackElicitingInFlight = ackElicitingInFlight();
@@ -88,46 +133,48 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             //  its Handshake packets and the handshake is not confirmed (...), even if there are no packets in flight."
             if (ackElicitingInFlight || peerAwaitingAddressValidation) {
                 PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
-                if (ptoTimeAndSpace.lossTime.equals(Instant.MAX)) {
-                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight for I/H, peer not awaiting address validation)");
+                if (ptoTimeAndSpace == null) {
+                    log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (1))");
                     unschedule();
                 }
                 else {
-                    int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
-                    if (timeout < 1) {
-                        timeout = 0;
+                    rescheduleLossDetectionTimeout(ptoTimeAndSpace.lossTime);
+
+                    if (log.logRecovery()) {
+                        int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
+                        log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
+                                + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
+                                + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
+                                + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
+                                + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
                     }
-
-                    log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
-                            + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
-                            + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
-                            + (ackElicitingInFlight ? "ackElicitingInFlight " : "")
-                            + "| RTT:" + rttEstimater.getSmoothedRtt() + "/" + rttEstimater.getRttVar(), ptoTimeAndSpace.lossTime);
-
-                    lossDetectionTimer.cancel(false);
-                    lossDetectionTimer = reschedule(() -> lossDetectionTimeout(), timeout);
                 }
             }
             else {
-                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation)");
+                log.recovery("cancelling loss detection timer (no loss time set, no ack eliciting in flight, peer not awaiting address validation (2))");
                 unschedule();
             }
         }
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
+    /**
+     * Determines the current probe timeout.
+     * This method is defined in https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-.
+     * @return a <code>PnSpaceTime</code> object defining the next probe: its time and for which packet number space.
+     */
     private PnSpaceTime getPtoTimeAndSpace() {
         int ptoDuration = rttEstimater.getSmoothedRtt() + Integer.max(1, 4 * rttEstimater.getRttVar());
         ptoDuration *= (int) (Math.pow(2, ptoCount));
 
-        if (! ackElicitingInFlight()) {
-            // Must be peer awaiting address validation
+        // The pseudo code in https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection- test for
+        // ! ackElicitingInFlight() to determine whether peer is awaiting address validation. In a multi-threaded
+        // implementation, that solution is subject to all kinds of race conditions, so its better to just check:
+        if (peerAwaitingAddressValidation()) {
             if (handshakeState.hasNoHandshakeKeys()) {
-                log.info("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> I");
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> probe Initial");
                 return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
-            }
-            else {
-                log.info("getPtoTimeAndSpace: no ack eliciting in flight and but handshake keys -> H");
+            } else {
+                log.recovery("getPtoTimeAndSpace: no ack eliciting in flight but handshake keys -> probe Handshake");
                 return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
             }
         }
@@ -138,22 +185,30 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         for (PnSpace pnSpace: PnSpace.values()) {
             if (lossDetectors[pnSpace.ordinal()].ackElicitingInFlight()) {
                 if (pnSpace == PnSpace.App && handshakeState.isNotConfirmed()) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#appendix-A.8
-                    // Skip Application Data until handshake confirmed
+                    // https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-
+                    // "Skip Application Data until handshake confirmed"
                     log.recovery("getPtoTimeAndSpace is skipping level App, because handshake not yet confirmed!");
-                    continue;
+                    continue;  // Because App is the last, this is effectively a return.
                 }
                 if (pnSpace == PnSpace.App) {
+                    // https://www.rfc-editor.org/rfc/rfc9002.html#name-setting-the-loss-detection-
+                    // "Include max_ack_delay and backoff for Application Data"
                     ptoDuration += receiverMaxAckDelay * (int) (Math.pow(2, ptoCount));
                 }
-                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();  // TODO: dit moet zo nu en dan een NPE geven! (race conditie met ack eliciting in flight / reset
-                if (lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
+                Instant lastAckElicitingSent = lossDetectors[pnSpace.ordinal()].getLastAckElicitingSent();
+                if (lastAckElicitingSent != null && lastAckElicitingSent.plusMillis(ptoDuration).isBefore(ptoTime)) {
                     ptoTime = lastAckElicitingSent.plusMillis(ptoDuration);
                     ptoSpace = pnSpace;
                 }
             }
         }
-        return new PnSpaceTime(ptoSpace, ptoTime);
+
+        if (ptoSpace != null) {
+            return new PnSpaceTime(ptoSpace, ptoTime);
+        }
+        else {
+            return null;
+        }
     }
 
     private boolean peerAwaitingAddressValidation() {
@@ -168,28 +223,14 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             log.warn("Loss detection timeout: Timer was cancelled.");
             return;
         }
-        else if (Instant.now().isBefore(expiration)) {
-            // Old timer task was cancelled, but it still fired; just ignore.
-            log.warn("Scheduled task running early: " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
-            // Apparently, sleep is less precise than time measurement; and adding an extra ms is necessary to avoid that after the sleep, it's still too early
-            long remainingWaitTime = Duration.between(Instant.now(), expiration).toMillis() + 1;
-            if (remainingWaitTime > 0) {  // Time goes on, so remaining time could have become negative in the mean time
-                try {
-                    Thread.sleep(remainingWaitTime);
-                } catch (InterruptedException e) {}
-            }
-            expiration = timerExpiration;
-            if (expiration == null) {
-                log.warn("Delayed task: timer expiration is now null, cancelled");
-                return;
-            }
-            else if (Instant.now().isBefore(expiration)) {
-                log.warn("Delayed task is now still before timer expiration, probably rescheduled in the meantime; " + Duration.between(Instant.now(), expiration) + "(" + expiration + ")");
-                return;
-            }
-            else {
-                log.warn("Delayed task running now");
-            }
+        else if (Instant.now().isBefore(expiration) && Duration.between(Instant.now(), expiration).toMillis() > 0) {
+            // Might be due to an old task that was cancelled, but unfortunately, it also happens that the scheduler
+            // executes tasks much earlier than requested (30 ~ 40 ms). In that case, rescheduling is necessary to avoid
+            // losing the loss detection timeout event.
+            // To be sure the latest timer expiration is used, use timerExpiration i.s.o. the expiration of this call.
+            log.warn(String.format("Loss detection timeout running (at %s) is %s ms too early; rescheduling to %s",
+                    Instant.now(), Duration.between(Instant.now(), expiration).toMillis(), timerExpiration));
+            rescheduleLossDetectionTimeout(timerExpiration);
         }
         else {
             log.recovery("%s loss detection timeout handler running", Instant.now());
@@ -210,30 +251,42 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     private void sendProbe() {
-        PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
-
-        if (earliestLastAckElicitingSentTime != null) {
-            log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
-        } else {
-            log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+        if (log.logRecovery()) {
+            PnSpaceTime earliestLastAckElicitingSentTime = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+            if (earliestLastAckElicitingSentTime != null) {
+                log.recovery(String.format("Sending probe %d, because no ack since %%s. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()), earliestLastAckElicitingSentTime.lossTime);
+            } else {
+                log.recovery(String.format("Sending probe %d. Current RTT: %d/%d.", ptoCount, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar()));
+            }
         }
-        ptoCount++;
 
+        ptoCount++;
         int nrOfProbes = ptoCount > 1 ? 2 : 1;
 
         if (ackElicitingInFlight()) {
             PnSpaceTime ptoTimeAndSpace = getPtoTimeAndSpace();
+            if (ptoTimeAndSpace == null) {
+                // So, the "ack eliciting in flight" has just been acked; a new timeout will be set, no need to send a probe now
+                log.recovery("Refraining from sending probe because received ack meanwhile");
+                return;
+            }
             sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
-        } else {
-            // Must be peer awaiting address validation
-            log.recovery("Sending probe because peer awaiting address validation");
-            // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
-            // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
-            //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
-            if (handshakeState.hasNoHandshakeKeys()) {
-                sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
-            } else {
-                sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+        }
+        else {
+            // Must be the peer awaiting address validation or race condition
+            if (peerAwaitingAddressValidation()) {
+                log.recovery("Sending probe because peer awaiting address validation");
+                // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2.1
+                // "When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it
+                //  MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes."
+                if (handshakeState.hasNoHandshakeKeys()) {
+                    sendOneOrTwoAckElicitingPackets(PnSpace.Initial, 1);
+                } else {
+                    sendOneOrTwoAckElicitingPackets(PnSpace.Handshake, 1);
+                }
+            }
+            else {
+                log.recovery("Refraining from sending probe as no ack eliciting in flight and no peer awaiting address validation");
             }
         }
     }
@@ -318,33 +371,52 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         return earliestLossTime;
     }
 
-    ScheduledFuture<?> reschedule(Runnable runnable, int timeout) {
-        if (! lossDetectionTimer.cancel(false)) {
-            log.debug("Cancelling loss detection timer failed");
-        }
-        timerExpiration = Instant.now().plusMillis(timeout);
+    void rescheduleLossDetectionTimeout(Instant scheduledTime) {
         try {
-            return scheduler.schedule(() -> {
-                try {
-                    runnable.run();
-                } catch (Exception error) {
-                    log.error("Runtime exception occurred while processing scheduled task", error);
-                }
-            }, timeout, TimeUnit.MILLISECONDS);
+            synchronized (scheduleLock) {
+                // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
+                lossDetectionFuture.cancel(false);
+                timerExpiration = scheduledTime;
+                long delay = Duration.between(Instant.now(), scheduledTime).toMillis();
+                // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
+                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
+            }
         }
         catch (RejectedExecutionException taskRejected) {
             // Can happen if has been reset concurrently
             if (!hasBeenReset) {
                 throw taskRejected;
             }
-            else {
-                return new NullScheduledFuture();
-            }
         }
     }
 
+    private void runLossDetectionTimeout() {
+        try {
+            lossDetectionTimeout();
+        } catch (Exception error) {
+            log.error("Runtime exception occurred while running loss detection timeout handler", error);
+        }
+    }
+
+    /**
+     * Creates a Runnable to run the lossDetectionTimeout method, but first checks whether it is not running to early.
+     * For debugging purposes only: it is / can be used to prove that scheduled tasks sometimes run 30 ~ 40 milliseconds too early.
+     * @param scheduledTime
+     * @return
+     */
+    private Runnable createLossDetectionTimeoutRunnerWithTooEarlyDetection(final Instant scheduledTime) {
+        return () -> {
+            Instant now = Instant.now();
+            // Allow for 1 ms difference, as Instant has much more precision than the ScheduledExecutorService
+            if (now.plusMillis(1).isBefore(scheduledTime)) {
+                log.error(String.format("Task scheduled for %s is running already at %s (%s ms too early)", scheduledTime, now, Duration.between(now, scheduledTime).toMillis()));
+            }
+            runLossDetectionTimeout();
+        };
+    }
+
     void unschedule() {
-        lossDetectionTimer.cancel(true);
+        lossDetectionFuture.cancel(true);
         timerExpiration = null;
     }
 

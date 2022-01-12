@@ -51,6 +51,8 @@ public interface Logger {
 
     void logRecovery(boolean enabled);
 
+    boolean logRecovery();
+
     void logCongestionControl(boolean enabled);
 
     boolean logFlowControl();
