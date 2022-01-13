@@ -771,7 +771,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     //   another available one at any time during the connection. "
     public byte[] nextDestinationConnectionId() {
         byte[] newConnectionId = destConnectionIds.useNext();
-        log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
+        if (newConnectionId != null) {
+            log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
+        }
+        else {
+            log.debug("Cannot switch to next destination connection id: no connection id's available");
+        }
         return newConnectionId;
     }
 
