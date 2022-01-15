@@ -37,9 +37,12 @@ public class ServerConnectionFactory {
     private final int initalRtt;
     private final Consumer<byte[]> closeCallback;
     private final boolean requireRetry;
+    private final ServerConnectionRegistry connectionRegistry;
 
     public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
-                                   boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<byte[]> closeCallback, Logger log) {
+                                   boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt,
+                                   ServerConnectionRegistry connectionRegistry, Consumer<byte[]> closeCallback, Logger log)
+    {
         if (connectionIdLength > 20 || connectionIdLength < 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
             // "In QUIC version 1, this value MUST NOT exceed 20 bytes"
@@ -49,6 +52,7 @@ public class ServerConnectionFactory {
         this.requireRetry = requireRetry;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.connectionIdLength = connectionIdLength;
+        this.connectionRegistry = connectionRegistry;
         this.closeCallback = closeCallback;
         this.log = log;
         this.serverSocket = serverSocket;
@@ -65,7 +69,7 @@ public class ServerConnectionFactory {
      */
     public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
         return new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, connectionIdLength,
-                tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, closeCallback, log);
+                tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, closeCallback, log);
     }
 
 }

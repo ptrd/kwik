@@ -514,7 +514,7 @@ class ServerConnectionImplTest {
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], odcid,
-                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, closeCallback, mock(Logger.class));
+                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, null, closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

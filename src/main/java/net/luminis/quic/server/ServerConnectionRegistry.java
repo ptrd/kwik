@@ -23,4 +23,8 @@ public interface ServerConnectionRegistry {
     void registerConnection(ServerConnectionProxy connection, byte[] connectionId);
 
     void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId);
+
+    void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId);
+
+    void deregisterConnectionId(byte[] connectionId);
 }

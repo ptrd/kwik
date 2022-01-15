@@ -146,7 +146,7 @@ public class Server implements ServerConnectionRegistry {
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                this.requireRetry, applicationProtocolRegistry, initalRtt, this::removeConnection, log);
+                this.requireRetry, applicationProtocolRegistry, initalRtt, this, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         if (dir != null) {
@@ -391,5 +391,21 @@ public class Server implements ServerConnectionRegistry {
                     + currentConnections.get(new ConnectionSource(connectionId)) + " is registered for "
                     + ByteUtils.bytesToHex(connectionId));
         }
+    }
+
+    @Override
+    public void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId) {
+        ServerConnectionProxy connection = currentConnections.get(new ConnectionSource(currentConnectionId));
+        if (connection != null) {
+            currentConnections.put(new ConnectionSource(newConnectionId), connection);
+        }
+        else {
+            log.error("Cannot add additional cid to non-existing connection " + ByteUtils.bytesToHex(currentConnectionId));
+        }
+    }
+
+    @Override
+    public void deregisterConnectionId(byte[] connectionId) {
+
     }
 }

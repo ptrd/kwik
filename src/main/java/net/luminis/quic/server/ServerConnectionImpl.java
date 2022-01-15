@@ -97,13 +97,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param retryRequired  whether or not a retry is required for address validation
      * @param applicationProtocolRegistry  the registry for application protocols this server supports
      * @param initialRtt  the initial rtt
+     * @param connectionRegistry
      * @param closeCallback  callback for notifying interested parties this connection is closed
      * @param log  logger
      */
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                    byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                   Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
+                                   Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
         this.peerConnectionId = peerCid;
@@ -121,7 +122,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
         idleTimer.setPtoSupplier(sender::getPto);
 
-        connectionIdManager = new ConnectionIdManager(connectionIdLength, sender, log);
+        connectionIdManager = new ConnectionIdManager(connectionIdLength, connectionRegistry, sender, log);
         this.connectionId = connectionIdManager.getCurrentConnectionId();
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -249,6 +250,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (!acceptedEarlyData) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
         }
+        connectionIdManager.handshakeFinished();
     }
 
     private void sendHandshakeDone(QuicFrame frame) {
@@ -526,6 +528,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
+
+        connectionIdManager.setPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 
         flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),
