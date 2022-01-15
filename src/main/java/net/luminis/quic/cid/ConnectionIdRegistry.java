@@ -20,6 +20,7 @@ package net.luminis.quic.cid;
 
 import net.luminis.quic.log.Logger;
 
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,7 +33,7 @@ public abstract class ConnectionIdRegistry {
     protected Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
-    private final Random random = new Random();
+    private final SecureRandom randomGenerator;
     private final int connectionIdLength;
 
     public ConnectionIdRegistry(Logger log) {
@@ -42,6 +43,9 @@ public abstract class ConnectionIdRegistry {
     public ConnectionIdRegistry(Integer cidLength, Logger logger) {
         connectionIdLength = cidLength != null? cidLength: DEFAULT_CID_LENGTH;
         this.log = logger;
+
+        randomGenerator = new SecureRandom();
+
         currentConnectionId = generateConnectionId();
         connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
     }
@@ -69,7 +73,7 @@ public abstract class ConnectionIdRegistry {
 
     protected byte[] generateConnectionId() {
         byte[] connectionId = new byte[connectionIdLength];
-        random.nextBytes(connectionId);
+        randomGenerator.nextBytes(connectionId);
         return connectionId;
     }
 

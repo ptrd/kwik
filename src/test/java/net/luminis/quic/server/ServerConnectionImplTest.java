@@ -82,7 +82,7 @@ class ServerConnectionImplTest {
     @BeforeEach
     void setupObjectUnderTest() throws Exception {
         tlsServerEngineFactory = createTlsServerEngine();
-        connection = createServerConnection(tlsServerEngineFactory, false, null);
+        connection = createServerConnection(tlsServerEngineFactory, false, new byte[8]);
     }
 
     @Test
@@ -220,6 +220,7 @@ class ServerConnectionImplTest {
     @Test
     void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
         CryptoFrame firstFrame = mock(CryptoFrame.class);
         CryptoFrame secondFrame = mock(CryptoFrame.class);
         InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
@@ -234,7 +235,7 @@ class ServerConnectionImplTest {
     @Test
     void whenRetryIsRequiredFirstInitialLeadsToRetryPacket() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, null);
+        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
 
         // When
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
@@ -246,7 +247,7 @@ class ServerConnectionImplTest {
     @Test
     void whenRetryIsRequiredAllRetryPacketsContainsSameToken() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, null);
+        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
@@ -282,6 +283,7 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredInitialWithTokenIsProcessed() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, null);
+        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
@@ -301,7 +303,7 @@ class ServerConnectionImplTest {
     @Test
     void whenRetryIsRequiredInitialWithInvalidTokenConnectionIsClosed() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, null);
+        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
@@ -398,7 +400,7 @@ class ServerConnectionImplTest {
     @Test
     void whenRetryIsRequiredInitialWithValidTokenDisablesAntiAmplificationLimit() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, null);
+        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
@@ -511,8 +513,8 @@ class ServerConnectionImplTest {
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
-                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], new byte[8], odcid,
-                tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, closeCallback, mock(Logger.class));
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), new byte[8], odcid,
+                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

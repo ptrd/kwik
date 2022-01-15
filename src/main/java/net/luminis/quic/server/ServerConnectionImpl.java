@@ -19,13 +19,13 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStreamImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
@@ -76,6 +76,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final int maxOpenStreamsUni;
     private final int maxOpenStreamsBidi;
     private final byte[] token;
+    private final ConnectionIdManager connectionIdManager;
     private volatile String negotiatedApplicationProtocol;
     private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
@@ -84,14 +85,28 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private boolean acceptedEarlyData = false;
 
 
+    /**
+     * Creates a server connection implementation.
+     * @param quicVersion  quic version used for this connection
+     * @param serverSocket  the socket that is used for sending packets
+     * @param initialClientAddress  the initial client address (after handshake, clients can move to different address)
+     * @param peerCid  the connection id of the client
+     * @param originalDcid  the original destination connection id used by the client
+     * @param connectionIdLength  length of the connection id's generated and used by this connection (used as its source)
+     * @param tlsServerEngineFactory  factory for creating tls engine
+     * @param retryRequired  whether or not a retry is required for address validation
+     * @param applicationProtocolRegistry  the registry for application protocols this server supports
+     * @param initialRtt  the initial rtt
+     * @param closeCallback  callback for notifying interested parties this connection is closed
+     * @param log  logger
+     */
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                   byte[] connectionId, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                                   byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
-        this.connectionId = connectionId;
-        this.peerConnectionId = dcid;
+        this.peerConnectionId = peerCid;
         this.originalDcid = originalDcid;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -105,6 +120,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             sender.setAntiAmplificationLimit(0);
         }
         idleTimer.setPtoSupplier(sender::getPto);
+
+        connectionIdManager = new ConnectionIdManager(connectionIdLength, sender, log);
+        this.connectionId = connectionIdManager.getCurrentConnectionId();
 
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);

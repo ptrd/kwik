@@ -24,7 +24,6 @@ import net.luminis.tls.handshake.TlsServerEngineFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.security.SecureRandom;
 import java.util.function.Consumer;
 
 
@@ -36,7 +35,6 @@ public class ServerConnectionFactory {
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final DatagramSocket serverSocket;
     private final int initalRtt;
-    private final SecureRandom randomGenerator;
     private final Consumer<byte[]> closeCallback;
     private final boolean requireRetry;
 
@@ -55,22 +53,19 @@ public class ServerConnectionFactory {
         this.log = log;
         this.serverSocket = serverSocket;
         this.initalRtt = initalRtt;
-
-        randomGenerator = new SecureRandom();
     }
 
-    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid) {
-        byte[] connectionId = generateNewConnectionId();
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.2
-        // "A server MUST set the Destination Connection ID it uses for sending packets based on the first received Initial packet."
-        byte[] dcid = originalScid;
-        return new ServerConnectionImpl(version, serverSocket, clientAddress, connectionId, dcid, originalDcid,
+    /**
+     * Creates new server connection.
+     * @param version  quic version used
+     * @param clientAddress  the address of the client
+     * @param scid  the source connection id used by the client
+     * @param originalDcid  the original destination id used by the client
+     * @return
+     */
+    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
+        return new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, connectionIdLength,
                 tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, closeCallback, log);
     }
 
-    private byte[] generateNewConnectionId() {
-        byte[] connectionId = new byte[connectionIdLength];
-        randomGenerator.nextBytes(connectionId);
-        return connectionId;
-    }
 }
