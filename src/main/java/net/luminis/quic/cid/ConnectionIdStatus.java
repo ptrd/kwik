@@ -25,6 +25,8 @@ public enum ConnectionIdStatus {
     RETIRED;
 
     public boolean active() {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+        // "Connection IDs that are issued and not retired are considered active;..."
         return ! this.equals(RETIRED);
     }
 

@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
@@ -122,7 +123,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
         idleTimer.setPtoSupplier(sender::getPto);
 
-        connectionIdManager = new ConnectionIdManager(connectionIdLength, connectionRegistry, sender, log);
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(EncryptionLevel.App, error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(connectionIdLength, connectionRegistry, sender, closeWithErrorFunction, log);
         this.connectionId = connectionIdManager.getCurrentConnectionId();
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -490,6 +494,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 
     @Override

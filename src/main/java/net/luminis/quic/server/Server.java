@@ -406,6 +406,6 @@ public class Server implements ServerConnectionRegistry {
 
     @Override
     public void deregisterConnectionId(byte[] connectionId) {
-
+        currentConnections.remove(new ConnectionSource(connectionId));
     }
 }

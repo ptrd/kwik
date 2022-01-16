@@ -18,8 +18,10 @@
  */
 package net.luminis.quic.cid;
 
+import net.luminis.quic.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.server.ServerConnectionRegistry;
@@ -27,10 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
@@ -41,12 +45,14 @@ class ConnectionIdManagerTest {
     private ServerConnectionRegistry connectionRegistry;
     private Sender sender;
     private ConnectionIdManager connectionIdManager;
+    private BiConsumer<Integer, String> closeCallback;
 
     @BeforeEach
     void initObjectUnderTest() {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
-        connectionIdManager = new ConnectionIdManager(6, connectionRegistry, sender, mock(Logger.class));
+        closeCallback = mock(BiConsumer.class);
+        connectionIdManager = new ConnectionIdManager(6, connectionRegistry, sender, closeCallback, mock(Logger.class));
     }
 
     @Test
@@ -98,5 +104,80 @@ class ConnectionIdManagerTest {
 
         // Then
         verify(sender, times(MAX_CIDS_PER_CONNECTION - 1)).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
+    
+    @Test
+    void retireConnectionIdShouldLeadToDeregistering() {
+        // Given
+        byte[] originalCid = connectionIdManager.getCurrentConnectionId();
+        connectionIdManager.setPeerCidLimit(4);
+        connectionIdManager.handshakeFinished();
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+
+        // Then
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(connectionRegistry).deregisterConnectionId(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(originalCid);
+    }
+
+    @Test
+    void retireConnectionIdShouldLeadToSendingNew() {
+        // Given
+        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.handshakeFinished();
+        clearInvocations(sender);
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+
+        // Then
+        verify(sender).send(argThat(f -> f instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
+
+    @Test
+    void retiringConnectionIdAlreadyRetiredDoesNothing() {
+        // Given
+        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.handshakeFinished();
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+        clearInvocations(sender);
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+
+        // Then
+        verify(sender, never()).send(any(QuicFrame.class), any(), any(Consumer.class));
+    }
+
+    @Test
+    void retiringNonExistentSequenceNumberLeadsToConnectionClose() {
+        // Given
+        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.handshakeFinished();
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 2), null);
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x0a);
+    }
+
+    @Test
+    void retiringConnectionIdUsedAsDestinationConnectionIdLeadsToConnectionClose() {
+        // Given
+        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.handshakeFinished();
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), connectionIdManager.getCurrentConnectionId());
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x0a);
     }
 }

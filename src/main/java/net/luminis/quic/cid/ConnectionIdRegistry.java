@@ -50,9 +50,19 @@ public abstract class ConnectionIdRegistry {
         connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
     }
 
-    public void retireConnectionId(int sequenceNr) {
+    public byte[] retireConnectionId(int sequenceNr) {
         if (connectionIds.containsKey(sequenceNr)) {
-            connectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);
+            ConnectionIdInfo cidInfo = connectionIds.get(sequenceNr);
+            if (cidInfo.getConnectionIdStatus().active()) {
+                cidInfo.setStatus(ConnectionIdStatus.RETIRED);
+                return cidInfo.getConnectionId();
+            }
+            else {
+                return null;
+            }
+        }
+        else {
+            return null;
         }
     }
 

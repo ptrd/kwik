@@ -76,6 +76,14 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
     public void setActiveLimit(int activeConnectionIdLimit) {
         this.activeConnectionIdLimit = activeConnectionIdLimit;
     }
+
+    public int getMaxSequenceNr() {
+        return connectionIds.keySet().stream().max(Integer::compareTo).get();
+    }
+
+    public byte[] get(int sequenceNr) {
+        return connectionIds.get(sequenceNr).getConnectionId();
+    }
 }
 
 
