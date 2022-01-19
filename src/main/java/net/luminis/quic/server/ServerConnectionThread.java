@@ -92,6 +92,11 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         }
     }
 
+    @Override
+    public String toString() {
+        return "ServerConnectionThread[" + ByteUtils.bytesToHex(getOriginalDestinationConnectionId()) + "]";
+    }
+
     static class ReceivedDatagram {
 
         final int datagramNumber;

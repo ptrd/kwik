@@ -180,4 +180,9 @@ class ConnectionIdManagerTest {
         verify(closeCallback).accept(captor.capture(), anyString());
         assertThat(captor.getValue()).isEqualTo(0x0a);
     }
+
+    @Test
+    void initiallyThereShouldBeExactlyOneActiveCid() {
+        assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(1);
+    }
 }

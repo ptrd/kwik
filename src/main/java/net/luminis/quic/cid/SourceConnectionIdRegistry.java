@@ -22,6 +22,8 @@ import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
@@ -83,6 +85,13 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
     public byte[] get(int sequenceNr) {
         return connectionIds.get(sequenceNr).getConnectionId();
+    }
+
+    public List<byte[]> getActiveConnectionIds() {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().active())
+                .map(info -> info.getConnectionId())
+                .collect(Collectors.toList());
     }
 }
 

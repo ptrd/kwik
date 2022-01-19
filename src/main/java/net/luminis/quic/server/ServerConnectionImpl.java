@@ -595,6 +595,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         return originalDcid;
     }
 
+    public List<byte[]> getActiveConnectionIds() {
+        return connectionIdManager.getActiveConnectionIds();
+    }
+
     @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
     }

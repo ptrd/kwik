@@ -176,6 +176,6 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
 
     @Override
     public String toString() {
-        return "ServerConnectionCandidate(" + ByteUtils.bytesToHex(dcid) + ")";
+        return "ServerConnectionCandidate[" + ByteUtils.bytesToHex(dcid) + "]";
     }
 }

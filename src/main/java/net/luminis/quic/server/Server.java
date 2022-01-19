@@ -40,10 +40,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -334,19 +331,28 @@ public class Server implements ServerConnectionRegistry {
     }
 
     private void removeConnection(ServerConnectionImpl connection) {
-        byte[] cid = connection.getConnectionId();
-        ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(cid));
-        if (removed == null) {
-            log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));
-        }
-        else {
-            currentConnections.remove(new ConnectionSource(removed.getOriginalDestinationConnectionId()));
-            if (! removed.isClosed()) {
-                log.error("Removed connection with cid " + ByteUtils.bytesToHex(cid) + " that is not closed...");
+        ServerConnectionProxy removed = null;
+        for (byte[] connectionId: connection.getActiveConnectionIds()) {
+            if (removed == null) {
+                removed = currentConnections.remove(new ConnectionSource(connectionId));
+                if (removed == null) {
+                    log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(connectionId));
+                }
             }
-            removed.terminate();
+            else {
+                if (removed != currentConnections.remove(new ConnectionSource(connectionId))) {
+                    log.error("Removed connections for set of active cids are not identical");
+                }
+            }
         }
+        currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
+
+        if (! removed.isClosed()) {
+            log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed...");
+        }
+        removed.terminate();
     }
+
 
     private Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
         return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
@@ -408,5 +414,22 @@ public class Server implements ServerConnectionRegistry {
     @Override
     public void deregisterConnectionId(byte[] connectionId) {
         currentConnections.remove(new ConnectionSource(connectionId));
+    }
+
+    /**
+     * Logs the entire connection table. For debugging purposed only.
+     */
+    private void logConnectionTable() {
+        log.info("Connection table: \n" +
+                currentConnections.entrySet().stream()
+                        .sorted(new Comparator<Map.Entry<ConnectionSource, ServerConnectionProxy>>() {
+                            @Override
+                            public int compare(Map.Entry<ConnectionSource, ServerConnectionProxy> o1, Map.Entry<ConnectionSource, ServerConnectionProxy> o2) {
+                                return o1.getValue().toString().compareTo(o2.getValue().toString());
+                            }
+                        })
+                        .map(e -> e.getKey() + "->" + e.getValue())
+                        .collect(Collectors.joining("\n")));
+
     }
 }

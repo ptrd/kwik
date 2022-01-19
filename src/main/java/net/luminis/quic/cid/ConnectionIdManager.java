@@ -27,6 +27,7 @@ import net.luminis.quic.send.Sender;
 import net.luminis.quic.server.ServerConnectionRegistry;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
@@ -112,5 +113,16 @@ public class ConnectionIdManager {
         // "New connection IDs are sent in NEW_CONNECTION_ID frames and retransmitted if the packet containing them is
         //  lost. Retransmissions of this frame carry the same sequence number value."
         sender.send(frame, App, this::retransmitFrame);
+    }
+
+    /**
+     * Returns all active connection IDs.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids:
+     * "Connection IDs that are issued and not retired are considered active; any active connection ID is valid for use
+     *  with the current connection at any time, in any packet type. "
+     * @return  all active connection IDs
+     */
+    public List<byte[]> getActiveConnectionIds() {
+        return cidRegistry.getActiveConnectionIds();
     }
 }
