@@ -333,7 +333,8 @@ public class Server implements ServerConnectionRegistry {
         }
     }
 
-    private void removeConnection(byte[] cid) {
+    private void removeConnection(ServerConnectionImpl connection) {
+        byte[] cid = connection.getConnectionId();
         ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(cid));
         if (removed == null) {
             log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(cid));

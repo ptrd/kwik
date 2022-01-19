@@ -508,7 +508,7 @@ class ServerConnectionImplTest {
         return createServerConnection(tlsServerEngineFactory, odcid, retryRequired, cid -> {});
     }
 
-    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid, boolean retryRequired, Consumer<byte[]> closeCallback) throws Exception {
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid, boolean retryRequired, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
 

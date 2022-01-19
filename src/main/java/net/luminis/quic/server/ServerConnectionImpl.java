@@ -71,7 +71,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final TlsServerEngine tlsEngine;
     private final byte[] originalDcid;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
-    private final Consumer<byte[]> closeCallback;
+    private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
     private final int initialMaxStreamData;
     private final int maxOpenStreamsUni;
@@ -105,7 +105,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                    byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                   Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<byte[]> closeCallback, Logger log) {
+                                   Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
         this.peerConnectionId = peerCid;
@@ -156,7 +156,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public void abortConnection(Throwable error) {
         log.error(this.toString() + " aborted due to internal error", error);
-        closeCallback.accept(connectionId);
+        closeCallback.accept(this);
     }
 
     @Override
@@ -503,7 +503,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         log.getQLog().emitConnectionTerminatedEvent();
         String statsSummary = getStats().toString().replace("\n", "    ");
         log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionId), statsSummary));
-        closeCallback.accept(connectionId);
+        closeCallback.accept(this);
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {

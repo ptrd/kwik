@@ -35,13 +35,13 @@ public class ServerConnectionFactory {
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final DatagramSocket serverSocket;
     private final int initalRtt;
-    private final Consumer<byte[]> closeCallback;
+    private final Consumer<ServerConnectionImpl> closeCallback;
     private final boolean requireRetry;
     private final ServerConnectionRegistry connectionRegistry;
 
     public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt,
-                                   ServerConnectionRegistry connectionRegistry, Consumer<byte[]> closeCallback, Logger log)
+                                   ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
     {
         if (connectionIdLength > 20 || connectionIdLength < 0) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
