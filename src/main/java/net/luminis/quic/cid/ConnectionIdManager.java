@@ -89,6 +89,7 @@ public class ConnectionIdManager {
         }
     }
 
+    @Deprecated
     public byte[] getCurrentConnectionId() {
         return cidRegistry.getCurrent();
     }
@@ -101,7 +102,7 @@ public class ConnectionIdManager {
 
     private void sendNewCid() {
         ConnectionIdInfo cidInfo = cidRegistry.generateNew();
-        connectionRegistry.registerAdditionalConnectionId(cidRegistry.getCurrent(), cidInfo.getConnectionId());
+        connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
         sender.send(new NewConnectionIdFrame(quicVersion, cidInfo.getSequenceNumber(), 0, cidInfo.getConnectionId()),
                 App, this::retransmitFrame);
     }
