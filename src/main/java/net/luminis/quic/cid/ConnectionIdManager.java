@@ -90,11 +90,6 @@ public class ConnectionIdManager {
         }
     }
 
-    @Deprecated
-    public byte[] getCurrentConnectionId() {
-        return cidRegistry.getCurrent();
-    }
-
     public void setPeerCidLimit(int peerCidLimit) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint MUST NOT provide more connection IDs than the peer's limit."

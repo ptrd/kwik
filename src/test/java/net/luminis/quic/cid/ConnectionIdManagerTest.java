@@ -109,7 +109,7 @@ class ConnectionIdManagerTest {
     @Test
     void retireConnectionIdShouldLeadToDeregistering() {
         // Given
-        byte[] originalCid = connectionIdManager.getCurrentConnectionId();
+        byte[] originalCid = connectionIdManager.getActiveConnectionIds().get(0);
         connectionIdManager.setPeerCidLimit(4);
         connectionIdManager.handshakeFinished();
 
@@ -173,7 +173,7 @@ class ConnectionIdManagerTest {
         connectionIdManager.handshakeFinished();
 
         // When
-        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), connectionIdManager.getCurrentConnectionId());
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), connectionIdManager.getActiveConnectionIds().get(0));
 
         // Then
         ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);

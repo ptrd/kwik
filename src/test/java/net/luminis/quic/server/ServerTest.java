@@ -168,7 +168,7 @@ class ServerTest {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
         ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
         when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
-        when(connection.getConnectionId()).thenReturn(new byte[8]);
+        when(connection.getInitialConnectionId()).thenReturn(new byte[8]);
         when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection);
@@ -224,7 +224,7 @@ class ServerTest {
         byte[] orginalDcid = ByteUtils.hexToBytes("f8e39b14d954c988");
         ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
         when(connection.getSourceConnectionId()).thenReturn(ByteUtils.hexToBytes("cafebabe"));
-        when(connection.getConnectionId()).thenReturn(ByteUtils.hexToBytes("cafebabe"));
+        when(connection.getInitialConnectionId()).thenReturn(ByteUtils.hexToBytes("cafebabe"));
         when(connection.getOriginalDestinationConnectionId()).thenReturn(orginalDcid);
 
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
