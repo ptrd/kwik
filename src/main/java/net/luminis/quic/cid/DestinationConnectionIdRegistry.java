@@ -22,6 +22,7 @@ import net.luminis.quic.log.Logger;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 
@@ -31,6 +32,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
     private volatile byte[] retrySourceConnectionId;
 
+
     public DestinationConnectionIdRegistry(Logger log) {
         super(log);
         originalConnectionId = currentConnectionId;
@@ -38,7 +40,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
         super(log);
-        originalConnectionId = initialConnectionId;
+        originalConnectionId = Objects.requireNonNull(initialConnectionId);
         currentConnectionId = initialConnectionId;
         connectionIds.put(0, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
     }

@@ -64,7 +64,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final SenderImpl sender;
     private final InetSocketAddress initialClientAddress;
     private final byte[] initialConnectionId;
-    private final byte[] peerConnectionId;
+    private final byte[] initialPeerConnectionId;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
@@ -108,7 +108,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                                    Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
-        this.peerConnectionId = peerCid;
+        this.initialPeerConnectionId = peerCid;
         this.originalDcid = originalDcid;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -126,7 +126,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(connectionIdLength, connectionRegistry, sender, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(peerCid, connectionIdLength, connectionRegistry, sender, closeWithErrorFunction, log);
         this.initialConnectionId = connectionIdManager.getActiveConnectionIds().get(0);
 
         ackGenerator = sender.getGlobalAckGenerator();
@@ -187,7 +187,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
-                + peerConnectionId.length
+                + connectionIdManager.getDestinationConnectionId().length
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16; // encryption overhead
     }
@@ -208,7 +208,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public byte[] getDestinationConnectionId() {
-        return peerConnectionId;
+        return connectionIdManager.getDestinationConnectionId();
     }
 
     @Override
@@ -482,6 +482,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        connectionIdManager.process(newConnectionIdFrame);
     }
 
     @Override
@@ -522,7 +523,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (transportParameters.getActiveConnectionIdLimit() < 2) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
-        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), peerConnectionId)) {
+        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), initialPeerConnectionId)) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."

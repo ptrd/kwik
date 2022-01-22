@@ -28,10 +28,11 @@ import net.luminis.quic.server.ServerConnectionRegistry;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
-import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
 
 /**
  * Manages the collections of connection ID's for the connection, both for this (side of the) connection and the peer's.
@@ -45,22 +46,55 @@ public class ConnectionIdManager {
     private final Sender sender;
     private final BiConsumer<Integer, String> closeConnectionCallback;
     private final SourceConnectionIdRegistry cidRegistry;
-    private int maxPeerCids;
+    private final DestinationConnectionIdRegistry peerCidRegistry;
+    private int maxPeerCids = 2;
     private Version quicVersion = Version.QUIC_version_1;
 
 
-    public ConnectionIdManager(int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
+    public ConnectionIdManager(byte[] initialClientCid, int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.connectionIdLength = connectionIdLength;
         this.connectionRegistry = connectionRegistry;
         this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
+        peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
     }
 
     public void handshakeFinished() {
         for (int i = 1; i < maxPeerCids ; i++) {
             sendNewCid();
+        }
+    }
+
+    public void process(NewConnectionIdFrame frame) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
+        // "Receiving a value in the Retire Prior To field that is greater than that in the Sequence Number field MUST
+        //  be treated as a connection error of type FRAME_ENCODING_ERROR."
+        if (frame.getRetirePriorTo() > frame.getSequenceNr()) {
+            closeConnectionCallback.accept((int) FRAME_ENCODING_ERROR.value, "exceeding active connection id limit");
+            return;
+        }
+        if (!peerCidRegistry.connectionIds.containsKey(frame.getSequenceNr())) {
+            peerCidRegistry.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId(), frame.getStatelessResetToken());
+        }
+        else if (! Arrays.equals(peerCidRegistry.connectionIds.get(frame.getSequenceNr()).getConnectionId(), frame.getConnectionId())) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
+            // "... or if a sequence number is used for different connection IDs, the endpoint MAY treat that receipt as a
+            //  connection error of type PROTOCOL_VIOLATION."
+            closeConnectionCallback.accept((int) PROTOCOL_VIOLATION.value, "different cids or same sequence number");
+        }
+        if (frame.getRetirePriorTo() > 0) {
+            List<Integer> retired = peerCidRegistry.retireAllBefore(frame.getRetirePriorTo());
+            retired.forEach(seqNr -> sendRetireCid(seqNr));
+        }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+        // "After processing a NEW_CONNECTION_ID frame and adding and retiring active connection IDs, if the number of
+        // active connection IDs exceeds the value advertised in its active_connection_id_limit transport parameter, an
+        // endpoint MUST close the connection with an error of type CONNECTION_ID_LIMIT_ERROR."
+        if (peerCidRegistry.getActiveConnectionIds().size() > maxPeerCids) {
+            closeConnectionCallback.accept((int) CONNECTION_ID_LIMIT_ERROR.value, "exceeding active connection id limit");
+            return;
         }
     }
 
@@ -86,6 +120,8 @@ public class ConnectionIdManager {
         // If not retired already
         if (retiredCid != null) {
             connectionRegistry.deregisterConnectionId(retiredCid);
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+            // "An endpoint SHOULD supply a new connection ID when the peer retires a connection ID."
             sendNewCid();
         }
     }
@@ -110,6 +146,13 @@ public class ConnectionIdManager {
         sender.send(frame, App, this::retransmitFrame);
     }
 
+    private void sendRetireCid(Integer seqNr) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
+        // "Likewise, retired connection IDs are sent in RETIRE_CONNECTION_ID frames and retransmitted if the packet
+        //  containing them is lost."
+        sender.send(new RetireConnectionIdFrame(quicVersion, seqNr), App, this::retransmitFrame);
+    }
+
     /**
      * Returns all active connection IDs.
      * https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids:
@@ -119,5 +162,13 @@ public class ConnectionIdManager {
      */
     public List<byte[]> getActiveConnectionIds() {
         return cidRegistry.getActiveConnectionIds();
+    }
+
+    public List<byte[]> getActivePeerConnectionIds() {
+        return peerCidRegistry.getActiveConnectionIds();
+    }
+
+    public byte[] getDestinationConnectionId() {
+        return peerCidRegistry.getCurrent();
     }
 }

@@ -87,12 +87,6 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
         return connectionIds.get(sequenceNr).getConnectionId();
     }
 
-    public List<byte[]> getActiveConnectionIds() {
-        return connectionIds.values().stream()
-                .filter(cid -> cid.getConnectionIdStatus().active())
-                .map(info -> info.getConnectionId())
-                .collect(Collectors.toList());
-    }
 }
 
 

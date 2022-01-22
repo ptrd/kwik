@@ -21,15 +21,19 @@ package net.luminis.quic.cid;
 import net.luminis.quic.log.Logger;
 
 import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 
 public abstract class ConnectionIdRegistry {
 
     public static final int DEFAULT_CID_LENGTH = 8;
-    
+
+    /** Maps sequence number to connection ID (info) */
     protected Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
@@ -90,7 +94,7 @@ public abstract class ConnectionIdRegistry {
 
     protected int currentIndex() {
         return connectionIds.entrySet().stream()
-                .filter(entry -> entry.getValue().getConnectionId().equals(currentConnectionId))
+                .filter(entry -> Arrays.equals(entry.getValue().getConnectionId(), currentConnectionId))
                 .mapToInt(entry -> entry.getKey())
                 .findFirst().orElseThrow();
     }
@@ -103,6 +107,13 @@ public abstract class ConnectionIdRegistry {
 
     public int getConnectionIdlength() {
         return connectionIdLength;
+    }
+
+    public List<byte[]> getActiveConnectionIds() {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().active())
+                .map(info -> info.getConnectionId())
+                .collect(Collectors.toList());
     }
 }
 

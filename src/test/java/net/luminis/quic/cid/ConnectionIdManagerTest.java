@@ -29,12 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Arrays;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
@@ -52,7 +52,7 @@ class ConnectionIdManagerTest {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
-        connectionIdManager = new ConnectionIdManager(6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[4], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
     }
 
     @Test
@@ -184,5 +184,109 @@ class ConnectionIdManagerTest {
     @Test
     void initiallyThereShouldBeExactlyOneActiveCid() {
         assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(1);
+    }
+
+    @Test
+    void initiallyAtLeastOneNewCidShouldBeAccepted() {
+        // Given
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[4]));
+
+        // Then
+        assertThat(connectionIdManager.getActivePeerConnectionIds()).hasSize(2);
+    }
+
+    @Test
+    void whenNumberOfActiveCidsExceedsLimitConnectionIdLimitErrorIsThrown() {
+        // Given
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[4]));
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x09);
+    }
+
+    @Test
+    void repeatingNewCidWithSequenceNumberShouldNotLeadToError() {
+        // Given
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // Then
+        verify(closeCallback, never()).accept(anyInt(), anyString());
+    }
+
+    @Test
+    void invalidRetirePriorToFieldShouldLeadToFrameEncodingError() {
+        // Given
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 2, new byte[4]));
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x07);
+    }
+
+    @Test
+    void newConnectionIdFrameWithIncreasedRetirePriorToFieldLeadsToRetireConnectionIdFrame() {
+        // Given
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 0, 0, new byte[4]));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 1, new byte[4]));
+
+        // Then
+        verify(sender, atLeastOnce()).send(argThat(f -> f instanceof RetireConnectionIdFrame), any(), any(Consumer.class));
+    }
+
+    @Test
+    void newConnectionIdFrameWithIncreasedRetirePriorToFieldLeadsToDecrementOfActiveCids() {
+        // Given
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 1, new byte[4]));
+
+        // Then
+        assertThat(connectionIdManager.getActivePeerConnectionIds()).hasSize(2);
+        verify(closeCallback, never()).accept(anyInt(), anyString());
+    }
+
+    @Test
+    void retiredCidShouldNotBeUsedAnymoreAsDestination() {
+        // Given
+        byte[] originalDcid = connectionIdManager.getDestinationConnectionId();
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[] { 0x34, 0x1f, 0x5a, 0x55 }));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 1, new byte[] { 0x5b, 0x2e, 0x1a, 0x44 }));
+
+        // Then
+        assertThat(connectionIdManager.getDestinationConnectionId()).isNotEqualTo(originalDcid);
+    }
+
+    @Test
+    void newConnectionIdWithSequenceNumberZeroShouldFail() {
+        // Given
+        byte[] originalDcid = connectionIdManager.getDestinationConnectionId();
+        byte[] newDcid = Arrays.copyOf(originalDcid, originalDcid.length);
+        newDcid[0] += 1;  // So now the two or definitely different
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 0, 0, newDcid));
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x0a);
     }
 }
