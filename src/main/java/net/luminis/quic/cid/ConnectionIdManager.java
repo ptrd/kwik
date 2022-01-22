@@ -58,7 +58,13 @@ public class ConnectionIdManager {
         this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
-        peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
+        if (initialClientCid != null && initialClientCid.length != 0) {
+            peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
+        }
+        else {
+            // If peer (client) uses zero-length connection ID, it cannot change, so a registry is not needed.
+            peerCidRegistry = null;
+        }
     }
 
     public void handshakeFinished() {
@@ -68,6 +74,14 @@ public class ConnectionIdManager {
     }
 
     public void process(NewConnectionIdFrame frame) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
+        // "An endpoint that is sending packets with a zero-length Destination Connection ID MUST treat receipt of a
+        //  NEW_CONNECTION_ID frame as a connection error of type PROTOCOL_VIOLATION."
+        if (peerCidRegistry == null) {
+            closeConnectionCallback.accept((int) PROTOCOL_VIOLATION.value, "new connection id frame not allowed when using zero-length connection ID");
+            return;
+        }
+
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
         // "Receiving a value in the Retire Prior To field that is greater than that in the Sequence Number field MUST
         //  be treated as a connection error of type FRAME_ENCODING_ERROR."
@@ -83,6 +97,7 @@ public class ConnectionIdManager {
             // "... or if a sequence number is used for different connection IDs, the endpoint MAY treat that receipt as a
             //  connection error of type PROTOCOL_VIOLATION."
             closeConnectionCallback.accept((int) PROTOCOL_VIOLATION.value, "different cids or same sequence number");
+            return;
         }
         if (frame.getRetirePriorTo() > 0) {
             List<Integer> retired = peerCidRegistry.retireAllBefore(frame.getRetirePriorTo());
@@ -165,10 +180,20 @@ public class ConnectionIdManager {
     }
 
     public List<byte[]> getActivePeerConnectionIds() {
-        return peerCidRegistry.getActiveConnectionIds();
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.getActiveConnectionIds();
+        }
+        else {
+            return List.of(new byte[0]);
+        }
     }
 
     public byte[] getDestinationConnectionId() {
-        return peerCidRegistry.getCurrent();
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.getCurrent();
+        }
+        else {
+            return new byte[0];
+        }
     }
 }

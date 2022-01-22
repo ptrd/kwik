@@ -289,4 +289,17 @@ class ConnectionIdManagerTest {
         verify(closeCallback).accept(captor.capture(), anyString());
         assertThat(captor.getValue()).isEqualTo(0x0a);
     }
+
+    @Test
+    void whenUsingZeroLengthConnectionIdNewConnectionIdFrameShouldLeadToProtocolViolationError() {
+        // Given
+        connectionIdManager = new ConnectionIdManager(new byte[0], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // Then
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(closeCallback).accept(captor.capture(), anyString());
+        assertThat(captor.getValue()).isEqualTo(0x0a);
+    }
 }
