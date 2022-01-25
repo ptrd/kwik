@@ -28,7 +28,6 @@ import net.luminis.quic.server.ServerConnectionRegistry;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
@@ -49,6 +48,7 @@ public class ConnectionIdManager {
     private final DestinationConnectionIdRegistry peerCidRegistry;
     private final byte[] initialConnectionId;
     private final byte[] initialPeerConnectionId;
+    private final byte[] originalDestinationConnectionId;
     private int maxPeerCids = 2;
     private Version quicVersion = Version.QUIC_version_1;
 
@@ -56,14 +56,16 @@ public class ConnectionIdManager {
     /**
      * Creates a connection ID manager for server role.
      * @param initialClientCid  the initial connection ID of the client
+     * @param originalDestinationConnectionId
      * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
      * @param connectionRegistry  the connection registry for associating new connection IDs with the connection
      * @param sender  the sender to send messages to the peer
      * @param closeConnectionCallback  callback for closing the connection with a transport error code
      * @param log  logger
      */
-    public ConnectionIdManager(byte[] initialClientCid, int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
+    public ConnectionIdManager(byte[] initialClientCid, byte[] originalDestinationConnectionId, int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
+        this.originalDestinationConnectionId = originalDestinationConnectionId;
         this.connectionIdLength = connectionIdLength;
         this.connectionRegistry = connectionRegistry;
         this.sender = sender;
@@ -219,6 +221,10 @@ public class ConnectionIdManager {
      */
     public byte[] getInitialConnectionId() {
         return initialConnectionId;
+    }
+
+    public byte[] getOriginalDestinationConnectionId() {
+        return originalDestinationConnectionId;
     }
 
     /**

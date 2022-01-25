@@ -52,7 +52,7 @@ class ConnectionIdManagerTest {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
-        connectionIdManager = new ConnectionIdManager(new byte[4], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
     }
 
     @Test
@@ -293,7 +293,7 @@ class ConnectionIdManagerTest {
     @Test
     void whenUsingZeroLengthConnectionIdNewConnectionIdFrameShouldLeadToProtocolViolationError() {
         // Given
-        connectionIdManager = new ConnectionIdManager(new byte[0], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[0], new byte[8], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
         // When
         connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
 
@@ -319,7 +319,7 @@ class ConnectionIdManagerTest {
     void testValidateInitialPeerConnectionId() {
         // Given
         byte[] peerCid = new byte[] { 0x06, 0x0f, 0x08, 0x0b };
-        connectionIdManager = new ConnectionIdManager(peerCid, 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(peerCid, new byte[8], 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
 
         // Then
         assertThat(connectionIdManager.validateInitialPeerConnectionId(peerCid)).isTrue();
