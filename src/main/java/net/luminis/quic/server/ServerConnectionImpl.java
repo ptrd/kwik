@@ -63,7 +63,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final Random random;
     private final SenderImpl sender;
     private final InetSocketAddress initialClientAddress;
-    private final byte[] initialPeerConnectionId;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
@@ -107,7 +106,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                                    Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
-        this.initialPeerConnectionId = peerCid;
         this.originalDcid = originalDcid;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -521,7 +519,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (transportParameters.getActiveConnectionIdLimit() < 2) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
-        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), initialPeerConnectionId)) {
+        if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."

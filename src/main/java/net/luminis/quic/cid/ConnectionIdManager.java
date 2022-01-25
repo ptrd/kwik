@@ -48,6 +48,7 @@ public class ConnectionIdManager {
     private final SourceConnectionIdRegistry cidRegistry;
     private final DestinationConnectionIdRegistry peerCidRegistry;
     private final byte[] initialConnectionId;
+    private final byte[] initialPeerConnectionId;
     private int maxPeerCids = 2;
     private Version quicVersion = Version.QUIC_version_1;
 
@@ -72,10 +73,12 @@ public class ConnectionIdManager {
 
         if (initialClientCid != null && initialClientCid.length != 0) {
             peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
+            initialPeerConnectionId = initialClientCid;
         }
         else {
             // If peer (client) uses zero-length connection ID, it cannot change, so a registry is not needed.
             peerCidRegistry = null;
+            initialPeerConnectionId = new byte[0];
         }
     }
 
@@ -216,5 +219,14 @@ public class ConnectionIdManager {
      */
     public byte[] getInitialConnectionId() {
         return initialConnectionId;
+    }
+
+    /**
+     * Validates the given connection ID equals the initial peer connection ID.
+     * @param connectionId
+     * @return  true if given connection ID equals the initial peer connection ID, false otherwise.
+     */
+    public boolean validateInitialPeerConnectionId(byte[] connectionId) {
+        return Arrays.equals(connectionId, initialPeerConnectionId);
     }
 }

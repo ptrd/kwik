@@ -314,4 +314,14 @@ class ConnectionIdManagerTest {
         // Then
         assertThat(connectionIdManager.getInitialConnectionId()).isEqualTo(initialConnectionId);
     }
+
+    @Test
+    void testValidateInitialPeerConnectionId() {
+        // Given
+        byte[] peerCid = new byte[] { 0x06, 0x0f, 0x08, 0x0b };
+        connectionIdManager = new ConnectionIdManager(peerCid, 6, connectionRegistry, sender, closeCallback, mock(Logger.class));
+
+        // Then
+        assertThat(connectionIdManager.validateInitialPeerConnectionId(peerCid)).isTrue();
+    }
 }
