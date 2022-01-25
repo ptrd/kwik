@@ -302,4 +302,16 @@ class ConnectionIdManagerTest {
         verify(closeCallback).accept(captor.capture(), anyString());
         assertThat(captor.getValue()).isEqualTo(0x0a);
     }
+
+    @Test
+    void initialConnectionIdShouldNotChange() {
+        // Given
+        byte[] initialConnectionId = connectionIdManager.getInitialConnectionId();
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), new byte[3]);
+
+        // Then
+        assertThat(connectionIdManager.getInitialConnectionId()).isEqualTo(initialConnectionId);
+    }
 }

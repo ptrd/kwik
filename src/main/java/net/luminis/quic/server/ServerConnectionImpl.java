@@ -63,7 +63,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final Random random;
     private final SenderImpl sender;
     private final InetSocketAddress initialClientAddress;
-    private final byte[] initialConnectionId;
     private final byte[] initialPeerConnectionId;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
@@ -127,7 +126,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
         connectionIdManager = new ConnectionIdManager(peerCid, connectionIdLength, connectionRegistry, sender, closeWithErrorFunction, log);
-        this.initialConnectionId = connectionIdManager.getActiveConnectionIds().get(0);
 
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
@@ -194,16 +192,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     protected int getSourceConnectionIdLength() {
-        return initialConnectionId.length;
+        return connectionIdManager.getInitialConnectionId().length;
     }
 
     public byte[] getInitialConnectionId() {
-        return initialConnectionId;
+        return connectionIdManager.getInitialConnectionId();
     }
 
     @Override
     public byte[] getSourceConnectionId() {
-        return initialConnectionId;
+        return connectionIdManager.getInitialConnectionId();
     }
 
     @Override
@@ -307,10 +305,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
         serverTransportParams.setDisableMigration(true);
-        serverTransportParams.setInitialSourceConnectionId(initialConnectionId);
+        serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
         if (retryRequired) {
-            serverTransportParams.setRetrySourceConnectionId(initialConnectionId);
+            serverTransportParams.setRetrySourceConnectionId(connectionIdManager.getInitialConnectionId());
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -345,7 +343,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                     return super.parsePacket(data);
                 }
                 finally {
-                    connectionSecrets.computeInitialKeys(initialConnectionId);
+                    connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
                 }
             }
             else {
@@ -381,12 +379,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
-        assert(Arrays.equals(packet.getDestinationConnectionId(), initialConnectionId) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
+        assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
 
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
-                connectionSecrets.computeInitialKeys(initialConnectionId);
+                connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
             else if (!Arrays.equals(packet.getToken(), token)) {
@@ -412,7 +410,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion, initialConnectionId, getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        RetryPacket retry = new RetryPacket(quicVersion, connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
     }
 
@@ -503,7 +501,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super.terminate();
         log.getQLog().emitConnectionTerminatedEvent();
         String statsSummary = getStats().toString().replace("\n", "    ");
-        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(initialConnectionId), statsSummary));
+        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
         closeCallback.accept(this);
     }
 

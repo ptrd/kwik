@@ -47,10 +47,20 @@ public class ConnectionIdManager {
     private final BiConsumer<Integer, String> closeConnectionCallback;
     private final SourceConnectionIdRegistry cidRegistry;
     private final DestinationConnectionIdRegistry peerCidRegistry;
+    private final byte[] initialConnectionId;
     private int maxPeerCids = 2;
     private Version quicVersion = Version.QUIC_version_1;
 
 
+    /**
+     * Creates a connection ID manager for server role.
+     * @param initialClientCid  the initial connection ID of the client
+     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
+     * @param connectionRegistry  the connection registry for associating new connection IDs with the connection
+     * @param sender  the sender to send messages to the peer
+     * @param closeConnectionCallback  callback for closing the connection with a transport error code
+     * @param log  logger
+     */
     public ConnectionIdManager(byte[] initialClientCid, int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.connectionIdLength = connectionIdLength;
@@ -58,6 +68,8 @@ public class ConnectionIdManager {
         this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
+        initialConnectionId = cidRegistry.currentConnectionId;
+
         if (initialClientCid != null && initialClientCid.length != 0) {
             peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
         }
@@ -195,5 +207,14 @@ public class ConnectionIdManager {
         else {
             return new byte[0];
         }
+    }
+
+    /**
+     * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
+     * Source Connection ID field of the first Initial packet it sends/send for the connection.
+     * @return the initial connection id
+     */
+    public byte[] getInitialConnectionId() {
+        return initialConnectionId;
     }
 }
