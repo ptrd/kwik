@@ -107,7 +107,14 @@ public class ConnectionIdManager {
             return;
         }
         if (!peerCidRegistry.connectionIds.containsKey(frame.getSequenceNr())) {
-            peerCidRegistry.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId(), frame.getStatelessResetToken());
+            boolean added = peerCidRegistry.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId(), frame.getStatelessResetToken());
+            if (! added) {
+                // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames
+                // "An endpoint that receives a NEW_CONNECTION_ID frame with a sequence number smaller than the Retire Prior To
+                //  field of a previously received NEW_CONNECTION_ID frame MUST send a corresponding RETIRE_CONNECTION_ID
+                //  frame that retires the newly received connection ID, "
+                sendRetireCid(frame.getSequenceNr());
+            }
         }
         else if (! Arrays.equals(peerCidRegistry.connectionIds.get(frame.getSequenceNr()).getConnectionId(), frame.getConnectionId())) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-new_connection_id-frames

@@ -30,8 +30,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static net.luminis.quic.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -323,5 +325,23 @@ class ConnectionIdManagerTest {
 
         // Then
         assertThat(connectionIdManager.validateInitialPeerConnectionId(peerCid)).isTrue();
+    }
+
+    @Test
+    void whenReorderedNewConnectionIdIsAlreadyRetiredRetireConnectionIdFrameShouldBeSent() {
+        // Given
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 2, new byte[4]));
+
+        // When
+        connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
+
+        // Then
+        ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(sender, atLeastOnce()).send(captor.capture(), any(), any(Consumer.class));
+        List<Integer> retiredSeqNr = captor.getAllValues().stream()
+                .filter(f -> f instanceof RetireConnectionIdFrame)
+                .map(f -> ((RetireConnectionIdFrame) f).getSequenceNr())
+                .collect(Collectors.toList());
+        assertThat(retiredSeqNr).contains(1);
     }
 }
