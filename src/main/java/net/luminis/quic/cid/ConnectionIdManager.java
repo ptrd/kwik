@@ -85,6 +85,10 @@ public class ConnectionIdManager {
     }
 
     public void handshakeFinished() {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+        // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
+        // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
+        //  packet header (Section 17.2) during the handshake."
         for (int i = 1; i < maxPeerCids ; i++) {
             sendNewCid();
         }
@@ -129,8 +133,8 @@ public class ConnectionIdManager {
         }
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "After processing a NEW_CONNECTION_ID frame and adding and retiring active connection IDs, if the number of
-        // active connection IDs exceeds the value advertised in its active_connection_id_limit transport parameter, an
-        // endpoint MUST close the connection with an error of type CONNECTION_ID_LIMIT_ERROR."
+        //  active connection IDs exceeds the value advertised in its active_connection_id_limit transport parameter, an
+        //  endpoint MUST close the connection with an error of type CONNECTION_ID_LIMIT_ERROR."
         if (peerCidRegistry.getActiveConnectionIds().size() > maxPeerCids) {
             closeConnectionCallback.accept((int) CONNECTION_ID_LIMIT_ERROR.value, "exceeding active connection id limit");
             return;
@@ -165,12 +169,20 @@ public class ConnectionIdManager {
         }
     }
 
+    /**
+     * Register the active connection ID limit of the peer and determine the maximum number of peer connection ID's this
+     * endpoint is willing to maintain.
+     * @param peerCidLimit
+     */
     public void setPeerCidLimit(int peerCidLimit) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint MUST NOT provide more connection IDs than the peer's limit."
         maxPeerCids = Integer.min(peerCidLimit, MAX_CIDS_PER_CONNECTION);
     }
 
+    /**
+     * Generate, register and send a new connection ID (that identifies this endpoint).
+     */
     private void sendNewCid() {
         ConnectionIdInfo cidInfo = cidRegistry.generateNew();
         connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
@@ -185,6 +197,11 @@ public class ConnectionIdManager {
         sender.send(frame, App, this::retransmitFrame);
     }
 
+    /**
+     * Send a retire connection ID frame, that informs the peer the given connection ID will not be used by this
+     * endpoint anymore for addressing the peer.
+     * @param seqNr
+     */
     private void sendRetireCid(Integer seqNr) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Likewise, retired connection IDs are sent in RETIRE_CONNECTION_ID frames and retransmitted if the packet
@@ -212,7 +229,11 @@ public class ConnectionIdManager {
         }
     }
 
-    public byte[] getDestinationConnectionId() {
+    /**
+     * Returns the (peer's) connection ID that is currently used by this endpoint to address the peer.
+     * @return
+     */
+    public byte[] getCurrentPeerConnectionId() {
         if (peerCidRegistry != null) {
             return peerCidRegistry.getCurrent();
         }
@@ -230,6 +251,11 @@ public class ConnectionIdManager {
         return initialConnectionId;
     }
 
+    /**
+     * Returns the original destination connection ID, i.e. the connection ID the client used as destination in its
+     * very first initial packet.
+     * @return
+     */
     public byte[] getOriginalDestinationConnectionId() {
         return originalDestinationConnectionId;
     }
