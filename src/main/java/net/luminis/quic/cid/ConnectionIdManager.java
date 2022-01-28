@@ -242,4 +242,22 @@ public class ConnectionIdManager {
     public boolean validateInitialPeerConnectionId(byte[] connectionId) {
         return Arrays.equals(connectionId, initialPeerConnectionId);
     }
+
+    /**
+     * Registers that the given connection is used by the peer (as destination conneciton ID) to send messages to this
+     * endppoint.
+     * @param  connectionId  the connection ID used
+     */
+    public void registerConnectionIdInUse(byte[] connectionId) {
+        if (cidRegistry.registerUsedConnectionId(connectionId)) {
+            // New connection id, not used before.
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+            // "If an endpoint provided fewer connection IDs than the peer's active_connection_id_limit, it MAY supply
+            //  a new connection ID when it receives a packet with a previously unused connection ID."
+            if (cidRegistry.getActive().length < maxPeerCids) {
+                sendNewCid();
+            }
+        }
+    }
+
 }

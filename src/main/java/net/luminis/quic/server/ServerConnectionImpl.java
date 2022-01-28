@@ -412,6 +412,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+        connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
         processFrames(packet, time);
         return ProcessResult.Continue;
     }
