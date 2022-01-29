@@ -49,7 +49,10 @@ public class ConnectionIdManager {
     private final byte[] initialConnectionId;
     private final byte[] initialPeerConnectionId;
     private final byte[] originalDestinationConnectionId;
-    private int maxPeerCids = 2;
+    /** The maximum numbers of connection IDs this endpoint can use; determined by the TP supplied by the peer */
+    private int maxCids = 2;
+    /** The maximum number of peer connection IDs this endpoint is willing to maintain; advertised in TP sent by this endpoint */
+    private int maxPeerCids;
     private Version quicVersion = Version.QUIC_version_1;
 
 
@@ -57,16 +60,19 @@ public class ConnectionIdManager {
      * Creates a connection ID manager for server role.
      * @param initialClientCid  the initial connection ID of the client
      * @param originalDestinationConnectionId
-     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
+     * @param connectionIdLength  the length of the connection IDs generated for this endpoint (server)
+     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
      * @param connectionRegistry  the connection registry for associating new connection IDs with the connection
      * @param sender  the sender to send messages to the peer
      * @param closeConnectionCallback  callback for closing the connection with a transport error code
      * @param log  logger
      */
-    public ConnectionIdManager(byte[] initialClientCid, byte[] originalDestinationConnectionId, int connectionIdLength, ServerConnectionRegistry connectionRegistry, Sender sender,
+    public ConnectionIdManager(byte[] initialClientCid, byte[] originalDestinationConnectionId, int connectionIdLength,
+                               int maxPeerCids, ServerConnectionRegistry connectionRegistry, Sender sender,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.originalDestinationConnectionId = originalDestinationConnectionId;
         this.connectionIdLength = connectionIdLength;
+        this.maxPeerCids = maxPeerCids;
         this.connectionRegistry = connectionRegistry;
         this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
@@ -89,7 +95,7 @@ public class ConnectionIdManager {
         // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
         //  packet header (Section 17.2) during the handshake."
-        for (int i = 1; i < maxPeerCids ; i++) {
+        for (int i = 1; i < maxCids; i++) {
             sendNewCid();
         }
     }
@@ -172,12 +178,15 @@ public class ConnectionIdManager {
     /**
      * Register the active connection ID limit of the peer and determine the maximum number of peer connection ID's this
      * endpoint is willing to maintain.
+     * "This is an integer value specifying the maximum number of connection IDs from the peer that an endpoint is
+     *  willing to store.", so it puts an upper bound to the number of connection IDs this endpoint can generate.
      * @param peerCidLimit
      */
     public void setPeerCidLimit(int peerCidLimit) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint MUST NOT provide more connection IDs than the peer's limit."
-        maxPeerCids = Integer.min(peerCidLimit, MAX_CIDS_PER_CONNECTION);
+        // This implementation also sets a limit on the number of connection IDs it is willing to maintain, so
+        maxCids = Integer.min(peerCidLimit, MAX_CIDS_PER_CONNECTION);
     }
 
     /**
@@ -270,8 +279,8 @@ public class ConnectionIdManager {
     }
 
     /**
-     * Registers that the given connection is used by the peer (as destination conneciton ID) to send messages to this
-     * endppoint.
+     * Registers that the given connection is used by the peer (as destination connection ID) to send messages to this
+     * endpoint.
      * @param  connectionId  the connection ID used
      */
     public void registerConnectionIdInUse(byte[] connectionId) {
@@ -280,7 +289,7 @@ public class ConnectionIdManager {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
             // "If an endpoint provided fewer connection IDs than the peer's active_connection_id_limit, it MAY supply
             //  a new connection ID when it receives a packet with a previously unused connection ID."
-            if (cidRegistry.getActive().length < maxPeerCids) {
+            if (cidRegistry.getActive().length < maxCids) {
                 sendNewCid();
             }
         }

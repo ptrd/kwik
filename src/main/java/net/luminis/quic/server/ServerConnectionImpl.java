@@ -81,6 +81,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private volatile boolean addressValidated;
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
+    private int allowedClientConnectionIds = 3;
 
 
     /**
@@ -121,7 +122,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, connectionRegistry, sender, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
@@ -300,6 +301,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         serverTransportParams.setOriginalDestinationConnectionId(connectionIdManager.getOriginalDestinationConnectionId());
