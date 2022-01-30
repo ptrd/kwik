@@ -96,7 +96,7 @@ public class ConnectionIdManager {
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
         //  packet header (Section 17.2) during the handshake."
         for (int i = 1; i < maxCids; i++) {
-            sendNewCid();
+            sendNewCid(0);
         }
     }
 
@@ -171,7 +171,7 @@ public class ConnectionIdManager {
             connectionRegistry.deregisterConnectionId(retiredCid);
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
             // "An endpoint SHOULD supply a new connection ID when the peer retires a connection ID."
-            sendNewCid();
+            sendNewCid(0);
         }
     }
 
@@ -191,12 +191,15 @@ public class ConnectionIdManager {
 
     /**
      * Generate, register and send a new connection ID (that identifies this endpoint).
+     * @param retirePriorTo
+     * @return
      */
-    private void sendNewCid() {
+    private ConnectionIdInfo sendNewCid(int retirePriorTo) {
         ConnectionIdInfo cidInfo = cidRegistry.generateNew();
         connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
-        sender.send(new NewConnectionIdFrame(quicVersion, cidInfo.getSequenceNumber(), 0, cidInfo.getConnectionId()),
+        sender.send(new NewConnectionIdFrame(quicVersion, cidInfo.getSequenceNumber(), retirePriorTo, cidInfo.getConnectionId()),
                 App, this::retransmitFrame);
+        return cidInfo;
     }
 
     private void retransmitFrame(QuicFrame frame) {
@@ -290,9 +293,17 @@ public class ConnectionIdManager {
             // "If an endpoint provided fewer connection IDs than the peer's active_connection_id_limit, it MAY supply
             //  a new connection ID when it receives a packet with a previously unused connection ID."
             if (cidRegistry.getActive().length < maxCids) {
-                sendNewCid();
+                sendNewCid(0);
             }
         }
     }
 
+   /**
+     * Generates a new connection ID for this endpoint and sends it to the peer.
+     * @return
+     * @param retirePriorTo
+     */
+    public ConnectionIdInfo sendNewConnectionId(int retirePriorTo) {
+        return sendNewCid(retirePriorTo);
+    }
 }

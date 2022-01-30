@@ -346,4 +346,15 @@ class ConnectionIdManagerTest {
                 .collect(Collectors.toList());
         assertThat(retiredSeqNr).contains(1);
     }
+
+    @Test
+    void whenSendingNewConnectionIdRetirePriorToIsSet() {
+        connectionIdManager.sendNewConnectionId(1);
+
+        ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(sender, atLeastOnce()).send(captor.capture(), any(), any(Consumer.class));
+        assertThat(captor.getValue() instanceof NewConnectionIdFrame);
+        assertThat(((NewConnectionIdFrame) captor.getValue()).getRetirePriorTo()).isEqualTo(1);
+    }
+    
 }
