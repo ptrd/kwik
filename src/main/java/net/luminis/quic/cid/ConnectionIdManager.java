@@ -292,7 +292,7 @@ public class ConnectionIdManager {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
             // "If an endpoint provided fewer connection IDs than the peer's active_connection_id_limit, it MAY supply
             //  a new connection ID when it receives a packet with a previously unused connection ID."
-            if (cidRegistry.getActive().length < maxCids) {
+            if (cidRegistry.getActiveConnectionIds().size() < maxCids) {
                 sendNewCid(0);
             }
         }

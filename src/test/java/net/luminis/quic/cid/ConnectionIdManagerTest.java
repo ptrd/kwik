@@ -79,7 +79,7 @@ class ConnectionIdManagerTest {
 
         // Then
         ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(sender, atLeastOnce()).send(captor.capture(), any(), any(Consumer.class));
+        verify(sender, times(3)).send(captor.capture(), any(), any(Consumer.class));
         QuicFrame firstFrame = captor.getAllValues().get(0);
         assertThat(((NewConnectionIdFrame) firstFrame).getSequenceNr()).isEqualTo(1);
     }
@@ -356,5 +356,41 @@ class ConnectionIdManagerTest {
         assertThat(captor.getValue() instanceof NewConnectionIdFrame);
         assertThat(((NewConnectionIdFrame) captor.getValue()).getRetirePriorTo()).isEqualTo(1);
     }
-    
+
+    @Test
+    void whenPreviouslyUnusedConnectionIdIsUsedNewConnectionIdIsSent() {
+        // Given
+        int maxCids = 3;
+        connectionIdManager.setPeerCidLimit(maxCids);
+        connectionIdManager.sendNewConnectionId(0);
+        clearInvocations(sender);
+        assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(2);
+
+        // When
+        connectionIdManager.getActiveConnectionIds().forEach(cid -> {
+                connectionIdManager.registerConnectionIdInUse(cid);
+        });
+
+        // Then
+        verify(sender, atLeastOnce()).send(argThat(f -> f instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
+
+    @Test
+    void whenMaxCidsIsReachedRegisterUnusedDoesNotLeadToNew() {
+        // Given
+        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 4, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        int maxCids = 6;
+        connectionIdManager.setPeerCidLimit(maxCids);
+        connectionIdManager.handshakeFinished();
+        clearInvocations(sender);
+        assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(maxCids);
+
+        // When
+        connectionIdManager.getActiveConnectionIds().forEach(cid -> {
+            connectionIdManager.registerConnectionIdInUse(cid);
+        });
+
+        // Then
+        verify(sender, never()).send(argThat(f -> f instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
 }
