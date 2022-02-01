@@ -60,7 +60,7 @@ class ConnectionIdManagerTest {
     @Test
     void whenConnectionCreatedNewConnectionIdsShouldBeSent() {
         // Given
-        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.registerPeerCidLimit(2);
 
         // When
         connectionIdManager.handshakeFinished();
@@ -72,7 +72,7 @@ class ConnectionIdManagerTest {
     @Test
     void firstNewConnectionIdSentShouldHaveSequenceNumberOne() {
         // Given
-        connectionIdManager.setPeerCidLimit(4);
+        connectionIdManager.registerPeerCidLimit(4);
 
         // When
         connectionIdManager.handshakeFinished();
@@ -87,7 +87,7 @@ class ConnectionIdManagerTest {
     @Test
     void initialCidsShouldMatchPeerLimitMinusOne() {
         // Given
-        connectionIdManager.setPeerCidLimit(4);
+        connectionIdManager.registerPeerCidLimit(4);
 
         // When
         connectionIdManager.handshakeFinished();
@@ -99,7 +99,7 @@ class ConnectionIdManagerTest {
     @Test
     void whenPeerLimitIsLargeinitialCidsShouldMatchServerLimit() {
         // Given
-        connectionIdManager.setPeerCidLimit(64);
+        connectionIdManager.registerPeerCidLimit(64);
 
         // When
         connectionIdManager.handshakeFinished();
@@ -112,7 +112,7 @@ class ConnectionIdManagerTest {
     void retireConnectionIdShouldLeadToDeregistering() {
         // Given
         byte[] originalCid = connectionIdManager.getActiveConnectionIds().get(0);
-        connectionIdManager.setPeerCidLimit(4);
+        connectionIdManager.registerPeerCidLimit(4);
         connectionIdManager.handshakeFinished();
 
         // When
@@ -127,7 +127,7 @@ class ConnectionIdManagerTest {
     @Test
     void retireConnectionIdShouldLeadToSendingNew() {
         // Given
-        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.registerPeerCidLimit(2);
         connectionIdManager.handshakeFinished();
         clearInvocations(sender);
 
@@ -141,7 +141,7 @@ class ConnectionIdManagerTest {
     @Test
     void retiringConnectionIdAlreadyRetiredDoesNothing() {
         // Given
-        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.registerPeerCidLimit(2);
         connectionIdManager.handshakeFinished();
         connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
         clearInvocations(sender);
@@ -156,7 +156,7 @@ class ConnectionIdManagerTest {
     @Test
     void retiringNonExistentSequenceNumberLeadsToConnectionClose() {
         // Given
-        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.registerPeerCidLimit(2);
         connectionIdManager.handshakeFinished();
 
         // When
@@ -171,7 +171,7 @@ class ConnectionIdManagerTest {
     @Test
     void retiringConnectionIdUsedAsDestinationConnectionIdLeadsToConnectionClose() {
         // Given
-        connectionIdManager.setPeerCidLimit(2);
+        connectionIdManager.registerPeerCidLimit(2);
         connectionIdManager.handshakeFinished();
 
         // When
@@ -361,7 +361,7 @@ class ConnectionIdManagerTest {
     void whenPreviouslyUnusedConnectionIdIsUsedNewConnectionIdIsSent() {
         // Given
         int maxCids = 3;
-        connectionIdManager.setPeerCidLimit(maxCids);
+        connectionIdManager.registerPeerCidLimit(maxCids);
         connectionIdManager.sendNewConnectionId(0);
         clearInvocations(sender);
         assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(2);
@@ -380,7 +380,7 @@ class ConnectionIdManagerTest {
         // Given
         connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 4, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
         int maxCids = 6;
-        connectionIdManager.setPeerCidLimit(maxCids);
+        connectionIdManager.registerPeerCidLimit(maxCids);
         connectionIdManager.handshakeFinished();
         clearInvocations(sender);
         assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(maxCids);
@@ -392,5 +392,58 @@ class ConnectionIdManagerTest {
 
         // Then
         verify(sender, never()).send(argThat(f -> f instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
+
+    void testValidateRetrySourceConnectionId() {
+        // Given
+        connectionIdManager = new ConnectionIdManager(new byte[8], new byte[8], 6, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        byte[] retryCid = new byte[] { 0x06, 0x0f, 0x08, 0x0b };
+
+        // When
+        connectionIdManager.registerRetrySourceConnectionId(retryCid);
+
+        // Then
+        assertThat(connectionIdManager.validateRetrySourceConnectionId(retryCid)).isTrue();
+    }
+
+    @Test
+    void whenActiveConnectionIdLimitReachedReceivingRetireShouldNotLeadToNew() {
+        // Given
+        connectionIdManager.sendNewConnectionId(0);
+
+        // When
+        connectionIdManager.sendNewConnectionId(1);
+        clearInvocations(sender);
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), new byte[3]);
+
+        // Then
+        verify(sender, never()).send(any(QuicFrame.class), any(), any(Consumer.class));
+    }
+
+    @Test
+    void whenConnectionIdAlreadyRetiredReceivingRetireShouldNotLeadToNew() {
+        // Given
+        connectionIdManager.sendNewConnectionId(0);
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), new byte[3]);
+        clearInvocations(sender);
+        assertThat(connectionIdManager.getActiveConnectionIds()).hasSize(2);  // Because retire triggers new.
+
+        // When
+        connectionIdManager.process(new RetireConnectionIdFrame(Version.getDefault(), 0), new byte[3]);
+
+        // Then
+        verify(sender, never()).send(any(QuicFrame.class), any(), any(Consumer.class));
+    }
+
+    @Test
+    void testRegisterInitialPeerCid() {
+        // Given
+        assertThat(connectionIdManager.getAllPeerConnectionIds().get(0).getConnectionId()).isNotEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+
+        // When
+        connectionIdManager.registerInitialPeerCid(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+
+        // Then
+        assertThat(connectionIdManager.getAllPeerConnectionIds().get(0).getConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
     }
 }

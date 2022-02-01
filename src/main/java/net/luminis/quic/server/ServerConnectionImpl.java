@@ -532,7 +532,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
 
-        connectionIdManager.setPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
+        connectionIdManager.registerPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 
         flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),

@@ -24,10 +24,13 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
+import net.luminis.quic.server.ServerConnectionProxy;
 import net.luminis.quic.server.ServerConnectionRegistry;
 
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
@@ -53,6 +56,7 @@ public class ConnectionIdManager {
     private int maxCids = 2;
     /** The maximum number of peer connection IDs this endpoint is willing to maintain; advertised in TP sent by this endpoint */
     private int maxPeerCids;
+    private byte[] retrySourceCid;
     private Version quicVersion = Version.QUIC_version_1;
 
 
@@ -88,6 +92,46 @@ public class ConnectionIdManager {
             peerCidRegistry = null;
             initialPeerConnectionId = new byte[0];
         }
+    }
+
+    /**
+     * Creates a connection ID manager for client role.
+     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
+     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
+     * @param sender  the sender to send messages to the peer
+     * @param closeConnectionCallback  callback for closing the connection with a transport error code
+     * @param log  logger
+     */
+    public ConnectionIdManager(Integer connectionIdLength, int maxPeerCids, Sender sender, BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
+        this.maxPeerCids = maxPeerCids;
+        this.sender = sender;
+        cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
+        this.connectionIdLength = cidRegistry.getConnectionIdlength();
+        initialConnectionId = cidRegistry.getCurrent();
+        this.closeConnectionCallback = closeConnectionCallback;
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-negotiating-connection-ids
+        // "When an Initial packet is sent by a client (...), the client populates the Destination Connection ID field
+        //  with an unpredictable value. This Destination Connection ID MUST be at least 8 bytes in length."
+        originalDestinationConnectionId = new byte[8];
+        new SecureRandom().nextBytes(originalDestinationConnectionId);
+
+        peerCidRegistry = new DestinationConnectionIdRegistry(originalDestinationConnectionId, log);
+        initialPeerConnectionId = originalDestinationConnectionId;
+
+        connectionRegistry = new ServerConnectionRegistry() {   // TODO
+            @Override
+            public void registerConnection(ServerConnectionProxy connection, byte[] connectionId) {}
+
+            @Override
+            public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {}
+
+            @Override
+            public void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId) {}
+
+            @Override
+            public void deregisterConnectionId(byte[] connectionId) {}
+        };
     }
 
     public void handshakeFinished() {
@@ -171,18 +215,29 @@ public class ConnectionIdManager {
             connectionRegistry.deregisterConnectionId(retiredCid);
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
             // "An endpoint SHOULD supply a new connection ID when the peer retires a connection ID."
-            sendNewCid(0);
+            if (cidRegistry.getActiveConnectionIds().size() < maxCids) {
+                sendNewCid(0);
+            }
         }
     }
 
     /**
-     * Register the active connection ID limit of the peer and determine the maximum number of peer connection ID's this
-     * endpoint is willing to maintain.
+     * Sets the maximum number of peer connection IDs this endpoint is willing to store. This should be the same number
+     * as this endpoint sends in the TP active_connection_id_limit.
+     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
+     */
+    public void setMaxPeerConnectionIds(int maxPeerCids) {
+        this.maxPeerCids = maxPeerCids;
+    }
+
+    /**
+     * Register the active connection ID limit of the peer (as received by this endpoint as TP active_connection_id_limit)
+     * and determine the maximum number of peer connection ID's this endpoint is willing to maintain.
      * "This is an integer value specifying the maximum number of connection IDs from the peer that an endpoint is
      *  willing to store.", so it puts an upper bound to the number of connection IDs this endpoint can generate.
      * @param peerCidLimit
      */
-    public void setPeerCidLimit(int peerCidLimit) {
+    public void registerPeerCidLimit(int peerCidLimit) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint MUST NOT provide more connection IDs than the peer's limit."
         // This implementation also sets a limit on the number of connection IDs it is willing to maintain, so
@@ -298,7 +353,7 @@ public class ConnectionIdManager {
         }
     }
 
-   /**
+    /**
      * Generates a new connection ID for this endpoint and sends it to the peer.
      * @return
      * @param retirePriorTo
@@ -306,4 +361,99 @@ public class ConnectionIdManager {
     public ConnectionIdInfo sendNewConnectionId(int retirePriorTo) {
         return sendNewCid(retirePriorTo);
     }
+
+    /**
+     * Registers the source connection ID used in the (received) retry packet.
+     * @param connectionId  the connection ID used in the (received) retry packet.
+     */
+    public void registerRetrySourceConnectionId(byte[] connectionId) {
+        retrySourceCid = connectionId;
+    }
+
+    /**
+     * Validates the  source connection ID used in the (received) retry packet.
+     * @param connectionId  the connection ID used in the (received) retry packet.
+     * @return  true if the given connection ID matches the retry source connection id registered earlier.
+     */
+    public boolean validateRetrySourceConnectionId(byte[] connectionId) {
+        return Arrays.equals(retrySourceCid, connectionId);
+    }
+
+    /**
+     * Registers the initial connection ID issued by the peer (server). Used in client role only.
+     * @param connectionId
+     */
+    public void registerInitialPeerCid(byte[] connectionId) {
+        peerCidRegistry.replaceInitialConnectionId(connectionId);
+    }
+
+    /**
+     * Registers the stateless reset token for the initial connection ID. Used in client role only.
+     * @param statelessResetToken
+     */
+    public void setInitialStatelessResetToken(byte[] statelessResetToken) {
+        peerCidRegistry.setInitialStatelessResetToken(statelessResetToken);
+    }
+
+    /**
+     * Determines whether the given token is a stateless reset token
+     * @param data
+     * @return
+     */
+    public boolean isStatelessResetToken(byte[] data) {
+        return peerCidRegistry.isStatelessResetToken(data);
+    }
+
+    /**
+     * Returns the length of the connection ID (or connection ID's) of this endpont.
+     * @return
+     */
+    public int getConnectionIdLength() {
+        return connectionIdLength;
+    }
+
+    /**
+     * Returns all existing connection ID's for this endpoint, irrespective of its status (active or retired).
+     * @return
+     */
+    public Map<Integer, ConnectionIdInfo> getAllConnectionIds() {
+        return cidRegistry.getAll();
+    }
+
+    /**
+     * Returns all known connection ID's for the peer, irrespective of its status (active or retired).
+     * @return
+     */
+    public Map<Integer, ConnectionIdInfo> getAllPeerConnectionIds() {
+        return peerCidRegistry.getAll();
+    }
+
+    /**
+     * Switches the connection ID currently used by this endpoint to address the peer, to the next available.
+     * The connection ID that was previously used is not being retired by this method.
+     * @return
+     */
+    public byte[] nextPeerId() {
+        return peerCidRegistry.useNext();
+    }
+
+    /**
+     * Retires the given connection ID.
+     * @param sequenceNumber
+     */
+    public void retireConnectionId(Integer sequenceNumber) {
+        peerCidRegistry.retireConnectionId(sequenceNumber);
+        sender.send(new RetireConnectionIdFrame(quicVersion, sequenceNumber), App, lostFrame -> retireConnectionId(sequenceNumber));
+    }
+
+    /**
+     * Returns the connection ID that this endpoint considers as "current".
+     * Note that in QUIC, there is no such thing as a "current" connection ID, there are only active and retired
+     * connection ID's. The peer can use any time any active connection ID.
+     * @return
+     */
+    public byte[] getCurrentConnectionId() {
+        return cidRegistry.getActive();
+    }
+
 }

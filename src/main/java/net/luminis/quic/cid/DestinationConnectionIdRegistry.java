@@ -33,11 +33,6 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     private volatile byte[] retrySourceConnectionId;
 
 
-    public DestinationConnectionIdRegistry(Logger log) {
-        super(log);
-        originalConnectionId = currentConnectionId;
-    }
-
     public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
         super(log);
         originalConnectionId = Objects.requireNonNull(initialConnectionId);

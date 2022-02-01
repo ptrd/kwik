@@ -61,7 +61,7 @@ public class ConnectionIdInfo {
         return statelessResetToken;
     }
 
-    public void setStatus(ConnectionIdStatus newStatus) {
+    protected void setStatus(ConnectionIdStatus newStatus) {
         connectionIdStatus = newStatus;
     }
 }
