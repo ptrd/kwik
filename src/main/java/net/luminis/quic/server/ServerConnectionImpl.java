@@ -487,10 +487,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-    }
-
-    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }

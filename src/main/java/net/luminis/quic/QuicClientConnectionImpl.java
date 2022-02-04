@@ -560,12 +560,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
-        send(response, f -> {});
-    }
-
-    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }

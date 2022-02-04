@@ -421,6 +421,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
     }
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-path_challenge-frames
+    // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
+    @Override
+    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
+        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
+        // "Responses to path validation using PATH_RESPONSE frames are sent just once."
+        send(response, f -> {});
+    }
+
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
     }
