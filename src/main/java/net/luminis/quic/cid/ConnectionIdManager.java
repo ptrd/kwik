@@ -53,11 +53,11 @@ public class ConnectionIdManager {
     private final byte[] initialPeerConnectionId;
     private final byte[] originalDestinationConnectionId;
     /** The maximum numbers of connection IDs this endpoint can use; determined by the TP supplied by the peer */
-    private int maxCids = 2;
+    private volatile int maxCids = 2;
     /** The maximum number of peer connection IDs this endpoint is willing to maintain; advertised in TP sent by this endpoint */
-    private int maxPeerCids;
-    private byte[] retrySourceCid;
-    private Version quicVersion = Version.QUIC_version_1;
+    private volatile int maxPeerCids;
+    private volatile byte[] retrySourceCid;
+    private final Version quicVersion = Version.QUIC_version_1;
 
 
     /**

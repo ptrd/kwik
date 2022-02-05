@@ -34,7 +34,7 @@ public abstract class ConnectionIdRegistry {
     public static final int DEFAULT_CID_LENGTH = 8;
 
     /** Maps sequence number to connection ID (info) */
-    protected Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
+    protected final Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
     private final SecureRandom randomGenerator;
