@@ -22,13 +22,9 @@ import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
-
-    private int activeConnectionIdLimit;
 
     public SourceConnectionIdRegistry(Integer cidLength, Logger logger) {
         super(cidLength, logger);
@@ -67,16 +63,6 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
         else {
             return false;
         }
-    }
-
-    public boolean limitReached() {
-        return connectionIds.values().stream()
-                .filter(cid -> cid.getConnectionIdStatus().active())
-                .count() >= activeConnectionIdLimit;
-    }
-
-    public void setActiveLimit(int activeConnectionIdLimit) {
-        this.activeConnectionIdLimit = activeConnectionIdLimit;
     }
 
     public int getMaxSequenceNr() {

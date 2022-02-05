@@ -22,20 +22,16 @@ import net.luminis.quic.log.Logger;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
-    private final byte[] originalConnectionId;
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
-    private volatile byte[] retrySourceConnectionId;
 
 
     public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
         super(log);
-        originalConnectionId = Objects.requireNonNull(initialConnectionId);
         currentConnectionId = initialConnectionId;
         connectionIds.put(0, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
     }
@@ -75,10 +71,6 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         }
     }
 
-    public byte[] getOriginalConnectionId() {
-        return originalConnectionId;
-    }
-
     public List<Integer> retireAllBefore(int retirePriorTo) {
         notRetiredThreshold = retirePriorTo;
         int currentIndex = currentIndex();
@@ -102,14 +94,6 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         }
 
         return toRetire;
-    }
-
-    public byte[] getRetrySourceConnectionId() {
-        return retrySourceConnectionId;
-    }
-
-    public void setRetrySourceConnectionId(byte[] retrySourceConnectionId) {
-        this.retrySourceConnectionId = retrySourceConnectionId;
     }
 
     public void setInitialStatelessResetToken(byte[] statelessResetToken) {
