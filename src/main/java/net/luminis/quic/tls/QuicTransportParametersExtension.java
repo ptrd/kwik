@@ -49,7 +49,7 @@ public class QuicTransportParametersExtension extends Extension {
 
 
     public static boolean isCodepoint(Version quicVersion, int extensionType) {
-        if (quicVersion == Version.QUIC_version_1) {
+        if (quicVersion.equals(Version.QUIC_version_1)) {
             return extensionType == CODEPOINT_V1;
         }
         else {
@@ -95,7 +95,7 @@ public class QuicTransportParametersExtension extends Extension {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
         // "quic_transport_parameters(0xffa5)"
-        buffer.putShort((short) (quicVersion == Version.QUIC_version_1? CODEPOINT_V1: CODEPOINT_IETFDRAFT));
+        buffer.putShort((short) (quicVersion.equals(Version.QUIC_version_1)? CODEPOINT_V1: CODEPOINT_IETFDRAFT));
 
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.

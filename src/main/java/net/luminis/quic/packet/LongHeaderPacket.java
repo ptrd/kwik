@@ -161,11 +161,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         byte flags = buffer.get();
         checkPacketType(flags);
 
-        boolean matchingVersion = false;
-        try {
-            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
-        } catch (UnknownVersionException e) {}
-
+        boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
             // "... packets are discarded if they indicate a different protocol version than that of the connection..."

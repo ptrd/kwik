@@ -316,18 +316,13 @@ public class Server implements ServerConnectionRegistry {
     }
 
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
-        try {
-            Version version = Version.parse(versionValue);
-            ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
-            // Register new connection now with the original connection id, as retransmitted initial packets with the
-            // same original dcid might be received, which should _not_ lead to another connection candidate)
-            currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
+        Version version = Version.parse(versionValue);
+        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+        // Register new connection now with the original connection id, as retransmitted initial packets with the
+        // same original dcid might be received, which should _not_ lead to another connection candidate)
+        currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
 
-            return connectionCandidate;
-        } catch (UnknownVersionException e) {
-            // Impossible, as it only gets here if the given version is supported, so it is a known version.
-            throw new RuntimeException();
-        }
+        return connectionCandidate;
     }
 
     private void removeConnection(ServerConnectionImpl connection) {

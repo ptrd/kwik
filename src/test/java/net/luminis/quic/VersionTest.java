@@ -80,6 +80,26 @@ class VersionTest {
     }
 
     @Test
+    void testV1IsAtLeastDraft33() {
+        assertThat(Version.QUIC_version_1.atLeast(Version.IETF_draft_33)).isTrue();
+    }
+
+    @Test
+    void testDraft33IsNotAtLeastV1() {
+        assertThat(Version.IETF_draft_33.atLeast(Version.QUIC_version_1)).isFalse();
+    }
+
+    @Test
+    void testV1IsNotBeforeDraft33() {
+        assertThat(Version.QUIC_version_1.before(Version.IETF_draft_33)).isFalse();
+    }
+
+    @Test
+    void testDraft33IsBeforeV1() {
+            assertThat(Version.IETF_draft_33.before(Version.QUIC_version_1)).isTrue();
+    }
+
+    @Test
     void testDraft19BeforeDraft20() {
         assertThat(Version.IETF_draft_19.before(Version.IETF_draft_20)).isEqualTo(true);
     }

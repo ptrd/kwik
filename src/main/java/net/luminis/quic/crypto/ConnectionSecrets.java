@@ -87,7 +87,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion == Version.QUIC_version_1? STATIC_SALT_V1: STATIC_SALT_DRAFT_29;
+        byte[] initialSalt = quicVersion.equals(Version.QUIC_version_1)? STATIC_SALT_V1: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);

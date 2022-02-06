@@ -103,10 +103,7 @@ public class RetryPacket extends QuicPacket {
 
         byte flags = buffer.get();
 
-        boolean matchingVersion = false;
-        try {
-            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
-        } catch (UnknownVersionException e) {}
+        boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
 
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
@@ -203,9 +200,9 @@ public class RetryPacket extends QuicPacket {
         try {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
             // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
-            SecretKeySpec secretKey = new SecretKeySpec(quicVersion == Version.QUIC_version_1? SECRET_KEY_V1: SECRET_KEY, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(quicVersion.equals(Version.QUIC_version_1)? SECRET_KEY_V1: SECRET_KEY, "AES");
             String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, quicVersion == Version.QUIC_version_1? NONCE_V1: NONCE);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, quicVersion.equals(Version.QUIC_version_1)? NONCE_V1: NONCE);
             Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
