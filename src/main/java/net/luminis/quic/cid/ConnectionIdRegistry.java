@@ -20,19 +20,24 @@ package net.luminis.quic.cid;
 
 import net.luminis.quic.log.Logger;
 
+import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 
 public abstract class ConnectionIdRegistry {
 
     public static final int DEFAULT_CID_LENGTH = 8;
-    
-    protected Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
+
+    /** Maps sequence number to connection ID (info) */
+    protected final Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
     protected volatile byte[] currentConnectionId;
     protected final Logger log;
-    private final Random random = new Random();
+    private final SecureRandom randomGenerator;
     private final int connectionIdLength;
 
     public ConnectionIdRegistry(Logger log) {
@@ -42,18 +47,45 @@ public abstract class ConnectionIdRegistry {
     public ConnectionIdRegistry(Integer cidLength, Logger logger) {
         connectionIdLength = cidLength != null? cidLength: DEFAULT_CID_LENGTH;
         this.log = logger;
+
+        randomGenerator = new SecureRandom();
+
         currentConnectionId = generateConnectionId();
         connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
     }
 
-    public void retireConnectionId(int sequenceNr) {
+    public byte[] retireConnectionId(int sequenceNr) {
         if (connectionIds.containsKey(sequenceNr)) {
-            connectionIds.get(sequenceNr).setStatus(ConnectionIdStatus.RETIRED);
+            ConnectionIdInfo cidInfo = connectionIds.get(sequenceNr);
+            if (cidInfo.getConnectionIdStatus().active()) {
+                cidInfo.setStatus(ConnectionIdStatus.RETIRED);
+                return cidInfo.getConnectionId();
+            }
+            else {
+                return null;
+            }
+        }
+        else {
+            return null;
         }
     }
 
+    /**
+     * @deprecated  use getActive to get <em>an</em> active connection ID
+     */
     public byte[] getCurrent() {
         return currentConnectionId;
+    }
+
+    /**
+     * Get an active connection ID. There can be multiple active connection IDs, this method returns an arbitrary one.
+     * @return  an active connection ID or null if non is active (which should never happen).
+     */
+    public byte[] getActive() {
+        return connectionIds.entrySet().stream()
+                .filter(e -> e.getValue().getConnectionIdStatus().active())
+                .map(e -> e.getValue().getConnectionId())
+                .findFirst().orElse(null);
     }
 
     public Map<Integer, ConnectionIdInfo> getAll() {
@@ -62,19 +94,26 @@ public abstract class ConnectionIdRegistry {
 
     protected int currentIndex() {
         return connectionIds.entrySet().stream()
-                .filter(entry -> entry.getValue().getConnectionId().equals(currentConnectionId))
+                .filter(entry -> Arrays.equals(entry.getValue().getConnectionId(), currentConnectionId))
                 .mapToInt(entry -> entry.getKey())
                 .findFirst().orElseThrow();
     }
 
     protected byte[] generateConnectionId() {
         byte[] connectionId = new byte[connectionIdLength];
-        random.nextBytes(connectionId);
+        randomGenerator.nextBytes(connectionId);
         return connectionId;
     }
 
     public int getConnectionIdlength() {
         return connectionIdLength;
+    }
+
+    public List<byte[]> getActiveConnectionIds() {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().active())
+                .map(info -> info.getConnectionId())
+                .collect(Collectors.toList());
     }
 }
 

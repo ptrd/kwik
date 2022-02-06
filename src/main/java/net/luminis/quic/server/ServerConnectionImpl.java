@@ -19,13 +19,13 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStreamImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
@@ -62,37 +63,49 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final Random random;
     private final SenderImpl sender;
     private final InetSocketAddress initialClientAddress;
-    private final byte[] connectionId;
-    private final byte[] peerConnectionId;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
-    private final byte[] originalDcid;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
-    private final Consumer<byte[]> closeCallback;
+    private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
     private final int initialMaxStreamData;
     private final int maxOpenStreamsUni;
     private final int maxOpenStreamsBidi;
     private final byte[] token;
+    private final ConnectionIdManager connectionIdManager;
     private volatile String negotiatedApplicationProtocol;
     private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
     private volatile boolean addressValidated;
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
+    private int allowedClientConnectionIds = 3;
 
 
+    /**
+     * Creates a server connection implementation.
+     * @param quicVersion  quic version used for this connection
+     * @param serverSocket  the socket that is used for sending packets
+     * @param initialClientAddress  the initial client address (after handshake, clients can move to different address)
+     * @param peerCid  the connection id of the client
+     * @param originalDcid  the original destination connection id used by the client
+     * @param connectionIdLength  length of the connection id's generated and used by this connection (used as its source)
+     * @param tlsServerEngineFactory  factory for creating tls engine
+     * @param retryRequired  whether or not a retry is required for address validation
+     * @param applicationProtocolRegistry  the registry for application protocols this server supports
+     * @param initialRtt  the initial rtt
+     * @param connectionRegistry
+     * @param closeCallback  callback for notifying interested parties this connection is closed
+     * @param log  logger
+     */
     protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                   byte[] connectionId, byte[] dcid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                                   byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                   Integer initialRtt, Consumer<byte[]> closeCallback, Logger log) {
+                                   Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
-        this.connectionId = connectionId;
-        this.peerConnectionId = dcid;
-        this.originalDcid = originalDcid;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
@@ -105,6 +118,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             sender.setAntiAmplificationLimit(0);
         }
         idleTimer.setPtoSupplier(sender::getPto);
+
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(EncryptionLevel.App, error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
         registerProcessor(ackGenerator);
@@ -133,7 +151,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public void abortConnection(Throwable error) {
         log.error(this.toString() + " aborted due to internal error", error);
-        closeCallback.accept(connectionId);
+        closeCallback.accept(this);
     }
 
     @Override
@@ -164,28 +182,28 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
-                + peerConnectionId.length
+                + connectionIdManager.getCurrentPeerConnectionId().length
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16; // encryption overhead
     }
 
     @Override
     protected int getSourceConnectionIdLength() {
-        return connectionId.length;
+        return connectionIdManager.getInitialConnectionId().length;
     }
 
-    public byte[] getConnectionId() {
-        return connectionId;
+    public byte[] getInitialConnectionId() {
+        return connectionIdManager.getInitialConnectionId();
     }
 
     @Override
     public byte[] getSourceConnectionId() {
-        return connectionId;
+        return connectionIdManager.getInitialConnectionId();
     }
 
     @Override
     public byte[] getDestinationConnectionId() {
-        return peerConnectionId;
+        return connectionIdManager.getCurrentPeerConnectionId();
     }
 
     @Override
@@ -231,6 +249,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (!acceptedEarlyData) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
         }
+        connectionIdManager.handshakeFinished();
     }
 
     private void sendHandshakeDone(QuicFrame frame) {
@@ -282,11 +301,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
-        serverTransportParams.setInitialSourceConnectionId(connectionId);
-        serverTransportParams.setOriginalDestinationConnectionId(originalDcid);
+        serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
+        serverTransportParams.setOriginalDestinationConnectionId(connectionIdManager.getOriginalDestinationConnectionId());
         if (retryRequired) {
-            serverTransportParams.setRetrySourceConnectionId(connectionId);
+            serverTransportParams.setRetrySourceConnectionId(connectionIdManager.getInitialConnectionId());
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
@@ -317,11 +337,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
                 try {
                     data.rewind();
-                    connectionSecrets.computeInitialKeys(originalDcid);
+                    connectionSecrets.computeInitialKeys(connectionIdManager.getOriginalDestinationConnectionId());
                     return super.parsePacket(data);
                 }
                 finally {
-                    connectionSecrets.computeInitialKeys(connectionId);
+                    connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
                 }
             }
             else {
@@ -357,12 +377,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
-        assert(Arrays.equals(packet.getDestinationConnectionId(), connectionId) || Arrays.equals(packet.getDestinationConnectionId(), originalDcid));
+        assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
 
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
-                connectionSecrets.computeInitialKeys(connectionId);
+                connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
             else if (!Arrays.equals(packet.getToken(), token)) {
@@ -388,12 +408,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion, connectionId, getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        RetryPacket retry = new RetryPacket(quicVersion, connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
     }
 
     @Override
     public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+        connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
         processFrames(packet, time);
         return ProcessResult.Continue;
     }
@@ -458,6 +479,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        connectionIdManager.process(newConnectionIdFrame);
     }
 
     @Override
@@ -465,11 +487,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-    }
-
-    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 
     @Override
@@ -477,8 +496,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super.terminate();
         log.getQLog().emitConnectionTerminatedEvent();
         String statsSummary = getStats().toString().replace("\n", "    ");
-        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionId), statsSummary));
-        closeCallback.accept(connectionId);
+        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
+        closeCallback.accept(this);
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
@@ -497,7 +516,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (transportParameters.getActiveConnectionIdLimit() < 2) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
-        if (!Arrays.equals(transportParameters.getInitialSourceConnectionId(), peerConnectionId)) {
+        if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
@@ -508,6 +527,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
+
+        connectionIdManager.registerPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 
         flowController = new FlowControl(Role.Server, transportParameters.getInitialMaxData(),
                 transportParameters.getInitialMaxStreamDataBidiLocal(), transportParameters.getInitialMaxStreamDataBidiRemote(),
@@ -565,7 +586,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     public byte[] getOriginalDestinationConnectionId() {
-        return originalDcid;
+        return connectionIdManager.getOriginalDestinationConnectionId();
+    }
+
+    public List<byte[]> getActiveConnectionIds() {
+        return connectionIdManager.getActiveConnectionIds();
     }
 
     @Override
@@ -587,6 +612,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public String toString() {
-        return "ServerConnection[" + ByteUtils.bytesToHex(originalDcid) + "]";
+        return "ServerConnection[" + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId()) + "]";
     }
 }

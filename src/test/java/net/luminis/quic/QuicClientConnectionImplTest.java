@@ -73,7 +73,10 @@ class QuicClientConnectionImplTest {
 
     @BeforeEach
     void initConnectionUnderTest() throws Exception {
-        connection = QuicClientConnectionImpl.newBuilder().uri(new URI("//localhost:443")).logger(logger).build();
+        connection = QuicClientConnectionImpl.newBuilder()
+                .connectionIdLength(4)
+                .uri(new URI("//localhost:443"))
+                .logger(logger).build();
         sender = Mockito.mock(SenderImpl.class);
     }
 
@@ -107,10 +110,11 @@ class QuicClientConnectionImplTest {
                 argThat(token -> token != null && Arrays.equals(token, new byte[] { 0x01, 0x02, 0x03 })));
     }
 
-
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("destConnectionIds"),
-                new DestinationConnectionIdRegistry(originalConnectionId, mock(Logger.class)));
+        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        FieldSetter.setField(connectionIdManager,
+                connectionIdManager.getClass().getDeclaredField("originalDestinationConnectionId"),
+                originalConnectionId);
     }
 
     @Test
@@ -258,9 +262,9 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
-        byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        originalDestinationId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
-        setFixedOriginalDestinationConnectionId(originalConnectionId);
+        setFixedOriginalDestinationConnectionId(originalDestinationId);
 
         connection = Mockito.spy(connection);
 
@@ -271,9 +275,6 @@ class QuicClientConnectionImplTest {
             }
         }).start();
         Thread.sleep(100);  // Give connection a chance to send packet(s).
-
-        // Store original destination id
-        originalDestinationId = connection.getDestinationConnectionId();
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
@@ -344,6 +345,7 @@ class QuicClientConnectionImplTest {
     void testQuicVersion29IsSupported() throws Exception {
         assertThat(QuicClientConnectionImpl.newBuilder()
                 .version(Version.IETF_draft_29)
+                .connectionIdLength(4)
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build())
                 .isNotNull();
@@ -444,42 +446,35 @@ class QuicClientConnectionImplTest {
 
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-
-        assertThat(connection.getSourceConnectionIds()).hasSize(1);
-
-        TransportParameters params = new TransportParameters();
-        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
-        params.setActiveConnectionIdLimit(3);
-        connection.setPeerTransportParameters(params);
+        // Given
+        useMockSender();
+        setTransportParametersWithActiveConnectionIdLimit(3);
+        connection.newConnectionIds(1, 0);
+        assertThat(connection.getSourceConnectionIds()).hasSize(2);
 
         RetireConnectionIdFrame retireFrame = new RetireConnectionIdFrame(Version.getDefault(), 0);
         connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame), Instant.now());
 
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
-        verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class));
+        verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
 
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        // Given
+        useMockSender();
+        setTransportParametersWithActiveConnectionIdLimit(7);
 
-        TransportParameters params = new TransportParameters();
-        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
-        params.setActiveConnectionIdLimit(7);
-        connection.setPeerTransportParameters(params);
-
-        byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
-        byte[] nextConnectionId = newConnectionIds[0];
-        assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
-
+        // When
+        byte[] newUnusedConnectionId = connection.newConnectionIds(1, 0)[0];
+        assertThat(newUnusedConnectionId).isNotEqualTo(connection.getSourceConnectionId());
         clearInvocations(sender);
-        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
 
+        connection.process(new ShortHeaderPacket(Version.getDefault(), newUnusedConnectionId, new Padding(20)), Instant.now());
+
+        // Then
         assertThat(connection.getSourceConnectionIds().get(0).getConnectionIdStatus()).isEqualTo(ConnectionIdStatus.USED);
-        verify(sender, times(1)).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class));
+        verify(sender, times(1)).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
 
     @Test
@@ -542,11 +537,10 @@ class QuicClientConnectionImplTest {
 */
     @Test
     void retireConnectionIdFrameShouldBeRetransmittedWhenLost() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-
         // Given
+        useMockSender();
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
-        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }));
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }), null, null);
 
         // When
         connection.retireDestinationConnectionId(0);
@@ -569,16 +563,14 @@ class QuicClientConnectionImplTest {
 
     @Test
     void receivingReorderedNewConnectionIdWithSequenceNumberThatIsAlreadyRetiredShouldImmediatelySendRetire() throws Exception {
-
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-
         // Given
+        useMockSender();
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
-        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }));
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }), null, null);
         clearInvocations(sender);
 
         // When
-        connection.registerNewDestinationConnectionId(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }));
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }), null, null);
 
         // Then
         verify(sender).send(argThat(frame -> frame.equals(new RetireConnectionIdFrame(Version.getDefault(), 2))), any(EncryptionLevel.class), any(Consumer.class));
@@ -674,5 +666,21 @@ class QuicClientConnectionImplTest {
 
         connection.setPeerTransportParameters(new TransportParameters(idleTimeoutInSeconds, 1_000_000, 10, 10));
         connection.handshakeFinished();
+    }
+
+    private void useMockSender() throws Exception {
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        FieldSetter.setField(connectionIdManager,
+                connectionIdManager.getClass().getDeclaredField("sender"),
+                sender);
+    }
+
+    private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
+        TransportParameters params = new TransportParameters();
+        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
+        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        params.setActiveConnectionIdLimit(connectionIdLimit);
+        connection.setPeerTransportParameters(params);
     }
 }

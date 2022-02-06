@@ -24,9 +24,9 @@ Kwik is created and maintained by Peter Doornbosch. The latest greatest can alwa
 
 ## Status
 
-The status of the project is different for client and server. 
-For the client role, most QUIC features are implemented. For server role, the essential features necessary for connecting
-and transferring data in both directions are implemented; see below for more details.
+Kwik implements all QUIC features, except that the server does not yet support connection migration.
+With respect to the interface Kwik offers to applications, it provides all necessary operations to exchange data, but
+it does not support specifying stream priorities.
 For both roles, interoperability is tested with a large number of other implementations, see [automated interoperability tests](https://interop.seemann.io/). 
 Due the to fact that most implementations are still in active development, and that some test cases
 (specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
@@ -45,7 +45,7 @@ Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)) 
 
 ### Implemented QUIC features
 
-* version negotation
+* version negotiation
 * handshake based on TLS 1.3
 * data exchange over bidirectional and unidirectional streams
 * stateless retry
@@ -67,10 +67,10 @@ Having said that, interoperability with other implementations is heavily tested 
 However, Kwik is not tested in various or extreme networking conditions, so your mileage may vary.  
 As development focus has been on correctness and features (in that order), performance is not optimal yet.
 
-Kwik does not yet implement all QUIC features. Specially, the server does not yet respond to NEW_CONNECTION_ID, 
-RETIRE_CONNECTION_ID and PATH_CHALLENGE frames.
-In both roles, you cannot set priority on streams, so the division of network capacity over streams cannot be influenced
-and might not even be fair.
+Kwik does not yet implement all QUIC requirements. Specifically, it does not enable applications or application 
+protocols to specify the relative priority of streams. Note that this will not introduce interoperability issues,
+because the concept of priorities only exists in a peer; it does not affect the wire protocol. However, the division of
+network capacity over streams cannot be influenced and might not even be fair (although in practice it probably will).
 When wondering whether limitations would harm your use case: just go ahead and test it! When in doubt, you can 
 always contact the author (see contact details below) for more information or help.
 

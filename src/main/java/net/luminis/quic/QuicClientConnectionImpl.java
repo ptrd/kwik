@@ -19,8 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
-import net.luminis.quic.cid.DestinationConnectionIdRegistry;
-import net.luminis.quic.cid.SourceConnectionIdRegistry;
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -28,7 +27,6 @@ import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.stream.QuicStreamImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.*;
@@ -36,7 +34,6 @@ import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
-import net.luminis.tls.util.ByteUtils;
 
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
@@ -51,6 +48,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -78,11 +76,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final StreamManager streamManager;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
+    private final ConnectionIdManager connectionIdManager;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
-    private DestinationConnectionIdRegistry destConnectionIds;
-    private SourceConnectionIdRegistry sourceConnectionIds;
     private KeepAliveActor keepAliveActor;
     private String applicationProtocol;
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
@@ -122,8 +119,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         receiver = new Receiver(socket, log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
-        sourceConnectionIds = new SourceConnectionIdRegistry(cidLength, log);
-        destConnectionIds = new DestinationConnectionIdRegistry(log);
+
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(EncryptionLevel.App, error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
 
         connectionState = Status.Created;
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
@@ -197,13 +197,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
             this.transportParams = transportParameters;
+            connectionIdManager.setMaxPeerConnectionIds(transportParams.getActiveConnectionIdLimit());
         }
-        this.transportParams.setInitialSourceConnectionId(sourceConnectionIds.getCurrent());
+        this.transportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         if (earlyData == null) {
             earlyData = Collections.emptyList();
         }
 
-        log.info(String.format("Original destination connection id: %s (scid: %s)", bytesToHex(destConnectionIds.getCurrent()), bytesToHex(sourceConnectionIds.getCurrent())));
+        log.info(String.format("Original destination connection id: %s (scid: %s)", bytesToHex(connectionIdManager.getOriginalDestinationConnectionId()), bytesToHex(connectionIdManager.getInitialConnectionId())));
         generateInitialKeys();
 
         receiver.start();
@@ -331,7 +332,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void generateInitialKeys() {
-        connectionSecrets.computeInitialKeys(destConnectionIds.getCurrent());
+        connectionSecrets.computeInitialKeys(connectionIdManager.getCurrentPeerConnectionId());
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
@@ -443,7 +444,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
-        destConnectionIds.replaceInitialConnectionId(packet.getSourceConnectionId());
+        connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
         processFrames(packet, time);
         ignoreVersionNegotiation = true;
         return ProcessResult.Continue;
@@ -457,16 +458,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(ShortHeaderPacket packet, Instant time) {
-        if (sourceConnectionIds.registerUsedConnectionId(packet.getDestinationConnectionId())) {
-            // New connection id, not used before.
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
-            // "If an endpoint provided fewer connection IDs than the
-            //   peer's active_connection_id_limit, it MAY supply a new connection ID
-            //   when it receives a packet with a previously unused connection ID."
-            if (! sourceConnectionIds.limitReached()) {
-                newConnectionIds(1, 0);
-            }
-        }
+        connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
         processFrames(packet, time);
         return ProcessResult.Continue;
     }
@@ -488,7 +480,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(RetryPacket packet, Instant time) {
-        if (packet.validateIntegrityTag(destConnectionIds.getCurrent())) {
+        if (packet.validateIntegrityTag(connectionIdManager.getOriginalDestinationConnectionId())) {
             if (!processedRetryPacket) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
                 // "A client MUST accept and process at most one Retry packet for each
@@ -500,10 +492,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 token = packet.getRetryToken();
                 sender.setInitialToken(token);
                 getCryptoStream(Initial).reset();  // Stream offset should restart from 0.
-                byte[] destConnectionId = packet.getSourceConnectionId();
-                destConnectionIds.replaceInitialConnectionId(destConnectionId);
-                destConnectionIds.setRetrySourceConnectionId(destConnectionId);
-                log.debug("Changing destination connection id into: " + bytesToHex(destConnectionId));
+                byte[] peerConnectionId = packet.getSourceConnectionId();
+                connectionIdManager.registerInitialPeerCid(peerConnectionId);
+                connectionIdManager.registerRetrySourceConnectionId(peerConnectionId);
+                log.debug("Changing destination connection id into: " + bytesToHex(peerConnectionId));
                 generateInitialKeys();
 
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
@@ -560,7 +552,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        registerNewDestinationConnectionId((newConnectionIdFrame));
+        connectionIdManager.process(newConnectionIdFrame);
     }
 
     @Override
@@ -568,14 +560,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
-        send(response, f -> {});
-    }
-
-    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        retireSourceConnectionId(retireConnectionIdFrame);
+        connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 
     @Override
@@ -632,7 +618,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public int getMaxShortHeaderPacketOverhead() {
         return 1  // flag byte
-                + destConnectionIds.getConnectionIdlength()
+                + connectionIdManager.getCurrentPeerConnectionId().length
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16 // encryption overhead
         ;
@@ -676,15 +662,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         streamManager.setInitialMaxStreamsUni(peerTransportParams.getInitialMaxStreamsUni());
 
         sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
-        sourceConnectionIds.setActiveLimit(peerTransportParams.getActiveConnectionIdLimit());
+        connectionIdManager.registerPeerCidLimit(peerTransportParams.getActiveConnectionIdLimit());
 
         determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
 
-        destConnectionIds.setInitialStatelessResetToken(peerTransportParams.getStatelessResetToken());
+        connectionIdManager.setInitialStatelessResetToken(peerTransportParams.getStatelessResetToken());
 
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
-                    ! Arrays.equals(destConnectionIds.getRetrySourceConnectionId(), peerTransportParams.getRetrySourceConnectionId())) {
+                    ! connectionIdManager.validateRetrySourceConnectionId(peerTransportParams.getRetrySourceConnectionId())) {
                 immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
             }
         }
@@ -716,12 +702,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:
         //   *  a mismatch between values received from a peer in these transport parameters and the value sent in the
         //      corresponding Destination or Source Connection ID fields of Initial packets."
-        if (! Arrays.equals(destConnectionIds.getCurrent(), transportParameters.getInitialSourceConnectionId())) {
+        if (! Arrays.equals(connectionIdManager.getCurrentPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
             immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
             return false;
         }
-        if (! Arrays.equals(destConnectionIds.getOriginalConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
+        if (! Arrays.equals(connectionIdManager.getOriginalDestinationConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
             log.error("Original destination connection id does not match corresponding transport parameter");
             immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "original_destination_connection_id transport parameter does not match");
             return false;
@@ -747,31 +733,17 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         streamManager.abortAll();
     }
 
-    protected void registerNewDestinationConnectionId(NewConnectionIdFrame frame) {
-        boolean addedNew = destConnectionIds.registerNewConnectionId(frame.getSequenceNr(), frame.getConnectionId(), frame.getStatelessResetToken());
-        if (! addedNew) {
-            // Already retired, notify peer
-            retireDestinationConnectionId(frame.getSequenceNr());
-        }
-        if (frame.getRetirePriorTo() > 0) {
-            // TODO:
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.15
-            // "The Retire Prior To field MUST be less than or equal
-            //   to the Sequence Number field.  Receiving a value greater than the
-            //   Sequence Number MUST be treated as a connection error of type
-            //   FRAME_ENCODING_ERROR."
-            List<Integer> retired = destConnectionIds.retireAllBefore(frame.getRetirePriorTo());
-            retired.forEach(retiredCid -> retireDestinationConnectionId(retiredCid));
-            log.info("Peer requests to retire connection ids; switching to destination connection id ", destConnectionIds.getCurrent());
-        }
-    }
-
     // https://tools.ietf.org/html/draft-ietf-quic-transport-19#section-5.1.2
     // "An endpoint can change the connection ID it uses for a peer to
     //   another available one at any time during the connection. "
     public byte[] nextDestinationConnectionId() {
-        byte[] newConnectionId = destConnectionIds.useNext();
-        log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
+        byte[] newConnectionId = connectionIdManager.nextPeerId();
+        if (newConnectionId != null) {
+            log.debug("Switching to next destination connection id: " + bytesToHex(newConnectionId));
+        }
+        else {
+            log.debug("Cannot switch to next destination connection id: no connection id's available");
+        }
         return newConnectionId;
     }
 
@@ -780,7 +752,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         byte[] tokenCandidate = new byte[16];
         data.position(data.limit() - 16);
         data.get(tokenCandidate);
-        boolean isStatelessReset = destConnectionIds.isStatelessResetToken(tokenCandidate);
+        boolean isStatelessReset = connectionIdManager.isStatelessResetToken(tokenCandidate);
         return isStatelessReset;
     }
 
@@ -788,11 +760,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         byte[][] newConnectionIds = new byte[count][];
 
         for (int i = 0; i < count; i++) {
-            ConnectionIdInfo cid = sourceConnectionIds.generateNew();
-            newConnectionIds[i] = cid.getConnectionId();
-            log.debug("New generated source connection id", cid.getConnectionId());
-            // Send frame; flushing sender is not necessary (and not even wanted) because this is part of processing received packet.
-            sender.send(new NewConnectionIdFrame(quicVersion, cid.getSequenceNumber(), retirePriorTo, cid.getConnectionId()), App);
+            ConnectionIdInfo cid = connectionIdManager.sendNewConnectionId(retirePriorTo);
+            if (cid != null) {
+                newConnectionIds[i] = cid.getConnectionId();
+                log.debug("New generated source connection id", cid.getConnectionId());
+            }
         }
         sender.flush();
         
@@ -800,31 +772,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void retireDestinationConnectionId(Integer sequenceNumber) {
-        send(new RetireConnectionIdFrame(quicVersion, sequenceNumber), lostFrame -> retireDestinationConnectionId(sequenceNumber));
-        destConnectionIds.retireConnectionId(sequenceNumber);
-    }
-
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-22#section-19.16
-    // "An endpoint sends a RETIRE_CONNECTION_ID frame (type=0x19) to
-    //   indicate that it will no longer use a connection ID that was issued
-    //   by its peer."
-    private void retireSourceConnectionId(RetireConnectionIdFrame frame) {
-        int sequenceNr = frame.getSequenceNr();
-        // TODO:
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.16
-        // "Receipt of a RETIRE_CONNECTION_ID frame containing a sequence number
-        //   greater than any previously sent to the peer MUST be treated as a
-        //   connection error of type PROTOCOL_VIOLATION."
-        sourceConnectionIds.retireConnectionId(sequenceNr);
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-5.1.1
-        // "An endpoint SHOULD supply a new connection ID when the peer retires a
-        //   connection ID."
-        if (! sourceConnectionIds.limitReached()) {
-            newConnectionIds(1, 0);
-        }
-        else {
-            log.debug("active connection id limit reached for peer, not sending new");
-        }
+        connectionIdManager.retireConnectionId(sequenceNumber);
     }
 
     @Override
@@ -849,25 +797,25 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     protected int getSourceConnectionIdLength() {
-        return sourceConnectionIds.getConnectionIdlength();
+        return connectionIdManager.getConnectionIdLength();
     }
 
     @Override
     public byte[] getSourceConnectionId() {
-        return sourceConnectionIds.getCurrent();
+        return connectionIdManager.getCurrentConnectionId();
     }
 
     public Map<Integer, ConnectionIdInfo> getSourceConnectionIds() {
-        return sourceConnectionIds.getAll();
+        return connectionIdManager.getAllConnectionIds();
     }
 
     @Override
     public byte[] getDestinationConnectionId() {
-        return destConnectionIds.getCurrent();
+        return connectionIdManager.getCurrentPeerConnectionId();
     }
 
     public Map<Integer, ConnectionIdInfo> getDestinationConnectionIds() {
-        return destConnectionIds.getAll();
+        return connectionIdManager.getAllPeerConnectionIds();
     }
 
     @Override

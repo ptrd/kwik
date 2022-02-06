@@ -26,8 +26,6 @@ import java.util.Arrays;
 
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
-    private int activeConnectionIdLimit;
-
     public SourceConnectionIdRegistry(Integer cidLength, Logger logger) {
         super(cidLength, logger);
     }
@@ -67,15 +65,14 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
         }
     }
 
-    public boolean limitReached() {
-        return connectionIds.values().stream()
-                .filter(cid -> cid.getConnectionIdStatus().active())
-                .count() >= activeConnectionIdLimit;
+    public int getMaxSequenceNr() {
+        return connectionIds.keySet().stream().max(Integer::compareTo).get();
     }
 
-    public void setActiveLimit(int activeConnectionIdLimit) {
-        this.activeConnectionIdLimit = activeConnectionIdLimit;
+    public byte[] get(int sequenceNr) {
+        return connectionIds.get(sequenceNr).getConnectionId();
     }
+
 }
 
 
