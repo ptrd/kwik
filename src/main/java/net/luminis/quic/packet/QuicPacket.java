@@ -470,7 +470,7 @@ abstract public class QuicPacket {
             return packetSize;
         }
         else {
-            throw new IllegalStateException("no size");
+            throw new IllegalStateException("no size for " + this.getClass().getSimpleName());
         }
     }
 
