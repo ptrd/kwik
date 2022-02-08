@@ -125,4 +125,18 @@ class VersionTest {
         assertThat(Version.IETF_draft_29.getDraftVersion()).isEqualTo("29");
     }
 
+    @Test
+    void testDraft32ToString() {
+        assertThat(Version.IETF_draft_32.toString()).isEqualTo("draft-32");
+    }
+
+    @Test
+    void testUnknownVersionToString() {
+        assertThat(new Version(0x9afa5aba).toString()).isEqualTo("v-9afa5aba");
+    }
+
+    @Test
+    void testQuicVersion1ToString() {
+        assertThat(Version.QUIC_version_1.toString()).isEqualTo("v1");
+    }
 }

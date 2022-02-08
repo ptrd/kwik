@@ -27,6 +27,9 @@ import net.luminis.tls.extension.Extension;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 import static net.luminis.quic.Role.Server;
@@ -335,6 +338,19 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- retry source connection id: " + retrySourceCid);
             params.setRetrySourceConnectionId(retrySourceCid);
         }
+        else if (parameterId == version_information.value) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-05.html#name-version-information
+            if (size % 4 != 0 || size < 4) {
+                throw new DecodeErrorException("invalid parameters size");
+            }
+            int chosenVersion = buffer.getInt();
+            List<Version> otherVersions = new ArrayList<>();
+            for (int i = 0; i < size/4 - 1; i++) {
+                int otherVersion = buffer.getInt();
+                otherVersions.add(Version.parse(otherVersion));
+            }
+            params.setVersionInformation(new TransportParameters.VersionInformation(Version.parse(chosenVersion), otherVersions));
+        }
         else {
             String extension = "";
             if (parameterId == 0x0020) extension = "datagram";
@@ -401,7 +417,7 @@ public class QuicTransportParametersExtension extends Extension {
         addTransportParameter(buffer, id.value, value);
     }
 
-    private void addTransportParameter(ByteBuffer buffer, short id, long value) {
+    private void addTransportParameter(ByteBuffer buffer, int id, long value) {
         VariableLengthInteger.encode(id, buffer);
         buffer.mark();
         int encodedValueLength = VariableLengthInteger.encode(value, buffer);
@@ -414,7 +430,7 @@ public class QuicTransportParametersExtension extends Extension {
         addTransportParameter(buffer, id.value, value);
     }
 
-    private void addTransportParameter(ByteBuffer buffer, short id, byte[] value) {
+    private void addTransportParameter(ByteBuffer buffer, int id, byte[] value) {
         VariableLengthInteger.encode(id, buffer);
         VariableLengthInteger.encode(value.length, buffer);
         buffer.put(value);

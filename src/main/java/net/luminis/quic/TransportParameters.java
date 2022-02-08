@@ -22,6 +22,7 @@ import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class TransportParameters {
 
@@ -42,6 +43,7 @@ public class TransportParameters {
     private byte[] retrySourceConnectionId;
     private int maxUdpPayloadSize;
     private byte[] statelessResetToken;
+    private VersionInformation versionInformation;
 
     public TransportParameters() {
         setDefaults();
@@ -245,6 +247,14 @@ public class TransportParameters {
         }
     }
 
+    public VersionInformation getVersionInformation() {
+        return versionInformation;
+    }
+
+    public void setVersionInformation(VersionInformation versionInfo) {
+        versionInformation = versionInfo;
+    }
+
     public static class PreferredAddress {
         InetAddress ip4;
         int ip4Port;
@@ -301,6 +311,30 @@ public class TransportParameters {
         public void setStatelessResetToken(ByteBuffer buffer, int size) {
             statelessResetToken = new byte[size];
             buffer.get(statelessResetToken);
+        }
+    }
+
+    public static class VersionInformation {
+
+        private final Version chosenVersion;
+        private final List<Version> otherVersions;
+
+        public VersionInformation(Version chosenVersion, List<Version> otherVersions) {
+            this.chosenVersion = chosenVersion;
+            this.otherVersions = otherVersions;
+        }
+
+        public Version getChosenVersion() {
+            return chosenVersion;
+        }
+
+        public List<Version> getOtherVersions() {
+            return otherVersions;
+        }
+
+        @Override
+        public String toString() {
+            return "" + chosenVersion + otherVersions;
         }
     }
 }
