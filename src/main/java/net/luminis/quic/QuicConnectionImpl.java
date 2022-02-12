@@ -240,7 +240,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
         }
-        int flags = data.get();
+        byte flags = data.get();
 
         if ((flags & 0x40) != 0x40) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.2
@@ -302,11 +302,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
      * @return
      * @throws InvalidPacketException
      */
-    private QuicPacket createLongHeaderPacket(int flags, ByteBuffer data) throws InvalidPacketException {
+    private QuicPacket createLongHeaderPacket(byte flags, ByteBuffer data) throws InvalidPacketException {
         final int MIN_LONGHEADERPACKET_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
         if (1 + data.remaining() < MIN_LONGHEADERPACKET_LENGTH) {
             throw new InvalidPacketException("packet too short to be valid QUIC long header packet");
         }
+        int type = (flags & 0x30) >> 4;
         int version = data.getInt();
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
@@ -316,29 +317,19 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (version == 0) {
             return new VersionNegotiationPacket(quicVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
-        // "An Initial packet uses long headers with a type value of 0x0."
-        else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
+        else if (InitialPacket.isInitial(type)) {
             return new InitialPacket(quicVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
-        // "A Retry packet uses a long packet header with a type value of 0x3"
-        else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
-            // Retry packet....
-            return new RetryPacket(quicVersion);
+        else if (RetryPacket.isRetry(type)) {
+             return new RetryPacket(quicVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
-        // "A Handshake packet uses long headers with a type value of 0x2."
-        else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
+        else if (HandshakePacket.isHandshake(type)) {
             return new HandshakePacket(quicVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "|  0x1 | 0-RTT Protected | Section 12.1 |"
-        else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
-            // 0-RTT Protected
-            // "It is used to carry "early"
-            //   data from the client to the server as part of the first flight, prior
-            //   to handshake completion."
+        else if (ZeroRttPacket.isZeroRTT(type)) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
+            // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
+            //  prior to handshake completion. "
             if (role == Role.Client) {
                 // When such a packet arrives, consider it to be caused by network corruption, so
                 throw new InvalidPacketException();

@@ -39,6 +39,12 @@ public class InitialPacket extends LongHeaderPacket {
         return (flags & 0xf0) == 0b1100_0000;
     }
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-initial-packet
+    // "An Initial packet uses long headers with a type value of 0x00."
+    public static boolean isInitial(int type) {
+        return type == 0;
+    }
+
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
         super(quicVersion, sourceConnectionId, destConnectionId, payload);
         this.token = token;
@@ -60,15 +66,7 @@ public class InitialPacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
-        // "|1|1| 0 |R R|P P|"
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "The next two bits (those with a mask of 0x0c) of
-        //      byte 0 are reserved.  These bits are protected using header
-        //      protection (see Section 5.4 of [QUIC-TLS]).  The value included
-        //      prior to protection MUST be set to 0."
-        byte flags = (byte) 0xc0;  // 1100 0000
-        return encodePacketNumberLength(flags, packetNumber);
+        return 0;
     }
 
     @Override

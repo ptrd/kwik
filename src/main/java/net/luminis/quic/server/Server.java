@@ -22,6 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
@@ -302,8 +303,8 @@ public class Server implements ServerConnectionRegistry {
 
     private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
         packetBytes.rewind();
-        int flags = packetBytes.get() & 0xff;
-        if ((flags & 0b1111_0000) == 0b1100_0000) {
+        int type = packetBytes.get() & 0x30;
+        if (InitialPacket.isInitial(type)) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-14.1
             // "A server MUST discard an Initial packet that is carried in a UDP
             //   datagram with a payload that is smaller than the smallest allowed

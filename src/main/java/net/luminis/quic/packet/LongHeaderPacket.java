@@ -122,9 +122,24 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
-        // Packet type
-        byte packetType = getPacketType();
-        packetBuffer.put(packetType);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-long-header-packets
+        // "Long Header Packet {
+        //    Header Form (1) = 1,
+        //    Fixed Bit (1) = 1,
+        //    Long Packet Type (2),
+        //    Type-Specific Bits (4),"
+        //    Version (32),
+        //    Destination Connection ID Length (8),
+        //    Destination Connection ID (0..160),
+        //    Source Connection ID Length (8),
+        //    Source Connection ID (0..160),
+        //    Type-Specific Payload (..),
+        //  }
+
+        // Packet type and packet number length
+        byte flags = encodePacketNumberLength((byte) (0b1100_0000 | (getPacketType() << 4)), packetNumber);
+        encodePacketNumberLength(flags, packetNumber);
+        packetBuffer.put(flags);
         // Version
         packetBuffer.put(quicVersion.getBytes());
         // DCID Len

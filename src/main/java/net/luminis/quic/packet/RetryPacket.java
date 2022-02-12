@@ -73,6 +73,11 @@ public class RetryPacket extends QuicPacket {
     private byte[] rawPacketData;
     private byte[] retryIntegrityTag;
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-retry-packet
+    // "a Retry packet uses a long packet header with a type value of 0x03."
+    public static boolean isRetry(int type) {
+        return type == 3;
+    }
 
     public RetryPacket(Version quicVersion) {
         this.quicVersion = quicVersion;

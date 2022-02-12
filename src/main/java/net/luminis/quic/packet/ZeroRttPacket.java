@@ -31,6 +31,12 @@ import java.util.stream.Collectors;
 
 public class ZeroRttPacket extends LongHeaderPacket {
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
+    // "A 0-RTT packet uses long headers with a type value of 0x01."
+    public static boolean isZeroRTT(int type) {
+        return type == 1;
+    }
+
     public ZeroRttPacket(Version quicVersion) {
         super(quicVersion);
     }
@@ -45,8 +51,7 @@ public class ZeroRttPacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        byte flags = (byte) 0xd0;  // 1101 0000
-        return encodePacketNumberLength(flags, packetNumber);
+        return 1;
     }
 
     @Override

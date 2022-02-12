@@ -29,6 +29,12 @@ import java.time.Instant;
 
 public class HandshakePacket extends LongHeaderPacket {
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-handshake-packet
+    // "A Handshake packet uses long headers with a type value of 0x02, ..."
+    public static boolean isHandshake(int type) {
+        return type == 2;
+    }
+
     public HandshakePacket(Version quicVersion) {
         super(quicVersion);
     }
@@ -43,16 +49,7 @@ public class HandshakePacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "|1|1|T T|R R|P P|"
-        // "|  0x2 | Handshake       | Section 17.6 |"
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "The next two bits (those with a mask of 0x0c) of
-        //      byte 0 are reserved.  These bits are protected using header
-        //      protection (see Section 5.4 of [QUIC-TLS]).  The value included
-        //      prior to protection MUST be set to 0."
-        byte flags = (byte) 0xe0;  // 1110 0000
-        return encodePacketNumberLength(flags, packetNumber);
+        return 2;
     }
 
     @Override
