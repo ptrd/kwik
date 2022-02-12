@@ -44,10 +44,20 @@ public class ConnectionSecrets {
             (byte) 0x9e, (byte) 0x97, (byte) 0x86, (byte) 0xf1, (byte) 0x9c, (byte) 0x61, (byte) 0x11, (byte) 0xe0,
             (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
 
+    // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
+    // "initial_salt = 0x38762cf7f55934b34d179ae6a4c80cadccbb7f0a"
     public static final byte[] STATIC_SALT_V1 = new byte[] {
             (byte) 0x38, (byte) 0x76, (byte) 0x2c, (byte) 0xf7, (byte) 0xf5, (byte) 0x59, (byte) 0x34, (byte) 0xb3,
             (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad,
             (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a };
+
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-initial-salt
+    // "The salt used to derive Initial keys in Section 5.2 of [QUIC-TLS] changes to:
+    //  initial_salt = 0xa707c203a59b47184a1d62ca570406ea7ae3e5d3"
+    public static final byte[] STATIC_SALT_V2 = new byte[] {
+            (byte) 0xa7, (byte) 0x07, (byte) 0xc2, (byte) 0x03, (byte) 0xa5, (byte) 0x9b, (byte) 0x47, (byte) 0x18,
+            (byte) 0x4a, (byte) 0x1d, (byte) 0x62, (byte) 0xca, (byte) 0x57, (byte) 0x04, (byte) 0x06, (byte) 0xea,
+            (byte) 0x7a, (byte) 0xe3, (byte) 0xe5, (byte) 0xd3 };
 
     private final Version quicVersion;
     private final Role ownRole;
@@ -87,7 +97,7 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion.equals(Version.QUIC_version_1)? STATIC_SALT_V1: STATIC_SALT_DRAFT_29;
+        byte[] initialSalt = quicVersion.isV1()? STATIC_SALT_V1: quicVersion.isV2()? STATIC_SALT_V2: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);

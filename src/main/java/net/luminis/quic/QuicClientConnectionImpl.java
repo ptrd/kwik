@@ -347,6 +347,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             });
         }
 
+        if (quicVersion.isV2()) {
+            transportParams.setVersionInformation(new TransportParameters.VersionInformation(Version.QUIC_version_2,
+                    List.of(Version.QUIC_version_2, Version.QUIC_version_1)));
+        }
         QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams, Role.Client);
         if (clientHelloEnlargement != null) {
             tpExtension.addDiscardTransportParameter(clientHelloEnlargement);

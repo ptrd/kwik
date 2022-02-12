@@ -27,7 +27,6 @@ import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
@@ -317,16 +316,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (version == 0) {
             return new VersionNegotiationPacket(quicVersion);
         }
-        else if (InitialPacket.isInitial(type)) {
+        else if (InitialPacket.isInitial(type, quicVersion)) {
             return new InitialPacket(quicVersion);
         }
-        else if (RetryPacket.isRetry(type)) {
+        else if (RetryPacket.isRetry(type, quicVersion)) {
              return new RetryPacket(quicVersion);
         }
-        else if (HandshakePacket.isHandshake(type)) {
+        else if (HandshakePacket.isHandshake(type, quicVersion)) {
             return new HandshakePacket(quicVersion);
         }
-        else if (ZeroRttPacket.isZeroRTT(type)) {
+        else if (ZeroRttPacket.isZeroRTT(type, quicVersion)) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
             // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
             //  prior to handshake completion. "

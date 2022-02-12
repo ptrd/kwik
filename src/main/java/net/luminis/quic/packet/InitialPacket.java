@@ -30,6 +30,13 @@ import java.util.stream.Collectors;
 
 public class InitialPacket extends LongHeaderPacket {
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-initial-packet
+    // "An Initial packet uses long headers with a type value of 0x00."
+    private static int V1_type = 0;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+    // Initial packets use a packet type field of 0b01.
+    private static int V2_type = 1;
+
     private byte[] token;
 
     public static boolean isInitial(ByteBuffer data) {
@@ -39,10 +46,13 @@ public class InitialPacket extends LongHeaderPacket {
         return (flags & 0xf0) == 0b1100_0000;
     }
 
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-initial-packet
-    // "An Initial packet uses long headers with a type value of 0x00."
-    public static boolean isInitial(int type) {
-        return type == 0;
+    public static boolean isInitial(int type, Version quicVersion) {
+        if (quicVersion.isV2()) {
+            return type == V2_type;
+        }
+        else {
+            return type == V1_type;
+        }
     }
 
     public InitialPacket(Version quicVersion, byte[] sourceConnectionId, byte[] destConnectionId, byte[] token, QuicFrame payload) {
@@ -66,7 +76,12 @@ public class InitialPacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        return 0;
+        if (quicVersion.isV2()) {
+            return (byte) V2_type;
+        }
+        else {
+            return (byte) V1_type;
+        }
     }
 
     @Override
@@ -99,15 +114,6 @@ public class InitialPacket extends LongHeaderPacket {
     @Override
     public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
         return processor.process(this, time);
-    }
-
-    @Override
-    protected void checkPacketType(byte type) {
-        byte masked = (byte) (type & 0xf0);
-        if (masked != (byte) 0xc0) {
-            // Programming error: this method shouldn't have been called if packet is not Initial
-            throw new RuntimeException();
-        }
     }
 
     @Override

@@ -66,7 +66,22 @@ public class Version {
     }
 
     public boolean isKnown() {
-        return isDraftVersion(versionId) || versionId == QUIC_version_1.versionId;
+        return isDraftVersion(versionId) || versionId == QUIC_version_1.versionId || versionId == QUIC_version_2.versionId;
+    }
+
+    public boolean isV1() {
+        return versionId == 0x00000001;
+    }
+
+    public boolean isV2() {
+        return versionId == 0x709a50c4;
+    }
+
+    /**
+     * @return   true if version is V1 or V2, false otherwise.
+     */
+    public boolean isV1V2() {
+        return versionId == 0x00000001 || versionId == 0x709a50c4;
     }
 
     /**
@@ -90,38 +105,20 @@ public class Version {
     }
 
     private int compare(Version other) {
-        if (isDraftVersion(other.versionId)) {
-            if (isDraftVersion(this.versionId)) {
+        if (this.isKnown() && other.isKnown()) {
+            if (isDraftVersion(this.versionId) && isDraftVersion(other.versionId)) {
+                return Integer.compare(this.versionId, other.versionId);
+            } else if (isDraftVersion(this.versionId) && !isDraftVersion(other.versionId)) {
+                // draft compare with v1 or v2
+                return -1;
+            } else if (!isDraftVersion(this.versionId) && isDraftVersion(other.versionId)) {
+                // v1 or v2 compare with draft
+                return 1;
+            } else {
+                // v1 compare with v2 or v2 compare with v1
                 return Integer.compare(this.versionId, other.versionId);
             }
-            else {
-                // Other is draft, this is not draft
-                if (this.versionId == QUIC_version_1.versionId) {
-                    return 0;  // Equal
-                }
-                else {
-                    // Cannot compare unknown version
-                    throw new IllegalArgumentException();
-                }
-            }
-        }
-        else if (other.versionId == QUIC_version_1.versionId) {
-            if (isDraftVersion(this.versionId)) {
-                // Other is V1, this is draft, so this is "less" than other
-                return -1;
-            }
-            else {
-                // Other is V1, this is not draft
-                if (this.versionId == QUIC_version_1.versionId) {
-                    return 0;  // Equal
-                }
-                else {
-                    // Cannot compare unknown version
-                    throw new IllegalArgumentException();
-                }
-            }
-        }
-        else {
+        } else {
             // Cannot compare unknown version
             throw new IllegalArgumentException();
         }
@@ -156,7 +153,7 @@ public class Version {
             case 0x00000001:
                 versionString = "v1";
                 break;
-           case 0x709a50c4:
+            case 0x709a50c4:
                 versionString = "v2";
                 break;
             default:

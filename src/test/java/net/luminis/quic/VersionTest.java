@@ -105,6 +105,11 @@ class VersionTest {
     }
 
     @Test
+    void testV1IsBeforeV2() {
+        assertThat(Version.QUIC_version_1.before(Version.QUIC_version_2)).isTrue();
+    }
+
+    @Test
     void testParseDraft22Version() throws UnknownVersionException {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[] { (byte) 0xff, 0x00, 0x00, 0x16 });
         int rawVersion = buffer.getInt();
@@ -139,4 +144,10 @@ class VersionTest {
     void testQuicVersion1ToString() {
         assertThat(Version.QUIC_version_1.toString()).isEqualTo("v1");
     }
+
+    @Test
+    void testQuicVersion2ToString() {
+        assertThat(Version.QUIC_version_2.toString()).isEqualTo("v2");
+    }
+
 }

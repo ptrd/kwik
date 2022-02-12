@@ -31,8 +31,18 @@ public class HandshakePacket extends LongHeaderPacket {
 
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-handshake-packet
     // "A Handshake packet uses long headers with a type value of 0x02, ..."
-    public static boolean isHandshake(int type) {
-        return type == 2;
+    private static int V1_type = 2;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+    // "Handshake packets use a packet type field of 0b11."
+    private static int V2_type = 3;
+
+    public static boolean isHandshake(int type, Version quicVersion) {
+        if (quicVersion.isV2()) {
+            return type == V2_type;
+        }
+        else {
+            return type == V1_type;
+        }
     }
 
     public HandshakePacket(Version quicVersion) {
@@ -49,7 +59,12 @@ public class HandshakePacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        return 2;
+        if (quicVersion.isV2()) {
+            return (byte) V2_type;
+        }
+        else {
+            return (byte) V1_type;
+        }
     }
 
     @Override
@@ -74,15 +89,6 @@ public class HandshakePacket extends LongHeaderPacket {
     @Override
     public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
         return processor.process(this, time);
-    }
-
-    @Override
-    protected void checkPacketType(byte type) {
-        byte masked = (byte) (type & 0xf0);
-        if (masked != (byte) 0xe0) {
-            // Programming error: this method shouldn't have been called if packet is not Initial
-            throw new RuntimeException();
-        }
     }
 
     @Override

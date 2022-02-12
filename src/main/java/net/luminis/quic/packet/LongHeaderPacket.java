@@ -174,7 +174,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
             throw new InvalidPacketException();
         }
         byte flags = buffer.get();
-        checkPacketType(flags);
+        checkPacketType((flags & 0x30) >> 4);
 
         boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
         if (! matchingVersion) {
@@ -244,7 +244,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return sourceConnectionId;
     }
 
-    protected abstract void checkPacketType(byte b);
+    protected void checkPacketType(int type) {
+        if (type != getPacketType()) {
+            // Programming error: this method shouldn't have been called if packet is not Initial
+            throw new RuntimeException();
+        }
+    }
 
     protected abstract void parseAdditionalFields(ByteBuffer buffer) throws InvalidPacketException;
 }

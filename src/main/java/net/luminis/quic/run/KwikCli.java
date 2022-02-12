@@ -79,6 +79,7 @@ public class KwikCli {
         cmdLineOptions.addOption("31", "use Quic version IETF_draft_31");
         cmdLineOptions.addOption("32", "use Quic version IETF_draft_32");
         cmdLineOptions.addOption("v1", "use Quic version 1");
+        cmdLineOptions.addOption("v2", "use Quic version 2");
         cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
@@ -234,7 +235,10 @@ public class KwikCli {
 
         Version quicVersion = Version.getDefault();
 
-        if (cmd.hasOption("v1")) {
+        if (cmd.hasOption("v2")) {
+            quicVersion = Version.QUIC_version_2;
+        }
+        else if (cmd.hasOption("v1")) {
             quicVersion = Version.QUIC_version_1;
         }
         else if (cmd.hasOption("32")) {
@@ -266,7 +270,7 @@ public class KwikCli {
             }
         }
         else {
-            if (quicVersion.equals(Version.QUIC_version_1)) {
+            if (quicVersion.isV1() || quicVersion.isV2()) {
                 alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
             }
             else {
