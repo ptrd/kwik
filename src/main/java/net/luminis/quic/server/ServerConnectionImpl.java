@@ -464,11 +464,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
-        // TODO: eventually, this method should be removed from the FrameProcessor3 interface
-    }
-
-    @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         ackProcessors.forEach(processor -> processor.process(ackFrame, packet.getPnSpace(), timeReceived));
     }

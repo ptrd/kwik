@@ -170,10 +170,6 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
-        }
-
-        @Override
         public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         }
 
@@ -187,7 +183,6 @@ class QuicConnectionImplTest {
 
         @Override
         public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
-            
         }
 
         @Override

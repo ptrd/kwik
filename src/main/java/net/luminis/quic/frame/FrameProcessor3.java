@@ -6,8 +6,6 @@ import java.time.Instant;
 
 public interface FrameProcessor3 {
 
-    void process(QuicFrame frame, QuicPacket packet, Instant timeReceived);
-
     void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived);
 
     void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived);

@@ -565,11 +565,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
-        log.warn("Unhandled frame type: " + frame);
-    }
-
-    @Override
     protected void immediateCloseWithError(EncryptionLevel level, int error, String errorReason) {
         if (keepAliveActor != null) {
             keepAliveActor.shutdown();

@@ -37,12 +37,6 @@ public class FrameFormatter implements FrameProcessor3 {
     }
 
     @Override
-    public void process(QuicFrame frame, QuicPacket packet, Instant timeReceived) {
-        String type = frame.getClass().getSimpleName().replace("Frame", "").toLowerCase();
-        jsonGenerator.writeStartObject().write("frame_type", type).writeEnd();
-    }
-
-    @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "ack")
