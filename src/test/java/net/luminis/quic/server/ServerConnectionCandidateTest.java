@@ -54,7 +54,7 @@ class ServerConnectionCandidateTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         TlsServerEngineFactory tlsServerEngineFactory = new TlsServerEngineFactory(certificate, privateKey);
-        serverConnectionFactory = new TestServerConnectionFactory(16, null, tlsServerEngineFactory, false, mock(ApplicationProtocolRegistry.class), 100, cid -> {}, logger);
+        serverConnectionFactory = new TestServerConnectionFactory(16, mock(DatagramSocket.class), tlsServerEngineFactory, false, mock(ApplicationProtocolRegistry.class), 100, cid -> {}, logger);
     }
 
     @Test
