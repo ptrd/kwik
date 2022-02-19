@@ -117,6 +117,7 @@ public class Server implements ServerConnectionRegistry {
         List<Version> supportedVersions = new ArrayList<>();
         supportedVersions.addAll(List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32));
         supportedVersions.add(Version.QUIC_version_1);
+        supportedVersions.add(Version.QUIC_version_2);
 
         new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
     }
@@ -303,7 +304,7 @@ public class Server implements ServerConnectionRegistry {
 
     private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
         packetBytes.rewind();
-        int type = packetBytes.get() & 0x30;
+        int type = (packetBytes.get() & 0x30) >> 4;
         if (InitialPacket.isInitial(type, Version.parse(version))) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-14.1
             // "A server MUST discard an Initial packet that is carried in a UDP
