@@ -35,7 +35,6 @@ public abstract class ConnectionIdRegistry {
 
     /** Maps sequence number to connection ID (info) */
     protected final Map<Integer, ConnectionIdInfo> connectionIds = new ConcurrentHashMap<>();
-    protected volatile byte[] currentConnectionId;
     protected final Logger log;
     private final SecureRandom randomGenerator;
     private final int connectionIdLength;
@@ -50,8 +49,7 @@ public abstract class ConnectionIdRegistry {
 
         randomGenerator = new SecureRandom();
 
-        currentConnectionId = generateConnectionId();
-        connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
+        connectionIds.put(0, new ConnectionIdInfo(0, generateConnectionId(), ConnectionIdStatus.IN_USE));
     }
 
     public byte[] retireConnectionId(int sequenceNr) {
@@ -71,13 +69,6 @@ public abstract class ConnectionIdRegistry {
     }
 
     /**
-     * @deprecated  use getActive to get <em>an</em> active connection ID
-     */
-    public byte[] getCurrent() {
-        return currentConnectionId;
-    }
-
-    /**
      * Get an active connection ID. There can be multiple active connection IDs, this method returns an arbitrary one.
      * @return  an active connection ID or null if non is active (which should never happen).
      */
@@ -90,13 +81,6 @@ public abstract class ConnectionIdRegistry {
 
     public Map<Integer, ConnectionIdInfo> getAll() {
         return connectionIds;
-    }
-
-    protected int currentIndex() {
-        return connectionIds.entrySet().stream()
-                .filter(entry -> Arrays.equals(entry.getValue().getConnectionId(), currentConnectionId))
-                .mapToInt(entry -> entry.getKey())
-                .findFirst().orElseThrow();
     }
 
     protected byte[] generateConnectionId() {

@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
+    private volatile byte[] currentConnectionId;
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
 
 
@@ -56,6 +57,10 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
             connectionIds.put(sequenceNr, new ConnectionIdInfo(sequenceNr, connectionId, ConnectionIdStatus.RETIRED, statelessResetToken));
             return false;
         }
+    }
+
+    public byte[] getCurrent() {
+        return currentConnectionId;
     }
 
     public byte[] useNext() {
@@ -111,5 +116,11 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
                 .filter(cid -> cid.getConnectionIdStatus().notUnusedOrRetired())
                 .anyMatch(cid -> Arrays.equals(cid.getStatelessResetToken(), tokenCandidate));
     }
-}
 
+    private int currentIndex() {
+        return connectionIds.entrySet().stream()
+                .filter(entry -> Arrays.equals(entry.getValue().getConnectionId(), currentConnectionId))
+                .mapToInt(entry -> entry.getKey())
+                .findFirst().orElseThrow();
+    }
+}

@@ -464,6 +464,7 @@ class QuicClientConnectionImplTest {
         // Given
         useMockSender();
         setTransportParametersWithActiveConnectionIdLimit(7);
+        connection.process(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), new Padding(20)), Instant.now());
 
         // When
         byte[] newUnusedConnectionId = connection.newConnectionIds(1, 0)[0];

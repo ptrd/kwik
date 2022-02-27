@@ -81,7 +81,7 @@ public class ConnectionIdManager {
         this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
-        initialConnectionId = cidRegistry.currentConnectionId;
+        initialConnectionId = cidRegistry.get(0);
 
         if (initialClientCid != null && initialClientCid.length != 0) {
             peerCidRegistry = new DestinationConnectionIdRegistry(initialClientCid, log);
@@ -96,7 +96,7 @@ public class ConnectionIdManager {
 
     /**
      * Creates a connection ID manager for client role.
-     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
+     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (client)
      * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
      * @param sender  the sender to send messages to the peer
      * @param closeConnectionCallback  callback for closing the connection with a transport error code
@@ -107,7 +107,7 @@ public class ConnectionIdManager {
         this.sender = sender;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         this.connectionIdLength = cidRegistry.getConnectionIdlength();
-        initialConnectionId = cidRegistry.getCurrent();
+        initialConnectionId = cidRegistry.getActive();
         this.closeConnectionCallback = closeConnectionCallback;
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-negotiating-connection-ids
