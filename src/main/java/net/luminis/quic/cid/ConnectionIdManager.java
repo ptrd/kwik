@@ -119,19 +119,7 @@ public class ConnectionIdManager {
         peerCidRegistry = new DestinationConnectionIdRegistry(originalDestinationConnectionId, log);
         initialPeerConnectionId = originalDestinationConnectionId;
 
-        connectionRegistry = new ServerConnectionRegistry() {   // TODO
-            @Override
-            public void registerConnection(ServerConnectionProxy connection, byte[] connectionId) {}
-
-            @Override
-            public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {}
-
-            @Override
-            public void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId) {}
-
-            @Override
-            public void deregisterConnectionId(byte[] connectionId) {}
-        };
+        connectionRegistry = null;  // Not used for client
     }
 
     public void handshakeFinished() {
@@ -212,7 +200,9 @@ public class ConnectionIdManager {
         byte[] retiredCid = cidRegistry.retireConnectionId(sequenceNr);
         // If not retired already
         if (retiredCid != null) {
-            connectionRegistry.deregisterConnectionId(retiredCid);
+            if (connectionRegistry != null) {
+                connectionRegistry.deregisterConnectionId(retiredCid);
+            }
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
             // "An endpoint SHOULD supply a new connection ID when the peer retires a connection ID."
             if (cidRegistry.getActiveConnectionIds().size() < maxCids) {
@@ -251,7 +241,9 @@ public class ConnectionIdManager {
      */
     private ConnectionIdInfo sendNewCid(int retirePriorTo) {
         ConnectionIdInfo cidInfo = cidRegistry.generateNew();
-        connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
+        if (connectionRegistry != null) {
+            connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
+        }
         sender.send(new NewConnectionIdFrame(quicVersion, cidInfo.getSequenceNumber(), retirePriorTo, cidInfo.getConnectionId()),
                 App, this::retransmitFrame);
         return cidInfo;
