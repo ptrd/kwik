@@ -2,7 +2,7 @@
 
 ## A QUIC implementation in Java
 
-Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in Java. 
+Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in (100%) Java. 
 Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
 QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
@@ -144,13 +144,13 @@ Usage of the sample client:
             
 If you do not provide the `--http` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
 
-Plain Kwik will use HTTP 0.9 for http requests. However, if the flupke-plugin.jar is on the classpath (e.g. when using
+Plain Kwik will use HTTP 0.9 for http requests. However, if the flupke-plugin.jar is on the classpath (when using
 the kwik.sh script, it will try to load the plugin from the `libs` directory), it will use Flupke HTTP3 client for the
 HTTP request.
 
 ### Server
 
-To run the server, execute `java -cp kwik.jar net.luminis.quic.server.Server` with the following arguments:
+To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.run.SampleWebServer` with the following arguments:
 - certificate file
 - private key file
 - port number
@@ -160,15 +160,15 @@ This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc
 To run without retry-mode, add the `--noRetry` flag as first argument.  
 
 
-## Adding HTTP/3 Support to the KWIK Server
+## Adding HTTP/3 Support to Kwik client or server.
 
-A plain Kwik server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
+A plain Kwik client or server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
 have been using for early testing. 
 
-To add HTTP/3 to Kwik,
-- Clone the repo [Flupke](https://bitbucket.org/pjtr/flupke).
-- Build the flupke repo cloned above.
-- Add the flupke.jar generated to server's class path For e.g. `java -cp kwik.jar:flupke.jar net.luminis.quic.server.Server`.
+To add HTTP/3 to Kwik you should use the flupke-plugin:
+- Clone the repo [Flupke](https://bitbucket.org/pjtr/flupke) and cd into its directory.
+- Build with `gradle flupkePlugin`
+- Add the generated flupke-plugin.jar (in build/libs) to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-plugin.jar net.luminis.quic.run.SampleWebServer`. 
                                 
 ## Contact
 

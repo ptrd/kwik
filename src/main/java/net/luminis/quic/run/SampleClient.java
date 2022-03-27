@@ -36,7 +36,7 @@ import java.nio.charset.StandardCharsets;
  * Retrieves "/" resource and safes content to file.
  * Usage: expects one argument: the address of the server, e.g. http://quicserver:4433
  */
-public class Sample {
+public class SampleClient {
 
     public static void main(String[] args) throws Exception {
 

@@ -17,4 +17,4 @@ RUN truncate -s 3M /www/3M
 RUN truncate -s 4M /www/4M
 RUN truncate -s 5M /www/5M
 
-CMD java -cp kwik.jar:flupke.jar net.luminis.quic.server.Server ${CERT} ${KEY} 4433 /www
+CMD java -cp kwik.jar:flupke.jar net.luminis.quic.run.InteropServer ${CERT} ${KEY} 4433 /www

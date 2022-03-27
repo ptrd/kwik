@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2020. 2021, 2022 Peter Doornbosch
+ *
+ * This file is part of Kwik, an implementation of the QUIC protocol in Java.
+ *
+ * Kwik is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Kwik is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package net.luminis.quic.server;
 
 import net.luminis.quic.*;
@@ -18,7 +36,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
-import java.io.File;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -34,9 +51,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
-class ServerTest {
+class ServerConnectorTest {
 
-    private Server server;
+    private ServerConnector server;
     private DatagramSocket serverSocket;
 
     @BeforeEach
@@ -44,7 +61,8 @@ class ServerTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new Server(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, new File("."));
+        server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, mock(Logger.class));
+        server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
     }
 
     @Test

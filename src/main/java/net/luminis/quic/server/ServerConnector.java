@@ -19,21 +19,13 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.*;
-import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.VersionNegotiationPacket;
-import net.luminis.quic.run.KwikVersion;
-import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
-import org.apache.commons.cli.*;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -47,7 +39,7 @@ import java.util.stream.Collectors;
 /**
  * Simple QUIC server.
  */
-public class Server implements ServerConnectionRegistry {
+public class ServerConnector implements ServerConnectionRegistry {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
     private static final int CONNECTION_ID_LENGTH = 4;
@@ -64,81 +56,16 @@ public class Server implements ServerConnectionRegistry {
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
 
-    private static void usageAndExit() {
-        System.err.println("Usage: [--noRetry] cert file, cert key file, port number [www dir]");
-        System.exit(1);
+
+    public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
+        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
     }
 
-    public static void main(String[] rawArgs) throws Exception {
-        Options cmdLineOptions = new Options();
-        cmdLineOptions.addOption(null, "noRetry", false, "disable always use retry");
-
-        CommandLineParser parser = new DefaultParser();
-        CommandLine cmd = null;
-        try {
-            cmd = parser.parse(cmdLineOptions, rawArgs);
-        }
-        catch (ParseException argError) {
-            System.out.println("Invalid argument: " + argError.getMessage());
-            usageAndExit();
-        }
-
-        List<String> args = cmd.getArgList();
-        if (args.size() < 3) {
-            usageAndExit();
-        }
-
-        boolean requireRetry = ! cmd.hasOption("noRetry");
-
-        File certificateFile = new File(args.get(0));
-        if (!certificateFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(0));
-            System.exit(1);
-        }
-
-        File certificateKeyFile = new File(args.get(1));
-        if (!certificateKeyFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(1));
-            System.exit(1);
-        }
-
-        int port = Integer.parseInt(args.get(2));
-
-        File wwwDir = null;
-        if (args.size() > 3) {
-            wwwDir = new File(args.get(3));
-            if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
-                System.err.println("Cannot read www dir '" + wwwDir + "'");
-                System.exit(1);
-            }
-        }
-
-        List<Version> supportedVersions = new ArrayList<>();
-        supportedVersions.addAll(List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32));
-        supportedVersions.add(Version.QUIC_version_1);
-
-        new Server(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, wwwDir).start();
-    }
-
-    public Server(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, File dir) throws Exception {
-        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, dir);
-    }
-
-    public Server(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, File dir) throws Exception {
+    public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
         this.requireRetry = requireRetry;
-
-        File logDir = new File("/logs");
-        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite()) {
-            log = new FileLogger(new File(logDir, "kwikserver.log"));
-        }
-        else {
-            log = new SysOutLogger();
-        }
-        log.timeFormat(Logger.TimeFormat.Long);
-        log.logWarning(true);
-        log.logInfo(true);
+        this.log = log;
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
@@ -146,54 +73,24 @@ public class Server implements ServerConnectionRegistry {
                 this.requireRetry, applicationProtocolRegistry, initalRtt, this, this::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
-        if (dir != null) {
-            registerApplicationLayerProtocols(dir);
-        }
-
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
-        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protcols: "
-                + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
-    private void start() {
+    public void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory) {
+        applicationProtocolRegistry.registerApplicationProtocol(protocol, protocolConnectionFactory);
+    }
+
+    public Set<String> getRegisteredApplicationProtocols() {
+        return applicationProtocolRegistry.getRegisteredApplicationProtocols();
+    }
+
+    public void start() {
         receiver.start();
 
         new Thread(this::receiveLoop, "server receive loop").start();
-    }
-
-    private void registerApplicationLayerProtocols(File wwwDir) {
-        ApplicationProtocolConnectionFactory http3ApplicationProtocolConnectionFactory = null;
-
-        try {
-            // If flupke server plugin is on classpath, load the http3 connection factory class.
-            Class<?> http3FactoryClass = this.getClass().getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
-            http3ApplicationProtocolConnectionFactory = (ApplicationProtocolConnectionFactory)
-                    http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
-            log.info("Loading Flupke H3 server plugin");
-        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-        }
-
-        Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory(wwwDir);
-
-        final ApplicationProtocolConnectionFactory http3ApplicationProtocolFactory = http3ApplicationProtocolConnectionFactory;
-        supportedVersions.forEach(version -> {
-            String protocol = "hq";
-            String versionSuffix = version.getDraftVersion();
-            if (! versionSuffix.isBlank()) {
-                protocol += "-" + versionSuffix;
-            }
-            else {
-                protocol = "hq-interop";
-            }
-            applicationProtocolRegistry.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
-
-            if (http3ApplicationProtocolFactory != null) {
-
-                String h3Protocol = protocol.replace("hq-interop", "h3").replace("hq", "h3");
-                applicationProtocolRegistry.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
-            }
-        });
+        log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protcols: "
+                + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
     private void receiveLoop() {
@@ -432,4 +329,5 @@ public class Server implements ServerConnectionRegistry {
                         .collect(Collectors.joining("\n")));
 
     }
+
 }
