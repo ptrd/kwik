@@ -93,7 +93,7 @@ public class ServerConnector implements ServerConnectionRegistry {
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
-    private void receiveLoop() {
+    protected void receiveLoop() {
         while (true) {
             try {
                 RawPacket rawPacket = receiver.get((int) Duration.ofDays(10 * 365).toSeconds());
@@ -109,7 +109,7 @@ public class ServerConnector implements ServerConnectionRegistry {
         }
     }
 
-    void process(RawPacket rawPacket) {
+    protected void process(RawPacket rawPacket) {
         ByteBuffer data = rawPacket.getData();
         int flags = data.get();
         data.rewind();
