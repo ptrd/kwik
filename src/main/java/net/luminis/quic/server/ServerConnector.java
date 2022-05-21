@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Simple QUIC server.
+ * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
 public class ServerConnector implements ServerConnectionRegistry {
 
