@@ -65,7 +65,7 @@ public class ServerConnector implements ServerConnectionRegistry {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
         this.requireRetry = requireRetry;
-        this.log = log;
+        this.log = Objects.requireNonNull(log);
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
