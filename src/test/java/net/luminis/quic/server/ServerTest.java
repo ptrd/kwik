@@ -198,7 +198,7 @@ class ServerTest {
         byte[] dcid = new byte[] { 11, 12, 13, 14, 15, 16, 17, 18 };
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
         initialPacket.addFrame(new Padding(938));
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         connectionSecrets.computeInitialKeys(dcid);
         byte[] packetBytes = initialPacket.generatePacketBytes(0L, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
         server.process(createPacket(ByteBuffer.wrap(packetBytes)));

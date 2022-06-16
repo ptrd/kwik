@@ -93,12 +93,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile Thread receiverThread;
 
 
-    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version quicVersion, Logger log,
+    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version initialVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey) throws UnknownHostException, SocketException {
-        super(quicVersion, Role.Client, secretsFile, log);
-        log.info("Creating connection with " + host + ":" + port + " with " + quicVersion);
+        super(initialVersion, Role.Client, secretsFile, log);
+        log.info("Creating connection with " + host + ":" + port + " with " + initialVersion);
         this.host = host;
         this.port = port;
         serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
@@ -291,7 +291,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void ping() {
         if (connectionState == Status.Connected) {
-            sender.send(new PingFrame(quicVersion), App);
+            sender.send(new PingFrame(quicVersion.getVersion()), App);
             sender.flush();
         }
         else {
@@ -347,11 +347,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             });
         }
 
-        if (quicVersion.isV2()) {
+        if (quicVersion.getVersion().isV2()) {
             transportParams.setVersionInformation(new TransportParameters.VersionInformation(Version.QUIC_version_2,
                     List.of(Version.QUIC_version_2, Version.QUIC_version_1)));
         }
-        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion, transportParams, Role.Client);
+        QuicTransportParametersExtension tpExtension = new QuicTransportParametersExtension(quicVersion.getVersion(), transportParams, Role.Client);
         if (clientHelloEnlargement != null) {
             tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
         }
@@ -469,7 +469,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(VersionNegotiationPacket vnPacket, Instant time) {
-        if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion)) {
+        if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion.getVersion())) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
         }

@@ -57,7 +57,7 @@ class SenderImplTest extends AbstractSenderTest {
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
+        sender = new SenderImpl(new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, 100, new NullLogger());
         sender.start(connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);

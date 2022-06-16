@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.InvalidPacketException;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
@@ -164,7 +161,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
         // "An Initial packet uses long headers with a type value of 0x0."
         if (InitialPacket.isInitial((flags & 0x30) >> 4, quicVersion)) {
             InitialPacket packet = new InitialPacket(quicVersion);
-            ConnectionSecrets connectionSecrets = new ConnectionSecrets(quicVersion, Role.Server, null, new NullLogger());
+            ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
             byte[] originalDcid = dcid;
             connectionSecrets.computeInitialKeys(originalDcid);
             Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());

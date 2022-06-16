@@ -71,7 +71,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
-    protected final Version quicVersion;
+    protected final VersionHolder quicVersion;
     private final Role role;
     protected final Logger log;
 
@@ -96,8 +96,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     private final ScheduledExecutorService scheduler;
 
 
-    protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
-        this.quicVersion = quicVersion;
+    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
+        this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
 
@@ -257,7 +257,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
         else {
             // Short header packet
-            packet = new ShortHeaderPacket(quicVersion);
+            packet = new ShortHeaderPacket(quicVersion.getVersion());
         }
         data.rewind();
 
@@ -314,18 +314,18 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         //  will be identified as a Version Negotiation packet based on the
         //  Version field having a value of 0."
         if (version == 0) {
-            return new VersionNegotiationPacket(quicVersion);
+            return new VersionNegotiationPacket(quicVersion.getVersion());
         }
-        else if (InitialPacket.isInitial(type, quicVersion)) {
-            return new InitialPacket(quicVersion);
+        else if (InitialPacket.isInitial(type, quicVersion.getVersion())) {
+            return new InitialPacket(quicVersion.getVersion());
         }
-        else if (RetryPacket.isRetry(type, quicVersion)) {
-             return new RetryPacket(quicVersion);
+        else if (RetryPacket.isRetry(type, quicVersion.getVersion())) {
+             return new RetryPacket(quicVersion.getVersion());
         }
-        else if (HandshakePacket.isHandshake(type, quicVersion)) {
-            return new HandshakePacket(quicVersion);
+        else if (HandshakePacket.isHandshake(type, quicVersion.getVersion())) {
+            return new HandshakePacket(quicVersion.getVersion());
         }
-        else if (ZeroRttPacket.isZeroRTT(type, quicVersion)) {
+        else if (ZeroRttPacket.isZeroRTT(type, quicVersion.getVersion())) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
             // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
             //  prior to handshake completion. "
@@ -334,7 +334,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 throw new InvalidPacketException();
             }
             else {
-                return new ZeroRttPacket(quicVersion);
+                return new ZeroRttPacket(quicVersion.getVersion());
             }
         }
         else {
@@ -415,7 +415,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
+        PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Responses to path validation using PATH_RESPONSE frames are sent just once."
         send(response, f -> {});
@@ -527,7 +527,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
-        getSender().send(new ConnectionCloseFrame(quicVersion, error, errorReason), level);
+        getSender().send(new ConnectionCloseFrame(quicVersion.getVersion(), error, errorReason), level);
         // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
         connectionState = Status.Closing;
 
@@ -563,7 +563,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
+            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion.getVersion()), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
         }
     }
 
@@ -584,7 +584,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
-            send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);  // No flush necessary, as this method is called while processing a received packet.
+            send(new ConnectionCloseFrame(quicVersion.getVersion()), encryptionLevel, NO_RETRANSMIT, false);  // No flush necessary, as this method is called while processing a received packet.
 
             drain();
         }
@@ -707,7 +707,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
     @Override
     public Version getQuicVersion() {
-        return quicVersion;
+        return quicVersion.getVersion();
     }
 
     protected abstract SenderImpl getSender();

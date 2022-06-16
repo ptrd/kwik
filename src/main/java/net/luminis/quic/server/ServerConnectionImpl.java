@@ -100,11 +100,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param closeCallback  callback for notifying interested parties this connection is closed
      * @param log  logger
      */
-    protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
+    protected ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                    byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
-        super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
+        super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.initialClientAddress = initialClientAddress;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -233,7 +233,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // TODO: discard keys too
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
-        sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
+        sendHandshakeDone(new HandshakeDoneFrame(quicVersion.getVersion()));
         connectionState = Connected;
 
         synchronized (handshakeStateLock) {
@@ -309,7 +309,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             serverTransportParams.setRetrySourceConnectionId(connectionIdManager.getInitialConnectionId());
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
-        tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
+        tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
     }
 
     @Override
@@ -408,7 +408,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion, connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
     }
 

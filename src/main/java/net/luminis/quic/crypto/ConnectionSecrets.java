@@ -22,9 +22,9 @@ import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Role;
 import net.luminis.quic.Version;
+import net.luminis.quic.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
-import net.luminis.tls.handshake.TlsClientEngine;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
@@ -59,7 +59,7 @@ public class ConnectionSecrets {
             (byte) 0x4a, (byte) 0x1d, (byte) 0x62, (byte) 0xca, (byte) 0x57, (byte) 0x04, (byte) 0x06, (byte) 0xea,
             (byte) 0x7a, (byte) 0xe3, (byte) 0xe5, (byte) 0xd3 };
 
-    private final Version quicVersion;
+    private final VersionHolder quicVersion;
     private final Role ownRole;
     private Logger log;
     private byte[] clientRandom;
@@ -69,7 +69,7 @@ public class ConnectionSecrets {
     private Path wiresharkSecretsFile;
 
 
-    public ConnectionSecrets(Version quicVersion, Role role, Path wiresharksecrets, Logger log) {
+    public ConnectionSecrets(VersionHolder quicVersion, Role role, Path wiresharksecrets, Logger log) {
         this.quicVersion = quicVersion;
         this.ownRole = role;
         this.log = log;
@@ -97,17 +97,18 @@ public class ConnectionSecrets {
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion.isV1()? STATIC_SALT_V1: quicVersion.isV2()? STATIC_SALT_V2: STATIC_SALT_DRAFT_29;
+        Version actualVersion = quicVersion.getVersion();
+        byte[] initialSalt = actualVersion.isV1()? STATIC_SALT_V1: actualVersion.isV2()? STATIC_SALT_V2: STATIC_SALT_DRAFT_29;
         byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
         log.secret("Initial secret", initialSecret);
 
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Server, log);
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
     }
 
     public synchronized void computeEarlySecrets(TrafficSecrets secrets) {
-        Keys zeroRttSecrets = new Keys(quicVersion, Role.Client, log);
+        Keys zeroRttSecrets = new Keys(quicVersion.getVersion(), Role.Client, log);
         zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
@@ -115,13 +116,15 @@ public class ConnectionSecrets {
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
         Keys clientHandshakeSecrets;
         Keys serverHandshakeSecrets;
+        Version actualVersion = this.quicVersion.getVersion();
+        
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Keys(quicVersion, Role.Client, log);
-            serverHandshakeSecrets = new Keys(quicVersion, Role.Server, log);
+            clientHandshakeSecrets = new Keys(actualVersion, Role.Client, log);
+            serverHandshakeSecrets = new Keys(actualVersion, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Client, log);
-            serverHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Server, log);
+            clientHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Client, log);
+            serverHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Server, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);

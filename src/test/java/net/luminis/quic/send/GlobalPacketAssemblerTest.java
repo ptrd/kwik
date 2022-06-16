@@ -49,7 +49,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue();
         }
-        globalPacketAssembler = new GlobalPacketAssembler(Version.getDefault(), sendRequestQueues, ackGenerator);
+        globalPacketAssembler = new GlobalPacketAssembler(new VersionHolder(Version.getDefault()), sendRequestQueues, ackGenerator);
     }
 
     @Test
