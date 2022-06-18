@@ -56,7 +56,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Command line interface for Kwik
+ * Command line interface for Kwik client.
  */
 public class KwikCli {
 
@@ -80,6 +80,7 @@ public class KwikCli {
         cmdLineOptions.addOption("32", "use Quic version IETF_draft_32");
         cmdLineOptions.addOption("v1", "use Quic version 1");
         cmdLineOptions.addOption("v2", "use Quic version 2");
+        cmdLineOptions.addOption("v1v2", "use Quic version 1, request version 2");
         cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
@@ -234,8 +235,13 @@ public class KwikCli {
         }
 
         Version quicVersion = Version.getDefault();
+        Version preferredVersion = null;
 
-        if (cmd.hasOption("v2")) {
+        if (cmd.hasOption("v1v2")) {
+            quicVersion = Version.QUIC_version_1;
+            preferredVersion = Version.QUIC_version_2;
+        }
+        else if (cmd.hasOption("v2")) {
             quicVersion = Version.QUIC_version_2;
         }
         else if (cmd.hasOption("v1")) {
@@ -258,6 +264,7 @@ public class KwikCli {
             quicVersion = Version.reserved_1;
         }
         builder.version(quicVersion);
+        builder.preferredVersion(preferredVersion);
 
         HttpVersion httpVersion = loadHttp3ClientClass()? HttpVersion.HTTP3: HttpVersion.HTTP09;
 

@@ -69,6 +69,10 @@ public class Version {
         return isDraftVersion(versionId) || versionId == QUIC_version_1.versionId || versionId == QUIC_version_2.versionId;
     }
 
+    public boolean isZero() {
+        return versionId == 0x00000000;
+    }
+
     public boolean isV1() {
         return versionId == 0x00000001;
     }

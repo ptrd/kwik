@@ -88,7 +88,7 @@ public class QuicConstants {
         }
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-error-codes
     public enum TransportErrorCode {
         NO_ERROR (0x0),
         INTERNAL_ERROR (0x1),
@@ -106,7 +106,10 @@ public class QuicConstants {
         CRYPTO_BUFFER_EXCEEDED (0xd),
         KEY_UPDATE_ERROR (0xe),
         AEAD_LIMIT_REACHED (0xf),
+        NO_VIABLE_PATH (0x10),
         CRYPTO_ERROR (0x100),
+        // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-08.html#iana-error
+        VERSION_NEGOTIATION_ERROR(0x53F8),   // !! When this document is approved, it will request permanent allocation of a codepoint in the 0-63 range to replace the provisional codepoint described above.
         ;
 
         public final short value;

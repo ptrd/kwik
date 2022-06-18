@@ -334,7 +334,7 @@ public class TransportParameters {
 
         @Override
         public String toString() {
-            return "" + chosenVersion + otherVersions;
+            return String.format("%s|%s", chosenVersion, otherVersions);
         }
     }
 }

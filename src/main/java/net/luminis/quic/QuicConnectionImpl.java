@@ -23,6 +23,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
@@ -262,7 +263,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            Keys keys = null;
+            if (packet.getVersion().equals(quicVersion.getVersion())) {
+                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
+            else if (role == Role.Client && isHandshaking()) {
+                log.info(String.format("Receiving packet with version %s, while connection version is %s", packet.getVersion(), quicVersion));
+                // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
+                ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
+                altSecrets.computeInitialKeys(getDestinationConnectionId());
+                keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
             if (keys == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
@@ -307,25 +318,25 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             throw new InvalidPacketException("packet too short to be valid QUIC long header packet");
         }
         int type = (flags & 0x30) >> 4;
-        int version = data.getInt();
+        Version packetVersion = new Version(data.getInt());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
-        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
-        //  will be identified as a Version Negotiation packet based on the
-        //  Version field having a value of 0."
-        if (version == 0) {
-            return new VersionNegotiationPacket(quicVersion.getVersion());
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-version-negotiation-packet
+        // "A Version Negotiation packet is inherently not version specific. Upon receipt by a client, it will be
+        // identified as a Version Negotiation packet based on the Version field having a value of 0."
+        Version connectionVersion = quicVersion.getVersion();
+        if (packetVersion.isZero()) {
+            return new VersionNegotiationPacket(connectionVersion);
         }
-        else if (InitialPacket.isInitial(type, quicVersion.getVersion())) {
-            return new InitialPacket(quicVersion.getVersion());
+        else if (InitialPacket.isInitial(type, packetVersion)) {
+            return new InitialPacket(packetVersion);
         }
-        else if (RetryPacket.isRetry(type, quicVersion.getVersion())) {
-             return new RetryPacket(quicVersion.getVersion());
+        else if (RetryPacket.isRetry(type, connectionVersion)) {
+             return new RetryPacket(connectionVersion);
         }
-        else if (HandshakePacket.isHandshake(type, quicVersion.getVersion())) {
-            return new HandshakePacket(quicVersion.getVersion());
+        else if (HandshakePacket.isHandshake(type, connectionVersion)) {
+            return new HandshakePacket(connectionVersion);
         }
-        else if (ZeroRttPacket.isZeroRTT(type, quicVersion.getVersion())) {
+        else if (ZeroRttPacket.isZeroRTT(type, connectionVersion)) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
             // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
             //  prior to handshake completion. "
@@ -334,7 +345,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 throw new InvalidPacketException();
             }
             else {
-                return new ZeroRttPacket(quicVersion.getVersion());
+                return new ZeroRttPacket(connectionVersion);
             }
         }
         else {
@@ -708,6 +719,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public Version getQuicVersion() {
         return quicVersion.getVersion();
+    }
+
+    public boolean isHandshaking() {
+        return handshakeState != HandshakeState.Confirmed;
     }
 
     protected abstract SenderImpl getSender();

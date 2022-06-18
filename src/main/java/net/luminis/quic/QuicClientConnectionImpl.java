@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -54,8 +55,7 @@ import java.util.stream.Collectors;
 
 import static net.luminis.quic.EarlyDataStatus.*;
 import static net.luminis.quic.EncryptionLevel.*;
-import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
-import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
@@ -64,7 +64,11 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
-
+    enum VersionNegotiationStatus {
+        NotStarted,
+        VersionChangeUnconfirmed,
+        VersionNegotiated
+    }
     private final String host;
     private final int port;
     private final QuicSessionTicket sessionTicket;
@@ -77,6 +81,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
     private final ConnectionIdManager connectionIdManager;
+    private final Version originalVersion;
+    private final Version preferredVersion;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -91,14 +97,17 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
+    private VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
 
-    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version initialVersion, Logger log,
+    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey) throws UnknownHostException, SocketException {
-        super(initialVersion, Role.Client, secretsFile, log);
-        log.info("Creating connection with " + host + ":" + port + " with " + initialVersion);
+        super(originalVersion, Role.Client, secretsFile, log);
+        log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
+        this.originalVersion = originalVersion;
+        this.preferredVersion = preferredVersion;
         this.host = host;
         this.port = port;
         serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
@@ -347,7 +356,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             });
         }
 
-        if (quicVersion.getVersion().isV2()) {
+        if (preferredVersion != null && !preferredVersion.equals(originalVersion)) {
+            transportParams.setVersionInformation(new TransportParameters.VersionInformation(originalVersion,
+                    List.of(preferredVersion, originalVersion)));
+        }
+        else if (quicVersion.getVersion().isV2()) {
             transportParams.setVersionInformation(new TransportParameters.VersionInformation(Version.QUIC_version_2,
                     List.of(Version.QUIC_version_2, Version.QUIC_version_1)));
         }
@@ -448,10 +461,23 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
+        if (! packet.getVersion().equals(quicVersion)) {
+            handleVersionNegotiation(packet.getVersion());
+        }
         connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
         processFrames(packet, time);
         ignoreVersionNegotiation = true;
         return ProcessResult.Continue;
+    }
+
+    private void handleVersionNegotiation(Version packetVersion) {
+        if (! packetVersion.equals(quicVersion)) {
+            if (packetVersion.equals(preferredVersion) && versionNegotiationStatus == VersionNegotiationStatus.NotStarted) {
+                versionNegotiationStatus = VersionNegotiationStatus.VersionChangeUnconfirmed;
+                quicVersion.setVersion(packetVersion);
+                connectionSecrets.computeInitialKeys(getDestinationConnectionId());
+            }
+        }
     }
 
     @Override
@@ -646,6 +672,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 return;
             }
         }
+        if (versionNegotiationStatus == VersionNegotiationStatus.VersionChangeUnconfirmed) {
+            verifyVersionNegotiation(transportParameters);
+        }
+
         peerTransportParams = transportParameters;
         if (flowController == null) {
             flowController = new FlowControl(Role.Client, peerTransportParams.getInitialMaxData(),
@@ -682,6 +712,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
                 immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
+        }
+    }
+
+    private void verifyVersionNegotiation(TransportParameters transportParameters) {
+        assert versionNegotiationStatus == VersionNegotiationStatus.VersionChangeUnconfirmed;
+        TransportParameters.VersionInformation versionInformation = transportParameters.getVersionInformation();
+        if (versionInformation == null || !versionInformation.getChosenVersion().equals(quicVersion.getVersion())) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-08.html
+            // "clients MUST validate that the server's Chosen Version is equal to the negotiated version; if they do not
+            //  match, the client MUST close the connection with a version negotiation error. "
+            log.error(String.format("HIERO: connection version: %s, version info: %s", quicVersion, versionInformation));
+            immediateCloseWithError(Handshake, VERSION_NEGOTIATION_ERROR.value, "Chosen version does not match packet version");
+        }
+        else {
+            versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
+            log.info(String.format("Version negotiation resulted in changing version from %s to %s", originalVersion, quicVersion));
         }
     }
 
@@ -948,6 +994,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         Builder version(Version version);
 
+        Builder initialVersion(Version version);
+
+        Builder preferredVersion(Version version);
+
         Builder logger(Logger log);
 
         Builder sessionTicket(QuicSessionTicket ticket);
@@ -978,6 +1028,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private int port;
         private QuicSessionTicket sessionTicket;
         private Version quicVersion = Version.getDefault();
+        private Version preferredVersion;
         private Logger log = new NullLogger();
         private String proxyHost;
         private Path secretsFile;
@@ -1005,8 +1056,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, log, proxyHost, secretsFile,
-                            initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
+                    new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, preferredVersion, log, proxyHost,
+                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
 
             if (omitCertificateCheck) {
                 quicConnection.trustAll();
@@ -1026,6 +1077,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder version(Version version) {
             quicVersion = version;
+            return this;
+        }
+
+        @Override
+        public Builder initialVersion(Version version) {
+            quicVersion = version;
+            return this;
+        }
+
+        @Override
+        public Builder preferredVersion(Version version) {
+            preferredVersion = version;
             return this;
         }
 
