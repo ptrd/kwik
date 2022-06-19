@@ -189,6 +189,42 @@ class ServerConnectionImplTest {
     }
 
     @Test
+    void versionInformationWithSupportedOtherVersionLeadsToVersionChange() throws Exception {
+        var connectionSecrets = spyOnConnectionSecrets();
+
+        // Given
+        TransportParameters.VersionInformation versionInfo = new TransportParameters.VersionInformation(Version.QUIC_version_1, List.of(Version.QUIC_version_2, Version.QUIC_version_1));
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension(versionInfo));
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
+
+        // When
+        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        assertThat(connection.getQuicVersion().equals(Version.QUIC_version_2));
+        verify(connectionSecrets).recomputeInitialKeys();
+    }
+
+    @Test
+    void versionInformationWithoutSupportedOtherVersionLeadsToNoVersionChange() throws Exception {
+        var connectionSecrets = spyOnConnectionSecrets();
+
+        // Given
+        TransportParameters.VersionInformation versionInfo = new TransportParameters.VersionInformation(Version.QUIC_version_1, List.of(Version.parse(0x1a2a3a4a), Version.QUIC_version_1));
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension(versionInfo));
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
+
+        // When
+        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        assertThat(connection.getQuicVersion().equals(Version.QUIC_version_1));
+        verify(connectionSecrets, never()).recomputeInitialKeys();
+    }
+
+    @Test
     void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
         // When
         List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
@@ -542,6 +578,18 @@ class ServerConnectionImplTest {
 
     private QuicTransportParametersExtension createTransportParametersExtension() {
         return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters(), Role.Client);
+    }
+
+    private QuicTransportParametersExtension createTransportParametersExtension(TransportParameters.VersionInformation versionInfo) {
+        TransportParameters transportParameters = createDefaultTransportParameters();
+        transportParameters.setVersionInformation(versionInfo);
+        return new QuicTransportParametersExtension(Version.getDefault(), transportParameters, Role.Client);
+    }
+
+    private ConnectionSecrets spyOnConnectionSecrets() throws Exception {
+        ConnectionSecrets connectionSecrets = spy((ConnectionSecrets) new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets")).read());
+        FieldSetter.setField(connection, QuicConnectionImpl.class. getDeclaredField("connectionSecrets"), connectionSecrets);
+        return connectionSecrets;
     }
 
     static class MockTlsServerEngine extends TlsServerEngine {

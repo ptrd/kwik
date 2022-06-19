@@ -86,7 +86,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     /**
      * Creates a server connection implementation.
-     * @param quicVersion  quic version used for this connection
+     * @param originalVersion  quic version used for this connection
      * @param serverSocket  the socket that is used for sending packets
      * @param initialClientAddress  the initial client address (after handshake, clients can move to different address)
      * @param peerCid  the connection id of the client
@@ -301,6 +301,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-version-negotiation-conside
+        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information transport parameter"
+        serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
@@ -333,7 +336,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             return super.parsePacket(data);
         }
         catch (DecryptionException decryptionException) {
-            if (retryRequired && (data.get(0) & 0b1111_0000) == 0b1100_0000) {
+            Version connectionVersion = quicVersion.getVersion();
+            if (retryRequired
+                    && LongHeaderPacket.isLongHeaderPacket(data.get(0), connectionVersion)
+                    && InitialPacket.isInitial((data.get(0) & 0x30) >> 4, connectionVersion)) {
                 // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
                 try {
                     data.rewind();
@@ -501,6 +507,17 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
+        TransportParameters.VersionInformation versionInformation = transportParameters.getVersionInformation();
+        if (versionInformation != null) {
+            Optional<Version> clientPreferred = versionInformation.getOtherVersions().stream()
+                    // Filter out versions reserved to exercise version negotiation (0x?a?a?a?a) and unknown versions.
+                    .filter(version -> version.isV1V2()).findFirst();
+            if (!clientPreferred.equals(Optional.of(quicVersion.getVersion()))) {
+                log.info(String.format("Switching from initial version %s to client's preferred version %s.", quicVersion, clientPreferred));
+                quicVersion.setVersion(clientPreferred.get());
+                connectionSecrets.recomputeInitialKeys();
+            }
+        }
         if (transportParameters.getInitialMaxStreamsBidi() > 0x1000000000000000l) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }

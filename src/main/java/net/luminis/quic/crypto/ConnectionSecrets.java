@@ -67,6 +67,7 @@ public class ConnectionSecrets {
     private Keys[] serverSecrets = new Keys[EncryptionLevel.values().length];
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
+    private byte[] originalDestinationConnectionId;
 
 
     public ConnectionSecrets(VersionHolder quicVersion, Role role, Path wiresharksecrets, Logger log) {
@@ -92,6 +93,7 @@ public class ConnectionSecrets {
      * @param destConnectionId
      */
     public synchronized void computeInitialKeys(byte[] destConnectionId) {
+        this.originalDestinationConnectionId = destConnectionId;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2:
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
@@ -105,6 +107,10 @@ public class ConnectionSecrets {
 
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
+    }
+
+    public void recomputeInitialKeys() {
+        computeInitialKeys(originalDestinationConnectionId);
     }
 
     public synchronized void computeEarlySecrets(TrafficSecrets secrets) {

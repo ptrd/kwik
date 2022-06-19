@@ -38,6 +38,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected byte[] sourceConnectionId;
 
+    public static boolean isLongHeaderPacket(byte flags, Version quicVersion) {
+        return (flags & 0b1100_0000) == 0b1100_0000;
+    }
+
     /**
      * Constructs an empty packet for parsing a received one
      * @param quicVersion

@@ -475,7 +475,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (packetVersion.equals(preferredVersion) && versionNegotiationStatus == VersionNegotiationStatus.NotStarted) {
                 versionNegotiationStatus = VersionNegotiationStatus.VersionChangeUnconfirmed;
                 quicVersion.setVersion(packetVersion);
-                connectionSecrets.computeInitialKeys(getDestinationConnectionId());
+                connectionSecrets.recomputeInitialKeys();
             }
         }
     }
