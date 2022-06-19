@@ -330,13 +330,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         else if (InitialPacket.isInitial(type, packetVersion)) {
             return new InitialPacket(packetVersion);
         }
-        else if (RetryPacket.isRetry(type, connectionVersion)) {
+        else if (RetryPacket.isRetry(type, packetVersion)) {
              return new RetryPacket(connectionVersion);
         }
-        else if (HandshakePacket.isHandshake(type, connectionVersion)) {
+        else if (HandshakePacket.isHandshake(type, packetVersion)) {
             return new HandshakePacket(connectionVersion);
         }
-        else if (ZeroRttPacket.isZeroRTT(type, connectionVersion)) {
+        else if (ZeroRttPacket.isZeroRTT(type, packetVersion)) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
             // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
             //  prior to handshake completion. "
@@ -345,7 +345,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 throw new InvalidPacketException();
             }
             else {
-                return new ZeroRttPacket(connectionVersion);
+                return new ZeroRttPacket(packetVersion);
             }
         }
         else {
