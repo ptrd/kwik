@@ -31,7 +31,8 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Sample with the smallest / simplest Java program to setup and use a QUIC connection,
- * assuming the server implements HTTP 0.9 protocol.
+ * assuming the server implements HTTP 0.9 protocol
+ * (which is a simplified version of HTTP 1, see https://medium.com/platform-engineer/evolution-of-http-69cfe6531ba0).
  *
  * Retrieves "/" resource and safes content to file.
  * Usage: expects one argument: the address of the server, e.g. http://quicserver:4433
@@ -48,11 +49,13 @@ public class SampleClient {
 
         QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
         QuicClientConnectionImpl connection =
-                builder.version(Version.IETF_draft_32)
+                builder.version(Version.QUIC_version_1)
                         .uri(new URI(args[0]))
                         .build();
 
-        connection.connect(10_000, "hq-32");
+        // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
+        // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
+        connection.connect(10_000, "hq-interop");
 
         QuicStream stream = connection.createStream(true);
 
