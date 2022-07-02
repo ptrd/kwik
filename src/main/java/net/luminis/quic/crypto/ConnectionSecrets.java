@@ -94,19 +94,22 @@ public class ConnectionSecrets {
      */
     public synchronized void computeInitialKeys(byte[] destConnectionId) {
         this.originalDestinationConnectionId = destConnectionId;
-
-        // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2:
-        // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
-        HKDF hkdf = HKDF.fromHmacSha256();
-
         Version actualVersion = quicVersion.getVersion();
-        byte[] initialSalt = actualVersion.isV1()? STATIC_SALT_V1: actualVersion.isV2()? STATIC_SALT_V2: STATIC_SALT_DRAFT_29;
-        byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
 
+        byte[] initialSecret = computeInitialSecret(actualVersion);
         log.secret("Initial secret", initialSecret);
 
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
+    }
+
+    private byte[] computeInitialSecret(Version actualVersion) {
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
+        // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
+        HKDF hkdf = HKDF.fromHmacSha256();
+
+        byte[] initialSalt = actualVersion.isV1() ? STATIC_SALT_V1 : actualVersion.isV2() ? STATIC_SALT_V2 : STATIC_SALT_DRAFT_29;
+        return hkdf.extract(initialSalt, originalDestinationConnectionId);
     }
 
     public void recomputeInitialKeys() {
