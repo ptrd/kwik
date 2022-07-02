@@ -62,6 +62,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
+    private final Version originalVersion;
     private final InetSocketAddress initialClientAddress;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
@@ -105,6 +106,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
+        this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -213,7 +215,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void earlySecretsKnown() {
-        connectionSecrets.computeEarlySecrets(tlsEngine);
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
+        connectionSecrets.computeEarlySecrets(tlsEngine, originalVersion);
     }
 
     @Override

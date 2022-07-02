@@ -126,8 +126,10 @@ public class ConnectionSecrets {
         computeInitialKeys(originalDestinationConnectionId);
     }
 
-    public synchronized void computeEarlySecrets(TrafficSecrets secrets) {
-        Keys zeroRttSecrets = new Keys(quicVersion.getVersion(), Role.Client, log);
+    public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
+        Keys zeroRttSecrets = new Keys(originalVersion, Role.Client, log);
         zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }

@@ -20,7 +20,6 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -380,7 +379,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void earlySecretsKnown() {
-        connectionSecrets.computeEarlySecrets(tlsEngine);
+        connectionSecrets.computeEarlySecrets(tlsEngine, quicVersion.getVersion());
     }
 
     @Override

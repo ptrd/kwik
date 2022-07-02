@@ -44,8 +44,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static net.luminis.quic.EncryptionLevel.App;
-import static net.luminis.quic.EncryptionLevel.Initial;
+import static net.luminis.quic.EncryptionLevel.*;
 import static net.luminis.quic.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
@@ -284,6 +283,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
                 altSecrets.computeInitialKeys(getDestinationConnectionId());
                 keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
+            else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+                // "The client MUST NOT send 0-RTT packets using the negotiated version, even after processing a packet of that version
+                //  from the server. Servers can apply original version 0-RTT packets to a connection without additional considerations."
+                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
                 // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
