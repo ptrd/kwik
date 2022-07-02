@@ -64,11 +64,6 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
 
-    enum VersionNegotiationStatus {
-        NotStarted,
-        VersionChangeUnconfirmed,
-        VersionNegotiated
-    }
     private final String host;
     private final int port;
     private final QuicSessionTicket sessionTicket;
@@ -97,7 +92,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
-    private VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,

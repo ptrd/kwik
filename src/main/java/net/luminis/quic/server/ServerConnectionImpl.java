@@ -514,6 +514,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                     .filter(version -> version.isV1V2()).findFirst();
             if (!clientPreferred.equals(Optional.of(quicVersion.getVersion()))) {
                 log.info(String.format("Switching from initial version %s to client's preferred version %s.", quicVersion, clientPreferred));
+                versionNegotiationStatus = VersionNegotiationStatus.VersionChangeUnconfirmed;
                 quicVersion.setVersion(clientPreferred.get());
                 connectionSecrets.recomputeInitialKeys();
             }

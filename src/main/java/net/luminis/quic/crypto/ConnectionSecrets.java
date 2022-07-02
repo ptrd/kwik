@@ -103,6 +103,16 @@ public class ConnectionSecrets {
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
     }
 
+    /**
+     * (Re)generates the keys for the initial peer secrets based on the given version. This is sometimes used during
+     * version negotiation, when a packet with the "old" (original) version needs to be decoded.
+     * @param version
+     * @return
+     */
+    public Keys getInitialPeerSecretsForVersion(Version version) {
+        return new Keys(version, computeInitialSecret(version), ownRole.other(), log);
+    }
+
     private byte[] computeInitialSecret(Version actualVersion) {
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"

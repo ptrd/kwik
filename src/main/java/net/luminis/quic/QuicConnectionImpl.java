@@ -46,6 +46,7 @@ import java.util.function.Function;
 
 import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.quic.EncryptionLevel.Initial;
+import static net.luminis.quic.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
@@ -72,9 +73,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
+    protected enum VersionNegotiationStatus {
+        NotStarted,
+        VersionChangeUnconfirmed,
+        VersionNegotiated
+    }
+
     protected final VersionHolder quicVersion;
     private final Role role;
     protected final Logger log;
+    protected VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
     protected final ConnectionSecrets connectionSecrets;
     protected volatile TransportParameters transportParams;
@@ -265,6 +273,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (packet.getEncryptionLevel() != null) {
             Keys keys = null;
             if (packet.getVersion().equals(quicVersion.getVersion())) {
+                if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
+                    versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
+                }
                 keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
             }
             else if (role == Role.Client && isHandshaking()) {
@@ -273,6 +284,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
                 altSecrets.computeInitialKeys(getDestinationConnectionId());
                 keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
+            else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+                // "The server MUST NOT discard its original version Initial receive keys until it successfully processes a packet with the negotiated version."
+                keys = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
             }
             if (keys == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
