@@ -30,11 +30,11 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -49,17 +49,19 @@ class LossDetectorTest extends RecoveryTests {
     private LostPacketHandler lostPacketHandler;
     private int defaultRtt = 10;
     private CongestionController congestionController;
-    private RttEstimator rttEstimater;
+    private RttEstimator rttEstimator;
+    private TestClock clock;
 
     @BeforeEach
-    void initObjectUnderTest() {
-        RttEstimator rttEstimator = mock(RttEstimator.class);
+    void initObjectUnderTest() throws Exception {
+        clock = new TestClock();
+
+        rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class), () -> {});
         congestionController = mock(CongestionController.class);
         lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController, () -> {});
-        rttEstimater = mock(RttEstimator.class);
+        FieldSetter.setField(lossDetector, lossDetector.getClass().getDeclaredField("clock"), clock);
     }
 
     @BeforeEach
@@ -151,13 +153,16 @@ class LossDetectorTest extends RecoveryTests {
 
     @Test
     void packetTooOldIsDeclaredLost() {
-        Instant now = Instant.now();
+        // Given second packets is sent (a little) more than 9/8 rtt
         int timeDiff = (defaultRtt * 9 / 8) + 1;
-        lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
-        lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(6), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        clock.fastForward(timeDiff);
+        lossDetector.packetSent(createPacket(8), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(new Range(8L)), Instant.now());
+        // When when (only) the second packets is acked
+        lossDetector.onAckReceived(new AckFrame(new Range(8L)), clock.instant());
 
+        // Then the first is declared lost.
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 
@@ -186,20 +191,21 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void packetNotYetLostIsLostAfterLossTime() throws InterruptedException {
-        Instant now = Instant.now();
-        int timeDiff = defaultRtt - 1;  // Give some time for processing.
-        lossDetector.packetSent(createPacket(6), now.minusMillis(timeDiff), lostPacket -> lostPacketHandler.process(lostPacket));
-        lossDetector.packetSent(createPacket(8), now, lostPacket -> lostPacketHandler.process(lostPacket));
-
-        lossDetector.onAckReceived(new AckFrame(8L), Instant.now());
+    void packetNotYetLostIsLostAfterLossTime() throws Exception {
+        // Given two packets are sent at the same time and only the last is acked, exactly after RTT
+        lossDetector.packetSent(createPacket(6), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(8), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        clock.fastForward(defaultRtt);
+        lossDetector.onAckReceived(new AckFrame(8L), clock.instant());
 
         verify(lostPacketHandler, never()).process(any(QuicPacket.class));
         assertThat(lossDetector.getLossTime()).isNotNull();
 
-        Thread.sleep(Duration.between(lossDetector.getLossTime(), Instant.now()).toMillis() + 1);
-        lossDetector.detectLostPackets();
+        // When time is progressing another 1/8 rtt and another ack is received
+        clock.fastForward(defaultRtt / 8 + 1);
+        lossDetector.onAckReceived(new AckFrame(9L), clock.instant());
 
+        // Then the first packet is also acked (because by that time, it is old enough)
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 
@@ -270,14 +276,16 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void lostPacketIsNotDetectedAsUnacked() throws InterruptedException {
-        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(3), Instant.now(), p -> {});
+    void lostPacketIsNotDetectedAsUnacked() throws Exception {
+        // Given two packets sent
+        lossDetector.packetSent(createPacket(2), clock.instant(), p -> {});
+        lossDetector.packetSent(createPacket(3), clock.instant(), p -> {});
 
-        Thread.sleep(defaultRtt * 2);
-        lossDetector.onAckReceived(new AckFrame(3), Instant.now());  // So 2 will be lost.
-        lossDetector.detectLostPackets();
+        // When after 2 rtt an Ack is received that will cause first packet to be lost
+        clock.fastForward(defaultRtt * 2);
+        lossDetector.onAckReceived(new AckFrame(3), clock.instant());  // So 2 will be lost.
 
+        // Then the lost packet is not considered un-acknowlegded.
         assertThat(lossDetector.unAcked()).isEmpty();
     }
 

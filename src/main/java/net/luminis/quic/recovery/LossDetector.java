@@ -23,6 +23,7 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 
 public class LossDetector {
 
+    private final Clock clock;
     private final RecoveryManager recoveryManager;
     private final RttEstimator rttEstimater;
     private final CongestionController congestionController;
@@ -51,6 +53,7 @@ public class LossDetector {
 
 
     public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController, Runnable postProcessLostCallback) {
+        clock = Clock.systemUTC();
         this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
         this.congestionController = congestionController;
@@ -130,7 +133,7 @@ public class LossDetector {
 
         int lossDelay = (int) (kTimeThreshold * Integer.max(rttEstimater.getSmoothedRtt(), rttEstimater.getLatestRtt()));
         assert(lossDelay > 0);  // Minimum time of kGranularity before packets are deemed lost
-        Instant lostSendTime = Instant.now().minusMillis(lossDelay);
+        Instant lostSendTime = Instant.now(clock).minusMillis(lossDelay);
 
         // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1
         // "A packet is declared lost if it meets all the following conditions:
