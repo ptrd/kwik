@@ -81,6 +81,20 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
+    void connectRequiresAlpn() {
+        assertThatThrownBy(() ->
+                connection.connect(1000, null)
+        ).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void connectRequiresNonEmptyAlpn() {
+        assertThatThrownBy(() ->
+                connection.connect(1000, " ")
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void testRetryPacketInitiatesInitialPacketWithToken() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         InOrder recorder = inOrder(sender);

@@ -191,6 +191,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      */
     @Override
     public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
+        if (applicationProtocol.trim().isEmpty()) {
+            throw new IllegalArgumentException("ALPN cannot be empty");
+        }
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot connect a connection that is in state " + connectionState);
         }
