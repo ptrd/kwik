@@ -908,7 +908,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return connectionState == Status.Connected;
     }
 
-    public void trustAll() {
+    protected void trustAnyServerCertificate() {
         X509TrustManager trustAllCerts =
             new X509TrustManager() {
                 @Override
@@ -925,6 +925,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 }
         };
         tlsEngine.setTrustManager(trustAllCerts);
+        tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
     }
 
     private void enableQuantumReadinessTest(int nrDummyBytes) {
@@ -1003,7 +1004,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                             initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
 
             if (omitCertificateCheck) {
-                quicConnection.trustAll();
+                quicConnection.trustAnyServerCertificate();
             }
             if (quantumReadinessTest != null) {
                 quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
