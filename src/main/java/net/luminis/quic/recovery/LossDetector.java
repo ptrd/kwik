@@ -53,7 +53,11 @@ public class LossDetector {
 
 
     public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController, Runnable postProcessLostCallback) {
-        clock = Clock.systemUTC();
+        this(Clock.systemUTC(), recoveryManager, rttEstimator, congestionController, postProcessLostCallback);
+    }
+
+    public LossDetector(Clock clock, RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController, Runnable postProcessLostCallback) {
+        this.clock = clock;
         this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
         this.congestionController = congestionController;

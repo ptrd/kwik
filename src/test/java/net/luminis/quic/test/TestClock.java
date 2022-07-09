@@ -23,16 +23,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAmount;
+import java.util.ArrayList;
+import java.util.List;
 
 
 public class TestClock extends Clock {
 
     private Instant instant;
     private ZoneId zone;
+    private List<ClockListener> listeners;
 
     public TestClock() {
         instant = Instant.now();
         zone = ZoneId.of("Z");
+        listeners = new ArrayList<>();
     }
 
     public TestClock(Instant instant, ZoneId zone) {
@@ -57,9 +61,22 @@ public class TestClock extends Clock {
 
     public void fastForward(TemporalAmount temporalAmount) {
         instant = instant.plus(temporalAmount);
+        notifyListeners();
+    }
+
+    private void notifyListeners() {
+        listeners.forEach(l -> l.clockAdvanced());
     }
 
     public void fastForward(int millis) {
         fastForward(Duration.ofMillis(millis));
+    }
+
+    public void registerListener(ClockListener listener) {
+        listeners.add(listener);
+    }
+
+    public interface ClockListener {
+        void clockAdvanced();
     }
 }

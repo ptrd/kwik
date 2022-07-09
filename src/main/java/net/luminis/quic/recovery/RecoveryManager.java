@@ -29,10 +29,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
@@ -89,6 +86,7 @@ import java.util.stream.Stream;
  */
 public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
 
+    private final Clock clock;
     private final Role role;
     private final RttEstimator rttEstimater;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
@@ -104,10 +102,15 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private volatile boolean hasBeenReset = false;
 
     public RecoveryManager(FrameProcessorRegistry processorRegistry, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+        this(Clock.systemUTC(), processorRegistry, role, rttEstimater, congestionController, sender, logger);
+    }
+
+    public RecoveryManager(Clock clock, FrameProcessorRegistry processorRegistry, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+        this.clock = clock;
         this.role = role;
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
-            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController, () -> sender.flush());
+            lossDetectors[pnSpace.ordinal()] = new LossDetector(clock,this, rttEstimater, congestionController, () -> sender.flush());
         }
         this.sender = sender;
         log = logger;
@@ -141,7 +144,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                     rescheduleLossDetectionTimeout(ptoTimeAndSpace.lossTime);
 
                     if (log.logRecovery()) {
-                        int timeout = (int) Duration.between(Instant.now(), ptoTimeAndSpace.lossTime).toMillis();
+                        int timeout = (int) Duration.between(clock.instant(), ptoTimeAndSpace.lossTime).toMillis();
                         log.recovery("reschedule loss detection timer for PTO over " + timeout + " millis, "
                                 + "based on %s/" + ptoTimeAndSpace.pnSpace + ", because "
                                 + (peerAwaitingAddressValidation ? "peerAwaitingAddressValidation " : "")
@@ -172,10 +175,10 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         if (peerAwaitingAddressValidation()) {
             if (handshakeState.hasNoHandshakeKeys()) {
                 log.recovery("getPtoTimeAndSpace: no ack eliciting in flight and no handshake keys -> probe Initial");
-                return new PnSpaceTime(PnSpace.Initial, Instant.now().plusMillis(ptoDuration));
+                return new PnSpaceTime(PnSpace.Initial, clock.instant().plusMillis(ptoDuration));
             } else {
                 log.recovery("getPtoTimeAndSpace: no ack eliciting in flight but handshake keys -> probe Handshake");
-                return new PnSpaceTime(PnSpace.Handshake, Instant.now().plusMillis(ptoDuration));
+                return new PnSpaceTime(PnSpace.Handshake, clock.instant().plusMillis(ptoDuration));
             }
         }
 
@@ -223,17 +226,17 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
             log.warn("Loss detection timeout: Timer was cancelled.");
             return;
         }
-        else if (Instant.now().isBefore(expiration) && Duration.between(Instant.now(), expiration).toMillis() > 0) {
+        else if (clock.instant().isBefore(expiration) && Duration.between(clock.instant(), expiration).toMillis() > 0) {
             // Might be due to an old task that was cancelled, but unfortunately, it also happens that the scheduler
             // executes tasks much earlier than requested (30 ~ 40 ms). In that case, rescheduling is necessary to avoid
             // losing the loss detection timeout event.
             // To be sure the latest timer expiration is used, use timerExpiration i.s.o. the expiration of this call.
             log.warn(String.format("Loss detection timeout running (at %s) is %s ms too early; rescheduling to %s",
-                    Instant.now(), Duration.between(Instant.now(), expiration).toMillis(), timerExpiration));
+                    clock.instant(), Duration.between(clock.instant(), expiration).toMillis(), timerExpiration));
             rescheduleLossDetectionTimeout(timerExpiration);
         }
         else {
-            log.recovery("%s loss detection timeout handler running", Instant.now());
+            log.recovery("%s loss detection timeout handler running", clock.instant());
         }
 
         PnSpaceTime earliestLossTime = getEarliestLossTime(LossDetector::getLossTime);
@@ -377,7 +380,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
                 // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
                 lossDetectionFuture.cancel(false);
                 timerExpiration = scheduledTime;
-                long delay = Duration.between(Instant.now(), scheduledTime).toMillis();
+                long delay = Duration.between(clock.instant(), scheduledTime).toMillis();
                 // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
                 lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
             }
@@ -406,7 +409,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
      */
     private Runnable createLossDetectionTimeoutRunnerWithTooEarlyDetection(final Instant scheduledTime) {
         return () -> {
-            Instant now = Instant.now();
+            Instant now = clock.instant();
             // Allow for 1 ms difference, as Instant has much more precision than the ScheduledExecutorService
             if (now.plusMillis(1).isBefore(scheduledTime)) {
                 log.error(String.format("Task scheduled for %s is running already at %s (%s ms too early)", scheduledTime, now, Duration.between(now, scheduledTime).toMillis()));
@@ -545,7 +548,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     String timeNow() {
-        LocalTime localTimeNow = LocalTime.from(Instant.now().atZone(ZoneId.systemDefault()));
+        LocalTime localTimeNow = LocalTime.from(clock.instant().atZone(ZoneId.systemDefault()));
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss.SSS");
         return timeFormatter.format(localTimeNow);
     }
