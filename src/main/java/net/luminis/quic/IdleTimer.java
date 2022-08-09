@@ -18,17 +18,21 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Instant;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
 public class IdleTimer {
 
-    private final Timer timer;
+    private final ScheduledExecutorService timer;
     private final int timerResolution;
     private long timeout;
     private final QuicConnectionImpl connection;
@@ -48,7 +52,7 @@ public class IdleTimer {
         this.log = logger;
         this.timerResolution = timerResolution;
 
-        timer = new Timer(true);
+        timer = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("idle-timer"));
         lastAction = Instant.now();
     }
 
@@ -56,12 +60,7 @@ public class IdleTimer {
         if (! enabled) {
             enabled = true;
             timeout = idleTimeoutInMillis;
-            timer.scheduleAtFixedRate(new TimerTask() {
-                @Override
-                public void run() {
-                    checkIdle();
-                }
-            }, timerResolution, timerResolution);
+            timer.scheduleAtFixedRate(() -> checkIdle(), timerResolution, timerResolution, TimeUnit.MILLISECONDS);
         }
         else {
             log.error("idle timeout was set already; can't be set twice on same connection");
@@ -81,7 +80,7 @@ public class IdleTimer {
                 // To avoid excessively small idle timeout periods, endpoints MUST increase the idle timeout period
                 // to be at least three times the current Probe Timeout (PTO)
                 if (lastAction.plusMillis(3 * currentPto).isBefore(now)) {
-                    timer.cancel();
+                    timer.shutdown();
                     connection.silentlyCloseConnection(timeout + currentPto);
                 }
             }}
@@ -108,7 +107,7 @@ public class IdleTimer {
 
     public void shutdown() {
         if (enabled) {
-            timer.cancel();
+            timer.shutdown();
         }
     }
 }
