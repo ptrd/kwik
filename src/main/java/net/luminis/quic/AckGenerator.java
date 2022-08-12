@@ -24,6 +24,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -34,6 +35,7 @@ import java.util.*;
  */
 public class AckGenerator {
 
+    private final Clock clock;
     private final Version quicVersion = Version.getDefault();
     private final PnSpace pnSpace;
     private final Sender sender;
@@ -44,6 +46,11 @@ public class AckGenerator {
     private int acksNotSend = 0;
 
     public AckGenerator(PnSpace pnSpace, Sender sender) {
+        this(Clock.systemUTC(), pnSpace, sender);
+    }
+
+    public AckGenerator(Clock clock, PnSpace pnSpace, Sender sender) {
+        this.clock = clock;
         this.pnSpace = pnSpace;
         this.sender = sender;
     }
@@ -62,7 +69,7 @@ public class AckGenerator {
             if (packet.isAckEliciting()) {
                 newPacketsToAcknowledge = true;
                 if (newPacketsToAcknowlegdeSince == null) {
-                    newPacketsToAcknowlegdeSince = Instant.now();
+                    newPacketsToAcknowlegdeSince = clock.instant();
                 }
                 if (pnSpace != PnSpace.App) {
                     sender.sendAck(pnSpace, 0);
@@ -170,7 +177,7 @@ public class AckGenerator {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-13.2.1
         // "An endpoint MUST acknowledge all ack-eliciting Initial and Handshake packets immediately"
         if (newPacketsToAcknowlegdeSince != null && pnSpace == PnSpace.App) {
-            delay = (int) Duration.between(newPacketsToAcknowlegdeSince, Instant.now()).toMillis();
+            delay = (int) Duration.between(newPacketsToAcknowlegdeSince, clock.instant()).toMillis();
             if (delay < 0) {
                 // WTF. This should be impossible, but it sometimes happen in the interop tests. Maybe related to docker?
                 delay = 0;

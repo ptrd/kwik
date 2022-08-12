@@ -23,9 +23,11 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.send.Sender;
+import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,13 +39,15 @@ import static org.mockito.Mockito.*;
 
 class AckGeneratorTest {
 
+    private TestClock clock;
     private AckGenerator ackGenerator;
     private Sender sender;
 
     @BeforeEach
     void initObjectUnderTest() {
+        clock = new TestClock();
         sender = mock(Sender.class);
-        ackGenerator = new AckGenerator(PnSpace.App, sender);
+        ackGenerator = new AckGenerator(clock, PnSpace.App, sender);
     }
 
     @Test
@@ -160,7 +164,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
 
         // When
-        Thread.sleep(10);
+        clock.fastForward(10);
 
         // Then
         AckFrame ackFrame = ackGenerator.generateAckForPacket(13).get();
@@ -173,7 +177,7 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(0, 83, EncryptionLevel.Initial));
 
         // When
-        Thread.sleep(10);
+        clock.fastForward(10);
 
         // Then
         AckFrame firstAckFrame = ackGenerator.generateAckForPacket(13).get();
@@ -187,9 +191,9 @@ class AckGeneratorTest {
         ackGenerator.packetReceived(new MockPacket(1, 83, EncryptionLevel.Initial));
 
         // When
-        Thread.sleep(10);
+        clock.fastForward(10);
         ackGenerator.packetReceived(new MockPacket(2, 83, EncryptionLevel.Initial));
-        Thread.sleep(10);
+        clock.fastForward(10);
 
         // Then
         Optional<AckFrame> ack = ackGenerator.generateAckForPacket(13);
