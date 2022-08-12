@@ -702,7 +702,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         oneRttPacketAssembler.assemble(6000, 2, null, new byte[0]);
 
         // Then
-        sendRequestQueue.mustSendAck();
+        assertThat(sendRequestQueue.mustSendAck()).isTrue();
     }
 
     @Test
