@@ -679,17 +679,17 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // When
         // ... it is send together with a ack-eliciting packet
         sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
 
-        assertThat(optionalSendItem).isPresent();
-        assertThat(optionalSendItem.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
+        assertThat(firstPacket).isPresent();
+        assertThat(firstPacket.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
 
         // Then
-        // ... after delay time
-        Thread.sleep(ackDelay);
-        // ... and after one check for explicit ack
-        sendRequestQueue.mustAndWillSendAck();
-        assertThat(sendRequestQueue.mustSendAck()).isFalse();
+        // ... (even) after delay time
+        clock.fastForward(ackDelay);
+        // ... no ack is sent.
+        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+        assertThat(secondPacket).isEmpty();
     }
 
     @Test

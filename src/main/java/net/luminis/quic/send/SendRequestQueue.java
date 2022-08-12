@@ -105,6 +105,14 @@ public class SendRequestQueue {
         }
     }
 
+    /**
+     * Check on whether an ack must be sent and promise to do so: if this method returns true the flag that indicates (when)
+     * an explicit ack must be sent will be reset, so if the caller does not actually send the ack, the notion it had to be
+     * sent will be lost.
+     * The reason for this uncommon behaviour is to avoid race conditions: when checking and changing status is not done
+     * transactionally, a next change might be lost.
+     * @return
+     */
     public boolean mustAndWillSendAck() {
         Instant now = clock.instant();
         synchronized (ackLock) {
