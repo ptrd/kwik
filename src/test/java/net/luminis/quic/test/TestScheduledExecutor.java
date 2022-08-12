@@ -36,6 +36,7 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
 
     private TestClock clock;
     private List<ScheduledAction> scheduledActions;
+    private boolean shutdown;
 
     public TestScheduledExecutor(TestClock clock) {
         this.clock = clock;
@@ -58,7 +59,10 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
 
     @Override
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
-        throw new NotYetImplementedException();
+        long delayInMillis = unit.toMillis(initialDelay);
+        ScheduledAction action = new ScheduledAction(clock.instant().plusMillis(delayInMillis), new SelfRepeatingCommand(command, period, clock.instant().plusMillis(delayInMillis)));
+        scheduledActions.add(action);
+        return new ActionFuture(action);
     }
 
     @Override
@@ -68,17 +72,19 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
 
     @Override
     public void shutdown() {
-
+        shutdown = true;
+        cancelAllScheduledActions();
     }
 
     @Override
     public List<Runnable> shutdownNow() {
-        throw new NotYetImplementedException();
+        shutdown = true;
+        return cancelAllScheduledActions();
     }
 
     @Override
     public boolean isShutdown() {
-        return false;
+        return shutdown;
     }
 
     @Override
@@ -144,6 +150,12 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
         actionsToRun.forEach(a -> a.command.run());
     }
 
+    private List<Runnable> cancelAllScheduledActions() {
+        List<Runnable> commands = scheduledActions.stream().map(action -> action.command).collect(Collectors.toList());
+        scheduledActions.clear();
+        return commands;
+    }
+
     private static class ScheduledAction {
         final Instant scheduledTime;
         final Runnable command;
@@ -194,6 +206,30 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
         @Override
         public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             throw new NotYetImplementedException();
+        }
+    }
+
+    private class SelfRepeatingCommand implements Runnable {
+
+        private final Runnable command;
+        private final long period;
+        private Instant scheduledTime;
+
+        public SelfRepeatingCommand(Runnable command, long period, Instant initialRun) {
+            this.command = command;
+            this.period = period;
+            scheduledTime = initialRun;
+        }
+
+        @Override
+        public void run() {
+            command.run();
+            if (! shutdown) {
+                scheduledTime = scheduledTime.plusMillis(period);
+                ScheduledAction repeatAction = new ScheduledAction(scheduledTime, this);
+                scheduledActions.add(repeatAction);
+                check();
+            }
         }
     }
 }

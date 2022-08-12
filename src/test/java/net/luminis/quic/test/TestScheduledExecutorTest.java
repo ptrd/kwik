@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,6 +73,67 @@ public class TestScheduledExecutorTest {
         clock.fastForward(200);
         scheduledFuture.cancel(true);
         clock.fastForward(200);
+
+        assertThat(hasBeenExecuted.get()).isFalse();
+    }
+
+    @Test
+    void scheduledAtFixedRateShouldRunAfterInitialDelay() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.scheduleAtFixedRate(() -> hasBeenExecuted.incrementAndGet(), 100, 300, TimeUnit.MILLISECONDS);
+        clock.fastForward(100);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(1);
+    }
+
+    @Test
+    void scheduledAtFixedRateShouldRunRepeatedly() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.scheduleAtFixedRate(() -> hasBeenExecuted.incrementAndGet(), 100, 300, TimeUnit.MILLISECONDS);
+        clock.fastForward(100);
+        clock.fastForward(300);
+        clock.fastForward(300);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(3);
+    }
+
+    @Test
+    void scheduledAtFixedRateShouldHaveBeenRunRepeatedly() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.scheduleAtFixedRate(() -> hasBeenExecuted.incrementAndGet(), 100, 400, TimeUnit.MILLISECONDS);
+        clock.fastForward(1000);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(3);
+    }
+
+    @Test
+    void scheduledAtFixedRateShouldRunNoMoreWhenShutdown() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.scheduleAtFixedRate(() -> {
+            hasBeenExecuted.incrementAndGet();
+            scheduledExecutor.shutdown();
+        }, 100, 300, TimeUnit.MILLISECONDS);
+        clock.fastForward(1200);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(1);
+    }
+
+    @Test
+    void whenShutdownTasksWillNotBeRun() {
+        AtomicBoolean hasBeenExecuted = new AtomicBoolean(false);
+        scheduledExecutor.schedule(() -> hasBeenExecuted.set(true), 100, TimeUnit.MILLISECONDS);
+        scheduledExecutor.shutdown();
+        clock.fastForward(500);
+
+        assertThat(hasBeenExecuted.get()).isFalse();
+    }
+
+    @Test
+    void whenShutdownNowTasksWillNotBeRun() {
+        AtomicBoolean hasBeenExecuted = new AtomicBoolean(false);
+        scheduledExecutor.schedule(() -> hasBeenExecuted.set(true), 100, TimeUnit.MILLISECONDS);
+        scheduledExecutor.shutdownNow();
+        clock.fastForward(500);
 
         assertThat(hasBeenExecuted.get()).isFalse();
     }
