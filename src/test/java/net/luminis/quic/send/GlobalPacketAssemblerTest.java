@@ -47,7 +47,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         ackGenerator = new GlobalAckGenerator(mock(Sender.class));
         sendRequestQueues = new SendRequestQueue[4];
         for (int i = 0; i < 4; i++) {
-            sendRequestQueues[i] = new SendRequestQueue();
+            sendRequestQueues[i] = new SendRequestQueue(EncryptionLevel.values()[i]);
         }
         globalPacketAssembler = new GlobalPacketAssembler(Version.getDefault(), sendRequestQueues, ackGenerator);
     }

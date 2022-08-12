@@ -24,6 +24,7 @@ import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.TestClock;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
 
     public static final int MAX_PACKET_SIZE = 1232;
 
+    private TestClock clock;
     private SendRequestQueue sendRequestQueue;
     private InitialPacketAssembler initialPacketAssembler;
     private PacketAssembler handshakePacketAssembler;
@@ -52,14 +54,14 @@ class PacketAssemblerTest extends AbstractSenderTest {
     
     @BeforeEach
     void initObjectUnderTest() {
-        sendRequestQueue = new SendRequestQueue(null);
+        clock = new TestClock();
+        sendRequestQueue = new SendRequestQueue(clock, null);
         initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
         initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), sendRequestQueue, initialAckGenerator);
         handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
         handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator);
-        oneRttAckGenerator = new AckGenerator(PnSpace.App, mock(Sender.class));
+        oneRttAckGenerator = new AckGenerator(clock, PnSpace.App, mock(Sender.class));
         oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
-
     }
 
     @Test
@@ -263,13 +265,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
         Optional<SendItem> firstCheck = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[]{ (byte) 0xdc, 0x1d });
 
         // When
-        Thread.sleep(ackDelay);
+        clock.fastForward(ackDelay);
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[]{ (byte) 0xdc, 0x1d }).get().getPacket();
+        Optional<QuicPacket> packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[]{ (byte) 0xdc, 0x1d }).map(e -> e.getPacket());
         assertThat(firstCheck).isEmpty();
-        assertThat(packet).isNotNull();
-        assertThat(packet.getFrames()).allSatisfy(frame -> {
+        assertThat(packet.isPresent()).isTrue();
+        assertThat(packet.get().getFrames()).allSatisfy(frame -> {
             assertThat(frame).isInstanceOf(AckFrame.class);
             assertThat(((AckFrame) frame).getAckDelay()).isGreaterThanOrEqualTo(ackDelay);
         });

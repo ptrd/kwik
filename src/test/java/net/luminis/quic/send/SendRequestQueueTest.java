@@ -78,7 +78,7 @@ class SendRequestQueueTest {
 
     @Test
     void whenSecondAckHasShorterDelaySecondDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
 
         sendRequestQueue.addAckRequest(200);
         sendRequestQueue.addAckRequest(100);
@@ -91,7 +91,7 @@ class SendRequestQueueTest {
 
     @Test
     void whenSecondAckHasNoDelaySecondDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
 
         sendRequestQueue.addAckRequest(200);
         sendRequestQueue.addAckRequest(0);
@@ -105,7 +105,7 @@ class SendRequestQueueTest {
     @Test
     void whenProbeIsVanishedDueToClearDoReturnProbe() throws Exception {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[100])));
 
         boolean hasProbe = sendRequestQueue.hasProbeWithData();   // client is checking for probe
@@ -123,7 +123,7 @@ class SendRequestQueueTest {
 
     @Test
     void testProbeWithData() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue();
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addProbeRequest();
 
         assertThat(sendRequestQueue.hasProbeWithData()).isFalse();
