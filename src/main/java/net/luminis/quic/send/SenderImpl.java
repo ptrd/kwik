@@ -277,7 +277,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 synchronized (condition) {
                     try {
                         if (! signalled) {
-                            long timeout = determineMinimalDelay();
+                            long timeout = determineMaximumWaitTime();
                             if (timeout > 0) {
                                 condition.wait(timeout);
                             }
@@ -327,7 +327,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
     }
 
-    long determineMinimalDelay() {
+    /**
+     * Determines the maximum wait (sleep) time before the sender must check again if there is something to send.
+     * @return
+     */
+    long determineMaximumWaitTime() {
         Optional<Instant> nextDelayedSendTime = packetAssembler.nextDelayedSendTime();
         if (nextDelayedSendTime.isPresent()) {
             long delay = max(Duration.between(clock.instant(), nextDelayedSendTime.get()).toMillis(), 0);

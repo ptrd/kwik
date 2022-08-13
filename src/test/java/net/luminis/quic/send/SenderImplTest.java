@@ -80,7 +80,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.packetProcessed(false);
 
         // Then
-        long delay = sender.determineMinimalDelay();
+        long delay = sender.determineMaximumWaitTime();
         assertThat(delay).isBetween(49L, 51L);
     }
 
