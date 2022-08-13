@@ -24,6 +24,7 @@ import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -41,11 +42,13 @@ import static org.mockito.Mockito.*;
 
 class SenderImplTest extends AbstractSenderTest {
 
+    private TestClock clock;
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
+        clock = new TestClock();
         DatagramSocket socket = mock(DatagramSocket.class);
         InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
@@ -57,8 +60,8 @@ class SenderImplTest extends AbstractSenderTest {
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
-        sender.start(connectionSecrets);
+        sender = new SenderImpl(clock, Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
 
         packetAssembler = mock(GlobalPacketAssembler.class);
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
@@ -67,21 +70,18 @@ class SenderImplTest extends AbstractSenderTest {
     }
 
     @Test
-    void assemblePacketIsCalledBeforeAckDelayHasPassed() throws Exception {
-        Instant ackSendTime = Instant.now().plusMillis(50);
+    void whenAckWithDelayIsQueueSenderIsWakedUpAfterDelay() {
+        // Given
+        Instant ackSendTime = clock.instant().plusMillis(50);
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.of(ackSendTime));
 
+        // When
         sender.sendAck(PnSpace.App, 50);
         sender.packetProcessed(false);
 
-        Thread.sleep(5);
-        clearInvocations(packetAssembler);  // PacketProcessed will check to see if anything must be sent
-
-        Thread.sleep(30);
-        verify(packetAssembler, never()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
-
-        Thread.sleep(20);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
+        // Then
+        long delay = sender.determineMinimalDelay();
+        assertThat(delay).isBetween(49L, 51L);
     }
 
     @Test

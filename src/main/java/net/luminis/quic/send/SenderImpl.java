@@ -37,6 +37,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -68,6 +69,7 @@ import static java.lang.Long.max;
  */
 public class SenderImpl implements Sender, CongestionControlEventListener {
 
+    private final Clock clock;
     private final int maxPacketSize;
     private volatile DatagramSocket socket;
     private final InetSocketAddress peerAddress;
@@ -102,6 +104,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
                       QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, initialRtt, log);
+    }
+    public SenderImpl(Clock clock, Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+        this.clock = clock;
         this.maxPacketSize = maxPacketSize;
         this.socket = socket;
         this.peerAddress = peerAddress;
@@ -320,10 +327,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
     }
 
-    private long determineMinimalDelay() {
+    long determineMinimalDelay() {
         Optional<Instant> nextDelayedSendTime = packetAssembler.nextDelayedSendTime();
         if (nextDelayedSendTime.isPresent()) {
-            long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
+            long delay = max(Duration.between(clock.instant(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
                 subsequentZeroDelays.set(0);
                 lastDelayWasZero = false;
@@ -374,7 +381,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
-        Instant timeSent = Instant.now();
+        Instant timeSent = clock.instant();
         socket.send(datagram);
         datagramsSent++;
         packetsSent += itemsToSend.size();
