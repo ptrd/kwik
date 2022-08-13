@@ -118,7 +118,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
-            sendRequestQueue[levelIndex] = new SendRequestQueue(level);
+            sendRequestQueue[levelIndex] = new SendRequestQueue(clock, level);
         });
         globalAckGenerator = new GlobalAckGenerator(this);
         packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);

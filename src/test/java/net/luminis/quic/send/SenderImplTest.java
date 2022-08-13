@@ -31,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.internal.util.reflection.FieldReader;
 import org.mockito.internal.util.reflection.FieldSetter;
 
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.time.Instant;
@@ -45,11 +46,12 @@ class SenderImplTest extends AbstractSenderTest {
     private TestClock clock;
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
+    private DatagramSocket socket;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         clock = new TestClock();
-        DatagramSocket socket = mock(DatagramSocket.class);
+        socket = mock(DatagramSocket.class);
         InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
@@ -62,18 +64,12 @@ class SenderImplTest extends AbstractSenderTest {
 
         sender = new SenderImpl(clock, Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
-
-        packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
-
-        FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
 
     @Test
-    void whenAckWithDelayIsQueueSenderIsWakedUpAfterDelay() {
+    void whenAckWithDelayIsQueuedSenderIsWakedUpAfterDelay() {
         // Given
-        Instant ackSendTime = clock.instant().plusMillis(50);
-        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.of(ackSendTime));
+        sender.enableAllLevels();
 
         // When
         sender.sendAck(PnSpace.App, 50);
@@ -117,8 +113,8 @@ class SenderImplTest extends AbstractSenderTest {
     @Test
     void whenAntiAmplificationLimitNotReachedAssemblerIsCalledWithNoLimit() throws Exception {
         // Given
+        setupMockPacketAssember();
         sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
 
         // When
         sender.sendIfAny();
@@ -130,16 +126,27 @@ class SenderImplTest extends AbstractSenderTest {
     }
 
     @Test
-    void whenAntiAmplificationLimitIsReachedNothingIsSend() throws Exception {
+    void whenAntiAmplificationLimitIsReachedNothingIsSentAnymore() throws Exception {
         // Given
+        sender.enableAllLevels();
         sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        for (int i = 0; i < 9; i++) {
+            sender.send(new StreamFrame(0, i * 1100, new byte[1100], false), EncryptionLevel.App);
+        }
+        sender.flush();
 
         // When
         sender.sendIfAny();
 
-        // Then verify
-        ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(packetAssembler, times(3)).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
+        // Then   (given fixed size of StreamFrames, only three packets will fit in the limit of 3 * 1200)
+        verify(socket, times(3)).send(any(DatagramPacket.class));
     }
+
+    private void setupMockPacketAssember() throws NoSuchFieldException {
+        packetAssembler = mock(GlobalPacketAssembler.class);
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
+    }
+
 }
