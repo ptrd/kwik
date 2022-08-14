@@ -21,6 +21,8 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
@@ -28,6 +30,7 @@ import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import net.luminis.quic.test.FieldSetter;
 
@@ -37,6 +40,7 @@ import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -149,4 +153,58 @@ class SenderImplTest extends AbstractSenderTest {
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
 
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void whenNothingIsQueuedNothingIsSentWhenPacketProcessedIsCalled()  throws Exception {
+        // Given
+
+        // When
+        sender.packetProcessed(false);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void whenPacketProcessedIsCalledQueuedFramesAreSent() throws Exception {
+        // Given
+        sender.send(new PingFrame(), EncryptionLevel.Handshake);
+
+        // When
+        sender.packetProcessed(false);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void probeIsSentImmediatelyEvenWhenSenderIsNotFlushed() throws Exception {
+        // Given
+        sender.enableAllLevels();
+
+        // When
+        sender.sendProbe(EncryptionLevel.App);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void probeWithDataIsSentImmediatelyEvenWhenSenderIsNotFlushed() throws Exception {
+        // Given
+        sender.enableAllLevels();
+
+        // When
+        sender.sendProbe(List.of(new CryptoFrame(Version.getDefault(), new byte[368])), EncryptionLevel.App);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
+    }
 }

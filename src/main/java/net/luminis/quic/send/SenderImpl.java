@@ -274,28 +274,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         try {
             running = true;
             while (running) {
-                synchronized (condition) {
-                    try {
-                        if (! signalled) {
-                            long timeout = determineMaximumWaitTime();
-                            if (timeout > 0) {
-                                condition.wait(timeout);
-                            }
-                        }
-                        signalled = false;
-                    }
-                    catch (InterruptedException e) {
-                        log.debug("Sender thread is interrupted; probably shutting down? " + running);
-                    }
-                }
-
-                // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
-                // items being queued just after the packet assembler (for that level) has executed.
-                if (stopping) {
-                    running = false;
-                }
-
-                sendIfAny();
+                doLoopIteration();
             }
         }
         catch (Throwable fatalError) {
@@ -307,6 +286,31 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 log.warn("Ignoring " + fatalError + " because sender is shutting down.");
             }
         }
+    }
+
+    void doLoopIteration() throws IOException {
+        synchronized (condition) {
+            try {
+                if (! signalled) {
+                    long timeout = determineMaximumWaitTime();
+                    if (timeout > 0) {
+                        condition.wait(timeout);
+                    }
+                }
+                signalled = false;
+            }
+            catch (InterruptedException e) {
+                log.debug("Sender thread is interrupted; probably shutting down? " + running);
+            }
+        }
+
+        // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
+        // items being queued just after the packet assembler (for that level) has executed.
+        if (stopping) {
+            running = false;
+        }
+
+        sendIfAny();
     }
 
     void sendIfAny() throws IOException {
