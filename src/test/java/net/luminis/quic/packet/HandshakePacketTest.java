@@ -31,7 +31,7 @@ import net.luminis.tls.handshake.TlsClientEngine;
 import net.luminis.tls.TlsConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import javax.crypto.Cipher;
 import java.nio.ByteBuffer;

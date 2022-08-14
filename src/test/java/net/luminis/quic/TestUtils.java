@@ -21,7 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import javax.crypto.Cipher;
 

@@ -27,7 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
 import java.util.concurrent.ScheduledExecutorService;

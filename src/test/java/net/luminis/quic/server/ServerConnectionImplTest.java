@@ -28,6 +28,7 @@ import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.stream.StreamManager;
+import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
@@ -45,8 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 

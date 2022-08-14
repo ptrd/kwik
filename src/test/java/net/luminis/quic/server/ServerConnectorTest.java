@@ -25,6 +25,7 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
@@ -33,8 +34,7 @@ import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;

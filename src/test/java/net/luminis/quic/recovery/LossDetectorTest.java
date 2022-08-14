@@ -33,7 +33,7 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
 import java.util.List;

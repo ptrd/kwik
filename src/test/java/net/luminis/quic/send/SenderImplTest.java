@@ -24,12 +24,12 @@ import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;

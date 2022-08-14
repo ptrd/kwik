@@ -31,14 +31,14 @@ import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.QuicStream;
 import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldReader;
 
 import java.io.IOException;
 import java.net.URI;

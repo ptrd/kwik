@@ -26,7 +26,7 @@ import net.luminis.quic.send.SenderImpl;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.util.reflection.FieldReader;
+import net.luminis.quic.test.FieldReader;
 
 import java.io.InputStream;
 import java.net.DatagramSocket;

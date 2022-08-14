@@ -26,8 +26,8 @@ import net.luminis.quic.packet.ZeroRttPacket;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 
 import java.util.List;
 import java.util.stream.Collectors;
