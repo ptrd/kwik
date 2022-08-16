@@ -128,8 +128,6 @@ public class InteropRunner extends KwikCli {
     private static void testTransfer(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException, URISyntaxException {
         URL url1 = downloadUrls.get(0);
         // logger.logPackets(true);
-        logger.logCongestionControl(true);
-        logger.logRecovery(true);
 
         QuicClientConnection connection = builder.build();
         connection.connect(5_000, "hq-interop", null, null);
