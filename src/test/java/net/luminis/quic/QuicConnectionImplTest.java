@@ -24,6 +24,9 @@ import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.stream.StreamManager;
+import net.luminis.quic.test.FieldSetter;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,12 +42,17 @@ class QuicConnectionImplTest {
     private int onePto = 40;
     private QuicConnectionImpl connection;
     private SenderImpl sender;
+    private TestClock testClock;
+    private TestScheduledExecutor testExecutor;
 
     @BeforeEach
     void createObjectUnderTest() throws Exception {
         sender = mock(SenderImpl.class);
         when(sender.getPto()).thenReturn(onePto);
         connection = new NonAbstractQuicConnection();
+        testClock = new TestClock();
+        testExecutor = new TestScheduledExecutor(testClock);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), testExecutor);
     }
 
     @Test
@@ -113,10 +121,10 @@ class QuicConnectionImplTest {
         connection.immediateClose(EncryptionLevel.App);
 
         // When
-        Thread.sleep(2 * onePto);
+        testClock.fastForward(11 * onePto / 4);
         assertThat(((NonAbstractQuicConnection) connection).terminated).isFalse();
 
-        Thread.sleep(2 * onePto);
+        testClock.fastForward((12 - 1) * onePto / 4);
 
         // Then
         assertThat(((NonAbstractQuicConnection) connection).terminated).isTrue();
@@ -128,10 +136,10 @@ class QuicConnectionImplTest {
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), EncryptionLevel.App);
 
         // When
-        Thread.sleep(2 * onePto);
+        testClock.fastForward(11 * onePto / 4);
         assertThat(((NonAbstractQuicConnection) connection).terminated).isFalse();
 
-        Thread.sleep(2 * onePto);
+        testClock.fastForward((12 - 1) * onePto / 4);
 
         // Then
         assertThat(((NonAbstractQuicConnection) connection).terminated).isTrue();
