@@ -26,6 +26,8 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
@@ -55,6 +57,9 @@ class ServerConnectorTest {
 
     private ServerConnector server;
     private DatagramSocket serverSocket;
+    private Context context;
+    private TestScheduledExecutor testExecutor;
+    private TestClock clock;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -63,6 +68,12 @@ class ServerConnectorTest {
         serverSocket = mock(DatagramSocket.class);
         server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, mock(Logger.class));
         server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
+        clock = new TestClock();
+        context = mock(Context.class);
+        testExecutor = new TestScheduledExecutor(clock);
+        when(context.getSharedServerExecutor()).thenReturn(testExecutor);
+        when(context.getSharedScheduledExecutor()).thenReturn(testExecutor);
+        FieldSetter.setField(server, "context", context);
     }
 
     @Test
@@ -194,7 +205,7 @@ class ServerConnectorTest {
 
         // When
         server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()))));
-        Thread.sleep(300);
+        testExecutor.check();
 
         // Then
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
@@ -219,7 +230,7 @@ class ServerConnectorTest {
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()));
 
         server.process(createPacket(buffer));
-        Thread.sleep(100);
+        testExecutor.check();
 
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         clearInvocations(connectionFactory);
@@ -254,7 +265,7 @@ class ServerConnectorTest {
 
         server.process(validFirstPacket);
         server.process(invalidRepeatedFirstPacket);
-        Thread.sleep(300);  // Give time to process 2 packets asynchronously
+        testExecutor.check();
 
         Map serverConnections = (Map) new FieldReader(server, server.getClass().getDeclaredField("currentConnections")).read();
         // As the first packet was valid, there must be an entry with the original DCID
