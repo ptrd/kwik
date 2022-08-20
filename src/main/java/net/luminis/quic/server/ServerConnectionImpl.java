@@ -29,6 +29,7 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.MissingExtensionAlert;
 import net.luminis.tls.alert.NoApplicationProtocolAlert;
@@ -111,6 +112,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.closeCallback = closeCallback;
 
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
+        tlsEngine.addSupportedCiphers(List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256));
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
