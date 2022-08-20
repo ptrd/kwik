@@ -203,40 +203,6 @@ class ServerConnectorTest {
     }
 
     @Test
-    void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
-        // TODO: this test is more an integration test. Testing correct use of connection id's can be tested on serverconnection directly
-        byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
-        TransportParameters clientTransportParams = new TransportParameters();
-        clientTransportParams.setInitialSourceConnectionId(scid);
-        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"),
-                new QuicTransportParametersExtension(Version.getDefault(), clientTransportParams, Role.Client));
-
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        byte[] dcid = new byte[] { 11, 12, 13, 14, 15, 16, 17, 18 };
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
-        initialPacket.addFrame(new Padding(938));
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
-        connectionSecrets.computeInitialKeys(dcid);
-        byte[] packetBytes = initialPacket.generatePacketBytes(0L, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
-        server.process(createPacket(ByteBuffer.wrap(packetBytes)));
-        Thread.sleep(100);  // Because processing packets is done on seperate thread.
-
-        // Then
-        ArgumentCaptor<DatagramPacket> captor = ArgumentCaptor.forClass(DatagramPacket.class);
-        verify(serverSocket, atLeast(1)).send(captor.capture());
-        DatagramPacket packetSent = captor.getValue();
-        int dcidLength = packetSent.getData()[5];
-        byte[] responseDcid = Arrays.copyOfRange(packetSent.getData(), 6, 6 + dcidLength);
-
-        assertThat(responseDcid).isEqualTo(scid);
-
-        int scidLength = packetSent.getData()[6 + dcidLength];
-        byte[] responseScid = Arrays.copyOfRange(packetSent.getData(), 6 + dcidLength + 1, 6 + dcidLength + 1 + scidLength);
-        assertThat(responseScid).isNotEqualTo(dcid);
-    }
-
-    @Test
     void receivingDuplicateInitialShouldNotCreateNewConnection() throws Exception {
         // Given
         byte[] orginalDcid = ByteUtils.hexToBytes("f8e39b14d954c988");
