@@ -21,8 +21,9 @@ package net.luminis.quic.server;
 import net.luminis.quic.TestUtils;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,18 +44,25 @@ import static org.mockito.Mockito.*;
 class ServerConnectionCandidateTest {
 
     private Logger logger;
+    private TestClock clock;
     private ServerConnectionImpl createdServerConnection;
     private ServerConnectionFactory serverConnectionFactory;
+    private Context context;
+    private TestScheduledExecutor testExecutor;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
-        logger = new SysOutLogger(); // mock(Logger.class);
-        logger.logDebug(true);
-
+        logger = mock(Logger.class);
+        clock = new TestClock();
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         TlsServerEngineFactory tlsServerEngineFactory = new TlsServerEngineFactory(certificate, privateKey);
-        serverConnectionFactory = new TestServerConnectionFactory(16, mock(DatagramSocket.class), tlsServerEngineFactory, false, mock(ApplicationProtocolRegistry.class), 100, cid -> {}, logger);
+        serverConnectionFactory = new TestServerConnectionFactory(16, mock(DatagramSocket.class), tlsServerEngineFactory,
+                false, mock(ApplicationProtocolRegistry.class), 100, cid -> {}, logger);
+        context = mock(Context.class);
+        testExecutor = new TestScheduledExecutor(clock);
+        when(context.getSharedServerExecutor()).thenReturn(testExecutor);
+        when(context.getSharedScheduledExecutor()).thenReturn(testExecutor);
     }
 
     @Test
@@ -65,11 +73,11 @@ class ServerConnectionCandidateTest {
         byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
         InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
-        Thread.sleep(500);
+        testExecutor.check();
 
         // Then
         assertThat(createdServerConnection).isNotNull();
@@ -84,11 +92,11 @@ class ServerConnectionCandidateTest {
         byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
         InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
-        Thread.sleep(500);
+        testExecutor.check();
 
         // Then
         assertThat(createdServerConnection).isNull();
@@ -102,14 +110,14 @@ class ServerConnectionCandidateTest {
         byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
         InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         ByteBuffer datagramBytes = ByteBuffer.allocate(1200);
         datagramBytes.put(initialPacketBytes);
         datagramBytes.rewind();
         connectionCandidate.parsePackets(0, Instant.now(), datagramBytes);
-        Thread.sleep(500);
+        testExecutor.check();
 
         // Then
         assertThat(createdServerConnection).isNotNull();

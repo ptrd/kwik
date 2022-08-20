@@ -109,7 +109,7 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
 
     @Override
     public Future<?> submit(Runnable task) {
-        throw new NotYetImplementedException();
+        return schedule(task, 0, TimeUnit.MILLISECONDS);
     }
 
     @Override

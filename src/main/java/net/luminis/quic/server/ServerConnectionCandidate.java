@@ -51,12 +51,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private final ServerConnectionRegistry connectionRegistry;
     private final Logger log;
     private volatile ServerConnectionThread registeredConnection;
-    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService executor;
+    private final ScheduledExecutorService scheduledExecutor;
 
 
-    public ServerConnectionCandidate(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
-                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry,  Logger log) {
+    public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
+                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry, Logger log) {
+        this.executor = context.getSharedServerExecutor();
+        this.scheduledExecutor = context.getSharedScheduledExecutor();
         this.quicVersion = version;
         this.clientAddress = clientAddress;
         this.dcid = dcid;

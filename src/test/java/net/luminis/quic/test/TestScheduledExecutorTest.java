@@ -119,6 +119,16 @@ public class TestScheduledExecutorTest {
     }
 
     @Test
+    void submittedRunnableShouldRunImmediately() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.submit(() -> {
+            hasBeenExecuted.incrementAndGet();
+        });
+        scheduledExecutor.check();
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(1);
+    }
+    @Test
     void whenShutdownTasksWillNotBeRun() {
         AtomicBoolean hasBeenExecuted = new AtomicBoolean(false);
         scheduledExecutor.schedule(() -> hasBeenExecuted.set(true), 100, TimeUnit.MILLISECONDS);
