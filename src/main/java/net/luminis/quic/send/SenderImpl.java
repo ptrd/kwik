@@ -25,8 +25,11 @@ import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.recovery.RttEstimator;
@@ -94,6 +97,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int receiverMaxAckDelay;
     private volatile int datagramsSent;
     private volatile long bytesSent;
+    private volatile long dataSent;
     private volatile long packetsSent;
     private AtomicInteger subsequentZeroDelays = new AtomicInteger();
     private volatile boolean lastDelayWasZero = false;
@@ -386,8 +390,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                     idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
-        List packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        List<QuicPacket> packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
         log.sent(timeSent, packetsSent);
+        dataSent += countDataBytes(packetsSent);
         qlog.emitPacketSentEvent(packetsSent, timeSent);
     }
 
@@ -423,8 +428,15 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
     }
 
+    private static long countDataBytes(List<QuicPacket> packets) {
+        return packets.stream()
+                .filter(p -> p instanceof ShortHeaderPacket)
+                .mapToInt(p -> p.getFrames().stream().filter(f -> f instanceof StreamFrame).mapToInt(f -> ((StreamFrame) f).getLength()).sum())
+                .sum();
+    }
+
     public SendStatistics getStatistics() {
-        return new SendStatistics(datagramsSent, packetsSent, bytesSent, recoveryManager.getLost(),
+        return new SendStatistics(datagramsSent, packetsSent, bytesSent, dataSent, recoveryManager.getLost(),
                 rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
     }
 

@@ -30,14 +30,12 @@ public class Statistics {
 
     @Override
     public String toString() {
-        return "datagrams sent: " + senderStatistics.datagramsSent() +
-                "\npackets send: " + senderStatistics.packetsSent() +
-                "\nbytes sent: " + senderStatistics.bytesSent() +
-                "\npackets lost: " + senderStatistics.lostPackets() +
-                "\nsmoothed RTT: " + senderStatistics.smoothedRtt() +
-                "\nRTT var: " + senderStatistics.rttVar() +
-                "\nlatest RTT: " + senderStatistics.latestRtt()
-                ;
-
+        return String.format(
+                "datagrams sent: %d\npackets send: %d\nbytes sent: %d\ndata sent: %d\nefficieny: %.1f\npackets lost: %d" +
+                "\nsmoothed RTT: %d\nRTT var: %d\nlatest RTT: %d",
+                senderStatistics.datagramsSent(), senderStatistics.packetsSent(), senderStatistics.bytesSent(),
+                senderStatistics.dataBytesSent(), (senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent())/10.0,
+                senderStatistics.lostPackets(),
+                senderStatistics.smoothedRtt(), senderStatistics.rttVar(), senderStatistics.latestRtt());
     }
 }
