@@ -30,6 +30,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.NullQLog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.reflection.FieldSetter;
@@ -56,9 +57,9 @@ class LossDetectorTest extends RecoveryTests {
         RttEstimator rttEstimator = mock(RttEstimator.class);
         when(rttEstimator.getSmoothedRtt()).thenReturn(defaultRtt);
         when(rttEstimator.getLatestRtt()).thenReturn(defaultRtt);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class), () -> {});
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, mock(CongestionController.class), () -> {}, new NullQLog());
         congestionController = mock(CongestionController.class);
-        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController, () -> {});
+        lossDetector = new LossDetector(mock(RecoveryManager.class), rttEstimator, congestionController, () -> {}, new NullQLog());
         rttEstimater = mock(RttEstimator.class);
     }
 

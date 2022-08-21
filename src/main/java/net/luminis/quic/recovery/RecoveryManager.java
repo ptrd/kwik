@@ -107,7 +107,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         this.role = role;
         this.rttEstimater = rttEstimater;
         for (PnSpace pnSpace: PnSpace.values()) {
-            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController, () -> sender.flush());
+            lossDetectors[pnSpace.ordinal()] = new LossDetector(this, rttEstimater, congestionController, () -> sender.flush(), logger.getQLog());
         }
         this.sender = sender;
         log = logger;

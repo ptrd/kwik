@@ -22,6 +22,7 @@ import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.QLog;
 
 import java.time.Instant;
 import java.util.List;
@@ -39,6 +40,7 @@ public class LossDetector {
     private final RttEstimator rttEstimater;
     private final CongestionController congestionController;
     private final Runnable postProcessLostCallback;
+    private final QLog qLog;
     private float kTimeThreshold = 9f/8f;
     private int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
@@ -50,11 +52,13 @@ public class LossDetector {
     private volatile boolean isReset;
 
 
-    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController, Runnable postProcessLostCallback) {
+    public LossDetector(RecoveryManager recoveryManager, RttEstimator rttEstimator, CongestionController congestionController,
+                        Runnable postProcessLostCallback, QLog qLog) {
         this.recoveryManager = recoveryManager;
         this.rttEstimater = rttEstimator;
         this.congestionController = congestionController;
         this.postProcessLostCallback = postProcessLostCallback;
+        this.qLog = qLog;
 
         ackElicitingInFlight = new AtomicInteger();
         packetSentLog = new ConcurrentHashMap<>();
@@ -221,6 +225,7 @@ public class LossDetector {
                     // see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.3
                     packetStatus.lostPacketCallback().accept(packetStatus.packet());
                     lost++;
+                    qLog.emitPacketLostEvent(packetStatus.packet(), Instant.now());
                 });
         postProcessLostCallback.run();
 

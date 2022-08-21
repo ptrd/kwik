@@ -39,6 +39,9 @@ public class NullQLog implements QLog {
     public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {}
 
     @Override
+    public void emitPacketLostEvent(QuicPacket packet, Instant received) {}
+
+    @Override
     public void emitConnectionTerminatedEvent() {}
 
     @Override

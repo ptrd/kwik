@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022 Peter Doornbosch
+ * Copyright © 2022 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,19 +18,22 @@
  */
 package net.luminis.quic.qlog.event;
 
-public interface QLogEventProcessor {
+import net.luminis.quic.packet.QuicPacket;
 
-    void process(PacketSentEvent event);
+import java.time.Instant;
 
-    void process(ConnectionCreatedEvent event);
+/**
+ * QLog QUIC event recovery:packet_lost
+ * See https://www.ietf.org/archive/id/draft-ietf-quic-qlog-quic-events-01.html#name-packet_lost
+ */
+public class PacketLostEvent extends PacketEvent {
 
-    void process(ConnectionClosedEvent event);
+    public PacketLostEvent(byte[] cid, QuicPacket packet, Instant time) {
+        super(cid, packet, time);
+    }
 
-    void process(PacketReceivedEvent event);
-
-    void process(ConnectionTerminatedEvent event);
-
-    void process(CongestionControlMetricsEvent event);
-
-    void process(PacketLostEvent packetLostEvent);
+    @Override
+    public void accept(QLogEventProcessor processor) {
+        processor.process(this);
+    }
 }

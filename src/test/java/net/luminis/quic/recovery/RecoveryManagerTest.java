@@ -24,6 +24,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.send.Sender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +59,7 @@ class RecoveryManagerTest extends RecoveryTests {
         when(rttEstimator.getRttVar()).thenReturn(defaultRttVar);
         probeSender = mock(Sender.class);
         Logger logger = mock(Logger.class);
+        when(logger.getQLog()).thenReturn(mock(QLog.class));
         // logger = new SysOutLogger();
         // logger.logRecovery(true);
         recoveryManager = new RecoveryManager(mock(FrameProcessorRegistry.class), Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);

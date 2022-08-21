@@ -26,10 +26,7 @@ import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
 import javax.json.stream.JsonGenerator;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -50,13 +47,13 @@ public class ConnectionQLog implements QLogEventProcessor {
     private final FrameFormatter frameFormatter;
     private boolean closed;  // thread-confined
 
+    public ConnectionQLog(QLogEvent startEvent) throws IOException {
+        this(startEvent, getOutputStream(startEvent.getCid()));
+    }
 
-    public ConnectionQLog(QLogEvent event) throws IOException {
+    public ConnectionQLog(QLogEvent event, OutputStream output) throws IOException {
         this.cid = event.getCid();
         this.startTime = event.getTime();
-        // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
-        String qlogDir = System.getenv("QLOGDIR");
-        OutputStream output = new FileOutputStream(new File(qlogDir, format(cid, null) + ".qlog"));
 
         boolean prettyPrinting = false;
         Map<String, ?> configuration = prettyPrinting ? Map.of(PRETTY_PRINTING, "whatever") : emptyMap();
@@ -97,11 +94,23 @@ public class ConnectionQLog implements QLogEventProcessor {
         emitMetrics(event);
     }
 
+    @Override
+    public void process(PacketLostEvent packetLostEvent) {
+        writePacketLostEvent(packetLostEvent);
+    }
+
     public void close() {
         if (! closed) {
             closed = true;
             writeFooter();
         }
+    }
+
+    private static OutputStream getOutputStream(byte[] cid) throws FileNotFoundException {
+        // Buffering not needed on top of output stream, JsonGenerator has its own buffering.
+        String qlogDir = System.getenv("QLOGDIR");
+        OutputStream output = new FileOutputStream(new File(qlogDir, format(cid, null) + ".qlog"));
+        return output;
     }
 
     private void writeHeader() {
@@ -147,6 +156,20 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeEnd();      // event
     }
 
+    private void writePacketLostEvent(PacketLostEvent event) {
+        QuicPacket packet = event.getPacket();
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "recovery:packet_lost")
+                .writeStartObject("data")
+                .writeStartObject("header")
+                .write("packet_type", formatPacketType(packet))
+                .write("packet_number", packet.getPacketNumber() != null? packet.getPacketNumber(): 0)
+                .writeEnd()  // header
+                .writeEnd()       // data
+                .writeEnd();      // event
+    }
+
     private void emitMetrics(CongestionControlMetricsEvent event) {
         jsonGenerator.writeStartObject()
                 .write("time", Duration.between(startTime, event.getTime()).toMillis())
@@ -188,7 +211,7 @@ public class ConnectionQLog implements QLogEventProcessor {
         }
     }
 
-    private String format(byte[] data, String defaultValue) {
+    private static String format(byte[] data, String defaultValue) {
         return data != null? ByteUtils.bytesToHex(data): defaultValue;
     }
 

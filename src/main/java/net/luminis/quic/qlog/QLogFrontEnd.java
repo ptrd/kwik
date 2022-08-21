@@ -72,6 +72,11 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
+    public void emitPacketLostEvent(QuicPacket packet, Instant received) {
+        eventQueue.add(new PacketLostEvent(originalDcid, packet, received));
+    }
+
+    @Override
     public void emitConnectionTerminatedEvent() {
         eventQueue.add(new ConnectionTerminatedEvent(originalDcid));
     }

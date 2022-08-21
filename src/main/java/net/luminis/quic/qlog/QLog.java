@@ -40,6 +40,8 @@ public interface QLog {
 
     void emitPacketReceivedEvent(QuicPacket packet, Instant received);
 
+    void emitPacketLostEvent(QuicPacket packet, Instant received);
+
     void emitConnectionTerminatedEvent();
 
     void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight);
