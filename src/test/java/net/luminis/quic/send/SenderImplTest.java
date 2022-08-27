@@ -21,32 +21,41 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class SenderImplTest extends AbstractSenderTest {
 
+    private TestClock clock;
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
+    private DatagramSocket socket;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
-        DatagramSocket socket = mock(DatagramSocket.class);
+        clock = new TestClock();
+        socket = mock(DatagramSocket.class);
         InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
@@ -57,31 +66,22 @@ class SenderImplTest extends AbstractSenderTest {
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderImpl(Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
-        sender.start(connectionSecrets);
-
-        packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
-
-        FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
+        sender = new SenderImpl(clock, Version.getDefault(), 1200, socket, peerAddress, connection, 100, new NullLogger());
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
     }
 
     @Test
-    void assemblePacketIsCalledBeforeAckDelayHasPassed() throws Exception {
-        Instant ackSendTime = Instant.now().plusMillis(50);
-        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.of(ackSendTime));
+    void whenAckWithDelayIsQueuedSenderIsWakedUpAfterDelay() {
+        // Given
+        sender.enableAllLevels();
 
+        // When
         sender.sendAck(PnSpace.App, 50);
         sender.packetProcessed(false);
 
-        Thread.sleep(5);
-        clearInvocations(packetAssembler);  // PacketProcessed will check to see if anything must be sent
-
-        Thread.sleep(30);
-        verify(packetAssembler, never()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
-
-        Thread.sleep(20);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class));
+        // Then
+        long delay = sender.determineMaximumWaitTime();
+        assertThat(delay).isBetween(49L, 51L);
     }
 
     @Test
@@ -117,8 +117,8 @@ class SenderImplTest extends AbstractSenderTest {
     @Test
     void whenAntiAmplificationLimitNotReachedAssemblerIsCalledWithNoLimit() throws Exception {
         // Given
+        setupMockPacketAssember();
         sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
 
         // When
         sender.sendIfAny();
@@ -130,16 +130,81 @@ class SenderImplTest extends AbstractSenderTest {
     }
 
     @Test
-    void whenAntiAmplificationLimitIsReachedNothingIsSend() throws Exception {
+    void whenAntiAmplificationLimitIsReachedNothingIsSentAnymore() throws Exception {
         // Given
+        sender.enableAllLevels();
         sender.setAntiAmplificationLimit(3 * 1200);   // This is how it's initialized when client packet received
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        for (int i = 0; i < 9; i++) {
+            sender.send(new StreamFrame(0, i * 1100, new byte[1100], false), EncryptionLevel.App);
+        }
+        sender.flush();
 
         // When
         sender.sendIfAny();
 
-        // Then verify
-        ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(packetAssembler, times(3)).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
+        // Then   (given fixed size of StreamFrames, only three packets will fit in the limit of 3 * 1200)
+        verify(socket, times(3)).send(any(DatagramPacket.class));
+    }
+
+    private void setupMockPacketAssember() throws NoSuchFieldException {
+        packetAssembler = mock(GlobalPacketAssembler.class);
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
+        FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void whenNothingIsQueuedNothingIsSentWhenPacketProcessedIsCalled()  throws Exception {
+        // Given
+
+        // When
+        sender.packetProcessed(false);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void whenPacketProcessedIsCalledQueuedFramesAreSent() throws Exception {
+        // Given
+        sender.send(new PingFrame(), EncryptionLevel.Handshake);
+
+        // When
+        sender.packetProcessed(false);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void probeIsSentImmediatelyEvenWhenSenderIsNotFlushed() throws Exception {
+        // Given
+        sender.enableAllLevels();
+
+        // When
+        sender.sendProbe(EncryptionLevel.App);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    @Timeout(value = 500, unit = TimeUnit.MILLISECONDS)
+    void probeWithDataIsSentImmediatelyEvenWhenSenderIsNotFlushed() throws Exception {
+        // Given
+        sender.enableAllLevels();
+
+        // When
+        sender.sendProbe(List.of(new CryptoFrame(Version.getDefault(), new byte[368])), EncryptionLevel.App);
+        sender.doLoopIteration();
+
+        // Then
+        verify(socket).send(any(DatagramPacket.class));
     }
 }

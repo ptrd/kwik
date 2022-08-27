@@ -23,6 +23,7 @@ import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -32,6 +33,7 @@ import java.util.function.Function;
 
 public class SendRequestQueue {
 
+    private final Clock clock;
     private final EncryptionLevel encryptionLevel;
     private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
     private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
@@ -40,11 +42,12 @@ public class SendRequestQueue {
     private volatile boolean cleared;
 
     public SendRequestQueue(EncryptionLevel level) {
-        encryptionLevel = level;
+        this(Clock.systemUTC(), level);
     }
 
-    public SendRequestQueue() {
-        encryptionLevel = null;
+    public SendRequestQueue(Clock clock, EncryptionLevel level) {
+        this.clock = clock;
+        encryptionLevel = level;
     }
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
@@ -53,12 +56,12 @@ public class SendRequestQueue {
 
     public void addAckRequest() {
         synchronized (ackLock) {
-            nextAckTime = Instant.now();
+            nextAckTime = clock.instant();
         }
     }
 
     public void addAckRequest(int delay) {
-        Instant requestedAckTime = Instant.now().plusMillis(delay);
+        Instant requestedAckTime = clock.instant().plusMillis(delay);
         synchronized (ackLock) {
             if (nextAckTime == null || requestedAckTime.isBefore(nextAckTime)) {
                 nextAckTime = requestedAckTime;
@@ -96,14 +99,22 @@ public class SendRequestQueue {
     }
 
     public boolean mustSendAck() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         synchronized (ackLock) {
             return nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
         }
     }
 
+    /**
+     * Check on whether an ack must be sent and promise to do so: if this method returns true the flag that indicates (when)
+     * an explicit ack must be sent will be reset, so if the caller does not actually send the ack, the notion it had to be
+     * sent will be lost.
+     * The reason for this uncommon behaviour is to avoid race conditions: when checking and changing status is not done
+     * transactionally, a next change might be lost.
+     * @return
+     */
     public boolean mustAndWillSendAck() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         synchronized (ackLock) {
             boolean must = nextAckTime != null && (now.isAfter(nextAckTime) || Duration.between(now, nextAckTime).toMillis() < 1);
             if (must) {

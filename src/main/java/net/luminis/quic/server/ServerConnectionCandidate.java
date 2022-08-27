@@ -51,12 +51,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private final ServerConnectionRegistry connectionRegistry;
     private final Logger log;
     private volatile ServerConnectionThread registeredConnection;
-    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private static final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService executor;
+    private final ScheduledExecutorService scheduledExecutor;
 
 
-    public ServerConnectionCandidate(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
-                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry,  Logger log) {
+    public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
+                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry, Logger log) {
+        this.executor = context.getSharedServerExecutor();
+        this.scheduledExecutor = context.getSharedScheduledExecutor();
         this.quicVersion = version;
         this.clientAddress = clientAddress;
         this.dcid = dcid;
@@ -74,8 +76,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
         // Execute packet parsing on separate thread, to make this method return a.s.a.p.
         executor.submit(() -> {
-            // If duplicate initial packets are arriving faster than they are processed, serialized processing (per connection candidate)
+            // Serialize processing (per connection candidate): duplicate initial packets might arrive faster than they are processed.
             synchronized (this) {
+                // Because of possible queueing in the executor, a connection might already exist (i.e. when multiple
+                // packets queued before the connection was registered).
                 if (registeredConnection != null) {
                     registeredConnection.parsePackets(datagramNumber, timeReceived, data);
                     return;

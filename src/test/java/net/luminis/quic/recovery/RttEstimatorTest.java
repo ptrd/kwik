@@ -26,7 +26,7 @@ import net.luminis.quic.recovery.RttEstimator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
 import java.util.Collections;

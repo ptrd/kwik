@@ -34,6 +34,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
 /**
@@ -55,6 +58,9 @@ public class ServerConnector implements ServerConnectionRegistry {
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
+    private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private Context context;
 
 
     public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
@@ -75,6 +81,7 @@ public class ServerConnector implements ServerConnectionRegistry {
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
+        context = new ServerConnectorContext();
     }
 
     public void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory) {
@@ -215,7 +222,7 @@ public class ServerConnector implements ServerConnectionRegistry {
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
         try {
             Version version = Version.parse(versionValue);
-            ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+            ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
             // Register new connection now with the original connection id, as retransmitted initial packets with the
             // same original dcid might be received, which should _not_ lead to another connection candidate)
             currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
@@ -330,4 +337,16 @@ public class ServerConnector implements ServerConnectionRegistry {
 
     }
 
+    private class ServerConnectorContext implements Context {
+
+        @Override
+        public ExecutorService getSharedServerExecutor() {
+            return sharedExecutor;
+        }
+
+        @Override
+        public ScheduledExecutorService getSharedScheduledExecutor() {
+            return sharedScheduledExecutor;
+        }
+    }
 }

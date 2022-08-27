@@ -40,6 +40,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -71,6 +72,7 @@ import static java.lang.Long.max;
  */
 public class SenderImpl implements Sender, CongestionControlEventListener {
 
+    private final Clock clock;
     private final int maxPacketSize;
     private volatile DatagramSocket socket;
     private final InetSocketAddress peerAddress;
@@ -106,6 +108,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
                       QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, initialRtt, log);
+    }
+    public SenderImpl(Clock clock, Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+        this.clock = clock;
         this.maxPacketSize = maxPacketSize;
         this.socket = socket;
         this.peerAddress = peerAddress;
@@ -115,7 +122,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         Arrays.stream(EncryptionLevel.values()).forEach(level -> {
             int levelIndex = level.ordinal();
-            sendRequestQueue[levelIndex] = new SendRequestQueue(level);
+            sendRequestQueue[levelIndex] = new SendRequestQueue(clock, level);
         });
         globalAckGenerator = new GlobalAckGenerator(this);
         packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
@@ -271,28 +278,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         try {
             running = true;
             while (running) {
-                synchronized (condition) {
-                    try {
-                        if (! signalled) {
-                            long timeout = determineMinimalDelay();
-                            if (timeout > 0) {
-                                condition.wait(timeout);
-                            }
-                        }
-                        signalled = false;
-                    }
-                    catch (InterruptedException e) {
-                        log.debug("Sender thread is interrupted; probably shutting down? " + running);
-                    }
-                }
-
-                // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
-                // items being queued just after the packet assembler (for that level) has executed.
-                if (stopping) {
-                    running = false;
-                }
-
-                sendIfAny();
+                doLoopIteration();
             }
         }
         catch (Throwable fatalError) {
@@ -304,6 +290,31 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 log.warn("Ignoring " + fatalError + " because sender is shutting down.");
             }
         }
+    }
+
+    void doLoopIteration() throws IOException {
+        synchronized (condition) {
+            try {
+                if (! signalled) {
+                    long timeout = determineMaximumWaitTime();
+                    if (timeout > 0) {
+                        condition.wait(timeout);
+                    }
+                }
+                signalled = false;
+            }
+            catch (InterruptedException e) {
+                log.debug("Sender thread is interrupted; probably shutting down? " + running);
+            }
+        }
+
+        // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
+        // items being queued just after the packet assembler (for that level) has executed.
+        if (stopping) {
+            running = false;
+        }
+
+        sendIfAny();
     }
 
     void sendIfAny() throws IOException {
@@ -324,10 +335,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
     }
 
-    private long determineMinimalDelay() {
+    /**
+     * Determines the maximum wait (sleep) time before the sender must check again if there is something to send.
+     * @return
+     */
+    long determineMaximumWaitTime() {
         Optional<Instant> nextDelayedSendTime = packetAssembler.nextDelayedSendTime();
         if (nextDelayedSendTime.isPresent()) {
-            long delay = max(Duration.between(Instant.now(), nextDelayedSendTime.get()).toMillis(), 0);
+            long delay = max(Duration.between(clock.instant(), nextDelayedSendTime.get()).toMillis(), 0);
             if (delay > 0) {
                 subsequentZeroDelays.set(0);
                 lastDelayWasZero = false;
@@ -378,7 +393,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
-        Instant timeSent = Instant.now();
+        Instant timeSent = clock.instant();
         socket.send(datagram);
         datagramsSent++;
         packetsSent += itemsToSend.size();

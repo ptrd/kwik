@@ -23,7 +23,7 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.*;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
 import java.time.LocalTime;

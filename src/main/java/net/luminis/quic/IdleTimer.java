@@ -18,17 +18,23 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
 public class IdleTimer {
 
-    private final Timer timer;
+    private final Clock clock;
+    private final ScheduledExecutorService timer;
     private final int timerResolution;
     private long timeout;
     private final QuicConnectionImpl connection;
@@ -43,25 +49,25 @@ public class IdleTimer {
     }
 
     public IdleTimer(QuicConnectionImpl connection, Logger logger, int timerResolution) {
+        this(Clock.systemUTC(), connection, logger, timerResolution);
+    }
+
+    public IdleTimer(Clock clock, QuicConnectionImpl connection, Logger logger, int timerResolution) {
+        this.clock = clock;
         this.connection = connection;
         this.ptoSupplier = () -> 0;
         this.log = logger;
         this.timerResolution = timerResolution;
 
-        timer = new Timer(true);
-        lastAction = Instant.now();
+        timer = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("idle-timer"));
+        lastAction = clock.instant();
     }
 
     void setIdleTimeout(long idleTimeoutInMillis) {
         if (! enabled) {
             enabled = true;
             timeout = idleTimeoutInMillis;
-            timer.scheduleAtFixedRate(new TimerTask() {
-                @Override
-                public void run() {
-                    checkIdle();
-                }
-            }, timerResolution, timerResolution);
+            timer.scheduleAtFixedRate(() -> checkIdle(), timerResolution, timerResolution, TimeUnit.MILLISECONDS);
         }
         else {
             log.error("idle timeout was set already; can't be set twice on same connection");
@@ -74,14 +80,14 @@ public class IdleTimer {
 
     private void checkIdle() {
         if (enabled) {
-            Instant now = Instant.now();
+            Instant now = clock.instant();
             if (lastAction.plusMillis(timeout).isBefore(now)) {
                 int currentPto = ptoSupplier.getAsInt();
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
                 // To avoid excessively small idle timeout periods, endpoints MUST increase the idle timeout period
                 // to be at least three times the current Probe Timeout (PTO)
                 if (lastAction.plusMillis(3 * currentPto).isBefore(now)) {
-                    timer.cancel();
+                    timer.shutdown();
                     connection.silentlyCloseConnection(timeout + currentPto);
                 }
             }}
@@ -91,7 +97,7 @@ public class IdleTimer {
         if (enabled) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
             // "An endpoint restarts its idle timer when a packet from its peer is received and processed successfully."
-            lastAction = Instant.now();
+            lastAction = clock.instant();
         }
     }
 
@@ -108,7 +114,7 @@ public class IdleTimer {
 
     public void shutdown() {
         if (enabled) {
-            timer.cancel();
+            timer.shutdown();
         }
     }
 }

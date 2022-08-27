@@ -24,7 +24,7 @@ import net.luminis.quic.Version;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import javax.crypto.Cipher;
 

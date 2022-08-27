@@ -21,12 +21,16 @@ package net.luminis.quic;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -37,12 +41,15 @@ class IdleTimerTest {
 
     private QuicConnectionImpl connection;
     private IdleTimer idleTimer;
-    private int delta = 30;
+    private TestClock clock;
 
     @BeforeEach
-    void initObjectUnderTest() {
+    void initObjectUnderTest() throws Exception {
+        clock = new TestClock();
         connection = Mockito.spy(mock(QuicConnectionImpl.class));
-        idleTimer = new IdleTimer(connection, mock(Logger.class), 10);
+        idleTimer = new IdleTimer(clock, connection, mock(Logger.class), 1);
+        ScheduledExecutorService scheduler = new TestScheduledExecutor(clock);
+        FieldSetter.setField(idleTimer, idleTimer.getClass().getDeclaredField("timer"), scheduler);
     }
 
     @AfterEach
@@ -54,13 +61,13 @@ class IdleTimerTest {
     void idleTimerShouldBeRestartedWhenPacketProcessed() throws Exception {
         idleTimer.setIdleTimeout(200);
 
-        Thread.sleep(150);
+        clock.fastForward(150);
         idleTimer.packetProcessed();
 
-        Thread.sleep(150);
+        clock.fastForward(150);
         verify(connection, never()).silentlyCloseConnection(anyInt());
 
-        Thread.sleep(50 + delta);
+        clock.fastForward(51);
         verify(connection, times(1)).silentlyCloseConnection(anyLong());
     }
 
@@ -68,27 +75,25 @@ class IdleTimerTest {
     void idleTimerShouldBeRestartedWhenPacketSent() throws Exception {
         idleTimer.setIdleTimeout(200);
 
-        Thread.sleep(150);
-        idleTimer.packetSent(new ShortHeaderPacket(Version.getDefault(), new byte[0], new PingFrame()), Instant.now());
+        clock.fastForward(150);
+        idleTimer.packetSent(new ShortHeaderPacket(Version.getDefault(), new byte[0], new PingFrame()), clock.instant());
 
-        Thread.sleep(150);
+        clock.fastForward(150);
         verify(connection, never()).silentlyCloseConnection(anyLong());
 
-        Thread.sleep(50 + delta);
+        clock.fastForward(51);
         verify(connection, times(1)).silentlyCloseConnection(anyLong());
     }
 
     @Test
     void ifThreeTimesPtoIsLargerThanIdleTimeoutConnectionShouldNotTimeoutBeforeThreeTimesPto() throws Exception {
-        idleTimer = new IdleTimer(connection, mock(Logger.class), 10);
         idleTimer.setIdleTimeout(200);
         idleTimer.setPtoSupplier(() -> 100);
 
-        Thread.sleep(200 + delta);
+        clock.fastForward(201);
         verify(connection, never()).silentlyCloseConnection(anyLong());
 
-        Thread.sleep(100);
+        clock.fastForward(100);
         verify(connection, times(1)).silentlyCloseConnection(anyLong());
     }
-
 }

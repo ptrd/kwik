@@ -27,7 +27,7 @@ import net.luminis.tls.handshake.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -43,6 +43,7 @@ import static net.luminis.tls.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static net.luminis.quic.test.FieldSetter.setField;
 
 class CryptoStreamTest {
 
@@ -58,7 +59,7 @@ class CryptoStreamTest {
         cryptoStream = new CryptoStream(QUIC_VERSION, EncryptionLevel.Handshake, null,
                 Role.Client, new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
-        FieldSetter.setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
+        setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
         setParseFunction(buffer -> {
             buffer.mark();

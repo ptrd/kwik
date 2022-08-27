@@ -25,6 +25,9 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
@@ -33,8 +36,7 @@ import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.internal.util.reflection.FieldReader;
-import org.mockito.internal.util.reflection.FieldSetter;
+import net.luminis.quic.test.FieldSetter;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -55,6 +57,9 @@ class ServerConnectorTest {
 
     private ServerConnector server;
     private DatagramSocket serverSocket;
+    private Context context;
+    private TestScheduledExecutor testExecutor;
+    private TestClock clock;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -63,6 +68,12 @@ class ServerConnectorTest {
         serverSocket = mock(DatagramSocket.class);
         server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, mock(Logger.class));
         server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
+        clock = new TestClock();
+        context = mock(Context.class);
+        testExecutor = new TestScheduledExecutor(clock);
+        when(context.getSharedServerExecutor()).thenReturn(testExecutor);
+        when(context.getSharedScheduledExecutor()).thenReturn(testExecutor);
+        FieldSetter.setField(server, "context", context);
     }
 
     @Test
@@ -194,46 +205,12 @@ class ServerConnectorTest {
 
         // When
         server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()))));
-        Thread.sleep(300);
+        testExecutor.check();
 
         // Then
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         // And
         verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), any(ByteBuffer.class), argThat(packet -> packet instanceof InitialPacket));
-    }
-
-    @Test
-    void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
-        // TODO: this test is more an integration test. Testing correct use of connection id's can be tested on serverconnection directly
-        byte[] scid = new byte[] { 1, 2, 3, 4, 5 };
-        TransportParameters clientTransportParams = new TransportParameters();
-        clientTransportParams.setInitialSourceConnectionId(scid);
-        List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("hq-29"),
-                new QuicTransportParametersExtension(Version.getDefault(), clientTransportParams, Role.Client));
-
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        byte[] dcid = new byte[] { 11, 12, 13, 14, 15, 16, 17, 18 };
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, dcid, null, cryptoFrame);
-        initialPacket.addFrame(new Padding(938));
-        ConnectionSecrets connectionSecrets = new ConnectionSecrets(Version.getDefault(), Role.Client, null, mock(Logger.class));
-        connectionSecrets.computeInitialKeys(dcid);
-        byte[] packetBytes = initialPacket.generatePacketBytes(0L, connectionSecrets.getOwnSecrets(EncryptionLevel.Initial));
-        server.process(createPacket(ByteBuffer.wrap(packetBytes)));
-        Thread.sleep(100);  // Because processing packets is done on seperate thread.
-
-        // Then
-        ArgumentCaptor<DatagramPacket> captor = ArgumentCaptor.forClass(DatagramPacket.class);
-        verify(serverSocket, atLeast(1)).send(captor.capture());
-        DatagramPacket packetSent = captor.getValue();
-        int dcidLength = packetSent.getData()[5];
-        byte[] responseDcid = Arrays.copyOfRange(packetSent.getData(), 6, 6 + dcidLength);
-
-        assertThat(responseDcid).isEqualTo(scid);
-
-        int scidLength = packetSent.getData()[6 + dcidLength];
-        byte[] responseScid = Arrays.copyOfRange(packetSent.getData(), 6 + dcidLength + 1, 6 + dcidLength + 1 + scidLength);
-        assertThat(responseScid).isNotEqualTo(dcid);
     }
 
     @Test
@@ -253,7 +230,7 @@ class ServerConnectorTest {
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()));
 
         server.process(createPacket(buffer));
-        Thread.sleep(100);
+        testExecutor.check();
 
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         clearInvocations(connectionFactory);
@@ -288,7 +265,7 @@ class ServerConnectorTest {
 
         server.process(validFirstPacket);
         server.process(invalidRepeatedFirstPacket);
-        Thread.sleep(300);  // Give time to process 2 packets asynchronously
+        testExecutor.check();
 
         Map serverConnections = (Map) new FieldReader(server, server.getClass().getDeclaredField("currentConnections")).read();
         // As the first packet was valid, there must be an entry with the original DCID
