@@ -21,26 +21,21 @@ package net.luminis.quic;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.cid.DestinationConnectionIdRegistry;
-import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.send.Sender;
 import net.luminis.quic.send.SenderImpl;
-import net.luminis.quic.QuicStream;
+import net.luminis.tls.handshake.TlsClientEngine;
 import net.luminis.tls.util.ByteUtils;
 import net.luminis.quic.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mockito;
 import net.luminis.quic.test.FieldReader;
 
-import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -78,35 +73,27 @@ class QuicClientConnectionImplTest {
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build();
         sender = Mockito.mock(SenderImpl.class);
+        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        FieldSetter.setField(connectionIdManager, "sender", sender);
     }
 
     @Test
     void testRetryPacketInitiatesInitialPacketWithToken() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        InOrder recorder = inOrder(sender);
-        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+        simulateSuccessfulConnect();
 
         byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
         setFixedOriginalDestinationConnectionId(originalConnectionId);
 
-        new Thread(() -> {
-            try {
-                connection.connect(3, "hq");
-            } catch (IOException e) {}
-        }).start();
-
-        Thread.sleep(1000);  // Give connection a chance to send packet.
-
         // First InitialPacket should not contain a token.
-        recorder.verify(sender, never()).setInitialToken(any(byte[].class));
+        verify(sender, never()).setInitialToken(any(byte[].class));
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(originalConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
 
         // A second InitialPacket should be send with token
-        recorder.verify(sender).setInitialToken(
+        verify(sender).setInitialToken(
                 argThat(token -> token != null && Arrays.equals(token, new byte[] { 0x01, 0x02, 0x03 })));
     }
 
@@ -119,21 +106,11 @@ class QuicClientConnectionImplTest {
 
     @Test
     void testSecondRetryPacketShouldBeIgnored() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+        simulateSuccessfulConnect();
 
         byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
         setFixedOriginalDestinationConnectionId(originalConnectionId);
-
-        new Thread(() -> {
-            try {
-                connection.connect(3, "hq");
-            } catch (IOException e) {
-            }
-        }).start();
-
-        Thread.sleep(1000);  // Give connection a chance to send packet(s).
 
         // Simulate a first RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
@@ -159,19 +136,7 @@ class QuicClientConnectionImplTest {
 
     @Test
     void testRetryPacketWithIncorrectOriginalDestinationIdShouldBeDiscarded() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
-
-        new Thread(() -> {
-            try {
-                connection.connect(3, "hq");
-            } catch (IOException e) {
-            }
-        }).start();
-
-        Thread.sleep(1000);  // Give connection a chance to send packet(s).
-
-        clearInvocations(sender);
+        simulateSuccessfulConnect();
 
         // Simulate a RetryPacket with arbitrary original destination id is received
         RetryPacket retryPacket = createRetryPacket(new byte[] { 0x03, 0x0a, 0x0d, 0x09 }, "00112233445566778899aabbccddeeff");
@@ -183,6 +148,7 @@ class QuicClientConnectionImplTest {
     @Test
     void testAfterRetryPacketTransportParametersWithoutOriginalDestinationIdLeadsToConnectionError() throws Exception {
         simulateConnectionReceivingRetryPacket();
+        connection = Mockito.spy(connection);
 
         // Simulate a TransportParametersExtension is received that does not contain the right original destination id
         connection.setPeerTransportParameters(new TransportParameters());
@@ -195,6 +161,7 @@ class QuicClientConnectionImplTest {
     @Test
     void testAfterRetryPacketTransportParametersWithIncorrectOriginalDestinationIdLeadsToConnectionError() throws Exception {
         RetryPacket retryPacket = simulateConnectionReceivingRetryPacket();
+        connection = Mockito.spy(connection);
 
         // Simulate a TransportParametersExtension is received that...
         TransportParameters transportParameters = new TransportParameters();
@@ -214,6 +181,7 @@ class QuicClientConnectionImplTest {
     @Test
     void testAfterRetryPacketTransportParametersWithCorrectRetrySourceConnectionId() throws Exception {
         RetryPacket retryPacket = simulateConnectionReceivingRetryPacket();
+        connection = Mockito.spy(connection);
 
         // Simulate a TransportParametersExtension is received that...
         TransportParameters transportParameters = new TransportParameters();
@@ -232,7 +200,8 @@ class QuicClientConnectionImplTest {
     void testWithNormalConnectionTransportParametersShouldNotContainRetrySourceId() throws Exception {
         byte[] originalSourceConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         setFixedOriginalDestinationConnectionId(originalSourceConnectionId);
-        simulateNormalConnection();
+        simulateSuccessfulConnect();
+        connection = spy(connection);
 
         // Simulate a TransportParametersExtension is received that does not contain a retry source id
         TransportParameters transportParameters = new TransportParameters();
@@ -246,7 +215,8 @@ class QuicClientConnectionImplTest {
 
     @Test
     void testOnNormalConnectionTransportParametersWithOriginalDestinationIdLeadsToConnectionError() throws Exception {
-        simulateNormalConnection();
+        simulateSuccessfulConnect();
+        connection = spy(connection);
 
         // Simulate a TransportParametersExtension is received that does contain an original destination id
         TransportParameters transportParameters = new TransportParameters();
@@ -259,43 +229,25 @@ class QuicClientConnectionImplTest {
     }
 
     private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+        simulateSuccessfulConnect();
 
         originalDestinationId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
         setFixedOriginalDestinationConnectionId(originalDestinationId);
-
-        connection = Mockito.spy(connection);
-
-        new Thread(() -> {
-            try {
-                connection.connect(3, "hq");
-            } catch (IOException e) {
-            }
-        }).start();
-        Thread.sleep(100);  // Give connection a chance to send packet(s).
 
         // Simulate a RetryPacket is received
         RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
         return retryPacket;
     }
-
-    private void simulateNormalConnection() throws Exception {
+    
+    private void simulateSuccessfulConnect() throws NoSuchFieldException {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
-        connection = Mockito.spy(connection);
 
-        new Thread(() -> {
-            try {
-                connection.connect(3, "hq");
-            } catch (IOException e) {
-            }
-        }).start();
-        Thread.sleep(100);  // Give connection a chance to send packet(s).
+        FieldSetter.setField(connection, "tlsEngine", mock(TlsClientEngine.class));
     }
-
+    
     @Test
     void testCreateStream() throws Exception {
         TransportParameters parameters = new TransportParameters(10, 10, 10, 10);
@@ -447,7 +399,6 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
-        useMockSender();
         setTransportParametersWithActiveConnectionIdLimit(3);
         connection.newConnectionIds(1, 0);
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
@@ -462,7 +413,6 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
-        useMockSender();
         setTransportParametersWithActiveConnectionIdLimit(7);
 
         // When
@@ -538,7 +488,6 @@ class QuicClientConnectionImplTest {
     @Test
     void retireConnectionIdFrameShouldBeRetransmittedWhenLost() throws Exception {
         // Given
-        useMockSender();
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }), null, null);
 
@@ -564,7 +513,6 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingReorderedNewConnectionIdWithSequenceNumberThatIsAlreadyRetiredShouldImmediatelySendRetire() throws Exception {
         // Given
-        useMockSender();
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
         connection.process(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }), null, null);
         clearInvocations(sender);
@@ -636,44 +584,6 @@ class QuicClientConnectionImplTest {
         assertThatThrownBy(() ->
                 connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }))
         ).isInstanceOf(InvalidPacketException.class);
-    }
-
-    void connectionShouldBeSilentlyClosedAfterIdleTimeout() throws Exception {
-
-        // Given
-        simulateNormalConnectionSetup(1);
-
-        // When
-        Thread.sleep(1000);
-
-        // Then
-        verify(connection, times(1)).silentlyCloseConnection(anyLong());
-    }
-
-    private void simulateNormalConnectionSetup(int idleTimeoutInSeconds) throws Exception {
-        Sender sender = Mockito.mock(Sender.class);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionSecrets"), mock(ConnectionSecrets.class));
-        connection = Mockito.spy(connection);
-
-        new Thread(() -> {
-            try {
-                connection.connect(3 * idleTimeoutInSeconds * 1000, "hq");
-            } catch (IOException e) {
-                System.out.println("Exception in connect method: " + e);
-            }
-        }).start();
-
-        connection.setPeerTransportParameters(new TransportParameters(idleTimeoutInSeconds, 1_000_000, 10, 10));
-        connection.handshakeFinished();
-    }
-
-    private void useMockSender() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
-        FieldSetter.setField(connectionIdManager,
-                connectionIdManager.getClass().getDeclaredField("sender"),
-                sender);
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
