@@ -525,9 +525,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                     }
 
                     if (streamFrame.isFinal()) {
-                        // Done! Retransmissions may follow, but don't need flow control.
-                        flowController.unregister(QuicStreamImpl.this);
-                        flowController.streamClosed(QuicStreamImpl.this);
+                        finalFrameSent();
                     }
                     return streamFrame;
                 }
@@ -546,6 +544,10 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 }
             }
             return null;
+        }
+
+        protected void finalFrameSent() {
+            stopFlowControl();
         }
 
         @Override
@@ -636,8 +638,15 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
      * cases the caller must (again) provide the data to be sent.
      */
     protected void resetOutputStream() {
+        outputStream.closed = false;
         // TODO: this is currently not thread safe, see comment in EarlyDataStream how to fix.
         outputStream.restart();
+    }
+
+    protected void stopFlowControl() {
+        // Done! Retransmissions may follow, but don't need flow control.
+        flowController.unregister(QuicStreamImpl.this);
+        flowController.streamClosed(QuicStreamImpl.this);
     }
 
     void abort() {
