@@ -292,9 +292,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
-                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-                // "The client MUST NOT send 0-RTT packets using the negotiated version, even after processing a packet of that version
-                //  from the server. Servers can apply original version 0-RTT packets to a connection without additional considerations."
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
                 keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
