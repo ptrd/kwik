@@ -317,8 +317,21 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
+        tlsEngine.setSessionData(quicVersion.getVersion().getBytes());
+        tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
     }
 
+    boolean acceptSessionResumption(ByteBuffer storedSessionData) {
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-tls-resumption-and-new_toke
+        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from a different version."
+        if (quicVersion.getVersion().equals(Version.parse(storedSessionData.getInt()))) {
+            return true;
+        }
+        else {
+            log.warn("Resumed session denied because quic versions don't match");
+            return false;
+        }
+    }
     @Override
     public boolean isEarlyDataAccepted() {
         if (acceptEarlyData) {
