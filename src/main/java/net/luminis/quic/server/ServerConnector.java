@@ -20,10 +20,17 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Options;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -206,8 +213,8 @@ public class ServerConnector implements ServerConnectionRegistry {
 
     private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
         packetBytes.rewind();
-        int flags = packetBytes.get() & 0xff;
-        if ((flags & 0b1111_0000) == 0b1100_0000) {
+        int type = (packetBytes.get() & 0x30) >> 4;
+        if (InitialPacket.isInitial(type, Version.parse(version))) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-14.1
             // "A server MUST discard an Initial packet that is carried in a UDP
             //   datagram with a payload that is smaller than the smallest allowed
@@ -220,18 +227,13 @@ public class ServerConnector implements ServerConnectionRegistry {
     }
 
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
-        try {
-            Version version = Version.parse(versionValue);
-            ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
-            // Register new connection now with the original connection id, as retransmitted initial packets with the
-            // same original dcid might be received, which should _not_ lead to another connection candidate)
-            currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
+        Version version = Version.parse(versionValue);
+        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+        // Register new connection now with the original connection id, as retransmitted initial packets with the
+        // same original dcid might be received, which should _not_ lead to another connection candidate)
+        currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
 
-            return connectionCandidate;
-        } catch (UnknownVersionException e) {
-            // Impossible, as it only gets here if the given version is supported, so it is a known version.
-            throw new RuntimeException();
-        }
+        return connectionCandidate;
     }
 
     private void removeConnection(ServerConnectionImpl connection) {

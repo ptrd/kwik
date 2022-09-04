@@ -96,6 +96,7 @@ public class SampleWebServer {
 
         List<Version> supportedVersions = new ArrayList<>();
         supportedVersions.add(Version.QUIC_version_1);
+        supportedVersions.add(Version.QUIC_version_2);
 
         boolean requireRetry = ! cmd.hasOption("noRetry");
         ServerConnector serverConnector = new ServerConnector(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, log);

@@ -18,10 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.InvalidPacketException;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
@@ -166,9 +163,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
         // "The most significant bit (0x80) of byte 0 (the first byte) is set to 1 for long headers."
         // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-17.2.2
         // "An Initial packet uses long headers with a type value of 0x0."
-        if ((flags & 0xf0) == 0xc0) {  // 1100 0000
+        if (InitialPacket.isInitial((flags & 0x30) >> 4, quicVersion)) {
             InitialPacket packet = new InitialPacket(quicVersion);
-            ConnectionSecrets connectionSecrets = new ConnectionSecrets(quicVersion, Role.Server, null, new NullLogger());
+            ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
             byte[] originalDcid = dcid;
             connectionSecrets.computeInitialKeys(originalDcid);
             Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());

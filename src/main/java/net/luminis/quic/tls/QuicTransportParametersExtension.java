@@ -27,6 +27,9 @@ import net.luminis.tls.extension.Extension;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 import static net.luminis.quic.Role.Server;
@@ -49,7 +52,7 @@ public class QuicTransportParametersExtension extends Extension {
 
 
     public static boolean isCodepoint(Version quicVersion, int extensionType) {
-        if (quicVersion == Version.QUIC_version_1) {
+        if (quicVersion.isV1V2()) {
             return extensionType == CODEPOINT_V1;
         }
         else {
@@ -95,7 +98,7 @@ public class QuicTransportParametersExtension extends Extension {
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
         // "quic_transport_parameters(0xffa5)"
-        buffer.putShort((short) (quicVersion == Version.QUIC_version_1? CODEPOINT_V1: CODEPOINT_IETFDRAFT));
+        buffer.putShort((short) (quicVersion.equals(Version.QUIC_version_1) || quicVersion.isV2()? CODEPOINT_V1: CODEPOINT_IETFDRAFT));
 
         // Format is same as any TLS extension, so next are 2 bytes length
         buffer.putShort((short) 0);  // PlaceHolder, will be correctly set at the end of this method.
@@ -186,6 +189,14 @@ public class QuicTransportParametersExtension extends Extension {
         if (discardTransportParameterSize != null) {
             // See https://github.com/quicwg/base-drafts/wiki/Quantum-Readiness-test
             addTransportParameter(buffer, (short) 0x173e, new byte[discardTransportParameterSize]);
+        }
+
+        if (params.getVersionInformation() != null) {
+            TransportParameters.VersionInformation versions = params.getVersionInformation();
+            ByteBuffer data = ByteBuffer.allocate(4 + versions.getOtherVersions().size() * 4);
+            data.put(versions.getChosenVersion().getBytes());
+            versions.getOtherVersions().forEach(v -> data.put(v.getBytes()));
+            addTransportParameter(buffer, version_information, data.array());
         }
 
         int length = buffer.position();
@@ -335,6 +346,19 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- retry source connection id: " + retrySourceCid);
             params.setRetrySourceConnectionId(retrySourceCid);
         }
+        else if (parameterId == version_information.value) {
+            // Óhttps://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-05.html#name-version-information
+            if (size % 4 != 0 || size < 4) {
+                throw new DecodeErrorException("invalid parameters size");
+            }
+            int chosenVersion = buffer.getInt();
+            List<Version> otherVersions = new ArrayList<>();
+            for (int i = 0; i < size/4 - 1; i++) {
+                int otherVersion = buffer.getInt();
+                otherVersions.add(Version.parse(otherVersion));
+            }
+            params.setVersionInformation(new TransportParameters.VersionInformation(Version.parse(chosenVersion), otherVersions));
+        }
         else {
             String extension = "";
             if (parameterId == 0x0020) extension = "datagram";
@@ -401,7 +425,7 @@ public class QuicTransportParametersExtension extends Extension {
         addTransportParameter(buffer, id.value, value);
     }
 
-    private void addTransportParameter(ByteBuffer buffer, short id, long value) {
+    private void addTransportParameter(ByteBuffer buffer, int id, long value) {
         VariableLengthInteger.encode(id, buffer);
         buffer.mark();
         int encodedValueLength = VariableLengthInteger.encode(value, buffer);
@@ -414,7 +438,7 @@ public class QuicTransportParametersExtension extends Extension {
         addTransportParameter(buffer, id.value, value);
     }
 
-    private void addTransportParameter(ByteBuffer buffer, short id, byte[] value) {
+    private void addTransportParameter(ByteBuffer buffer, int id, byte[] value) {
         VariableLengthInteger.encode(id, buffer);
         VariableLengthInteger.encode(value.length, buffer);
         buffer.put(value);

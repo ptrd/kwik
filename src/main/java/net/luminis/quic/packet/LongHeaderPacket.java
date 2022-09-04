@@ -38,6 +38,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected byte[] sourceConnectionId;
 
+    public static boolean isLongHeaderPacket(byte flags, Version quicVersion) {
+        return (flags & 0b1100_0000) == 0b1100_0000;
+    }
+
     /**
      * Constructs an empty packet for parsing a received one
      * @param quicVersion
@@ -122,9 +126,24 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     protected void generateFrameHeaderInvariant(ByteBuffer packetBuffer) {
-        // Packet type
-        byte packetType = getPacketType();
-        packetBuffer.put(packetType);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-long-header-packets
+        // "Long Header Packet {
+        //    Header Form (1) = 1,
+        //    Fixed Bit (1) = 1,
+        //    Long Packet Type (2),
+        //    Type-Specific Bits (4),"
+        //    Version (32),
+        //    Destination Connection ID Length (8),
+        //    Destination Connection ID (0..160),
+        //    Source Connection ID Length (8),
+        //    Source Connection ID (0..160),
+        //    Type-Specific Payload (..),
+        //  }
+
+        // Packet type and packet number length
+        byte flags = encodePacketNumberLength((byte) (0b1100_0000 | (getPacketType() << 4)), packetNumber);
+        encodePacketNumberLength(flags, packetNumber);
+        packetBuffer.put(flags);
         // Version
         packetBuffer.put(quicVersion.getBytes());
         // DCID Len
@@ -159,13 +178,9 @@ public abstract class LongHeaderPacket extends QuicPacket {
             throw new InvalidPacketException();
         }
         byte flags = buffer.get();
-        checkPacketType(flags);
+        checkPacketType((flags & 0x30) >> 4);
 
-        boolean matchingVersion = false;
-        try {
-            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
-        } catch (UnknownVersionException e) {}
-
+        boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
             // "... packets are discarded if they indicate a different protocol version than that of the connection..."
@@ -233,7 +248,12 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return sourceConnectionId;
     }
 
-    protected abstract void checkPacketType(byte b);
+    protected void checkPacketType(int type) {
+        if (type != getPacketType()) {
+            // Programming error: this method shouldn't have been called if packet is not Initial
+            throw new RuntimeException();
+        }
+    }
 
     protected abstract void parseAdditionalFields(ByteBuffer buffer) throws InvalidPacketException;
 }

@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 
 public class CryptoStream extends BaseStream {
 
-    private final Version quicVersion;
+    private final VersionHolder quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ProtectionKeysType tlsProtectionType;
     private final ConnectionSecrets connectionSecrets;
@@ -59,7 +59,7 @@ public class CryptoStream extends BaseStream {
     private byte msgType;
 
 
-    public CryptoStream(Version quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
         this.connectionSecrets = connectionSecrets;
@@ -131,8 +131,8 @@ public class CryptoStream extends BaseStream {
         buffer.mark();
         int extensionType = buffer.getShort();
         buffer.reset();
-        if (QuicTransportParametersExtension.isCodepoint(quicVersion, extensionType & 0xffff)) {
-            return new QuicTransportParametersExtension(quicVersion).parse(buffer, peerRole, log);
+        if (QuicTransportParametersExtension.isCodepoint(quicVersion.getVersion(), extensionType & 0xffff)) {
+            return new QuicTransportParametersExtension(quicVersion.getVersion()).parse(buffer, peerRole, log);
         }
         else {
             return null;
@@ -208,7 +208,7 @@ public class CryptoStream extends BaseStream {
             frameDataOffset += bytesToCopy;
         }
 
-        CryptoFrame frame = new CryptoFrame(quicVersion, dataToSendOffset, frameData);
+        CryptoFrame frame = new CryptoFrame(quicVersion.getVersion(), dataToSendOffset, frameData);
         dataToSendOffset += bytesToSend;
         return frame;
     }

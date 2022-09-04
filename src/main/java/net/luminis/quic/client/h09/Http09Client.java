@@ -181,7 +181,7 @@ public class Http09Client extends HttpClient {
 
             if (!quicConnection.isConnected()) {
                 String alpn;
-                if (quicConnection.getQuicVersion().equals(net.luminis.quic.Version.QUIC_version_1)) {
+                if (quicConnection.getQuicVersion().isV1V2()) {
                     alpn = "hq-interop";
                 } else {
                     String draftVersion = quicConnection.getQuicVersion().getDraftVersion();

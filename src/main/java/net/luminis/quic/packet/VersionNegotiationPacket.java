@@ -105,25 +105,12 @@ public class VersionNegotiationPacket extends QuicPacket {
 
         while (buffer.remaining() >= 4) {
             int versionData = buffer.getInt();
-            Version supportedVersion = parseVersion(versionData);
-            if (supportedVersion != null) {
-                serverSupportedVersions.add(supportedVersion);
-                log.debug("Server supports version " + supportedVersion);
-            }
-            else {
-                log.debug(String.format("Server supports unknown version %x", versionData));
-            }
+            Version supportedVersion = Version.parse(versionData);
+            serverSupportedVersions.add(supportedVersion);
+            log.debug("Server supports version " + supportedVersion);
         }
 
         packetSize = buffer.limit();
-    }
-
-    private Version parseVersion(int versionData) {
-        try {
-            return Version.parse(versionData);
-        } catch (UnknownVersionException e) {
-            return null;
-        }
     }
 
     @Override

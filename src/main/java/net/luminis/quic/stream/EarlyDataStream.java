@@ -38,6 +38,9 @@ public class EarlyDataStream extends QuicStreamImpl {
     private byte[] earlyData = new byte[0];
     private byte[] remainingData = new byte[0];
     private boolean writingEarlyData = true;
+    private volatile boolean earlyDataSent;
+    private volatile boolean finalFrameSent;
+
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, FlowControl flowController, Logger log) {
         super(quicVersion, streamId, connection, flowController, log);
@@ -76,12 +79,19 @@ public class EarlyDataStream extends QuicStreamImpl {
                 getOutputStream().write(remainingData);
                 getOutputStream().close();
             }
+            else {
+                earlyDataSent = true;  // Order important: set earlyDataSent before testing finalFrameSent
+                if (finalFrameSent) {
+                    stopFlowControl();
+                }
+            }
         }
         else {
             // TODO reconsider creating new QuicStream object, or fix resetOutputStream to make it thread safe.
             // Also consider to pass encryption level in that constructor to get rit of getEncryptionLevel
             resetOutputStream();
             getOutputStream().write(earlyData);
+            earlyDataSent = true;
             if (earlyDataIsFinalInStream) {
                 getOutputStream().close();
             }
@@ -97,6 +107,14 @@ public class EarlyDataStream extends QuicStreamImpl {
         @Override
         protected EncryptionLevel getEncryptionLevel() {
             return writingEarlyData? EncryptionLevel.ZeroRTT: EncryptionLevel.App;
+        }
+
+        @Override
+        protected void finalFrameSent() {
+            finalFrameSent = true;
+            if (earlyDataSent) {
+                stopFlowControl();
+            }
         }
     }
 }

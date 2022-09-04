@@ -23,11 +23,11 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
-import net.luminis.quic.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
@@ -44,8 +44,8 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static net.luminis.quic.EncryptionLevel.App;
-import static net.luminis.quic.EncryptionLevel.Initial;
+import static net.luminis.quic.EncryptionLevel.*;
+import static net.luminis.quic.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
@@ -72,9 +72,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
     }
 
-    protected final Version quicVersion;
+    protected enum VersionNegotiationStatus {
+        NotStarted,
+        VersionChangeUnconfirmed,
+        VersionNegotiated
+    }
+
+    protected final VersionHolder quicVersion;
     private final Role role;
     protected final Logger log;
+    protected VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
     protected final ConnectionSecrets connectionSecrets;
     protected volatile TransportParameters transportParams;
@@ -97,8 +104,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     private final ScheduledExecutorService scheduler;
 
 
-    protected QuicConnectionImpl(Version quicVersion, Role role, Path secretsFile, Logger log) {
-        this.quicVersion = quicVersion;
+    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
+        this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
 
@@ -240,7 +247,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
         }
-        int flags = data.get();
+        byte flags = data.get();
 
         if ((flags & 0x40) != 0x40) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.2
@@ -258,12 +265,46 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         }
         else {
             // Short header packet
-            packet = new ShortHeaderPacket(quicVersion);
+            packet = new ShortHeaderPacket(quicVersion.getVersion());
         }
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            Keys keys = null;
+            if (packet.getVersion().equals(quicVersion.getVersion())) {
+                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+                if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
+                    versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
+                }
+            }
+            else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // "Both endpoints MUST send Handshake or 1-RTT packets using the negotiated version. An endpoint MUST
+                //  drop packets using any other version."
+                log.warn("Dropping packet not using negotiated version");
+                throw new InvalidPacketException("invalid version");
+            }
+            else if (role == Role.Client && packet.getEncryptionLevel() == Initial) {
+                log.info(String.format("Receiving packet with version %s, while connection version is %s", packet.getVersion(), quicVersion));
+                // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
+                ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
+                altSecrets.computeInitialKeys(getDestinationConnectionId());
+                keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
+            else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
+                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+            }
+            else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+                // "The server MUST NOT discard its original version Initial receive keys until it successfully processes a packet with the negotiated version."
+                keys = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
+            }
+            else {
+                log.warn("Dropping packet not using negotiated version");
+                throw new InvalidPacketException("invalid version");
+            }
             if (keys == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
@@ -302,49 +343,40 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
      * @return
      * @throws InvalidPacketException
      */
-    private QuicPacket createLongHeaderPacket(int flags, ByteBuffer data) throws InvalidPacketException {
+    private QuicPacket createLongHeaderPacket(byte flags, ByteBuffer data) throws InvalidPacketException {
         final int MIN_LONGHEADERPACKET_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
         if (1 + data.remaining() < MIN_LONGHEADERPACKET_LENGTH) {
             throw new InvalidPacketException("packet too short to be valid QUIC long header packet");
         }
-        int version = data.getInt();
+        int type = (flags & 0x30) >> 4;
+        Version packetVersion = new Version(data.getInt());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.4:
-        // "A Version Negotiation packet ... will appear to be a packet using the long header, but
-        //  will be identified as a Version Negotiation packet based on the
-        //  Version field having a value of 0."
-        if (version == 0) {
-            return new VersionNegotiationPacket(quicVersion);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-version-negotiation-packet
+        // "A Version Negotiation packet is inherently not version specific. Upon receipt by a client, it will be
+        // identified as a Version Negotiation packet based on the Version field having a value of 0."
+        Version connectionVersion = quicVersion.getVersion();
+        if (packetVersion.isZero()) {
+            return new VersionNegotiationPacket(connectionVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.5
-        // "An Initial packet uses long headers with a type value of 0x0."
-        else if ((flags & 0xf0) == 0xc0) {  // 1100 0000
-            return new InitialPacket(quicVersion);
+        else if (InitialPacket.isInitial(type, packetVersion)) {
+            return new InitialPacket(packetVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.7
-        // "A Retry packet uses a long packet header with a type value of 0x3"
-        else if ((flags & 0xf0) == 0xf0) {  // 1111 0000
-            // Retry packet....
-            return new RetryPacket(quicVersion);
+        else if (RetryPacket.isRetry(type, packetVersion)) {
+             return new RetryPacket(connectionVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.6
-        // "A Handshake packet uses long headers with a type value of 0x2."
-        else if ((flags & 0xf0) == 0xe0) {  // 1110 0000
-            return new HandshakePacket(quicVersion);
+        else if (HandshakePacket.isHandshake(type, packetVersion)) {
+            return new HandshakePacket(connectionVersion);
         }
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.2
-        // "|  0x1 | 0-RTT Protected | Section 12.1 |"
-        else if ((flags & 0xf0) == 0xd0) {  // 1101 0000
-            // 0-RTT Protected
-            // "It is used to carry "early"
-            //   data from the client to the server as part of the first flight, prior
-            //   to handshake completion."
+        else if (ZeroRttPacket.isZeroRTT(type, packetVersion)) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
+            // "A 0-RTT packet is used to carry "early" data from the client to the server as part of the first flight,
+            //  prior to handshake completion. "
             if (role == Role.Client) {
                 // When such a packet arrives, consider it to be caused by network corruption, so
                 throw new InvalidPacketException();
             }
             else {
-                return new ZeroRttPacket(quicVersion);
+                return new ZeroRttPacket(packetVersion);
             }
         }
         else {
@@ -425,7 +457,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-        PathResponseFrame response = new PathResponseFrame(quicVersion, pathChallengeFrame.getData());
+        PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Responses to path validation using PATH_RESPONSE frames are sent just once."
         send(response, f -> {});
@@ -537,7 +569,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
-        getSender().send(new ConnectionCloseFrame(quicVersion, error, errorReason), level);
+        getSender().send(new ConnectionCloseFrame(quicVersion.getVersion(), error, errorReason), level);
         // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
         connectionState = Status.Closing;
 
@@ -573,7 +605,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
+            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion.getVersion()), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
         }
     }
 
@@ -594,7 +626,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
-            send(new ConnectionCloseFrame(quicVersion), encryptionLevel, NO_RETRANSMIT, false);  // No flush necessary, as this method is called while processing a received packet.
+            send(new ConnectionCloseFrame(quicVersion.getVersion()), encryptionLevel, NO_RETRANSMIT, false);  // No flush necessary, as this method is called while processing a received packet.
 
             drain();
         }
@@ -717,7 +749,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
     @Override
     public Version getQuicVersion() {
-        return quicVersion;
+        return quicVersion.getVersion();
     }
 
     protected abstract SenderImpl getSender();

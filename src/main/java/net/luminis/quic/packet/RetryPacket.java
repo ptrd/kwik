@@ -41,26 +41,48 @@ import java.util.Arrays;
  */
 public class RetryPacket extends QuicPacket {
 
-    public static final int RETRY_INTEGRITY_TAG_LENGTH = 16;    // The Retry Integrity Tag is 128 bits.
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-retry-packet
+    // "a Retry packet uses a long packet header with a type value of 0x03."
+    private static int V1_type = 3;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+    // "Retry packets use a packet type field of 0b00."
+    private static int V2_type = 0;
+
+
+    private static final int RETRY_INTEGRITY_TAG_LENGTH = 16;    // The Retry Integrity Tag is 128 bits.
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
     // "The secret key, K, is 128 bits equal to 0xccce187ed09a09d05728155a6cb96be1."
-    public static final byte[] SECRET_KEY = new byte[] {
+    private static final byte[] SECRET_KEY = new byte[] {
             (byte) 0xcc, (byte) 0xce, (byte) 0x18, (byte) 0x7e, (byte) 0xd0, (byte) 0x9a, (byte) 0x09, (byte) 0xd0,
             (byte) 0x57, (byte) 0x28, (byte) 0x15, (byte) 0x5a, (byte) 0x6c, (byte) 0xb9, (byte) 0x6b, (byte) 0xe1 };
 
-    public static final byte[] SECRET_KEY_V1 = new byte[] {
+    private static final byte[] SECRET_KEY_V1 = new byte[] {
             (byte) 0xbe, (byte) 0x0c, (byte) 0x69, (byte) 0x0b, (byte) 0x9f, (byte) 0x66, (byte) 0x57, (byte) 0x5a,
             (byte) 0x1d, (byte) 0x76, (byte) 0x6b, (byte) 0x54, (byte) 0xe3, (byte) 0x68, (byte) 0xc8, (byte) 0x4e };
 
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-hkdf-labels
+    // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
+    //  key = 0xba858dc7b43de5dbf87617ff4ab253db
+    private static final byte[] SECRET_KEY_V2 = new byte[] {
+            (byte) 0xba, (byte) 0x85, (byte) 0x8d, (byte) 0xc7, (byte) 0xb4, (byte) 0x3d, (byte) 0xe5, (byte) 0xdb,
+            (byte) 0xf8, (byte) 0x76, (byte) 0x17, (byte) 0xff, (byte) 0x4a, (byte) 0xb2, (byte) 0x53, (byte) 0xdb };
+
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
     // "The nonce, N, is 96 bits equal to 0xe54930f97f2136f0530a8c1c."
-    public static final byte[] NONCE = new byte[] {
+    private static final byte[] NONCE = new byte[] {
             (byte) 0xe5, (byte) 0x49, (byte) 0x30, (byte) 0xf9, (byte) 0x7f, (byte) 0x21, (byte) 0x36, (byte) 0xf0,
             (byte) 0x53, (byte) 0x0a, (byte) 0x8c, (byte) 0x1c };
 
-    public static final byte[] NONCE_V1 = new byte[] {
+    private static final byte[] NONCE_V1 = new byte[] {
             (byte) 0x46, (byte) 0x15, (byte) 0x99, (byte) 0xd3, (byte) 0x5d, (byte) 0x63, (byte) 0x2b, (byte) 0xf2,
             (byte) 0x23, (byte) 0x98, (byte) 0x25, (byte) 0xbb };
+
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-hkdf-labels
+    // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
+    //  nonce = 0x141b99c239b03e785d6a2e9f"
+    private static final byte[] NONCE_V2 = new byte[] {
+            (byte) 0x14, (byte) 0x1b, (byte) 0x99, (byte) 0xc2, (byte) 0x39, (byte) 0xb0, (byte) 0x3e, (byte) 0x78,
+            (byte) 0x5d, (byte) 0x6a, (byte) 0x2e, (byte) 0x9f };
 
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
@@ -73,6 +95,14 @@ public class RetryPacket extends QuicPacket {
     private byte[] rawPacketData;
     private byte[] retryIntegrityTag;
 
+    public static boolean isRetry(int type, Version quicVersion) {
+        if (quicVersion.isV2()) {
+            return type == 0;
+        }
+        else {
+            return type == 3;
+        }
+    }
 
     public RetryPacket(Version quicVersion) {
         this.quicVersion = quicVersion;
@@ -103,10 +133,7 @@ public class RetryPacket extends QuicPacket {
 
         byte flags = buffer.get();
 
-        boolean matchingVersion = false;
-        try {
-            matchingVersion = Version.parse(buffer.getInt()) == this.quicVersion;
-        } catch (UnknownVersionException e) {}
+        boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
 
         if (! matchingVersion) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
@@ -181,7 +208,8 @@ public class RetryPacket extends QuicPacket {
     public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
         packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
         ByteBuffer buffer = ByteBuffer.allocate(packetSize);
-        buffer.put((byte) 0b11110000);
+        byte flags = (byte) (0b1100_0000 | (getPacketType() << 4));
+        buffer.put(flags);
         buffer.put(quicVersion.getBytes());
         buffer.put((byte) destinationConnectionId.length);
         buffer.put(destinationConnectionId);
@@ -191,6 +219,16 @@ public class RetryPacket extends QuicPacket {
         rawPacketData = buffer.array();
         buffer.put(computeIntegrityTag(originalDestinationConnectionId));
         return buffer.array();
+    }
+
+    private int getPacketType() {
+        if (quicVersion.isV2()) {
+            return (byte) V2_type;
+        }
+        else {
+            return (byte) V1_type;
+        }
+
     }
 
     private byte[] computeIntegrityTag(byte[] originalDestinationConnectionId) {
@@ -203,9 +241,9 @@ public class RetryPacket extends QuicPacket {
         try {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8
             // "The Retry Integrity Tag is a 128-bit field that is computed as the output of AEAD_AES_128_GCM [AEAD]..."
-            SecretKeySpec secretKey = new SecretKeySpec(quicVersion == Version.QUIC_version_1? SECRET_KEY_V1: SECRET_KEY, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(quicVersion.isV1()? SECRET_KEY_V1: quicVersion.isV2()? SECRET_KEY_V2: SECRET_KEY, "AES");
             String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, quicVersion == Version.QUIC_version_1? NONCE_V1: NONCE);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, quicVersion.isV1()? NONCE_V1: quicVersion.isV2()? NONCE_V2: NONCE);
             Cipher aeadCipher = Cipher.getInstance(AES_GCM_NOPADDING);
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-5.8

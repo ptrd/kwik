@@ -63,6 +63,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
+    private final Version originalVersion;
     private final InetSocketAddress initialClientAddress;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
@@ -87,7 +88,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     /**
      * Creates a server connection implementation.
-     * @param quicVersion  quic version used for this connection
+     * @param originalVersion  quic version used for this connection
      * @param serverSocket  the socket that is used for sending packets
      * @param initialClientAddress  the initial client address (after handshake, clients can move to different address)
      * @param peerCid  the connection id of the client
@@ -101,11 +102,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param closeCallback  callback for notifying interested parties this connection is closed
      * @param log  logger
      */
-    protected ServerConnectionImpl(Version quicVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
+    protected ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                    byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
                                    boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
-        super(quicVersion, Role.Server, null, new LogProxy(log, originalDcid));
+        super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
+        this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
         this.retryRequired = retryRequired;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -215,7 +217,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void earlySecretsKnown() {
-        connectionSecrets.computeEarlySecrets(tlsEngine);
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
+        connectionSecrets.computeEarlySecrets(tlsEngine, originalVersion);
     }
 
     @Override
@@ -235,7 +239,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // TODO: discard keys too
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
-        sendHandshakeDone(new HandshakeDoneFrame(quicVersion));
+        sendHandshakeDone(new HandshakeDoneFrame(quicVersion.getVersion()));
         connectionState = Connected;
 
         synchronized (handshakeStateLock) {
@@ -303,6 +307,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-version-negotiation-conside
+        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information transport parameter"
+        serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
@@ -311,9 +318,22 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             serverTransportParams.setRetrySourceConnectionId(connectionIdManager.getInitialConnectionId());
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
-        tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion, serverTransportParams, Role.Server));
+        tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
+        tlsEngine.setSessionData(quicVersion.getVersion().getBytes());
+        tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
     }
 
+    boolean acceptSessionResumption(ByteBuffer storedSessionData) {
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-tls-resumption-and-new_toke
+        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from a different version."
+        if (quicVersion.getVersion().equals(Version.parse(storedSessionData.getInt()))) {
+            return true;
+        }
+        else {
+            log.warn("Resumed session denied because quic versions don't match");
+            return false;
+        }
+    }
     @Override
     public boolean isEarlyDataAccepted() {
         if (acceptEarlyData) {
@@ -335,7 +355,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             return super.parsePacket(data);
         }
         catch (DecryptionException decryptionException) {
-            if (retryRequired && (data.get(0) & 0b1111_0000) == 0b1100_0000) {
+            Version connectionVersion = quicVersion.getVersion();
+            if (retryRequired
+                    && LongHeaderPacket.isLongHeaderPacket(data.get(0), connectionVersion)
+                    && InitialPacket.isInitial((data.get(0) & 0x30) >> 4, connectionVersion)) {
                 // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
                 try {
                     data.rewind();
@@ -410,7 +433,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion, connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+        RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
     }
 
@@ -498,6 +521,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
+        TransportParameters.VersionInformation versionInformation = transportParameters.getVersionInformation();
+        if (versionInformation != null) {
+            Optional<Version> clientPreferred = versionInformation.getOtherVersions().stream()
+                    // Filter out versions reserved to exercise version negotiation (0x?a?a?a?a) and unknown versions.
+                    .filter(version -> version.isV1V2()).findFirst();
+            if (!clientPreferred.equals(Optional.of(quicVersion.getVersion()))) {
+                log.info(String.format("Switching from initial version %s to client's preferred version %s.", quicVersion, clientPreferred));
+                versionNegotiationStatus = VersionNegotiationStatus.VersionChangeUnconfirmed;
+                quicVersion.setVersion(clientPreferred.get());
+                connectionSecrets.recomputeInitialKeys();
+            }
+        }
         if (transportParameters.getInitialMaxStreamsBidi() > 0x1000000000000000l) {
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }

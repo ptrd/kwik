@@ -20,7 +20,7 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Version;
+import net.luminis.quic.VersionHolder;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -38,7 +38,7 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     protected byte[] initialToken;
 
-    public InitialPacketAssembler(Version version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
+    public InitialPacketAssembler(VersionHolder version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
         super(version, EncryptionLevel.Initial, requestQueue, ackGenerator);
     }
 
@@ -59,7 +59,7 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     @Override
     protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        InitialPacket packet = new InitialPacket(quicVersion, sourceConnectionId, destinationConnectionId, initialToken, (QuicFrame) null);
+        InitialPacket packet = new InitialPacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, initialToken, (QuicFrame) null);
         packet.setPacketNumber(nextPacketNumber());
         return packet;
     }

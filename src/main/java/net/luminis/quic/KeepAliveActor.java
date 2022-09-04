@@ -33,7 +33,7 @@ import static net.luminis.quic.EncryptionLevel.App;
 
 public class KeepAliveActor {
 
-    private final Version quicVersion;
+    private final VersionHolder quicVersion;
     private final int keepAliveTime;
     private final int peerIdleTimeout;
     private final Sender sender;
@@ -42,7 +42,7 @@ public class KeepAliveActor {
     private final int pingInterval;
     private volatile ScheduledFuture<?> scheduledTask;
 
-    public KeepAliveActor(Version quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender) {
+    public KeepAliveActor(VersionHolder quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender) {
         this.quicVersion = quicVersion;
         this.keepAliveTime = keepAliveTime;
         this.peerIdleTimeout = peerIdleTimeout;
@@ -54,7 +54,7 @@ public class KeepAliveActor {
     }
 
     private void ping() {
-        sender.send(new PingFrame(quicVersion), App);
+        sender.send(new PingFrame(quicVersion.getVersion()), App);
         sender.flush();
 
         scheduleNextPing();

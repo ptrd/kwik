@@ -184,6 +184,14 @@ public class Keys {
         //   the "quic hp" label, see Section 5.4).  Using these labels provides
         //   key separation between QUIC and TLS, see Section 9.4."
         prefix = "quic ";
+        if (quicVersion.isV2()) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+            // "The labels used in [QUIC-TLS] to derive packet protection keys (Section 5.1), header protection keys (Section 5.4),
+            //  Retry Integrity Tag keys (Section 5.8), and key updates (Section 6.1) change from "quic key" to "quicv2 key",
+            //  from "quic iv" to "quicv2 iv", from "quic hp" to "quicv2 hp", and from "quic ku" to "quicv2 ku", to meet
+            //  the guidance for new versions in Section 9.6 of that document."
+            prefix = "quicv2 ";
+        }
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
         byte[] key = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());

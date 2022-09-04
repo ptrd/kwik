@@ -36,7 +36,9 @@ Kwik is still in active development, see [git history](https://bitbucket.org/pjt
 
 HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
 
-Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)) as well as a few older IETF drafts: 
+Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html))
+and QUIC v2 ([draft-ietf-quic-v2-05](https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html))
+as well as a few older IETF drafts: 
 [draft-32](https://tools.ietf.org/html/draft-ietf-quic-transport-32),
 [draft-31](https://tools.ietf.org/html/draft-ietf-quic-transport-31),
 [draft-30](https://tools.ietf.org/html/draft-ietf-quic-transport-30), and
@@ -45,7 +47,7 @@ Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)) 
 
 ### Implemented QUIC features
 
-* version negotiation
+* (QUIC v1) version negotiation
 * handshake based on TLS 1.3
 * data exchange over bidirectional and unidirectional streams
 * stateless retry
@@ -53,6 +55,7 @@ Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html)) 
 * key update
 * session resumption
 * 0-RTT
+* compatible version negotiation [draft-ietf-quic-version-negotiation-09](https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-09.html)
   
 Client only:
 

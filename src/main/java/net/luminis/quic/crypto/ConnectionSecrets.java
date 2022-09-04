@@ -22,9 +22,9 @@ import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Role;
 import net.luminis.quic.Version;
+import net.luminis.quic.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
-import net.luminis.tls.handshake.TlsClientEngine;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
@@ -44,12 +44,22 @@ public class ConnectionSecrets {
             (byte) 0x9e, (byte) 0x97, (byte) 0x86, (byte) 0xf1, (byte) 0x9c, (byte) 0x61, (byte) 0x11, (byte) 0xe0,
             (byte) 0x43, (byte) 0x90, (byte) 0xa8, (byte) 0x99 };
 
+    // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
+    // "initial_salt = 0x38762cf7f55934b34d179ae6a4c80cadccbb7f0a"
     public static final byte[] STATIC_SALT_V1 = new byte[] {
             (byte) 0x38, (byte) 0x76, (byte) 0x2c, (byte) 0xf7, (byte) 0xf5, (byte) 0x59, (byte) 0x34, (byte) 0xb3,
             (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad,
             (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a };
 
-    private final Version quicVersion;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-initial-salt
+    // "The salt used to derive Initial keys in Section 5.2 of [QUIC-TLS] changes to:
+    //  initial_salt = 0xa707c203a59b47184a1d62ca570406ea7ae3e5d3"
+    public static final byte[] STATIC_SALT_V2 = new byte[] {
+            (byte) 0xa7, (byte) 0x07, (byte) 0xc2, (byte) 0x03, (byte) 0xa5, (byte) 0x9b, (byte) 0x47, (byte) 0x18,
+            (byte) 0x4a, (byte) 0x1d, (byte) 0x62, (byte) 0xca, (byte) 0x57, (byte) 0x04, (byte) 0x06, (byte) 0xea,
+            (byte) 0x7a, (byte) 0xe3, (byte) 0xe5, (byte) 0xd3 };
+
+    private final VersionHolder quicVersion;
     private final Role ownRole;
     private Logger log;
     private byte[] clientRandom;
@@ -57,9 +67,10 @@ public class ConnectionSecrets {
     private Keys[] serverSecrets = new Keys[EncryptionLevel.values().length];
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
+    private byte[] originalDestinationConnectionId;
 
 
-    public ConnectionSecrets(Version quicVersion, Role role, Path wiresharksecrets, Logger log) {
+    public ConnectionSecrets(VersionHolder quicVersion, Role role, Path wiresharksecrets, Logger log) {
         this.quicVersion = quicVersion;
         this.ownRole = role;
         this.log = log;
@@ -82,22 +93,43 @@ public class ConnectionSecrets {
      * @param destConnectionId
      */
     public synchronized void computeInitialKeys(byte[] destConnectionId) {
+        this.originalDestinationConnectionId = destConnectionId;
+        Version actualVersion = quicVersion.getVersion();
 
-        // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.2:
+        byte[] initialSecret = computeInitialSecret(actualVersion);
+        log.secret("Initial secret", initialSecret);
+
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
+    }
+
+    /**
+     * (Re)generates the keys for the initial peer secrets based on the given version. This is sometimes used during
+     * version negotiation, when a packet with the "old" (original) version needs to be decoded.
+     * @param version
+     * @return
+     */
+    public Keys getInitialPeerSecretsForVersion(Version version) {
+        return new Keys(version, computeInitialSecret(version), ownRole.other(), log);
+    }
+
+    private byte[] computeInitialSecret(Version actualVersion) {
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
-        byte[] initialSalt = quicVersion == Version.QUIC_version_1? STATIC_SALT_V1: STATIC_SALT_DRAFT_29;
-        byte[] initialSecret = hkdf.extract(initialSalt, destConnectionId);
-
-        log.secret("Initial secret", initialSecret);
-
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(quicVersion, initialSecret, Role.Server, log);
+        byte[] initialSalt = actualVersion.isV1() ? STATIC_SALT_V1 : actualVersion.isV2() ? STATIC_SALT_V2 : STATIC_SALT_DRAFT_29;
+        return hkdf.extract(initialSalt, originalDestinationConnectionId);
     }
 
-    public synchronized void computeEarlySecrets(TrafficSecrets secrets) {
-        Keys zeroRttSecrets = new Keys(quicVersion, Role.Client, log);
+    public void recomputeInitialKeys() {
+        computeInitialKeys(originalDestinationConnectionId);
+    }
+
+    public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
+        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
+        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
+        Keys zeroRttSecrets = new Keys(originalVersion, Role.Client, log);
         zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
@@ -105,13 +137,15 @@ public class ConnectionSecrets {
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
         Keys clientHandshakeSecrets;
         Keys serverHandshakeSecrets;
+        Version actualVersion = this.quicVersion.getVersion();
+        
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Keys(quicVersion, Role.Client, log);
-            serverHandshakeSecrets = new Keys(quicVersion, Role.Server, log);
+            clientHandshakeSecrets = new Keys(actualVersion, Role.Client, log);
+            serverHandshakeSecrets = new Keys(actualVersion, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Client, log);
-            serverHandshakeSecrets = new Chacha20Keys(quicVersion, Role.Server, log);
+            clientHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Client, log);
+            serverHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Server, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);

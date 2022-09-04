@@ -31,6 +31,23 @@ import java.util.stream.Collectors;
 
 public class ZeroRttPacket extends LongHeaderPacket {
 
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-0-rtt
+    // "A 0-RTT packet uses long headers with a type value of 0x01."
+    private static int V1_type = 1;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+    // "0-RTT packets use a packet type field of 0b10"
+    private static int V2_type = 2;
+
+
+    public static boolean isZeroRTT(int type, Version quicVersion) {
+        if (quicVersion.isV2()) {
+            return type == V2_type;
+        }
+        else {
+            return type == V1_type;
+        }
+    }
+
     public ZeroRttPacket(Version quicVersion) {
         super(quicVersion);
     }
@@ -45,8 +62,14 @@ public class ZeroRttPacket extends LongHeaderPacket {
 
     @Override
     protected byte getPacketType() {
-        byte flags = (byte) 0xd0;  // 1101 0000
-        return encodePacketNumberLength(flags, packetNumber);
+        if (quicVersion.isV2()) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
+            // "0-RTT packets use a packet type field of 0b10"
+            return (byte) V2_type;
+        }
+        else {
+            return (byte) V1_type;
+        }
     }
 
     @Override
@@ -56,10 +79,6 @@ public class ZeroRttPacket extends LongHeaderPacket {
     @Override
     protected int estimateAdditionalFieldsLength() {
         return 0;
-    }
-
-    @Override
-    protected void checkPacketType(byte b) {
     }
 
     @Override

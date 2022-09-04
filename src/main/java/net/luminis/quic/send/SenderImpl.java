@@ -106,11 +106,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int antiAmplificationLimit = -1;
 
 
-    public SenderImpl(Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+    public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
                       QuicConnectionImpl connection, Integer initialRtt, Logger log) {
         this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, initialRtt, log);
     }
-    public SenderImpl(Clock clock, Version version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+
+    public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
                       QuicConnectionImpl connection, Integer initialRtt, Logger log) {
         this.clock = clock;
         this.maxPacketSize = maxPacketSize;

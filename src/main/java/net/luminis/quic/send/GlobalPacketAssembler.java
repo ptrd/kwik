@@ -23,7 +23,6 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.ZeroRttPacket;
 
 import java.time.Instant;
 import java.util.*;
@@ -40,7 +39,7 @@ public class GlobalPacketAssembler {
     private volatile EncryptionLevel[] enabledLevels;
 
 
-    public GlobalPacketAssembler(Version quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
+    public GlobalPacketAssembler(VersionHolder quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
         this.sendRequestQueue = sendRequestQueues;
 
         PacketNumberGenerator appSpacePnGenerator = new PacketNumberGenerator();

@@ -56,12 +56,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
     void initObjectUnderTest() {
         clock = new TestClock();
         sendRequestQueue = new SendRequestQueue(clock, null);
+        VersionHolder version = new VersionHolder(Version.getDefault());
         initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
-        initialPacketAssembler = new InitialPacketAssembler(Version.getDefault(), sendRequestQueue, initialAckGenerator);
+        initialPacketAssembler = new InitialPacketAssembler(version, sendRequestQueue, initialAckGenerator);
         handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
-        handshakePacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator);
+        handshakePacketAssembler = new PacketAssembler(version, EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator);
         oneRttAckGenerator = new AckGenerator(clock, PnSpace.App, mock(Sender.class));
-        oneRttPacketAssembler = new PacketAssembler(Version.getDefault(), EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
+        oneRttPacketAssembler = new PacketAssembler(version, EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
     }
 
     @Test
