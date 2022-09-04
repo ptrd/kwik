@@ -513,10 +513,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     protected void terminate() {
-        super.terminate();
+        super.terminate(() -> {
+            String statsSummary = getStats().toString().replace("\n", "    ");
+            log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
+        });
         log.getQLog().emitConnectionTerminatedEvent();
-        String statsSummary = getStats().toString().replace("\n", "    ");
-        log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
         closeCallback.accept(this);
     }
 

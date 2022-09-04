@@ -34,7 +34,8 @@ public class Statistics {
                 "datagrams sent: %d\npackets send: %d\nbytes sent: %d\ndata sent: %d\nefficieny: %.1f\npackets lost: %d" +
                 "\nsmoothed RTT: %d\nRTT var: %d\nlatest RTT: %d",
                 senderStatistics.datagramsSent(), senderStatistics.packetsSent(), senderStatistics.bytesSent(),
-                senderStatistics.dataBytesSent(), (senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent())/10.0,
+                senderStatistics.dataBytesSent(),
+                senderStatistics.bytesSent() > 0? (senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent())/10.0: 0,
                 senderStatistics.lostPackets(),
                 senderStatistics.smoothedRtt(), senderStatistics.rttVar(), senderStatistics.latestRtt());
     }

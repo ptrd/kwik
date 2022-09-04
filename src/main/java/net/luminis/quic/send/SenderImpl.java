@@ -104,6 +104,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private AtomicInteger subsequentZeroDelays = new AtomicInteger();
     private volatile boolean lastDelayWasZero = false;
     private volatile int antiAmplificationLimit = -1;
+    private volatile Runnable shutdownHook;
 
 
     public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -258,10 +259,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         stopped = true;
     }
 
-    public void shutdown() {
+    public void shutdown(Runnable postShutdownAction) {
         assert(stopped);  // Stopped should have be called before.
         // Stop cannot be called here (again), because it would drop ConnectionCloseFrame still waiting to be sent.
 
+        shutdownHook = postShutdownAction;
         stopping = true;
         senderThread.interrupt();
     }
@@ -290,6 +292,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             else {
                 log.warn("Ignoring " + fatalError + " because sender is shutting down.");
             }
+        }
+        if (shutdownHook != null) {
+            shutdownHook.run();
         }
     }
 

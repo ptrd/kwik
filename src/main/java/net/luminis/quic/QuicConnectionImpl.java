@@ -579,14 +579,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // "An endpoint that has not established state, such as a server that detects an error in an Initial packet,
         //  does not enter the closing state."
         if (level != Initial) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-immediate-close
             // "The closing and draining connection states exist to ensure that connections close cleanly and that
             //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
-            //  times the current Probe Timeout (PTO) interval"
+            //  times the current PTO interval as defined in [QUIC-RECOVERY]."
             int pto = getSender().getPto();
             schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
         }
         else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-immediate-close-during-the-
+            // "An endpoint that has not established state, such as a server that detects an error in an Initial packet,
+            //  does not enter the closing state."
             postProcessingActions.add(() -> terminate());
         }
 
@@ -675,10 +678,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
      * closing state or draining state ends.
      */
     protected void terminate() {
+        terminate(null);
+    }
+
+    protected void terminate(Runnable postSenderShutdownAction) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         // "Once its closing or draining state ends, an endpoint SHOULD discard all connection state."
         idleTimer.shutdown();
-        getSender().shutdown();
+        getSender().shutdown(postSenderShutdownAction);
         connectionState = Status.Closed;
         scheduler.shutdown();
     }
