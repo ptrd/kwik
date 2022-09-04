@@ -272,12 +272,19 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         if (packet.getEncryptionLevel() != null) {
             Keys keys = null;
             if (packet.getVersion().equals(quicVersion.getVersion())) {
+                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
                 if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
                     versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
                 }
-                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
             }
-            else if (role == Role.Client && isHandshaking()) {
+            else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // "Both endpoints MUST send Handshake or 1-RTT packets using the negotiated version. An endpoint MUST
+                //  drop packets using any other version."
+                log.warn("Dropping packet not using negotiated version");
+                throw new InvalidPacketException("invalid version");
+            }
+            else if (role == Role.Client && packet.getEncryptionLevel() == Initial) {
                 log.info(String.format("Receiving packet with version %s, while connection version is %s", packet.getVersion(), quicVersion));
                 // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
                 ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
@@ -294,6 +301,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
                 // "The server MUST NOT discard its original version Initial receive keys until it successfully processes a packet with the negotiated version."
                 keys = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
+            }
+            else {
+                log.warn("Dropping packet not using negotiated version");
+                throw new InvalidPacketException("invalid version");
             }
             if (keys == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
@@ -740,10 +751,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public Version getQuicVersion() {
         return quicVersion.getVersion();
-    }
-
-    public boolean isHandshaking() {
-        return handshakeState != HandshakeState.Confirmed;
     }
 
     protected abstract SenderImpl getSender();
