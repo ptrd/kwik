@@ -95,6 +95,7 @@ public class RttEstimator {
         }
 
         log.debug("RTT: " + previousSmoothed + " + " + rttSample + " -> " + smoothedRtt);
+        log.getQLog().emitRttMetrics(minRtt, smoothedRtt, latestRtt, rttVar);
     }
 
     public int getSmoothedRtt() {

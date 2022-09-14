@@ -46,6 +46,8 @@ public interface QLog {
 
     void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight);
 
+    void emitRttMetrics(int minRtt, int smoothedRtt, int latestRtt, int rttVariance);
+
     void emitConnectionClosedEvent(Instant time);
 
     void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason);

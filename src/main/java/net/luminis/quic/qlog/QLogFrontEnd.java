@@ -86,6 +86,11 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
+    public void emitRttMetrics(int minRtt, int smoothedRtt, int latestRtt, int rttVariance) {
+        eventQueue.add(new RttMetricsEvent(originalDcid, minRtt, smoothedRtt, latestRtt, rttVariance, Instant.now()));
+    }
+
+    @Override
     public void emitConnectionClosedEvent(Instant time) {
         eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.idleTimeout));
     }

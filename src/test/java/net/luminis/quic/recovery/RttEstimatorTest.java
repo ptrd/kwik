@@ -22,6 +22,7 @@ import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.MockPacket;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RttEstimator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RttEstimatorTest {
 
@@ -43,6 +45,7 @@ class RttEstimatorTest {
     @BeforeAll
     static void initLogger() {
         logger = mock(Logger.class);
+        when(logger.getQLog()).thenReturn(mock(QLog.class));
     }
 
     @BeforeEach
