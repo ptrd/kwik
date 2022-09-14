@@ -21,7 +21,6 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
 
-import javax.sql.ConnectionEvent;
 import java.io.File;
 import java.time.Instant;
 import java.util.Collection;
@@ -67,8 +66,8 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
-    public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {
-        eventQueue.add(new PacketReceivedEvent(originalDcid, packet, received));
+    public void emitPacketReceivedEvent(QuicPacket packet, Instant received, long processingDelay) {
+        eventQueue.add(new PacketReceivedEvent(originalDcid, packet, received, processingDelay));
     }
 
     @Override
@@ -94,6 +93,11 @@ public class QLogFrontEnd implements QLog {
     @Override
     public void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason) {
         eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, transportErrorCode, errorReason));
+    }
+
+    @Override
+    public void emitWarning(Instant time, String message) {
+        eventQueue.add(new GenericEvent(originalDcid, time, GenericEvent.Type.Warning, message));
     }
 
     private static class NullQueue implements Queue<QLogEvent> {

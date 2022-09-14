@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022 Peter Doornbosch
+ * Copyright © 2022 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,22 +18,39 @@
  */
 package net.luminis.quic.qlog.event;
 
-import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.QLogEvent;
 
 import java.time.Instant;
 
-public class PacketReceivedEvent extends PacketEvent {
+/**
+ * QLog QUIC events generic:*
+ * See https://www.ietf.org/archive/id/draft-ietf-quic-qlog-main-schema-03.html#name-generic-events
+ */
+public class GenericEvent extends QLogEvent {
 
-    private final long processingDelay;
-
-    public PacketReceivedEvent(byte[] originalDcid, QuicPacket packet, Instant received, long processingDelay) {
-        super(originalDcid, packet, received);
-        this.processingDelay = processingDelay;
+    public enum Type {
+        Error,
+        Warning,
+        Info,
+        Debug,
+        Verbose
     }
 
-    public long getProcessingDelay() {
-        return processingDelay;
+    private final Type type;
+    private final String message;
+
+    public GenericEvent(byte[] cid, Instant time, Type type, String message) {
+        super(cid, time);
+        this.type = type;
+        this.message = message;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public Type getType() {
+        return type;
     }
 
     @Override

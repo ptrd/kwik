@@ -36,7 +36,7 @@ public class NullQLog implements QLog {
     public void emitPacketSentEvent(List<QuicPacket> packets, Instant sent) {}
 
     @Override
-    public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {}
+    public void emitPacketReceivedEvent(QuicPacket packet, Instant received, long processingDelay) {}
 
     @Override
     public void emitPacketLostEvent(QuicPacket packet, Instant received) {}
@@ -52,4 +52,7 @@ public class NullQLog implements QLog {
 
     @Override
     public void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason) {}
+
+    @Override
+    public void emitWarning(Instant time, String message) {}
 }

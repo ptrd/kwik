@@ -99,6 +99,11 @@ public class ConnectionQLog implements QLogEventProcessor {
         writePacketLostEvent(packetLostEvent);
     }
 
+    @Override
+    public void process(GenericEvent event) {
+        writeGenericEvent(event);
+    }
+
     public void close() {
         if (! closed) {
             closed = true;
@@ -148,8 +153,11 @@ public class ConnectionQLog implements QLogEventProcessor {
 
         jsonGenerator.writeStartArray("frames");
         packet.getFrames().stream().forEach(frame -> frame.accept(frameFormatter, null, null));
-        jsonGenerator.writeEnd()  // frames
-                .writeStartObject("raw")
+        jsonGenerator.writeEnd();  // frames
+        if (event instanceof PacketReceivedEvent) {
+            jsonGenerator.write("processing_delay", ((PacketReceivedEvent) event).getProcessingDelay());
+        }
+        jsonGenerator.writeStartObject("raw")
                 .write("length", packet.getSize())
                 .writeEnd()       // raw
                 .writeEnd()       // data
@@ -198,6 +206,15 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeEnd(); // event
     }
 
+    private void writeGenericEvent(GenericEvent event) {
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "generic:" + event.getType().toString().toLowerCase())
+                .writeStartObject("data")
+                .write("message", event.getMessage())
+                .writeEnd()  // data
+                .writeEnd(); // event
+    }
 
     private String formatPacketType(QuicPacket packet) {
         if (packet instanceof RetryPacket) {

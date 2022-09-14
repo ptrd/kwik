@@ -38,7 +38,7 @@ public interface QLog {
 
     void emitPacketSentEvent(List<QuicPacket> packets, Instant sent);
 
-    void emitPacketReceivedEvent(QuicPacket packet, Instant received);
+    void emitPacketReceivedEvent(QuicPacket packet, Instant received, long processingDelay);
 
     void emitPacketLostEvent(QuicPacket packet, Instant received);
 
@@ -49,4 +49,6 @@ public interface QLog {
     void emitConnectionClosedEvent(Instant time);
 
     void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason);
+
+    void emitWarning(Instant time, String message);
 }

@@ -37,6 +37,7 @@ import net.luminis.tls.handshake.TlsEngine;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -386,10 +387,15 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     protected void processPacket(Instant timeReceived, QuicPacket packet) {
-        log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
+        Instant startProcessing = Instant.now();
+        long processingDelay = Duration.between(timeReceived, startProcessing).toMillis();
+        log.getQLog().emitPacketReceivedEvent(packet, startProcessing, processingDelay);
+        if (processingDelay > 10) {
+            log.getQLog().emitWarning(startProcessing, "processing delay: " + processingDelay + " ms");
+        }
 
         if (! connectionState.closingOrDraining()) {
-            ProcessResult result = packet.accept(this, timeReceived);
+            ProcessResult result = packet.accept(this, startProcessing);
             if (result == ProcessResult.Abort) {
                 return;
             }
