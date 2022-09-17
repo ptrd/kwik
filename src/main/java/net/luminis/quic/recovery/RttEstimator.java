@@ -31,6 +31,7 @@ import java.util.Optional;
 public class RttEstimator {
 
     private static final int NOT_SET = -1;
+    private static final int MIN_SAMPLING_PERIOD_MS = 1;
 
     private final Logger log;
     // All intervals are in milliseconds (1/1000 second)
@@ -40,6 +41,7 @@ public class RttEstimator {
     private volatile int rttVar = NOT_SET;
     private volatile int latestRtt;
     private volatile int maxAckDelay;
+    private Instant previousReceived = Instant.now().minusMillis(MIN_SAMPLING_PERIOD_MS);
 
 
     public RttEstimator(Logger log) {
@@ -61,11 +63,15 @@ public class RttEstimator {
     }
 
     public void addSample(Instant timeReceived, Instant timeSent, int ackDelay) {
+        if (Duration.between(previousReceived, timeReceived).toNanos() < MIN_SAMPLING_PERIOD_MS * 1_000_000) {
+            return;
+        }
         if (timeReceived.isBefore(timeSent)) {
             // This sometimes happens in the Interop runner; reconsider solution after new sender is implemented.
             log.error("Receiving negative rtt estimate: sent=" + timeSent + ", received=" + timeReceived);
             return;
         }
+        previousReceived = timeReceived;
 
         if (ackDelay > maxAckDelay) {
             ackDelay = maxAckDelay;

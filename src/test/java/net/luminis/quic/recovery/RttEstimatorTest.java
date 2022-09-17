@@ -68,12 +68,12 @@ class RttEstimatorTest {
 
     @Test
     void afterTwoSamplesSrttShouldBeInBetween() {
-        Instant start = Instant.now();
-        Instant end = start.plusMillis(153);
-        rttEstimator.addSample(end, start, 0);
-        start = Instant.now();
-        end = start.plusMillis(108);
-        rttEstimator.addSample(end, start, 0);
+        Instant start1 = Instant.now();
+        Instant end1 = start1.plusMillis(153);
+        rttEstimator.addSample(end1, start1, 0);
+        Instant start2 = start1.plusMillis(200);
+        Instant end2 = start2.plusMillis(108);
+        rttEstimator.addSample(end2, start2, 0);
         assertThat(rttEstimator.getSmoothedRtt()).isLessThan(153).isGreaterThan(108);
     }
 
