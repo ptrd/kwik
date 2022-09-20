@@ -392,6 +392,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         log.getQLog().emitPacketReceivedEvent(packet, startProcessing, processingDelay);
         if (processingDelay > 10) {
             log.getQLog().emitWarning(startProcessing, "processing delay: " + processingDelay + " ms");
+            if (this instanceof QuicClientConnectionImpl) {
+                log.error("processing delay: " + processingDelay + " ms");
+            }
         }
 
         if (! connectionState.closingOrDraining()) {
