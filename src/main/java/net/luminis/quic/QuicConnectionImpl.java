@@ -126,8 +126,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         handshakeStateListeners.add(recoveryManager);
     }
 
-    public void updateConnectionFlowControl(int size) {
-        flowControlMax += size;
+    public void updateConnectionFlowControl(int increment) {
+        flowControlMax += increment;
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
             send(new MaxDataFrame(flowControlMax), f -> {}, true);
             flowControlLastAdvertised = flowControlMax;
