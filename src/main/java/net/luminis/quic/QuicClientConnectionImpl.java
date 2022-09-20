@@ -1013,6 +1013,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         Builder clientCertificate(X509Certificate certificate);
 
         Builder clientCertificateKey(PrivateKey privateKey);
+
+        Builder receiveBufferSize(long size);
     }
 
     private static class BuilderImpl implements Builder {
@@ -1031,6 +1033,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private Integer quantumReadinessTest;
         private X509Certificate clientCertificate;
         private PrivateKey clientCertificateKey;
+        private Long receiveBufferSize;
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1057,7 +1060,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (quantumReadinessTest != null) {
                 quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
             }
-
+            if (receiveBufferSize != null) {
+                quicConnection.setDefaultStreamReceiveBufferSize(receiveBufferSize);
+            }
             return quicConnection;
         }
 
@@ -1157,6 +1162,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder clientCertificateKey(PrivateKey privateKey) {
             this.clientCertificateKey = privateKey;
+            return this;
+        }
+
+        @Override
+        public Builder receiveBufferSize(long size) {
+            this.receiveBufferSize = size;
             return this;
         }
     }

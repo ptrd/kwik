@@ -102,6 +102,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
         cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");
         cmdLineOptions.addOption(null, "clientKey", true, "private key (file) for client certificate");
+        cmdLineOptions.addOption(null, "receiveBuffer", true, "receive buffer size (in bytes)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -180,6 +181,17 @@ public class KwikCli {
         String serverCertificatesFile = null;
         if (cmd.hasOption("saveServerCertificates")) {
             serverCertificatesFile = cmd.getOptionValue("saveServerCertificates");
+        }
+
+        if (cmd.hasOption("receiveBuffer")) {
+            try {
+                long bufferSize = Long.parseLong(cmd.getOptionValue("receiveBuffer"));
+                builder.receiveBufferSize(bufferSize);
+            }
+            catch (NumberFormatException e) {
+                usage();
+                System.exit(1);
+            }
         }
 
         Logger logger = null;
