@@ -53,7 +53,6 @@ public class TransportParameters {
         setDefaults();
         this.maxIdleTimeout = maxIdleTimeoutInSeconds * 1000;
         setInitialMaxStreamData(initialMaxStreamData);
-        initialMaxData = 10 * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
         ackDelayExponent = 0;
@@ -141,6 +140,8 @@ public class TransportParameters {
         initialMaxStreamDataBidiLocal = maxStreamData;
         initialMaxStreamDataBidiRemote = maxStreamData;
         initialMaxStreamDataUni = maxStreamData;
+
+        initialMaxData = VariableLengthInteger.MAX_VALUE;
     }
 
     public long getInitialMaxStreamsBidi() {

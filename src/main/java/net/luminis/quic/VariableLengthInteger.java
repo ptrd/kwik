@@ -29,6 +29,8 @@ import java.nio.ByteBuffer;
 // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
 public class VariableLengthInteger {
 
+    public static final long MAX_VALUE = 4611686018427387903L;
+
     /**
      * Parses a variable length integer and returns the value as in int. Throws an exception when the actual value is
      * larger than <code>Integer.MAX_VALUE</code>, so only use it in cases where a large value can be considered an
@@ -199,7 +201,7 @@ public class VariableLengthInteger {
         // | 2Bit | Length | Usable Bits | Range                 |
         // +------+--------+-------------+-----------------------+
         // | 11   | 8      | 62          | 0-4611686018427387903 |
-        else if (value <= 4611686018427387903L) {
+        else if (value <= VariableLengthInteger.MAX_VALUE) {
             int initialPosition = buffer.position();
             buffer.putLong(value);
             buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0xc0));
