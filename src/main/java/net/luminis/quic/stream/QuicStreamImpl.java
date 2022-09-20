@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
-import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -60,9 +59,6 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private final StreamOutputStream outputStream;
     private volatile boolean aborted;
     private volatile Thread blocking;
-    private long receiverFlowControlLimit;
-    private long lastCommunicatedMaxData;
-    private final long receiverMaxDataIncrement;
     private volatile long lastOffset = -1;
     private int sendBufferSize = 50 * 1024;
 
@@ -89,13 +85,10 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         }
         this.log = log;
 
-        inputStream = new StreamInputStream();
+        inputStream = new StreamInputStream(connection.getInitialMaxStreamData());
         outputStream = createStreamOutputStream();
 
         flowController.streamOpened(this);
-        receiverFlowControlLimit = connection.getInitialMaxStreamData();
-        lastCommunicatedMaxData = receiverFlowControlLimit;
-        receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
     @Override
@@ -195,6 +188,18 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         private volatile boolean closed;
         private volatile boolean reset;
+        private long receiveBufferSize;
+        private long receiverFlowControlLimit;
+        private long lastCommunicatedMaxData;
+        private final long receiverMaxDataIncrement;
+
+        public StreamInputStream(long receiveBufferSize) {
+            this.receiveBufferSize = receiveBufferSize;
+
+            receiverFlowControlLimit = this.receiveBufferSize;
+            lastCommunicatedMaxData = receiverFlowControlLimit;
+            receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
+        }
 
         @Override
         public int available() throws IOException {
