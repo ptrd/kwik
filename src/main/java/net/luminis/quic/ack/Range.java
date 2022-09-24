@@ -100,7 +100,17 @@ public class Range {
         }
     }
 
-    public Range subtract(Range other) {
+    /**
+     * Subtract an overlapping range from this range. This subtraction method only supports cases that result in single
+     * non-empty range, so the following cases lead to an IllegalArgumentException:
+     * - when the ranges are equal (would lead to an empty range)
+     * - when the other range contains this (would lead to an empty range)
+     * - when this range properly contains the other range, i.e. it contains the other range and both (lower and upper)
+     *   bounds do not match (would lead to two ranges)
+     * @param other
+     * @return
+     */
+    public Range subtractOverlapping(Range other) {
         assert ! this.equals(other);
         if (this.equals(other)) {
             // Subtraction would lead to empty range
@@ -140,6 +150,60 @@ public class Range {
         if (this.from < other.from && this.to < other.to) {
             return new Range(this.from, other.from - 1);
         }
+        // Not possible, all possibilities handled above.
+        throw new IllegalStateException();
+    }
+
+    /**
+     * Subtracts a range from this. As there are no preconditions on the other range, the result can be either one range,
+     * two ranges, or no range (an empty range).
+     */
+    public MultiRange subtract(Range other) {
+        if (this.equals(other)) {
+            return MultiRange.empty();
+        }
+        if (this.properlyContains(other)) {
+            Range range1 = new Range(this.from, other.from - 1);
+            Range range2 = new Range(other.to + 1, this.to);
+            return new MultiRange(range1, range2);
+        }
+        if (other.properlyContains(this)) {
+            return MultiRange.empty();
+        }
+        if (this.from > other.to || this.to < other.from) {
+            return new MultiRange(this);
+        }
+        // this  -------
+        // other   -----
+        if (this.from < other.from && this.to == other.to) {
+            return new MultiRange(from, other.from - 1);
+        }
+        // this      ---
+        // other   -----
+        if (this.from > other.from && this.to == other.to) {
+            return MultiRange.empty();
+        }
+        // this    -----
+        // other -----
+        if (this.from > other.from && this.to > other.to) {
+            return new MultiRange(other.to + 1, this.to);
+        }
+        // this   -----
+        // other  ---
+        if (this.from == other.from && this.to > other.to) {
+            return new MultiRange(other.to + 1, this.to);
+        }
+        // this   ---
+        // other  -----
+        if (this.from == other.from && this.to < other.to) {
+            return MultiRange.empty();
+        }
+        // this  -----
+        // other   -----
+        if (this.from < other.from && this.to < other.to) {
+            return new MultiRange(this.from, other.from - 1);
+        }
+        // Not possible, all possibilities handled above.
         throw new IllegalStateException();
     }
 

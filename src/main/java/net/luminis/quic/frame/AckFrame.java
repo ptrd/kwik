@@ -179,6 +179,10 @@ public class AckFrame extends QuicFrame {
         return acknowledgedRanges.stream().flatMap(r -> r.stream());
     }
 
+    public Stream<Long> getAckedPacketNumbers(Range excluding) {
+        return acknowledgedRanges.stream().map(r -> r.subtract(excluding)).flatMap(r -> r.stream());
+    }
+
     /**
      * Returns the acked ranges in reverse sorted order (so largest first)
      * @return

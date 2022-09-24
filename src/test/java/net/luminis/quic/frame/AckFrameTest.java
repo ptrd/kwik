@@ -140,5 +140,15 @@ class AckFrameTest extends FrameTest {
         assertThat(ackFrame.toString()).contains("[5-4,2-0|");
     }
 
+    @Test
+    void testGetAckedPacketNumbersExcludingRange() throws Exception {
+        var ackFrame = new AckFrame(new Range(6L, 25L));
+        assertThat(ackFrame.getAckedPacketNumbers(new Range(6L, 22L))).containsExactly(25L, 24L, 23L);
+    }
 
+    @Test
+    void testGetAckedPacketNumbersExcludingRange2() throws Exception {
+        var ackFrame = new AckFrame(new Range(6L, 25L));
+        assertThat(ackFrame.getAckedPacketNumbers(new Range(8L, 22L))).containsExactly(25L, 24L, 23L, 7L, 6L);
+    }
 }

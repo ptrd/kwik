@@ -121,28 +121,75 @@ class RangeTest {
     void testRangeSubtract1() {
         //  ----
         // ----
-        assertThat(range(5, 11).subtract(range(3, 6))).isEqualTo(range(7, 11));
+        assertThat(range(5, 11).subtractOverlapping(range(3, 6))).isEqualTo(range(7, 11));
+        assertThat(range(5, 11).subtract(range(3, 6))).isEqualTo(multiRange(7, 11));
     }
 
     @Test
     void testRangeSubtract2() {
         // -----
         // ----
-        assertThat(range(5, 11).subtract(range(5, 6))).isEqualTo(range(7, 11));
+        assertThat(range(5, 11).subtractOverlapping(range(5, 6))).isEqualTo(range(7, 11));
+        assertThat(range(5, 11).subtract(range(5, 6))).isEqualTo(multiRange(7, 11));
     }
 
     @Test
     void testRangeSubtract3() {
         // ----
         //   --
-        assertThat(range(5, 11).subtract(range(8, 11))).isEqualTo(range(5, 7));
+        assertThat(range(5, 11).subtractOverlapping(range(8, 11))).isEqualTo(range(5, 7));
+        assertThat(range(5, 11).subtract(range(8, 11))).isEqualTo(multiRange(5, 7));
     }
 
     @Test
     void testRangeSubtract4() {
         // -----
         //   -----
-        assertThat(range(5, 8).subtract(range(6, 10))).isEqualTo(range(5, 5));
+        assertThat(range(5, 8).subtractOverlapping(range(6, 10))).isEqualTo(range(5, 5));
+        assertThat(range(5, 8).subtract(range(6, 10))).isEqualTo(multiRange(5, 5));
+    }
+
+    @Test
+    void testProperlyContains() {
+        assertThat(range(5, 11).properlyContains(range(6, 10))).isTrue();
+    }
+
+    @Test
+    void whenRangeStartIsEqualItShouldNotProperlyContain() {
+        assertThat(range(5, 11).properlyContains(range(5, 10))).isFalse();
+    }
+
+    @Test
+    void whenRangeEndIsEqualItShouldNotProperlyContain() {
+        assertThat(range(5, 11).properlyContains(range(6, 11))).isFalse();
+    }
+
+    @Test
+    void subtractWithRangeThatIsProperlyContainedShouldGiveMultiRangeWithTwoElements() {
+        MultiRange result = range(5, 11).subtract(range(7, 9));
+        assertThat(result.ranges().get(0)).isEqualTo(range(5, 6));
+        assertThat(result.ranges().get(1)).isEqualTo(range(10, 11));
+        assertThat(result.ranges()).hasSize(2);
+    }
+
+    @Test
+    void subtractWithRangeThatIsProperlyContainedShouldGiveMultiRangeWithTwoElements2() {
+        MultiRange result = range(5, 11).subtract(range(6, 10));
+        assertThat(result.ranges().get(0)).isEqualTo(range(5));
+        assertThat(result.ranges().get(1)).isEqualTo(range(11));
+        assertThat(result.ranges()).hasSize(2);
+    }
+
+    @Test
+    void subtractRangeThatContainsThis1() {
+        MultiRange result = range(5, 11).subtract(range(3, 11));
+        assertThat(result).isEqualTo(MultiRange.empty());
+    }
+
+    @Test
+    void subtractRangeThatContainsThis2() {
+        MultiRange result = range(5, 11).subtract(range(5, 13));
+        assertThat(result).isEqualTo(MultiRange.empty());
     }
 
     private List<Range> createRangeList(Range... ranges) {
@@ -159,5 +206,9 @@ class RangeTest {
 
     Range range(int single) {
         return new Range(single, single);
+    }
+
+    MultiRange multiRange(int from, int to) {
+        return new MultiRange(new Range(from, to));
     }
 }

@@ -153,7 +153,7 @@ public class AckGenerator {
                 } else if (currentListRange.properlyContains(currentAckRange)) {
                     // Would lead to splitting current range => ignore
                 } else {
-                    rangeListIterator.set(currentListRange.subtract(currentAckRange));
+                    rangeListIterator.set(currentListRange.subtractOverlapping(currentAckRange));
                 }
             }
         }
