@@ -22,6 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.QuicStream;
 import net.luminis.tls.NewSessionTicket;
@@ -203,17 +204,20 @@ public class KwikCli {
                 System.err.println("Error: cannot open log file '" + logFilename + "'");
             }
         }
-        if (logger == null) {
-            logger = new SysOutLogger();
-        }
-        builder.logger(logger);
 
         String logArg = DEFAULT_LOG_ARGS;
         if (cmd.hasOption('l')) {
             logArg = cmd.getOptionValue('l', logArg);
         }
 
-        if (!logArg.contains("n")) {
+        if (logArg.contains("n")) {
+            logger = new NullLogger();
+        }
+        else {
+            if (logger == null) {
+                logger = new SysOutLogger();
+            }
+
             if (logArg.contains("R")) {
                 logger.logRaw(true);
             }
@@ -245,6 +249,7 @@ public class KwikCli {
                 logger.logDebug(true);
             }
         }
+        builder.logger(logger);
 
         Version quicVersion = Version.getDefault();
         Version preferredVersion = null;
