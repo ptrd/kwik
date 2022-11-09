@@ -21,6 +21,7 @@ package net.luminis.quic.server;
 import net.luminis.quic.TestUtils;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
@@ -133,6 +134,11 @@ class ServerConnectionCandidateTest {
             ServerConnectionImpl newConnection = super.createNewConnection(version, clientAddress, originalScid, originalDcid);
             createdServerConnection = newConnection;
             return newConnection;
+        }
+
+        @Override
+        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
+            return new ServerConnectionWrapper(connection, initialPacket, packetReceived, datagram);
         }
     }
 }

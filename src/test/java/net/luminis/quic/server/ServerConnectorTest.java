@@ -18,25 +18,18 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.*;
-import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.frame.Padding;
+import net.luminis.quic.RawPacket;
+import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
-import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
-import net.luminis.tls.extension.Extension;
-import net.luminis.tls.handshake.ClientHello;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import net.luminis.quic.test.FieldSetter;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -52,6 +45,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
+
 
 class ServerConnectorTest {
 
@@ -201,6 +195,9 @@ class ServerConnectorTest {
         when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection);
+        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(Instant.class), any(ByteBuffer.class)))
+                .thenAnswer(i -> new ServerConnectionWrapper(i.getArgument(0), i.getArgument(1), i.getArgument(2), i.getArgument(3)));
+
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
 
         // When

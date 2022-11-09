@@ -36,6 +36,9 @@ import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -763,7 +766,7 @@ class QuicStreamImplTest {
 
     @Test
     void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
-        QuicStreamImpl.waitForNextFrameTimeout = 25;  // Make long enough to have reader thread blocking when new frame arrives
+        QuicStreamImpl.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
         // Given
         InputStream inputStream = quicStream.getInputStream();
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));
@@ -773,16 +776,23 @@ class QuicStreamImplTest {
         // Async add of stream frame while read is already blocking
         new Thread(() -> {
             try {
-                Thread.sleep(5);   // Wait long enough to have reader thread block, but not to long to cause wait timeout
+                Thread.sleep(100);   // Wait long enough to have reader thread (the main thread) block _before_ the frame is added.
             } catch (InterruptedException e) {}
             quicStream.add(resurrect(new StreamFrame(0, 4, new byte[0], true)));
         }).start();
 
+        Instant startRead = Instant.now();
         int secondRead = inputStream.read(new byte[100]);
+        Duration readDuration = Duration.between(startRead, Instant.now());
 
         // Then
         assertThat(firstRead).isEqualTo(4);
         assertThat(secondRead).isEqualTo(-1);
+        // If read was very fast, it is unlikely the read was first in blocking state, in which case this test does not test what it ought to be.
+        // Of course, speed of execution depends on hardware and may vary, but it seems reasonable to assume that:
+        // - starting a thread takes less than 50 ms
+        // - a non-blocking read takes (far) less than 50 ms
+        assertThat(readDuration).isGreaterThan(Duration.of(50, ChronoUnit.MILLIS));
     }
 
     @Test

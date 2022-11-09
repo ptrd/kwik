@@ -20,10 +20,13 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.function.Consumer;
 
 
@@ -72,4 +75,7 @@ public class ServerConnectionFactory {
                 tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, closeCallback, log);
     }
 
+    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
+        return new ServerConnectionThread(connection, initialPacket, packetReceived, datagram);
+    }
 }
