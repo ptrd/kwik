@@ -96,7 +96,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected long flowControlMax;
     protected long flowControlLastAdvertised;
     protected long flowControlIncrement;
-    protected long largestPacketNumber;
+    protected long[] largestPacketNumber = new long[PnSpace.values().length];
 
     protected volatile Status connectionState;
 
@@ -312,14 +312,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 //   endpoint before the final TLS handshake messages are received."
                 throw new MissingKeysException(packet.getEncryptionLevel());
             }
-            packet.parse(data, keys, largestPacketNumber, log, getSourceConnectionIdLength());
+            packet.parse(data, keys, largestPacketNumber[packet.getPnSpace().ordinal()], log, getSourceConnectionIdLength());
         }
         else {
-            packet.parse(data, null, largestPacketNumber, log, 0);
+            // Packet has no encryption level, i.e. a VersionNegotiationPacket
+            packet.parse(data, null, 0, log, 0);
         }
 
-        if (packet.getPacketNumber() != null && packet.getPacketNumber() > largestPacketNumber) {
-            largestPacketNumber = packet.getPacketNumber();
+        // Only retry packet and version negotiation packet won't have a packet number.
+        if (packet.getPacketNumber() != null && packet.getPacketNumber() > largestPacketNumber[packet.getPnSpace().ordinal()]) {
+            largestPacketNumber[packet.getPnSpace().ordinal()] = packet.getPacketNumber();
         }
         return packet;
     }
