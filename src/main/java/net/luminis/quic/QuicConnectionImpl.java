@@ -312,7 +312,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
                 //   endpoint before the final TLS handshake messages are received."
                 throw new MissingKeysException(packet.getEncryptionLevel());
             }
-            packet.parse(data, keys, largestPacketNumber[packet.getPnSpace().ordinal()], log, getSourceConnectionIdLength());
+
+            long largestPN = packet.getPnSpace() != null? largestPacketNumber[packet.getPnSpace().ordinal()]: 0;
+            packet.parse(data, keys, largestPN, log, getSourceConnectionIdLength());
         }
         else {
             // Packet has no encryption level, i.e. a VersionNegotiationPacket
