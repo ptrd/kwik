@@ -22,16 +22,8 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A sample echo client that runs a very simple echo protocol on top of QUIC.
@@ -45,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 public class SimpleEchoClient {
 
     private int serverPort;
+    private QuicClientConnection connection;
 
     public static void main(String[] args) throws IOException {
         SimpleEchoClient client = null;
@@ -56,33 +49,39 @@ public class SimpleEchoClient {
             System.exit(1);
         }
 
-        client.echo();
+        client.run();
     }
 
     public SimpleEchoClient(int serverPort) {
         this.serverPort = serverPort;
     }
 
-    public void echo() throws IOException {
+    public void run() throws IOException {
         SysOutLogger log = new SysOutLogger();
         // log.logPackets(true);     // Set various log categories with log.logABC()
 
-        QuicClientConnectionImpl connection = QuicClientConnectionImpl.newBuilder()
+        connection = QuicClientConnectionImpl.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .noServerCertificateCheck()
                 .build();
 
         connection.connect(5000, "echo");
+
+        echo("hello mate!");
+        echo("look, a second request on a separate stream!");
+
+        connection.closeAndWait();
+    }
+
+    private void echo(String payload) throws IOException {
         QuicStream quicStream = connection.createStream(true);
-        byte[] requestData = "hello mate!".getBytes(StandardCharsets.US_ASCII);
+        byte[] requestData = payload.getBytes(StandardCharsets.US_ASCII);
         quicStream.getOutputStream().write(requestData);
         quicStream.getOutputStream().close();
 
         System.out.print("Response from server: ");
         quicStream.getInputStream().transferTo(System.out);
         System.out.println();
-
-        connection.closeAndWait();
     }
 }
