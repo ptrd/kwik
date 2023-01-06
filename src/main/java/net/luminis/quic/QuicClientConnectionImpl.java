@@ -253,7 +253,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (!streamEarlyDataList.isEmpty()) {
             TransportParameters rememberedTransportParameters = new TransportParameters();
             sessionTicket.copyTo(rememberedTransportParameters);
-            setPeerTransportParameters(rememberedTransportParameters, false);  // Do not validate TP, as these are yet incomplete.
+            setZeroRttTransportParameters(rememberedTransportParameters);
             // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-4.5
             // "the amount of data which the client can send in 0-RTT is controlled by the "initial_max_data"
             //   transport parameter supplied by the server"
@@ -291,7 +291,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             throw new IllegalStateException("keep alive can only be set when connected");
         }
 
-        keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) peerTransportParams.getMaxIdleTimeout(), sender);
+        if (idleTimer.isEnabled()) {
+            keepAliveActor = new KeepAliveActor(quicVersion, seconds, (int) idleTimer.getIdleTimeout(), sender);
+        }
     }
 
     public void ping() {
@@ -654,15 +656,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     void setPeerTransportParameters(TransportParameters transportParameters) {
-        setPeerTransportParameters(transportParameters, true);
-    }
-
-    private void setPeerTransportParameters(TransportParameters transportParameters, boolean validate) {
-        if (validate) {
-            if (!verifyConnectionIds(transportParameters)) {
-                return;
-            }
+        if (!verifyConnectionIds(transportParameters)) {
+            return;
         }
+
         if (versionNegotiationStatus == VersionNegotiationStatus.VersionChangeUnconfirmed) {
             verifyVersionNegotiation(transportParameters);
         }
@@ -704,6 +701,27 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
         }
+    }
+
+    private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {
+        determineIdleTimeout(transportParams.getMaxIdleTimeout(), rememberedTransportParameters.getMaxIdleTimeout());
+
+        // max_udp_payload_size not used by Kwik
+
+        flowController = new FlowControl(Role.Client,
+                rememberedTransportParameters.getInitialMaxData(),
+                rememberedTransportParameters.getInitialMaxStreamDataBidiLocal(),
+                rememberedTransportParameters.getInitialMaxStreamDataBidiRemote(),
+                rememberedTransportParameters.getInitialMaxStreamDataUni(),
+                log);
+        streamManager.setFlowController(flowController);
+
+        streamManager.setInitialMaxStreamsBidi(rememberedTransportParameters.getInitialMaxStreamsBidi());
+        streamManager.setInitialMaxStreamsUni(rememberedTransportParameters.getInitialMaxStreamsUni());
+
+        // disable_active_migration not (yet) used by Kwik (a TODO)
+
+        connectionIdManager.registerPeerCidLimit(rememberedTransportParameters.getActiveConnectionIdLimit());
     }
 
     private void verifyVersionNegotiation(TransportParameters transportParameters) {

@@ -27,18 +27,19 @@ import java.util.Date;
  * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to being able to
  * send 0-RTT packets.
  *
- * https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-7.3.1
- * "Both endpoints store the value of the server transport parameters
- *    from a connection and apply them to any 0-RTT packets that are sent
- *    in subsequent connections to that peer, except for transport
- *    parameters that are explicitly excluded."
- * "A client MUST NOT use remembered values for the following parameters:
- *    original_connection_id, preferred_address, stateless_reset_token,
- *    ack_delay_exponent and active_connection_id_limit."
+ * https://www.rfc-editor.org/rfc/rfc9000.html#name-values-of-transport-paramet
+ * "To enable 0-RTT, endpoints store the values of the server transport parameters with any session tickets it receives
+ *  on the connection. (...) The values of stored transport parameters are used when attempting 0-RTT using the session
+ *  tickets."
+ * "A client MUST NOT use remembered values for the following parameters: ack_delay_exponent, max_ack_delay,
+ *  initial_source_connection_id, original_destination_connection_id, preferred_address, retry_source_connection_id,
+ *  and stateless_reset_token."
+ *  "A client that attempts to send 0-RTT data MUST remember all other transport parameters used by the server that
+ *  it is able to process."
  */
 public class QuicSessionTicket extends NewSessionTicket {
 
-    private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1;
+    private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1 + 4;
 
     private NewSessionTicket wrappedTicket;
     private long maxIdleTimeout;
@@ -49,8 +50,8 @@ public class QuicSessionTicket extends NewSessionTicket {
     private long initialMaxStreamDataUni;
     private long initialMaxStreamsBidi;
     private long initialMaxStreamsUni;
-    private int maxAckDelay;
     private boolean disableActiveMigration;
+    private int activeConnectionIdLimit;
 
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
@@ -63,8 +64,8 @@ public class QuicSessionTicket extends NewSessionTicket {
         initialMaxStreamDataUni = serverParameters.getInitialMaxStreamDataUni();
         initialMaxStreamsBidi = serverParameters.getInitialMaxStreamsBidi();
         initialMaxStreamsUni = serverParameters.getInitialMaxStreamsUni();
-        maxAckDelay = serverParameters.getMaxAckDelay();
         disableActiveMigration = serverParameters.getDisableMigration();
+        activeConnectionIdLimit = serverParameters.getActiveConnectionIdLimit();
     }
 
     public QuicSessionTicket(byte[] data) {
@@ -79,10 +80,11 @@ public class QuicSessionTicket extends NewSessionTicket {
         initialMaxStreamDataUni = buffer.getLong();
         initialMaxStreamsBidi = buffer.getLong();
         initialMaxStreamsUni = buffer.getLong();
-        maxAckDelay = buffer.getInt();
         disableActiveMigration = buffer.get() == 1;
+        activeConnectionIdLimit = buffer.getInt();
     }
 
+    @Override
     public byte[] serialize() {
         byte[] serializedTicket;
         if (wrappedTicket != this) {
@@ -101,8 +103,8 @@ public class QuicSessionTicket extends NewSessionTicket {
         buffer.putLong(initialMaxStreamDataUni);
         buffer.putLong(initialMaxStreamsBidi);
         buffer.putLong(initialMaxStreamsUni);
-        buffer.putInt(maxAckDelay);
         buffer.put((byte) (disableActiveMigration? 1: 0));
+        buffer.putInt(activeConnectionIdLimit);
         return buffer.array();
     }
 
@@ -155,8 +157,8 @@ public class QuicSessionTicket extends NewSessionTicket {
         tp.setInitialMaxStreamDataUni(initialMaxStreamDataUni);
         tp.setInitialMaxStreamsBidi(initialMaxStreamsBidi);
         tp.setInitialMaxStreamsUni(initialMaxStreamsUni);
-        tp.setMaxAckDelay(maxAckDelay);
         tp.setDisableMigration(disableActiveMigration);
+        tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
     }
 
     public static QuicSessionTicket deserialize(byte[] data) {
@@ -195,12 +197,12 @@ public class QuicSessionTicket extends NewSessionTicket {
         return initialMaxStreamsUni;
     }
 
-    public int getMaxAckDelay() {
-        return maxAckDelay;
-    }
-
     public boolean getDisableActiveMigration() {
         return disableActiveMigration;
+    }
+
+    public int getActiveConnectionIdLimit() {
+        return activeConnectionIdLimit;
     }
 }
 

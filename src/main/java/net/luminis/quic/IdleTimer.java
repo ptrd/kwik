@@ -24,10 +24,9 @@ import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
@@ -36,12 +35,13 @@ public class IdleTimer {
     private final Clock clock;
     private final ScheduledExecutorService timer;
     private final int timerResolution;
-    private long timeout;
+    private volatile long timeout;
     private final QuicConnectionImpl connection;
     private final Logger log;
     private volatile IntSupplier ptoSupplier;
     private volatile Instant lastAction;
     private volatile boolean enabled;
+    private ScheduledFuture<?> timerTask;
 
 
     public IdleTimer(QuicConnectionImpl connection, Logger logger) {
@@ -64,14 +64,22 @@ public class IdleTimer {
     }
 
     void setIdleTimeout(long idleTimeoutInMillis) {
+        timeout = idleTimeoutInMillis;
         if (! enabled) {
             enabled = true;
-            timeout = idleTimeoutInMillis;
-            timer.scheduleAtFixedRate(() -> checkIdle(), timerResolution, timerResolution, TimeUnit.MILLISECONDS);
         }
         else {
-            log.error("idle timeout was set already; can't be set twice on same connection");
+            timerTask.cancel(true);
         }
+        timerTask = timer.scheduleAtFixedRate(() -> checkIdle(), timerResolution, timerResolution, TimeUnit.MILLISECONDS);
+    }
+
+    long getIdleTimeout() {
+        return timeout;
+    }
+
+    boolean isEnabled() {
+        return enabled;
     }
 
     public void setPtoSupplier(IntSupplier ptoSupplier) {
