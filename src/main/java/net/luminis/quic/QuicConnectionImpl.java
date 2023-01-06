@@ -37,6 +37,7 @@ import net.luminis.tls.handshake.TlsEngine;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -734,6 +735,28 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
+    }
+
+    @Override
+    public void closeAndWait() {
+        // After 3 PTO, connection should have been terminated anyway, so no use in waiting longer.
+        closeAndWait(Duration.ofMillis(4 * getSender().getPto()));
+    }
+
+    @Override
+    public void closeAndWait(Duration maxWait) {
+        close();
+
+        long maxWaitMillis = Long.min(maxWait.toMillis(), 4 * getSender().getPto());
+        long waitedMillis = 0;
+
+        try {
+            // Busy wait is not ideal, but this method will only use by a client that is waiting to shutdown JVM, so don't bother.
+            while (connectionState != Status.Closed && waitedMillis < maxWaitMillis) {
+                Thread.sleep(1);
+                waitedMillis++;
+            }
+        } catch (InterruptedException e) {}
     }
 
     @Override

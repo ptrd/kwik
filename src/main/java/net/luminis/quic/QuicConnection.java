@@ -18,8 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.QuicStream;
-
+import java.time.Duration;
 import java.util.function.Consumer;
 
 
@@ -38,6 +37,22 @@ public interface QuicConnection {
     void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
 
     void close();
+
+    /**
+     * Closes the connection and wait for the close to complete. This close method should be used when called just before
+     * the JVM shuts down, to enable the QUIC connection to close properly (send connection close frame and retransmit
+     * if lost).
+     */
+    void closeAndWait();
+
+    /**
+     * Closes the connection and wait for the close to complete. This close method should be used when called just before
+     * the JVM shuts down, to enable the QUIC connection to close properly (send connection close frame and retransmit
+     * if lost).
+     *
+     * @param maxWait     maximum time to wait before returning.
+     */
+    void closeAndWait(Duration maxWait);
 
     void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
 

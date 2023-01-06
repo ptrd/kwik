@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2022, 2023 Peter Doornbosch
+ *
+ * This file is part of Kwik, an implementation of the QUIC protocol in Java.
+ *
+ * Kwik is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Kwik is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package net.luminis.quic.sample.echo;
 
 import net.luminis.quic.QuicConnection;
@@ -18,7 +36,7 @@ import java.util.function.Consumer;
 
 
 /**
- * A simple server that runs a very simple echo protocol on top of QUIC.
+ * A sample server that runs a very simple echo protocol on top of QUIC.
  * The echo protocol is a request-response protocol, where the client sends one request on a new stream and the server
  * responds by echoing the data from the request in a response on the same stream. After sending the response, the
  * stream is closed.
@@ -30,7 +48,7 @@ import java.util.function.Consumer;
  */
 public class EchoServer {
 
-       private static void usageAndExit() {
+    private static void usageAndExit() {
         System.err.println("Usage: cert file, cert key file, port number");
         System.exit(1);
     }
@@ -88,7 +106,7 @@ public class EchoServer {
 
         private void handleEchoRequest(QuicStream quicStream) {
             try {
-                // Note that this implementation is not safe to use in the wild, as attackers can crash the server by sending arbitrary long requests.
+                // Note that this implementation is not safe to use in the wild, as attackers can crash the server by sending arbitrary large requests.
                 byte[] bytesRead = quicStream.getInputStream().readAllBytes();
                 System.out.println("Read echo request with " + bytesRead.length + " bytes of data.");
                 quicStream.getOutputStream().write(bytesRead);

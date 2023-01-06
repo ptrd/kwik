@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2022, 2023 Peter Doornbosch
+ *
+ * This file is part of Kwik, an implementation of the QUIC protocol in Java.
+ *
+ * Kwik is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Kwik is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package net.luminis.quic.sample.echo;
 
 import net.luminis.quic.*;
@@ -10,11 +28,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
- * A simple client that runs a very simple echo protocol on top of QUIC.
+ * A sample echo client that runs a very simple echo protocol on top of QUIC.
  * The echo protocol is a request-response protocol, where the client sends one request on a new stream and the server
  * responds by echoing the data from the request in a response on the same stream. After sending the response, the
  * stream is closed.
@@ -61,7 +81,8 @@ public class SimpleEchoClient {
 
         System.out.print("Response from server: ");
         quicStream.getInputStream().transferTo(System.out);
+        System.out.println();
 
-        connection.close();
+        connection.closeAndWait();
     }
 }
