@@ -39,7 +39,8 @@ import java.util.List;
  * stream is closed.
  *
  * If a session ticket can be found, this client tries to setup the QUIC connection with the session ticket and
- * send its request data via 0-RTT.
+ * send its request data via 0-RTT. A session ticket is saved to file (named echoclientsessionticket.bin), so just
+ * run the client a single time to obtain a session ticket.
  *
  * The class' main method requires one argument:
  * - port number of the server (which is assumed to run on localhost)
@@ -52,45 +53,49 @@ public class EchoClientUsing0RTT {
     private int serverPort;
 
     public static void main(String[] args) throws IOException {
-        EchoClientUsing0RTT client = null;
         try {
-            client = new EchoClientUsing0RTT(Integer.parseInt(args[0]));
+            EchoClientUsing0RTT client = new EchoClientUsing0RTT(Integer.parseInt(args[0]));
+            client.run();
         }
-        catch (Exception e) {
+        catch (NumberFormatException e) {
             System.err.println("Error: expected one argument: server-port-number");
             System.exit(1);
         }
 
-        client.echo();
     }
 
     public EchoClientUsing0RTT(int serverPort) {
         this.serverPort = serverPort;
     }
 
-    public void echo() throws IOException {
+    public void run() throws IOException {
         byte[] requestData = "hello mate!".getBytes(StandardCharsets.US_ASCII);
 
         SysOutLogger log = new SysOutLogger();
+        log.logPackets(true);    // When 0-RTT is used, log will show a 0-RTT packet like "Packet Z|0|Z|52|1  StreamFrame[0(CIB),0,11,fin]"
 
+        // Create connection builder (do not yet create connection!)
         QuicClientConnectionImpl.Builder connectionBuilder = QuicClientConnectionImpl.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .version(Version.QUIC_version_1)
                 .noServerCertificateCheck();
 
+        // Try to load session ticket and if it can be loaded, create early data.
         List<QuicClientConnection.StreamEarlyData> earlyData = Collections.emptyList();
         try {
             byte[] ticketData = Files.readAllBytes(Path.of(SESSIONTICKET_FILE));
-            connectionBuilder.sessionTicket(QuicSessionTicket.deserialize(ticketData));
+            connectionBuilder.sessionTicket(QuicSessionTicket.deserialize(ticketData));   // This is why the connection should not yet have been created!
             earlyData = List.of(new QuicClientConnection.StreamEarlyData(requestData, true));
         }
         catch (IOException e) {
             System.err.println("Cannot read/load session ticket; will not be using 0-RTT!");
         }
 
+        // Create connection with 0-RTT data
         QuicClientConnectionImpl connection = connectionBuilder.build();
         List<QuicStream> earlyStreams = connection.connect(5000, "echo", null, earlyData);
+        // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
                 .findAny()
                 .orElseGet(() -> {
@@ -108,9 +113,12 @@ public class EchoClientUsing0RTT {
         System.out.print("Response from server: ");
         quicStream.getInputStream().transferTo(System.out);
 
+        // Save one session ticket for a next invocation.
         List<QuicSessionTicket> newSessionTickets = connection.getNewSessionTickets();
         connection.closeAndWait();
 
+        // Note that session tickets are server specific, so if the client can connect to an arbitrary server, the
+        // ticket should be saved in a way that the origin server can be identified.
         newSessionTickets.forEach(ticket ->
         {
             try {

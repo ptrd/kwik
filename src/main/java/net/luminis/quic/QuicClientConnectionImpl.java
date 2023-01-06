@@ -199,6 +199,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot connect a connection that is in state " + connectionState);
         }
+        if (earlyData != null && !earlyData.isEmpty() && sessionTicket == null) {
+            throw new IllegalStateException("Cannot send early data without session ticket");
+        }
         this.applicationProtocol = applicationProtocol;
         if (transportParameters != null) {
             this.transportParams = transportParameters;
