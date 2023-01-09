@@ -630,6 +630,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             }
             getSender().stop();
 
+            getStreamManager().abortAll();
+
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
