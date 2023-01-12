@@ -32,7 +32,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Consumer;
 
 
 /**
@@ -90,17 +89,16 @@ public class EchoServer {
            });
     }
 
-    static class EchoProtocolConnection implements ApplicationProtocolConnection, Consumer<QuicStream> {
+    static class EchoProtocolConnection implements ApplicationProtocolConnection {
 
         private Logger log;
 
         public EchoProtocolConnection(QuicConnection quicConnection, Logger log) {
             this.log = log;
-            quicConnection.setPeerInitiatedStreamCallback(this);
         }
 
         @Override
-        public void accept(QuicStream quicStream) {
+        public void acceptPeerInitiatedStream(QuicStream quicStream) {
             new Thread(() -> handleEchoRequest(quicStream)).start();
         }
 
