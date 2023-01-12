@@ -80,13 +80,7 @@ public class EchoServer {
     }
 
     private static void registerProtocolHandler(ServerConnector serverConnector, Logger log) {
-           serverConnector.registerApplicationProtocol("echo", new ApplicationProtocolConnectionFactory() {
-
-               @Override
-               public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-                   return new EchoProtocolConnection(quicConnection, log);
-               }
-           });
+           serverConnector.registerApplicationProtocol("echo", (protocol, quicConnection) -> new EchoProtocolConnection(quicConnection, log));
     }
 
     static class EchoProtocolConnection implements ApplicationProtocolConnection {
