@@ -20,6 +20,9 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.QuicConnection;
 
+/**
+ * Factory for ApplicationProtocolConnection objects.
+ */
 public interface ApplicationProtocolConnectionFactory {
 
     ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection);
