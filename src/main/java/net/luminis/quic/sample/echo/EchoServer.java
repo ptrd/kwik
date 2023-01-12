@@ -90,7 +90,7 @@ public class EchoServer {
            });
     }
 
-    static class EchoProtocolConnection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
+    static class EchoProtocolConnection implements ApplicationProtocolConnection, Consumer<QuicStream> {
 
         private Logger log;
 

@@ -18,5 +18,5 @@
  */
 package net.luminis.quic.server;
 
-public class ApplicationProtocolConnection {
+public interface ApplicationProtocolConnection {
 }

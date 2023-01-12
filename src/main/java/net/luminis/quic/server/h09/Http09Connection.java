@@ -33,7 +33,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Http09Connection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
+public class Http09Connection implements ApplicationProtocolConnection, Consumer<QuicStream> {
 
     public static final int MAX_REQUEST_SIZE = 4096;
 

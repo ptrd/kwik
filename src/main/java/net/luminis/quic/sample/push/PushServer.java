@@ -92,7 +92,7 @@ public class PushServer {
            });
     }
 
-    static class PushProtocolConnection extends ApplicationProtocolConnection {
+    static class PushProtocolConnection implements ApplicationProtocolConnection {
 
         private Logger log;
 
