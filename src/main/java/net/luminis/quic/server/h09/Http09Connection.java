@@ -33,7 +33,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Http09Connection extends ApplicationProtocolConnection implements Consumer<QuicStream> {
+public class Http09Connection implements ApplicationProtocolConnection {
 
     public static final int MAX_REQUEST_SIZE = 4096;
 
@@ -45,12 +45,10 @@ public class Http09Connection extends ApplicationProtocolConnection implements C
     public Http09Connection(QuicConnection quicConnection, File wwwDir) {
         this.wwwDir = wwwDir;
         this.connection = quicConnection;
-
-        connection.setPeerInitiatedStreamCallback(this);
     }
 
     @Override
-    public void accept(QuicStream quicStream) {
+    public void acceptPeerInitiatedStream(QuicStream quicStream) {
         Thread thread = new Thread(() -> handleRequest(quicStream));
         thread.setName("http-" + threadCount.getAndIncrement());
         thread.start();

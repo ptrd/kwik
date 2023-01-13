@@ -25,6 +25,8 @@ import java.util.List;
 
 
 /**
+ * Defines the methods for emitting QLog events.
+ *
  * See
  * https://tools.ietf.org/html/draft-marx-qlog-main-schema-02
  * and

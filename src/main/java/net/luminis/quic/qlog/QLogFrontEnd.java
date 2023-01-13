@@ -29,7 +29,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Queue;
 
-
+/**
+ * Entrypoint of the QLog module. Collects qlog events and processes them asynchronously.
+ * Note that a QLOG log file will only be written if the environment variable "QLOGDIR" is set.
+ */
 public class QLogFrontEnd implements QLog {
 
     private final byte[] originalDcid;

@@ -43,6 +43,8 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -816,6 +818,70 @@ class QuicStreamImplTest {
         assertThat(thrownException.get())
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("reset by peer");
+    }
+
+    @Test
+    void writerDoesNotBlockWhenStreamAborted() throws Exception {
+        // Given
+        // Write as many bytes as the size of the send buffer, so a next write would block
+        quicStream.getOutputStream().write(new byte[50 * 1024]);
+
+        // When
+        quicStream.abort();
+
+        // Then
+        // write() should not block and throw an exception to indicate that writing is not possible anymore
+        Instant before = Instant.now();
+        assertThatThrownBy(() ->
+                quicStream.getOutputStream().write(new byte[10])
+        ).isInstanceOf(IOException.class);
+        Instant after = Instant.now();
+
+        assertThat(Duration.between(before, after)).isLessThan(Duration.ofMillis(100));
+    }
+
+    @Test
+    void blockingWriterIsInterruptedWhenStreamAborted() throws Exception {
+        // Given
+        // Write as many bytes as the size of the send buffer, so a next write will block
+        quicStream.getOutputStream().write(new byte[50 * 1024]);
+
+        AtomicBoolean writerHasThrownIOException = new AtomicBoolean(false);
+        AtomicBoolean writerHasBeenBlocked = new AtomicBoolean(false);
+        AtomicBoolean writerHasBeenUnblocked = new AtomicBoolean(false);
+        ReentrantLock lock = new ReentrantLock();
+        Condition threadHasStartedCondition = lock.newCondition();
+
+        // When
+        new Thread(() -> {
+            lock.lock();
+            threadHasStartedCondition.signal();
+            lock.unlock();
+
+            Instant before = Instant.now();
+            try {
+                quicStream.getOutputStream().write(new byte[1]);
+            } catch (IOException e) {
+                writerHasThrownIOException.set(true);
+            }
+            Instant after = Instant.now();
+            writerHasBeenBlocked.set(Duration.between(before, after).toMillis() > 5);
+
+            writerHasBeenUnblocked.set(true);
+        }
+        ).start();
+
+        lock.lock();
+        threadHasStartedCondition.await();
+        lock.unlock();
+
+        Thread.sleep(10);  // Give writer thread a change to start the write (and block)
+        quicStream.abort();
+        Thread.sleep(5);   // Give writer thread a change to awake from the wait
+
+        // Then
+        assertThat(writerHasBeenBlocked).isTrue();
+        assertThat(writerHasBeenUnblocked).isTrue();
     }
 
     private byte[] generateByteArray(int size) {

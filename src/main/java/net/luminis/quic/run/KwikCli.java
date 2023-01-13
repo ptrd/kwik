@@ -434,10 +434,6 @@ public class KwikCli {
             else {
                 QuicClientConnection quicConnection = builder.build();
 
-                if (keepAliveTime > 0) {
-                    quicConnection.keepAlive(keepAliveTime);
-                }
-
                 if (httpRequestPath != null) {
                     try {
                         HttpClient httpClient = createHttpClient(httpVersion, quicConnection, useZeroRtt);
@@ -487,11 +483,12 @@ public class KwikCli {
                 }
                 else {
                     quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
+
                     if (keepAliveTime > 0) {
+                        quicConnection.keepAlive(keepAliveTime);
                         try {
                             Thread.sleep((keepAliveTime + 30) * 1000);
-                        } catch (InterruptedException e) {
-                        }
+                        } catch (InterruptedException e) {}
                     }
                 }
 

@@ -47,10 +47,10 @@ class QuicSessionTicketTest {
         tp.setInitialMaxStreamsBidi(maxStreamsBidi);
         long maxStreamsUni = 513;
         tp.setInitialMaxStreamsUni(maxStreamsUni);
-        int maxAckDelay = 284;
-        tp.setMaxAckDelay(maxAckDelay);
         boolean disableMigration = true;
         tp.setDisableMigration(disableMigration);
+        int activeConnectionIdLimit = 7;
+        tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
         NewSessionTicket tlsTicket = mock(NewSessionTicket.class);
         when(tlsTicket.serialize()).thenReturn(new byte[16]);   // Exact size doesn't matter
         QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsTicket, tp);
@@ -66,8 +66,8 @@ class QuicSessionTicketTest {
         assertThat(restoredTicket.getInitialMaxStreamDataUni()).isEqualTo(maxDataUni);
         assertThat(restoredTicket.getInitialMaxStreamsBidi()).isEqualTo(maxStreamsBidi);
         assertThat(restoredTicket.getInitialMaxStreamsUni()).isEqualTo(maxStreamsUni);
-        assertThat(restoredTicket.getMaxAckDelay()).isEqualTo(maxAckDelay);
         assertThat(restoredTicket.getDisableActiveMigration()).isEqualTo(disableMigration);
+        assertThat(restoredTicket.getActiveConnectionIdLimit()).isEqualTo(activeConnectionIdLimit);
     }
 
     @Test
@@ -89,10 +89,10 @@ class QuicSessionTicketTest {
         tp.setInitialMaxStreamsBidi(maxStreamsBidi);
         long maxStreamsUni = 513;
         tp.setInitialMaxStreamsUni(maxStreamsUni);
-        int maxAckDelay = 284;
-        tp.setMaxAckDelay(maxAckDelay);
         boolean disableMigration = true;
         tp.setDisableMigration(disableMigration);
+        int activeConnectionIdLimit = 5;
+        tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
         NewSessionTicket tlsTicket = mock(NewSessionTicket.class);
         QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsTicket, tp);
 
@@ -107,8 +107,8 @@ class QuicSessionTicketTest {
         assertThat(copiedTransportParameters.getInitialMaxStreamDataUni()).isEqualTo(maxDataUni);
         assertThat(copiedTransportParameters.getInitialMaxStreamsBidi()).isEqualTo(maxStreamsBidi);
         assertThat(copiedTransportParameters.getInitialMaxStreamsUni()).isEqualTo(maxStreamsUni);
-        assertThat(copiedTransportParameters.getMaxAckDelay()).isEqualTo(maxAckDelay);
         assertThat(copiedTransportParameters.getDisableMigration()).isEqualTo(disableMigration);
+        assertThat(copiedTransportParameters.getActiveConnectionIdLimit()).isEqualTo(activeConnectionIdLimit);
     }
 
 }

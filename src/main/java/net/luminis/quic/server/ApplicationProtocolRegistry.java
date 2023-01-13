@@ -22,24 +22,51 @@ import net.luminis.quic.QuicConnection;
 
 import java.util.*;
 
+/**
+ * Registers supported application protocols.
+ */
 public class ApplicationProtocolRegistry {
 
-    Map<String, ApplicationProtocolConnectionFactory> registeredFactories = new HashMap<>();
+    Map<String, ApplicationProtocolConnectionFactory> registeredFactories = new LinkedHashMap<>();
 
-    Optional<String> selectSupportedApplicationProtocol(List<String> protocols) {
-        Set<String> intersection = new HashSet<String>(registeredFactories.keySet());
-        intersection.retainAll(protocols);
+    /**
+     * Select the (server preferred) protocol, given the list of clientProtocols that the client supports.
+     * @param clientProtocols  list of protocols (alpn's) the client advertises
+     * @return  selected protocol (if any)
+     */
+    Optional<String> selectSupportedApplicationProtocol(List<String> clientProtocols) {
+        Set<String> intersection = new LinkedHashSet<>(registeredFactories.keySet());
+        intersection.retainAll(clientProtocols);
         return intersection.stream().findFirst();
     }
 
+    /**
+     * Creates an application protocol connection for the given protocol on top of the given QUIC connection.
+     * @param protocol  protocol alpn
+     * @param quicConnection  underlying QUIC connection
+     * @return application protocol instance
+     */
     ApplicationProtocolConnection startApplicationProtocolConnection(String protocol, QuicConnection quicConnection) {
-        return registeredFactories.get(protocol).createConnection(protocol, quicConnection);
+        ApplicationProtocolConnection applicationProtocolConnection = registeredFactories.get(protocol).createConnection(protocol, quicConnection);
+        quicConnection.setPeerInitiatedStreamCallback(applicationProtocolConnection::acceptPeerInitiatedStream);
+        return applicationProtocolConnection;
     }
 
+    /**
+     * Add a protocol with lower preference than the protocols already added.
+     * So, to set protocols in order of preference, start with adding the most preferred, etc.
+     *
+     * @param protocol  the protocol alpn
+     * @param factory   factory for creating connections for the given protocol
+     */
     void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory factory) {
         registeredFactories.put(protocol, factory);
     }
 
+    /**
+     * Returns the list of APLN's registered.
+     * @return  list of APLN's
+     */
     Set<String> getRegisteredApplicationProtocols() {
         return registeredFactories.keySet();
     }

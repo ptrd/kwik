@@ -24,7 +24,7 @@ import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 
 import java.io.File;
 
-public class Http09ApplicationProtocolFactory extends ApplicationProtocolConnectionFactory {
+public class Http09ApplicationProtocolFactory implements ApplicationProtocolConnectionFactory {
 
     private File wwwDir;
 

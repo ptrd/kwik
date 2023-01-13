@@ -98,13 +98,19 @@ To build the project:
 
 Gradle will write the output to `build/libs`.
 
+### Kwik library
+
+If you want to use kwik as a library, there are various client & server examples in the 
+[sample package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/sample/),
+that show how you can set up a QUIC connection and use streams to run your own application protocol on top of it.
+Of course, the [sample client](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/KwikCli) and
+[sample server](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/SampleWebServer) 
+also can provide inspiration! 
+
 ### Client
 
 Kwik is both a library that can be used in any Java application to set up and use a QUIC connection, 
 and a (sample) command line client that can be used to experiment with the QUIC protocol. 
-If you want to use Kwik as a library, consider the various classes in 
-the [run package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/) as samples
-of how to setup and use a QUIC connection with Kwik in Java.
 
 To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
 

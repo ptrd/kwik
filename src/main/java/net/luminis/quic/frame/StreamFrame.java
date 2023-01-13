@@ -135,7 +135,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
 
     @Override
     public String toString() {
-        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",f": "") + "]";
+        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",fin": "") + "]";
     }
 
     @Override

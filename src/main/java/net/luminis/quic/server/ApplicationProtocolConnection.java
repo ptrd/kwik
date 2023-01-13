@@ -18,5 +18,23 @@
  */
 package net.luminis.quic.server;
 
-public class ApplicationProtocolConnection {
+import net.luminis.quic.QuicStream;
+
+
+/**
+ * Represents an application protocol connection, running over an underlying QUIC connection.
+ * Whether the instance has access to the underlying QUIC connection is up to the concrete implementation and depends
+ * on how the instance is created in the ApplicationProtocolConnectionFactory.
+ *
+ * @see ApplicationProtocolConnectionFactory
+ */
+public interface ApplicationProtocolConnection {
+
+    /**
+     * Accept a newly created QUIC stream, whose creation is initiated by the peer.
+     * Implementations that want to support (and do something useful with) peer-initiated streams, should override this method.
+     *
+     * @param stream  the newly created, peer initiated, stream
+     */
+    default void acceptPeerInitiatedStream(QuicStream stream) {}
 }

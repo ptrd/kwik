@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
-import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -59,7 +58,6 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private final StreamInputStream inputStream;
     private final StreamOutputStream outputStream;
     private volatile boolean aborted;
-    private volatile Thread blocking;
     private long receiverFlowControlLimit;
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
@@ -195,6 +193,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         private volatile boolean closed;
         private volatile boolean reset;
+        private volatile Thread blockingReaderThread;
 
         @Override
         public int available() throws IOException {
@@ -239,7 +238,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
                 synchronized (addMonitor) {
                     try {
-                        blocking = Thread.currentThread();
+                        blockingReaderThread = Thread.currentThread();
 
                         int bytesRead = QuicStreamImpl.this.read(ByteBuffer.wrap(buffer, offset, len));
                         if (bytesRead > 0) {
@@ -259,7 +258,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                         }
                     }
                     finally {
-                         blocking = null;
+                         blockingReaderThread = null;
                     }
                 }
 
@@ -286,7 +285,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput, true);
             }
             closed = true;
-            Thread blockingReader = blocking;
+            Thread blockingReader = blockingReaderThread;
             if (blockingReader != null) {
                 blockingReader.interrupt();
             }
@@ -319,10 +318,17 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         void terminate(long errorCode, long finalSize) {
             if (!aborted && !closed && !reset) {
                 reset = true;
-                Thread blockingReader = blocking;
+                Thread blockingReader = blockingReaderThread;
                 if (blockingReader != null) {
                     blockingReader.interrupt();
                 }
+            }
+        }
+
+        void interruptBlockingThread() {
+            Thread readerBlocking = blockingReaderThread;
+            if (readerBlocking != null) {
+                readerBlocking.interrupt();
             }
         }
     }
@@ -356,6 +362,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private volatile long resetErrorCode;
         // Stream offset at which the stream was last blocked, for detecting the first time stream is blocked at a certain offset.
         private long blockedOffset;
+        private volatile Thread blockingWriterThread;
 
         StreamOutputStream() {
             maxBufferSize = sendBufferSize;
@@ -397,17 +404,19 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             if (len > availableBufferSpace) {
                 // Wait for enough buffer space to become available
                 bufferLock.lock();
+                blockingWriterThread = Thread.currentThread();
                 try {
                     while (maxBufferSize - bufferedBytes.get() < len) {
                         checkState();
                         try {
                             notFull.await();
                         } catch (InterruptedException e) {
-                            throw new InterruptedIOException();
+                            throw new InterruptedIOException(aborted? "output aborted because connection is closed": "");
                         }
                     }
                 }
                 finally {
+                    blockingWriterThread = null;
                     bufferLock.unlock();
                 }
             }
@@ -452,6 +461,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private void checkState() throws IOException {
             if (closed || reset) {
                 throw new IOException("output stream " + (closed? "already closed": "is reset"));
+            }
+            if (aborted) {
+                throw new IOException("output aborted because connection is closed");
             }
         }
 
@@ -557,6 +569,13 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);  // No need to flush, as this is called while processing received message
         }
 
+        void interruptBlockingThread() {
+            Thread blocking = blockingWriterThread;
+            if (blocking != null) {
+                blocking.interrupt();
+            }
+        }
+
         /**
          * Sends StreamDataBlockedFrame or DataBlockedFrame to the peer, provided the blocked condition is still true.
          * @param maxFrameSize
@@ -651,9 +670,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
     void abort() {
         aborted = true;
-        Thread readerBlocking = blocking;
-        if (readerBlocking != null) {
-            readerBlocking.interrupt();
-        }
+        inputStream.interruptBlockingThread();
+        outputStream.interruptBlockingThread();
     }
 }
