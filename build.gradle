@@ -87,4 +87,4 @@ task determineVersion {
     }
 }
 
-compileJava.dependsOn determineVersion
+compileJava.dependsOn (determineVersion, processResources)
