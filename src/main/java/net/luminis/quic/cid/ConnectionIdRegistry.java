@@ -73,6 +73,7 @@ public abstract class ConnectionIdRegistry {
     /**
      * @deprecated  use getActive to get <em>an</em> active connection ID
      */
+    @Deprecated
     public byte[] getCurrent() {
         return currentConnectionId;
     }
