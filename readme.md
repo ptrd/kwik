@@ -168,6 +168,11 @@ To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.run.Samp
 This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc9000.html#name-address-validation-using-re).
 To run without retry-mode, add the `--noRetry` flag as first argument.  
 
+### Development
+
+To use IntelliJ for development, either just open the project directory in IntelliJ and it will pick up the gradle file,
+or generate IntelliJ project files with `gradle idea` and open the generated kwik.ipr file. The second option will
+give a better developer experience.
 
 ## Adding HTTP/3 Support to Kwik client or server.
 

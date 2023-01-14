@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="GroovyCompilerProjectConfiguration">
-    <excludes>
-      <directory url="file://$USER_HOME$/source/samples/groovy" includeSubdirectories="true" />
-    </excludes>
-  </component>
-</project>
