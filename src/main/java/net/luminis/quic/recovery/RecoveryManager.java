@@ -84,7 +84,7 @@ import java.util.stream.Stream;
  * Because a server might be blocked by the anti-amplification limit, a client must also send probes when it has no
  * ack eliciting packets in flight, but is not sure whether the peer has validated the client address.
  */
-public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStateListener {
+public class RecoveryManager implements FrameReceivedListener<AckFrame>, HandshakeStateListener {
 
     private final Clock clock;
     private final Role role;
@@ -495,7 +495,7 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     }
 
     @Override
-    public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
+    public void received(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
         onAckReceived(frame, pnSpace, timeReceived);
     }
 

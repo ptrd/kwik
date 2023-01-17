@@ -22,9 +22,12 @@ import net.luminis.quic.frame.QuicFrame;
 
 import java.time.Instant;
 
-public interface FrameProcessor2<F extends QuicFrame> {
+/**
+ * Listens to received events for a specific frame type.
+ * @param <F>
+ */
+public interface FrameReceivedListener<F extends QuicFrame> {
 
-    void process(F frame, PnSpace pnSpace, Instant timeReceived);
-
+    void received(F frame, PnSpace pnSpace, Instant timeReceived);
 }
 

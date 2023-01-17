@@ -92,7 +92,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
     protected final List<CryptoStream> cryptoStreams = new ArrayList<>();
-    private FrameProcessor2<AckFrame> recoveryManager;
+    private FrameReceivedListener<AckFrame> recoveryManager;
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
     protected volatile int peerAckDelayExponent = 3;
@@ -424,8 +424,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         ackFrame.setDelayExponent(peerAckDelayExponent);
-        getAckGenerator().process(ackFrame, packet.getPnSpace(), timeReceived);
-        recoveryManager.process(ackFrame, packet.getPnSpace(), timeReceived);
+        getAckGenerator().received(ackFrame, packet.getPnSpace(), timeReceived);
+        recoveryManager.received(ackFrame, packet.getPnSpace(), timeReceived);
     }
 
     @Override
@@ -839,7 +839,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return role;
     }
 
-    public void addAckFrameReceivedListener(FrameProcessor2<AckFrame> recoveryManager) {
+    public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {
         this.recoveryManager = recoveryManager;
     }
 }

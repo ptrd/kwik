@@ -26,7 +26,7 @@ import net.luminis.quic.send.Sender;
 import java.time.Instant;
 import java.util.Arrays;
 
-public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
+public class GlobalAckGenerator implements FrameReceivedListener<AckFrame> {
 
     private AckGenerator[] ackGenerators;
 
@@ -42,7 +42,7 @@ public class GlobalAckGenerator implements FrameProcessor2<AckFrame> {
     }
 
     @Override
-    public void process(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
+    public void received(AckFrame frame, PnSpace pnSpace, Instant timeReceived) {
         ackGenerators[pnSpace.ordinal()].process(frame);
     }
 
