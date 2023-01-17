@@ -92,6 +92,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
     protected final List<CryptoStream> cryptoStreams = new ArrayList<>();
+    protected final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+    // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
+    protected volatile int peerAckDelayExponent = 3;
 
     protected volatile FlowControl flowController;
     protected long flowControlMax;
@@ -415,6 +419,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
             //  to any incoming packet that it attributes to the connection."
             handlePacketInClosingState(packet);
         }
+    }
+
+    @Override
+    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+        ackFrame.setDelayExponent(peerAckDelayExponent);
+        ackProcessors.forEach(p -> p.process(ackFrame, packet.getPnSpace(), timeReceived));
     }
 
     @Override
@@ -776,6 +786,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
         catch (RejectedExecutionException rejected) {
             // Can happen when already terminated; don't bother
         }
+    }
+
+    @Override
+    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
+        ackProcessors.add(ackProcessor);
     }
 
     @Override

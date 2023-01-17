@@ -85,7 +85,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
-    private List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final List<TlsConstants.CipherSuite> cipherSuites;
 
     private final GlobalAckGenerator ackGenerator;
@@ -557,14 +556,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
-        if (peerTransportParams != null) {
-            ackFrame.setDelayExponent(peerTransportParams.getAckDelayExponent());
-        }
-        ackProcessors.forEach(p -> p.process(ackFrame, packet.getPnSpace(), timeReceived));
-    }
-
-    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
         synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
@@ -704,6 +695,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
         }
+
+        peerAckDelayExponent = transportParameters.getAckDelayExponent();
     }
 
     private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {
@@ -945,11 +938,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // Impossible
             throw new IllegalStateException();
         }
-    }
-
-    @Override
-    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
-        ackProcessors.add(ackProcessor);
     }
 
     @Override

@@ -49,7 +49,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -67,7 +66,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final InetSocketAddress initialClientAddress;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
-    private final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
     private final TlsServerEngine tlsEngine;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
@@ -208,11 +206,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public byte[] getDestinationConnectionId() {
         return connectionIdManager.getCurrentPeerConnectionId();
-    }
-
-    @Override
-    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
-        ackProcessors.add(ackProcessor);
     }
 
     @Override
@@ -489,11 +482,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
-        ackProcessors.forEach(processor -> processor.process(ackFrame, packet.getPnSpace(), timeReceived));
-    }
-
-    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
     }
 
@@ -570,6 +558,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         streamManager.setInitialMaxStreamsBidi(transportParameters.getInitialMaxStreamsBidi());
         streamManager.setInitialMaxStreamsUni(transportParameters.getInitialMaxStreamsUni());
+
+        peerAckDelayExponent = transportParameters.getAckDelayExponent();
     }
 
     @Override
