@@ -35,7 +35,6 @@ import net.luminis.quic.test.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -66,7 +65,7 @@ class RecoveryManagerTest extends RecoveryTests {
         // logger = new SysOutLogger();
         // logger.logRecovery(true);
         clock = new TestClock();
-        recoveryManager = new RecoveryManager(clock, mock(FrameProcessorRegistry.class), Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);
+        recoveryManager = new RecoveryManager(clock, Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);
         ScheduledExecutorService scheduler = new TestScheduledExecutor(clock);
         FieldSetter.setField(recoveryManager, recoveryManager.getClass().getDeclaredField("scheduler"), scheduler);
     }

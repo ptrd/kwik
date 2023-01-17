@@ -61,7 +61,7 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
 /**
  * Creates and maintains a QUIC connection with a QUIC server.
  */
-public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, FrameProcessorRegistry<AckFrame>, TlsStatusEventHandler, FrameProcessor3 {
+public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, TlsStatusEventHandler, FrameProcessor3 {
 
     private final String host;
     private final int port;
@@ -116,7 +116,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.enableAllLevels();
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
-        registerProcessor(ackGenerator);
 
         receiver = new Receiver(socket, log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);

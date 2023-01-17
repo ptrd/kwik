@@ -309,10 +309,6 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void registerProcessor(FrameProcessor2<AckFrame> processor) {
-        }
-
-        @Override
         protected int getSourceConnectionIdLength() {
             return 0;
         }

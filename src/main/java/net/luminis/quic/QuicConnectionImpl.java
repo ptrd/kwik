@@ -53,7 +53,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements QuicConnection, FrameProcessorRegistry<AckFrame>, PacketProcessor, FrameProcessor3 {
+public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor3 {
 
     public enum Status {
         Created,
@@ -92,7 +92,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
     protected final List<CryptoStream> cryptoStreams = new ArrayList<>();
-    protected final List<FrameProcessor2<AckFrame>> ackProcessors = new CopyOnWriteArrayList<>();
+    private FrameProcessor2<AckFrame> recoveryManager;
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
     protected volatile int peerAckDelayExponent = 3;
@@ -424,7 +424,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     @Override
     public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
         ackFrame.setDelayExponent(peerAckDelayExponent);
-        ackProcessors.forEach(p -> p.process(ackFrame, packet.getPnSpace(), timeReceived));
+        getAckGenerator().process(ackFrame, packet.getPnSpace(), timeReceived);
+        recoveryManager.process(ackFrame, packet.getPnSpace(), timeReceived);
     }
 
     @Override
@@ -789,11 +790,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
     }
 
     @Override
-    public void registerProcessor(FrameProcessor2<AckFrame> ackProcessor) {
-        ackProcessors.add(ackProcessor);
-    }
-
-    @Override
     public Statistics getStats() {
         return new Statistics(getSender().getStatistics());
     }
@@ -841,5 +837,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, FrameProcess
 
     public Role getRole() {
         return role;
+    }
+
+    public void addAckFrameReceivedListener(FrameProcessor2<AckFrame> recoveryManager) {
+        this.recoveryManager = recoveryManager;
     }
 }

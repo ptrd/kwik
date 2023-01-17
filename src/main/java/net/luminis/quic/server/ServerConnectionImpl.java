@@ -127,7 +127,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
-        registerProcessor(ackGenerator);
 
         if (retryRequired) {
             random = new SecureRandom();

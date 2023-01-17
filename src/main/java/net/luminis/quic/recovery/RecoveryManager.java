@@ -101,11 +101,11 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
     private volatile boolean hasBeenReset = false;
 
-    public RecoveryManager(FrameProcessorRegistry processorRegistry, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
-        this(Clock.systemUTC(), processorRegistry, role, rttEstimater, congestionController, sender, logger);
+    public RecoveryManager(Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+        this(Clock.systemUTC(), role, rttEstimater, congestionController, sender, logger);
     }
 
-    public RecoveryManager(Clock clock, FrameProcessorRegistry processorRegistry, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+    public RecoveryManager(Clock clock, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
         this.clock = clock;
         this.role = role;
         this.rttEstimater = rttEstimater;
@@ -115,7 +115,6 @@ public class RecoveryManager implements FrameProcessor2<AckFrame>, HandshakeStat
         this.sender = sender;
         log = logger;
 
-        processorRegistry.registerProcessor(this);
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
         synchronized (scheduleLock) {
             lossDetectionFuture = new NullScheduledFuture();
