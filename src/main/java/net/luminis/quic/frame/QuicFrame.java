@@ -44,7 +44,7 @@ public abstract class QuicFrame {
         return true;
     }
 
-    public abstract void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived);
+    public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived);
 
     public abstract int getFrameLength();
 

@@ -27,7 +27,7 @@ import javax.json.stream.JsonGenerator;
 import java.time.Instant;
 import java.util.ListIterator;
 
-public class FrameFormatter implements FrameProcessor3 {
+public class FrameFormatter implements FrameProcessor {
 
     private final JsonGenerator jsonGenerator;
 

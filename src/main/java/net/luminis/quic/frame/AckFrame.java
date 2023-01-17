@@ -220,7 +220,7 @@ public class AckFrame extends QuicFrame {
         delayScale = (int) Math.pow(2, exponent);
     }
 
-    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
     }
 }

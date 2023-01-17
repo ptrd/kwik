@@ -109,7 +109,7 @@ public class NewConnectionIdFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor3 frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
         frameProcessor.process(this, packet, timeReceived);
     }
 }

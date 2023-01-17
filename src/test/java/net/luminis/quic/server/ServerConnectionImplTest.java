@@ -22,7 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.KeyUtils;
 import net.luminis.quic.Version;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.frame.FrameProcessor3;
+import net.luminis.quic.frame.FrameProcessor;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -264,8 +264,8 @@ class ServerConnectionImplTest {
         connection.process(packet1, Instant.now());
         connection.process(packet2, Instant.now());
 
-        verify(firstFrame).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
-        verify(secondFrame).accept(any(FrameProcessor3.class), any(QuicPacket.class), any(Instant.class));
+        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
+        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
     }
 
     @Test

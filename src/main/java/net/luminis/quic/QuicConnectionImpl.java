@@ -53,7 +53,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor3 {
+public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor {
 
     public enum Status {
         Created,

@@ -4,7 +4,10 @@ import net.luminis.quic.packet.QuicPacket;
 
 import java.time.Instant;
 
-public interface FrameProcessor3 {
+/**
+ * Processor that is able to process all frame types.
+ */
+public interface FrameProcessor {
 
     void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived);
 
