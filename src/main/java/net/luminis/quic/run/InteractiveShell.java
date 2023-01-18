@@ -19,6 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.QuicClientConnectionImpl;
+import net.luminis.quic.Receiver;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.QuicStream;
@@ -346,6 +347,7 @@ public class InteractiveShell {
         System.out.println("- idle (idle timeout)");
         System.out.println("- cids (active connection id limit)");
         System.out.println("- maxstreamdata (receive buffer size)");
+        System.out.println("- payload (max udp payload)");
     }
 
     private void setClientParameter(String name, String value) {
@@ -359,6 +361,12 @@ public class InteractiveShell {
             case "maxStreamData":
             case "maxstreamdata":
                 params.setInitialMaxStreamData(toLong(value));
+                break;
+            case "payload":
+                params.setMaxUdpPayloadSize(toInt(value));
+                if (toInt(value) > Receiver.MAX_DATAGRAM_SIZE) {
+                    System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));
+                }
                 break;
             default:
                 System.out.println("Parameter must be one of:");
