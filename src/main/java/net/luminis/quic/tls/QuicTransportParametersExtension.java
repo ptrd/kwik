@@ -93,7 +93,7 @@ public class QuicTransportParametersExtension extends Extension {
         discardTransportParameterSize = parameterSize;
     }
 
-    private void serialize() {
+    protected void serialize() {
         ByteBuffer buffer = ByteBuffer.allocate(1024 + (discardTransportParameterSize != null? discardTransportParameterSize: 0));
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
@@ -242,10 +242,6 @@ public class QuicTransportParametersExtension extends Extension {
         int startPosition = buffer.position();
 
         if (parameterId == original_destination_connection_id.value) {
-            // "This transport parameter is only sent by a server."
-            if (senderRol != Server) {
-                throw new DecodeErrorException("server only parameter in transport parameter extension");
-            }
             byte[] destinationCid = new byte[size];
             buffer.get(destinationCid);
             log.debug("- original destination connection id: ", destinationCid);
@@ -257,10 +253,6 @@ public class QuicTransportParametersExtension extends Extension {
             params.setMaxIdleTimeout(idleTimeout);
         }
         else if (parameterId == stateless_reset_token.value) {
-            // "This transport parameter MUST NOT be sent by a client, but MAY be sent by a server. "
-            if (senderRol != Server) {
-                throw new DecodeErrorException("server only parameter in transport parameter extension");
-            }
             byte[] resetToken = new byte[16];
             buffer.get(resetToken);
             log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
@@ -319,10 +311,6 @@ public class QuicTransportParametersExtension extends Extension {
             params.setDisableMigration(true);
         }
         else if (parameterId == preferred_address.value) {
-            // "This transport parameter is only sent by a server."
-            if (senderRol != Server) {
-                throw new DecodeErrorException("server only parameter in transport parameter extension");
-            }
             parsePreferredAddress(buffer, log);
         }
         else if (parameterId == active_connection_id_limit.value) {
@@ -337,10 +325,6 @@ public class QuicTransportParametersExtension extends Extension {
             params.setInitialSourceConnectionId(initialSourceCid);
         }
         else if (parameterId == retry_source_connection_id.value) {
-            // "This transport parameter is only sent by a server."
-            if (senderRol != Server) {
-                throw new DecodeErrorException("server only parameter in transport parameter extension");
-            }
             byte[] retrySourceCid = new byte[size];
             buffer.get(retrySourceCid);
             log.debug("- retry source connection id: " + retrySourceCid);
@@ -434,7 +418,7 @@ public class QuicTransportParametersExtension extends Extension {
         VariableLengthInteger.encode(value, buffer);
     }
 
-    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, byte[] value) {
+    protected void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, byte[] value) {
         addTransportParameter(buffer, id.value, value);
     }
 

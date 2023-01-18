@@ -545,6 +545,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+        // "A client MUST NOT include any server-only transport parameter: original_destination_connection_id,
+        //  preferred_address, retry_source_connection_id, or stateless_reset_token. A server MUST treat receipt of any
+        //  of these transport parameters as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        if (transportParameters.getOriginalDestinationConnectionId() != null || transportParameters.getPreferredAddress() != null
+                || transportParameters.getRetrySourceConnectionId() != null || transportParameters.getStatelessResetToken() != null) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
 
         determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
 

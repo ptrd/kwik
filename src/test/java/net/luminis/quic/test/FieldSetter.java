@@ -40,4 +40,14 @@ public class FieldSetter {
             throw new RuntimeException("Failed to set " + fieldName + " of object", e);
         }
     }
+
+    public static void setField(Object target, Class clazz, String fieldName, Object value) {
+        try {
+            Field field = clazz.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            throw new RuntimeException("Failed to set " + fieldName + " of object", e);
+        }
+    }
 }

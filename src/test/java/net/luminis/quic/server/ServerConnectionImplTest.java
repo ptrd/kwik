@@ -66,6 +66,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import static net.luminis.quic.QuicConstants.TransportParameterId.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -156,6 +157,22 @@ class ServerConnectionImplTest {
     void whenTransportParametersContainsInvalidValueServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client);
+        List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
+                && ((ConnectionCloseFrame) frame).getErrorCode() == 0x08),
+                eq(EncryptionLevel.Initial));
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideInvalidTransportParametersForClient")
+    void whenTransportParametersContainsInvalidParameterServerShouldCloseConnection(TransportParameters tp) throws Exception {
+        // When
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtensionTest(tp);
         List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
@@ -549,6 +566,22 @@ class ServerConnectionImplTest {
                 invalidActiveConnectionIdLimit, incorrectInitialSourceConnectionId);
     }
 
+    static Stream<TransportParameters> provideInvalidTransportParametersForClient() {
+        TransportParameters withOriginalDestinationConnectionId = createDefaultTransportParameters();
+        withOriginalDestinationConnectionId.setOriginalDestinationConnectionId(new byte[8]);
+
+        TransportParameters withPreferredAddress = createDefaultTransportParameters();
+        withPreferredAddress.setPreferredAddress(new TransportParameters.PreferredAddress());
+
+        TransportParameters withRetrySourceConnectionId = createDefaultTransportParameters();
+        withRetrySourceConnectionId.setRetrySourceConnectionId(new byte[8]);
+
+        TransportParameters withStatelessResetToken = createDefaultTransportParameters();
+        withStatelessResetToken.setStatelessResetToken(new byte[16]);
+
+        return Stream.of(withOriginalDestinationConnectionId, withPreferredAddress, withRetrySourceConnectionId, withStatelessResetToken);
+    }
+
     private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] odcid) throws Exception {
         if (odcid == null) {
             odcid = new byte[]{ 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
@@ -622,6 +655,55 @@ class ServerConnectionImplTest {
 
         public void injectErrorInReceivingClientHello(Supplier<TlsProtocolException> exceptionSupplier) {
             this.exceptionSupplier = exceptionSupplier;
+        }
+    }
+
+    /**
+     * For testing behaviour when invalid parameters are sent (for client or server), the serialize method must be
+     * overridden, because the original will check for each parameter whether it is valid to sent for the given role.
+     */
+    static class QuicTransportParametersExtensionTest extends QuicTransportParametersExtension {
+
+        private TransportParameters transportParameters;
+
+        QuicTransportParametersExtensionTest(TransportParameters transportParameters) {
+            super(Version.getDefault(), transportParameters, Role.Client);
+            this.transportParameters = transportParameters;
+        }
+
+        @Override
+        protected void serialize() {
+            super.serialize();
+
+            ByteBuffer extendedBuffer = ByteBuffer.allocate(1024);
+            extendedBuffer.put(getBytes());
+
+            if (transportParameters.getOriginalDestinationConnectionId() != null) {
+                addTransportParameter(extendedBuffer, original_destination_connection_id, transportParameters.getOriginalDestinationConnectionId());
+            }
+            if (transportParameters.getPreferredAddress() != null) {
+                byte[] addressData = new byte[41];
+                addressData[0] = 123;   // IP address must not be all 0
+                addTransportParameter(extendedBuffer, preferred_address, addressData);
+            }
+            if (transportParameters.getRetrySourceConnectionId() != null) {
+                addTransportParameter(extendedBuffer, retry_source_connection_id, transportParameters.getRetrySourceConnectionId());
+            }
+            if (transportParameters.getStatelessResetToken() != null) {
+                addTransportParameter(extendedBuffer, stateless_reset_token, transportParameters.getStatelessResetToken());
+            }
+
+            int length = extendedBuffer.position();
+            extendedBuffer.limit(length);
+
+            int extensionsSize = length - 2 - 2;  // 2 bytes for the length itself and 2 for the type
+            extendedBuffer.putShort(2, (short) extensionsSize);
+
+            byte[] data = new byte[length];
+            extendedBuffer.flip();
+            extendedBuffer.get(data);
+
+            FieldSetter.setField(this, QuicTransportParametersExtension.class, "data", data);
         }
     }
 }
