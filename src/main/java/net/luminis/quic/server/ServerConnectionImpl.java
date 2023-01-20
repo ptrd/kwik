@@ -568,6 +568,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         peerAckDelayExponent = transportParameters.getAckDelayExponent();
 
+        sender.setReceiverMaxAckDelay(transportParameters.getMaxAckDelay());
+
         sender.registerMaxUdpPayloadSize(transportParameters.getMaxUdpPayloadSize());
     }
 

@@ -76,7 +76,7 @@ public class AckFrame extends QuicFrame {
         }
 
         acknowledgedRanges = List.copyOf(ackRanges);
-        this.ackDelay = ackDelay * 1000 / delayScale;
+        this.ackDelay = ackDelay * 1000 / delayScale;   // In an ack frame, the delay is in _microseconds_!
 
         Iterator<Range> rangeIterator = ackRanges.iterator();
         Range firstRange = rangeIterator.next();
