@@ -111,16 +111,19 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     @Override
     public int estimateLength(int additionalPayload) {
-        int payloadLength = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
+        int packetNumberSize = computePacketNumberSize(packetNumber);
+        int payloadSize = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
+        int padding = Integer.max(0,4 - packetNumberSize - payloadSize);
         return 1
                 + 4
                 + 1 + destinationConnectionId.length
                 + 1 + sourceConnectionId.length
                 + estimateAdditionalFieldsLength()
-                + (payloadLength + 1 > 63? 2: 1)
-                + 1  // packet number length: will usually be just 1, actual value cannot be computed until packet number is known
-                + payloadLength
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2
+                + (payloadSize + 1 > 63? 2: 1)
+                + computePacketNumberSize(packetNumber)
+                + payloadSize
+                + padding
+                // https://www.rfc-editor.org/rfc/rfc9001.html#name-header-protection-sample
                 // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
                 + 16;
     }

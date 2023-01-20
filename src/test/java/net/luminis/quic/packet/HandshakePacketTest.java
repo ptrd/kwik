@@ -21,10 +21,7 @@ package net.luminis.quic.packet;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.frame.Padding;
-import net.luminis.quic.frame.PingFrame;
+import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.handshake.TlsClientEngine;
@@ -194,13 +191,60 @@ class HandshakePacketTest {
         when(tlsClientEngine.getServerHandshakeTrafficSecret()).thenReturn(ByteUtils.hexToBytes("4cc9aad05d0b0d5fb07afbe4a40e4584cab6dc1f41fb6c79c78d3f7f834b0220"));
         connectionSecrets.computeHandshakeSecrets(tlsClientEngine, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
 
-        HandshakePacket handshakePacket = new HandshakePacket(IETF_draft_29);
-        handshakePacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerSecrets(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
+        QuicPacket packet = new HandshakePacket(IETF_draft_29);
+        packet.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerSecrets(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
 
-        assertThat(handshakePacket.packetNumber).isEqualTo(9);
-        assertThat(handshakePacket.frames).hasAtLeastOneElementOfType(AckFrame.class);
+        assertThat(packet.packetNumber).isEqualTo(9);
+        assertThat(packet.frames).hasAtLeastOneElementOfType(AckFrame.class);
     }
 
+    @Test
+    void estimatedLength() throws Exception {
+        byte[] srcCid = new byte[4];
+        byte[] destCid = new byte[8];
+        QuicFrame payload = new StreamFrame(0, new byte[80], true);
+        QuicPacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, payload);
+        packet.setPacketNumber(0);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
+    @Test
+    void estimatedLengthWithLargePacketNumber() throws Exception {
+        byte[] srcCid = new byte[4];
+        byte[] destCid = new byte[8];
+        QuicFrame payload = new StreamFrame(0, new byte[80], true);
+        QuicPacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, payload);
+        packet.setPacketNumber(15087995);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
+    @Test
+    void estimatedLengthWithMinimalLengthPacket() throws Exception {
+        byte[] srcCid = new byte[0];
+        byte[] destCid = new byte[0];
+        QuicFrame payload = new PingFrame();
+        HandshakePacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, payload);
+        packet.setPacketNumber(1);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
 
     // Utility method to generate an encrypted and protected Handshake packet
     void generateHandshakePacket() {

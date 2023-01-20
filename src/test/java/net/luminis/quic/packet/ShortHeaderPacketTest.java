@@ -22,8 +22,8 @@ import net.luminis.quic.TestUtils;
 import net.luminis.quic.Version;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.PingFrame;
+import net.luminis.quic.frame.StreamFrame;
 import org.junit.jupiter.api.Test;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,6 +38,51 @@ class ShortHeaderPacketTest {
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(shortHeaderPacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
+    }
+
+    @Test
+    void estimatedLengthShouldBeExactWhenPnIsKnown() throws Exception {
+        byte[] destinationConnectionId = { 0x0e, 0x0b, 0x02, 0x0f, 0x0a, 0x04, 0x02, 0x0d };
+        ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new StreamFrame(1, new byte[4], true));
+        shortHeaderPacket.setPacketNumber(54321);
+
+        int estimatedLength = shortHeaderPacket.estimateLength(0);
+        int actualLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+
+        // Then
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
+    @Test
+    void whenPnUnknownEstimatedLengthShouldAssumeMaxPnLength() throws Exception {
+        byte[] destinationConnectionId = { 0x0e, 0x0b, 0x02, 0x0f, 0x0a, 0x04, 0x02, 0x0d };
+        ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new StreamFrame(1, new byte[4], true));
+
+        int estimatedLength = shortHeaderPacket.estimateLength(0);
+
+        shortHeaderPacket.setPacketNumber(0);
+        int minLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+
+        // Then
+        assertThat(minLength).isLessThanOrEqualTo(estimatedLength);       // By contract!
+        assertThat(estimatedLength).isEqualTo(minLength + 3);    // In practice
+    }
+
+    @Test
+    void estimatedLengthShouldNotBeLessThanActual() throws Exception {
+        // Given (shortest possible payload and packet number -> not enough bytes for sample for header protection, so padding will be added when generating packet bytes)
+        byte[] destinationConnectionId = { 0x0e, 0x0b, 0x02, 0x0f, 0x0a, 0x04, 0x02, 0x0d };
+        ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new PingFrame());
+        shortHeaderPacket.setPacketNumber(0);
+
+        // When
+        int estimatedLength = shortHeaderPacket.estimateLength(0);
+        int actualLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+
+        // Then
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
     }
 
 }

@@ -187,8 +187,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 .hasOnlyElementsOfTypes(CryptoFrame.class);
         assertThat(generatedPacketLength)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE)
-                // Generated packet length is 3 bytes less than max packet size to allow for largest possible packet number encoding (4 bytes)
-                .isCloseTo(MAX_PACKET_SIZE, offset(3));
+                .isEqualTo(MAX_PACKET_SIZE);
     }
 
     @Test
@@ -312,14 +311,14 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 (3 + 2) + 1, null);  // Send at least 1 byte of data
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, MAX_PACKET_SIZE, null, new byte[0]).get().getPacket();
         assertThat(packet.getFrames())
                 .hasSize(2)
                 .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class);
-        byte[] packetBytes = packet.generatePacketBytes(509L, keys);
+        byte[] packetBytes = packet.generatePacketBytes(packet.getPacketNumber(), keys);
         assertThat(packetBytes.length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE)
-                .isGreaterThanOrEqualTo(MAX_PACKET_SIZE - 3);   // Packet length computation has allowance for 4 bytes packet number, so length can vary with 3 bytes
+                .isEqualTo(MAX_PACKET_SIZE);
     }
 
     @Test

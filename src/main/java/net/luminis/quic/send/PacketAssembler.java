@@ -74,8 +74,7 @@ public class PacketAssembler {
      * @return
      */
     Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        // Packet can be 3 bytes larger than estimated size because of unknown packet number length. TODO: this should not be responsibility of this class.
-        final int available = Integer.min(remainingCwndSize, availablePacketSize - 3);
+        final int available = Integer.min(remainingCwndSize, availablePacketSize);
 
         QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId);
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();

@@ -23,6 +23,8 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -120,6 +122,40 @@ class InitialPacketTest {
         assertThat(initialPacket.frames)
                 .hasAtLeastOneElementOfType(AckFrame.class)
                 .hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
+    @Test
+    void estimatedLengthWithZeroLengthToken() throws Exception {
+        byte[] srcCid = new byte[4];
+        byte[] destCid = new byte[8];
+        QuicFrame payload = new StreamFrame(0, new byte[80], true);
+        byte[] token = new byte[0];
+        QuicPacket packet = new InitialPacket(Version.getDefault(), srcCid, destCid, token, payload);
+        packet.setPacketNumber(0);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
+    @Test
+    void estimatedLengthWithToken() throws Exception {
+        byte[] srcCid = new byte[4];
+        byte[] destCid = new byte[8];
+        QuicFrame payload = new StreamFrame(0, new byte[80], true);
+        byte[] token = new byte[32];
+        QuicPacket packet = new InitialPacket(Version.getDefault(), srcCid, destCid, token, payload);
+        packet.setPacketNumber(0);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
     }
 
     // Used to generate bytes for a valid initial packet, used in the parse packet tests above.

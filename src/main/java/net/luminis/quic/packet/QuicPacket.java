@@ -44,6 +44,21 @@ abstract public class QuicPacket {
         frames = new ArrayList<>();
     }
 
+    static protected int computePacketNumberSize(long packetNumber) {
+        if (packetNumber <= 0xff) {
+            return 1;
+        }
+        else if (packetNumber <= 0xffff) {
+            return 2;
+        }
+        else if (packetNumber <= 0xffffff) {
+            return 3;
+        }
+        else {
+            return 4;
+        }
+    }
+
     static byte[] encodePacketNumber(long packetNumber) {
         if (packetNumber <= 0xff) {
             return new byte[] { (byte) packetNumber };
@@ -475,9 +490,11 @@ abstract public class QuicPacket {
     }
 
     /**
-     * Estimates what the length of this packet will be after it has been encrypted. The returned length must be
-     * less then or equal the actual length after encryption. Length estimates are used when preparing packets for
-     * sending, where certain limits must be met (e.g. congestion control, max datagram size, ...).
+     * Estimates what the length of this packet will be after it has been encrypted.
+     * The estimated length must not be less than what the actual length will be.
+     * Because length estimates are used when preparing packets for sending, where certain (hard) limits must be met
+     * (e.g. congestion control, max datagram size, ...), the actual size may never be larger than the estimated size.
+     *
      * @param additionalPayload    when not 0, estimate the length if this amount of additional (frame) bytes were added.
      * @return
      */
