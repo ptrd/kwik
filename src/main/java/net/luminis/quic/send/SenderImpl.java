@@ -73,7 +73,7 @@ import static java.lang.Long.max;
 public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private final Clock clock;
-    private final int maxPacketSize;
+    private volatile int maxPacketSize;
     private volatile DatagramSocket socket;
     private final InetSocketAddress peerAddress;
     private final QuicConnectionImpl connection;
@@ -493,6 +493,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public void enableAppLevel() {
         packetAssembler.enableAppLevel();
+    }
+
+    public void registerMaxUdpPayloadSize(int maxUdpPayloadSize) {
+        if (maxUdpPayloadSize < maxPacketSize) {
+            maxPacketSize = maxUdpPayloadSize;
+        }
     }
 }
 

@@ -695,6 +695,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         peerAckDelayExponent = transportParameters.getAckDelayExponent();
+
+        sender.registerMaxUdpPayloadSize(transportParameters.getMaxUdpPayloadSize());
     }
 
     private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {

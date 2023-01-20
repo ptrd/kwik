@@ -567,6 +567,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         streamManager.setInitialMaxStreamsUni(transportParameters.getInitialMaxStreamsUni());
 
         peerAckDelayExponent = transportParameters.getAckDelayExponent();
+
+        sender.registerMaxUdpPayloadSize(transportParameters.getMaxUdpPayloadSize());
     }
 
     @Override
