@@ -20,17 +20,11 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.Options;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -280,7 +274,7 @@ public class ServerConnector implements ServerConnectionRegistry {
             //  Destination Connection ID field. The value for Source Connection ID MUST be copied from the Destination
             //  Connection ID of the received packet, ..."
             VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(supportedVersions, dcid, scid);
-            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null, null);
+            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null);
             DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
             try {
                 serverSocket.send(datagram);

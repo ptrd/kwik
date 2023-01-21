@@ -389,16 +389,17 @@ class ServerConnectionImplTest {
         byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         connection = createServerConnection(createTlsServerEngine(), true, odcid);
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        initialPacket.setPacketNumber(0);
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
-        byte[] initialPacketBytes = initialPacket.generatePacketBytes(0L, clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
+        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
         ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
         paddedInitial.put(initialPacketBytes);
 
         connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor1.capture());
-        byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(0L, null);
+        byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(null);
         clearInvocations(connection.getSender());
 
         // When
@@ -408,7 +409,7 @@ class ServerConnectionImplTest {
         RetryPacket retryPacket2 = argumentCaptor1.getValue();
 
         // Then
-        assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(0L, null));
+        assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(null));
     }
 
     @Test

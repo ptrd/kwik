@@ -205,7 +205,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
+    public byte[] generatePacketBytes(Keys keys) {
         packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
         ByteBuffer buffer = ByteBuffer.allocate(packetSize);
         byte flags = (byte) (0b1100_0000 | (getPacketType() << 4));

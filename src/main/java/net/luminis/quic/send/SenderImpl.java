@@ -388,7 +388,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                         if (keys == null) {
                             throw new IllegalStateException("Missing keys for encryption level " + packet.getEncryptionLevel());
                         }
-                        byte[] packetData = packet.generatePacketBytes(packet.getPacketNumber(), keys);
+                        byte[] packetData = packet.generatePacketBytes(keys);
                         buffer.put(packetData);
                         log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
                     });

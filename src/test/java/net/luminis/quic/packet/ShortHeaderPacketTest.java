@@ -32,9 +32,10 @@ class ShortHeaderPacketTest {
     @Test
     void packetWithMinimalFrameShouldBePaddedToGetEnoughBytesForEncrypting() throws Exception {
         ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new PingFrame());
+        shortHeaderPacket.setPacketNumber(1);
 
         Keys keys = TestUtils.createKeys();
-        shortHeaderPacket.generatePacketBytes(1L, keys);
+        shortHeaderPacket.generatePacketBytes(keys);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(shortHeaderPacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
@@ -47,7 +48,7 @@ class ShortHeaderPacketTest {
         shortHeaderPacket.setPacketNumber(54321);
 
         int estimatedLength = shortHeaderPacket.estimateLength(0);
-        int actualLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = shortHeaderPacket.generatePacketBytes(TestUtils.createKeys()).length;
 
         // Then
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
@@ -62,7 +63,7 @@ class ShortHeaderPacketTest {
         int estimatedLength = shortHeaderPacket.estimateLength(0);
 
         shortHeaderPacket.setPacketNumber(0);
-        int minLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+        int minLength = shortHeaderPacket.generatePacketBytes(TestUtils.createKeys()).length;
 
         // Then
         assertThat(minLength).isLessThanOrEqualTo(estimatedLength);       // By contract!
@@ -78,7 +79,7 @@ class ShortHeaderPacketTest {
 
         // When
         int estimatedLength = shortHeaderPacket.estimateLength(0);
-        int actualLength = shortHeaderPacket.generatePacketBytes(shortHeaderPacket.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = shortHeaderPacket.generatePacketBytes(TestUtils.createKeys()).length;
 
         // Then
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!

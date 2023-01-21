@@ -135,7 +135,7 @@ class InitialPacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
@@ -152,7 +152,7 @@ class InitialPacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
@@ -166,7 +166,7 @@ class InitialPacketTest {
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
         Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
-        byte[] bytes = initialPacket.generatePacketBytes(0L, keys);
+        byte[] bytes = initialPacket.generatePacketBytes(keys);
         System.out.println(ByteUtils.bytesToHex(bytes));
     }
 }

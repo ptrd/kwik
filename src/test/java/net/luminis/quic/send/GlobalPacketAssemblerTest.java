@@ -22,7 +22,6 @@ import net.luminis.quic.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.quic.packet.ZeroRttPacket;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +69,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
         int datagramLength = packets.stream()
-                .mapToInt(p -> p.getPacket().generatePacketBytes(0L, levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
+                .mapToInt(p -> p.getPacket().generatePacketBytes(levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
                 .sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
         assertThat(datagramLength)
@@ -85,7 +84,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(0L, keys).length).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(keys).length).sum();
         assertThat(datagramLength).isCloseTo(18 + 3 + 36, Percentage.withPercentage(5));
     }
 
@@ -113,7 +112,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         int datagramLength = packets.stream()
                 .mapToInt(p -> {
                     QuicPacket packet = p.getPacket();
-                    byte[] generatedBytes = packet.generatePacketBytes(packet.getPacketNumber(), levelKeys[packet.getEncryptionLevel().ordinal()]);
+                    byte[] generatedBytes = packet.generatePacketBytes(levelKeys[packet.getEncryptionLevel().ordinal()]);
                     return generatedBytes.length;
                 })
                 .sum();
@@ -133,7 +132,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
         int datagramLength = packets.stream()
                 .mapToInt(p -> {
                     QuicPacket packet = p.getPacket();
-                    byte[] generatedBytes = packet.generatePacketBytes(packet.getPacketNumber(), levelKeys[packet.getEncryptionLevel().ordinal()]);
+                    byte[] generatedBytes = packet.generatePacketBytes(levelKeys[packet.getEncryptionLevel().ordinal()]);
                     return generatedBytes.length;
                 })
                 .sum();

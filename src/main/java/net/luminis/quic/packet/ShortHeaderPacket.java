@@ -123,8 +123,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Long packetNumber, Keys keys) {
-        this.packetNumber = packetNumber;
+    public byte[] generatePacketBytes(Keys keys) {
+        assert(packetNumber >= 0);
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
         byte flags;

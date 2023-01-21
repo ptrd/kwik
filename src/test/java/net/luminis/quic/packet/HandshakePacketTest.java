@@ -154,9 +154,10 @@ class HandshakePacketTest {
     @Test
     void packetWithMinimalFrameShouldBePaddedToGetEnoughBytesForEncrypting() throws Exception {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
+        handshakePacket.setPacketNumber(1);
 
         Keys keys = TestUtils.createKeys();
-        handshakePacket.generatePacketBytes(1L, keys);
+        handshakePacket.generatePacketBytes(keys);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(handshakePacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
@@ -208,7 +209,7 @@ class HandshakePacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
@@ -224,7 +225,7 @@ class HandshakePacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
@@ -240,7 +241,7 @@ class HandshakePacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
@@ -255,7 +256,7 @@ class HandshakePacketTest {
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
         when(keys.getWriteKey()).thenReturn(new byte[16]);
-        byte[] bytes = handshakePacket.generatePacketBytes(1L, keys);
+        byte[] bytes = handshakePacket.generatePacketBytes(keys);
         System.out.println(ByteUtils.bytesToHex(bytes));
 
     }

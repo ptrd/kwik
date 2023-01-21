@@ -39,7 +39,7 @@ class ZeroRttPacketTest {
 
         int estimatedLength = packet.estimateLength(0);
 
-        int actualLength = packet.generatePacketBytes(packet.getPacketNumber(), TestUtils.createKeys()).length;
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
 
         assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
