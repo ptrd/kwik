@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    def junitVersion = "5.9.0"
+    def junitVersion = "5.9.2"
 
     implementation project(':agent15')
 
@@ -25,8 +25,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
-    testImplementation("org.mockito:mockito-core:4.7.0")
-    testImplementation("org.assertj:assertj-core:3.23.1")
+    testImplementation("org.mockito:mockito-core:4.11.0")
+    testImplementation("org.assertj:assertj-core:3.24.2")
 }
 
 sourceSets {
