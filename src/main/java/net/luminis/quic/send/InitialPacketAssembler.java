@@ -21,6 +21,7 @@ package net.luminis.quic.send;
 import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.VersionHolder;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -38,12 +39,13 @@ public class InitialPacketAssembler extends PacketAssembler {
 
     protected byte[] initialToken;
 
-    public InitialPacketAssembler(VersionHolder version, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        super(version, EncryptionLevel.Initial, requestQueue, ackGenerator);
+    public InitialPacketAssembler(VersionHolder version, SendRequestQueue requestQueue, AckGenerator ackGenerator,
+                                  ConnectionIdProvider connectionIdProvider) {
+        super(version, EncryptionLevel.Initial, requestQueue, ackGenerator, connectionIdProvider);
     }
 
     @Override
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize) {
         if (availablePacketSize < 1200) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
             // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
@@ -54,12 +56,12 @@ public class InitialPacketAssembler extends PacketAssembler {
             // when different packets are coalesced, the initial packet is always the first that is assembled.
             return Optional.empty();
         }
-        return super.assemble(remainingCwndSize, availablePacketSize, sourceConnectionId, destinationConnectionId);
+        return super.assemble(remainingCwndSize, availablePacketSize);
     }
 
     @Override
-    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId) {
-        InitialPacket packet = new InitialPacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, initialToken, (QuicFrame) null);
+    protected QuicPacket createPacket() {
+        InitialPacket packet = new InitialPacket(quicVersion.getVersion(), cidProvider.getInitialConnectionId(), cidProvider.getPeerConnectionId(), initialToken, (QuicFrame) null);
         packet.setPacketNumber(nextPacketNumber());
         return packet;
     }

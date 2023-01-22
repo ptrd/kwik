@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
@@ -30,7 +31,8 @@ import java.util.*;
 import static net.luminis.quic.EncryptionLevel.*;
 
 /**
- * Assembles QUIC packets for sending.
+ * Assembles QUIC packets for sending. The term "global" refers to the fact that this packet assembler can assemble
+ * packets of various encryption levels, even at the same time (which can happen during connection handshake).
  */
 public class GlobalPacketAssembler {
 
@@ -39,8 +41,11 @@ public class GlobalPacketAssembler {
     private volatile EncryptionLevel[] enabledLevels;
 
 
-    public GlobalPacketAssembler(VersionHolder quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
-        this.sendRequestQueue = sendRequestQueues;
+    public GlobalPacketAssembler(VersionHolder quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator,
+                                 ConnectionIdProvider connectionIdProvider) {
+        this.sendRequestQueue = Objects.requireNonNull(sendRequestQueues);
+        Objects.requireNonNull(globalAckGenerator);
+        Objects.requireNonNull(connectionIdProvider);
 
         PacketNumberGenerator appSpacePnGenerator = new PacketNumberGenerator();
 
@@ -55,13 +60,15 @@ public class GlobalPacketAssembler {
             switch (level) {
                 case ZeroRTT:
                 case App:
-                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator, appSpacePnGenerator);
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator,
+                            connectionIdProvider, appSpacePnGenerator);
                     break;
                 case Initial:
-                    packetAssembler[levelIndex] = new InitialPacketAssembler(quicVersion, sendRequestQueue[levelIndex], ackGenerator);
+                    packetAssembler[levelIndex] = new InitialPacketAssembler(quicVersion, sendRequestQueue[levelIndex], ackGenerator, connectionIdProvider);
                     break;
                 default:
-                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator);
+                    packetAssembler[levelIndex] = new PacketAssembler(quicVersion, level, sendRequestQueue[levelIndex], ackGenerator,
+                            connectionIdProvider);
             }
         });
 
@@ -71,25 +78,24 @@ public class GlobalPacketAssembler {
     /**
      * Assembles packets for sending in one datagram. The total size of the QUIC packets returned will never exceed
      * max packet size and for packets not containing probes, it will not exceed the remaining congestion window size.
+     *
      * @param remainingCwndSize
      * @param maxDatagramSize
-     * @param sourceConnectionId
-     * @param destinationConnectionId
      * @return
      */
-    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize) {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
         boolean hasPathChallengeOrResponse = false;
 
-        int minPacketSize = 19 + destinationConnectionId.length;  // Computed for short header packet
+        int minPacketSize = 19;  // Is mininum size for short header packet, long header packet is at least 24
         int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
 
         for (EncryptionLevel level: enabledLevels) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
-                Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, sourceConnectionId, destinationConnectionId);
+                Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size);
                 if (item.isPresent()) {
                     packets.add(item.get());
                     int packetSize = item.get().getPacket().estimateLength(0);

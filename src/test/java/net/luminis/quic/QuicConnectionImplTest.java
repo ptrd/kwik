@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
@@ -345,6 +346,11 @@ class QuicConnectionImplTest {
         @Override
         public int getMaxShortHeaderPacketOverhead() {
             return 0;
+        }
+
+        @Override
+        public ConnectionIdProvider getConnectionIdManager() {
+            return null;
         }
 
         @Override

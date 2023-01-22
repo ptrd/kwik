@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -110,19 +111,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         socket = new DatagramSocket();
 
         idleTimer = new IdleTimer(this, log);
+
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(EncryptionLevel.App, error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
+
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
                         this, initialRtt, log);
         sender.enableAllLevels();
+        connectionIdManager.setSender(sender);
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
 
         receiver = new Receiver(socket, log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
-
-        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
-            immediateCloseWithError(EncryptionLevel.App, error, reason);
-        };
-        connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
 
         connectionState = Status.Created;
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
@@ -637,6 +640,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16 // encryption overhead
         ;
+    }
+
+    @Override
+    public ConnectionIdProvider getConnectionIdManager() {
+        return connectionIdManager;
     }
 
     public TransportParameters getTransportParameters() {

@@ -19,6 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.CryptoFrame;
@@ -37,7 +38,6 @@ import net.luminis.quic.test.FieldSetter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -57,11 +57,14 @@ class SenderImplTest extends AbstractSenderTest {
         clock = new TestClock();
         socket = mock(DatagramSocket.class);
         InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
+        ConnectionIdProvider connectionIdProvider = mock(ConnectionIdProvider.class);
+        when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[4]);
+        when(connectionIdProvider.getPeerConnectionId()).thenReturn(new byte[4]);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
-
+        when(connection.getConnectionIdManager()).thenReturn(connectionIdProvider);
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
@@ -125,7 +128,7 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then verify
         ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), packetSizeCaptor.capture());
         assertThat(packetSizeCaptor.getValue()).isLessThanOrEqualTo(3 * 1200);
     }
 
@@ -148,7 +151,7 @@ class SenderImplTest extends AbstractSenderTest {
 
     private void setupMockPacketAssember() throws NoSuchFieldException {
         packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.assemble(anyInt(), anyInt())).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }

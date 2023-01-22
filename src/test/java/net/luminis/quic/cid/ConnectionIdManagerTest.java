@@ -54,7 +54,8 @@ class ConnectionIdManagerTest {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
-        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
+        connectionIdManager.setSender(sender);
     }
 
     @Test
@@ -202,7 +203,7 @@ class ConnectionIdManagerTest {
     @Test
     void whenNumberOfActiveCidsExceedsLimitConnectionIdLimitErrorIsThrown() {
         // Given
-        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, 3, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, 3, connectionRegistry, closeCallback, mock(Logger.class));
         connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
         connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[4]));
 
@@ -297,7 +298,7 @@ class ConnectionIdManagerTest {
     @Test
     void whenUsingZeroLengthConnectionIdNewConnectionIdFrameShouldLeadToProtocolViolationError() {
         // Given
-        connectionIdManager = new ConnectionIdManager(new byte[0], new byte[8], 6, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[0], new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
         // When
         connectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
 
@@ -323,7 +324,7 @@ class ConnectionIdManagerTest {
     void testValidateInitialPeerConnectionId() {
         // Given
         byte[] peerCid = new byte[] { 0x06, 0x0f, 0x08, 0x0b };
-        connectionIdManager = new ConnectionIdManager(peerCid, new byte[8], 6, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(peerCid, new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
 
         // Then
         assertThat(connectionIdManager.validateInitialPeerConnectionId(peerCid)).isTrue();
@@ -378,7 +379,8 @@ class ConnectionIdManagerTest {
     @Test
     void whenMaxCidsIsReachedRegisterUnusedDoesNotLeadToNew() {
         // Given
-        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 4, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 4, 2, connectionRegistry, closeCallback, mock(Logger.class));
+        connectionIdManager.setSender(sender);
         int maxCids = 6;
         connectionIdManager.registerPeerCidLimit(maxCids);
         connectionIdManager.handshakeFinished();
@@ -396,7 +398,7 @@ class ConnectionIdManagerTest {
 
     void testValidateRetrySourceConnectionId() {
         // Given
-        connectionIdManager = new ConnectionIdManager(new byte[8], new byte[8], 6, 2, connectionRegistry, sender, closeCallback, mock(Logger.class));
+        connectionIdManager = new ConnectionIdManager(new byte[8], new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
         byte[] retryCid = new byte[] { 0x06, 0x0f, 0x08, 0x0b };
 
         // When

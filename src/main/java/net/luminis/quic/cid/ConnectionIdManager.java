@@ -39,13 +39,13 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
 /**
  * Manages the collections of connection ID's for the connection, both for this (side of the) connection and the peer's.
  */
-public class ConnectionIdManager {
+public class ConnectionIdManager implements ConnectionIdProvider {
 
     public static final int MAX_CIDS_PER_CONNECTION = 6;
 
     private final int connectionIdLength;
     private final ServerConnectionRegistry connectionRegistry;
-    private final Sender sender;
+    private volatile Sender sender;
     private final BiConsumer<Integer, String> closeConnectionCallback;
     private final SourceConnectionIdRegistry cidRegistry;
     private final DestinationConnectionIdRegistry peerCidRegistry;
@@ -62,23 +62,22 @@ public class ConnectionIdManager {
 
     /**
      * Creates a connection ID manager for server role.
-     * @param initialClientCid  the initial connection ID of the client
+     *
+     * @param initialClientCid                the initial connection ID of the client
      * @param originalDestinationConnectionId
-     * @param connectionIdLength  the length of the connection IDs generated for this endpoint (server)
-     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
-     * @param connectionRegistry  the connection registry for associating new connection IDs with the connection
-     * @param sender  the sender to send messages to the peer
-     * @param closeConnectionCallback  callback for closing the connection with a transport error code
-     * @param log  logger
+     * @param connectionIdLength              the length of the connection IDs generated for this endpoint (server)
+     * @param maxPeerCids                     the maximum number of peer connection IDs this endpoint is willing to store
+     * @param connectionRegistry              the connection registry for associating new connection IDs with the connection
+     * @param closeConnectionCallback         callback for closing the connection with a transport error code
+     * @param log                             logger
      */
     public ConnectionIdManager(byte[] initialClientCid, byte[] originalDestinationConnectionId, int connectionIdLength,
-                               int maxPeerCids, ServerConnectionRegistry connectionRegistry, Sender sender,
+                               int maxPeerCids, ServerConnectionRegistry connectionRegistry,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.originalDestinationConnectionId = originalDestinationConnectionId;
         this.connectionIdLength = connectionIdLength;
         this.maxPeerCids = maxPeerCids;
         this.connectionRegistry = connectionRegistry;
-        this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         initialConnectionId = cidRegistry.currentConnectionId;
@@ -96,15 +95,14 @@ public class ConnectionIdManager {
 
     /**
      * Creates a connection ID manager for client role.
-     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
-     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
-     * @param sender  the sender to send messages to the peer
-     * @param closeConnectionCallback  callback for closing the connection with a transport error code
-     * @param log  logger
+     *
+     * @param connectionIdLength      the length of the connection ID's generated for this endpoint (server)
+     * @param maxPeerCids             the maximum number of peer connection IDs this endpoint is willing to store
+     * @param closeConnectionCallback callback for closing the connection with a transport error code
+     * @param log                     logger
      */
-    public ConnectionIdManager(Integer connectionIdLength, int maxPeerCids, Sender sender, BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
+    public ConnectionIdManager(Integer connectionIdLength, int maxPeerCids, BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.maxPeerCids = maxPeerCids;
-        this.sender = sender;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         this.connectionIdLength = cidRegistry.getConnectionIdlength();
         initialConnectionId = cidRegistry.getCurrent();
@@ -309,6 +307,11 @@ public class ConnectionIdManager {
         }
     }
 
+    @Override
+    public byte[] getPeerConnectionId() {
+        return getCurrentPeerConnectionId();
+    }
+
     /**
      * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
      * Source Connection ID field of the first Initial packet it sends/send for the connection.
@@ -456,4 +459,7 @@ public class ConnectionIdManager {
         return cidRegistry.getActive();
     }
 
+    public void setSender(Sender sender) {
+        this.sender = sender;
+    }
 }

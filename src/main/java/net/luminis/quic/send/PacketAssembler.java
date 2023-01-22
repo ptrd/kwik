@@ -22,6 +22,7 @@ import net.luminis.quic.AckGenerator;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.Version;
 import net.luminis.quic.VersionHolder;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -32,6 +33,7 @@ import net.luminis.quic.packet.ZeroRttPacket;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -47,36 +49,39 @@ public class PacketAssembler {
     protected final EncryptionLevel level;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
+    protected final ConnectionIdProvider cidProvider;
     private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
     private volatile boolean stopping;
     private Consumer<PacketAssembler> finalizerCallback;
 
 
-    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        this(version, level, requestQueue, ackGenerator, new PacketNumberGenerator());
+    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator,
+                           ConnectionIdProvider connectionIdProvider) {
+        this(version, level, requestQueue, ackGenerator, connectionIdProvider, new PacketNumberGenerator());
     }
 
-    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
+    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator,
+                           ConnectionIdProvider connectionIdProvider, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
-        this.requestQueue = requestQueue;
-        this.ackGenerator = ackGenerator;
-        packetNumberGenerator = pnGenerator;
+        this.requestQueue = Objects.requireNonNull(requestQueue);
+        this.ackGenerator = Objects.requireNonNull(ackGenerator);
+        this.cidProvider = Objects.requireNonNull(connectionIdProvider);
+        packetNumberGenerator = Objects.requireNonNull(pnGenerator);
     }
 
     /**
      * Assembles a QUIC packet for the encryption level handled by this instance.
+     *
      * @param remainingCwndSize
      * @param availablePacketSize
-     * @param sourceConnectionId        can be null when encryption level is 1-rtt; but not for the other levels; can be empty array though
-     * @param destinationConnectionId
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize) {
         final int available = Integer.min(remainingCwndSize, availablePacketSize);
 
-        QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId);
+        QuicPacket packet = createPacket();
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
@@ -220,17 +225,20 @@ public class PacketAssembler {
         };
     }
 
-    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    protected QuicPacket createPacket() {
+        Version version = quicVersion.getVersion();
+        byte[] destinationConnectionId = cidProvider.getPeerConnectionId();
+
         QuicPacket packet;
         switch (level) {
             case Handshake:
-                packet = new HandshakePacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, null);
+                packet = new HandshakePacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, null);
                 break;
             case App:
-                packet = new ShortHeaderPacket(quicVersion.getVersion(), destinationConnectionId, null);
+                packet = new ShortHeaderPacket(version, destinationConnectionId, null);
                 break;
             case ZeroRTT:
-                packet = new ZeroRttPacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, (QuicFrame) null);
+                packet = new ZeroRttPacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, (QuicFrame) null);
                 break;
             default:
                 throw new RuntimeException();  // programming error

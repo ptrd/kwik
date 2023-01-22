@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.cid.ConnectionIdProvider;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
@@ -114,17 +115,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
         tlsEngine.addSupportedCiphers(List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256));
 
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(EncryptionLevel.App, error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, closeWithErrorFunction, log);
+
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
         idleTimer.setPtoSupplier(sender::getPto);
-
-        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
-            immediateCloseWithError(EncryptionLevel.App, error, reason);
-        };
-        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
+        connectionIdManager.setSender(sender);
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -186,6 +188,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 + connectionIdManager.getCurrentPeerConnectionId().length
                 + 4  // max packet number size, in practice this will be mostly 1
                 + 16; // encryption overhead
+    }
+
+    @Override
+    public ConnectionIdProvider getConnectionIdManager() {
+        return connectionIdManager;
     }
 
     @Override
