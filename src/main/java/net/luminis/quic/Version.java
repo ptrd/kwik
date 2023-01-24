@@ -42,7 +42,7 @@ public class Version {
     public final static Version IETF_draft_33 = new Version(0xff000021);
     public final static Version IETF_draft_34 = new Version(0xff000022);
     public final static Version QUIC_version_1 = new Version(0x00000001);
-    public final static Version QUIC_version_2 = new Version(0x709a50c4);
+    public final static Version QUIC_version_2 = new Version(0x6b3343cf);
     public final static Version reserved_1 = new Version(0x1a2a3a4a);
 
     private int versionId;
@@ -74,18 +74,18 @@ public class Version {
     }
 
     public boolean isV1() {
-        return versionId == 0x00000001;
+        return versionId == QUIC_version_1.versionId;
     }
 
     public boolean isV2() {
-        return versionId == 0x709a50c4;
+        return versionId == QUIC_version_2.versionId;
     }
 
     /**
      * @return   true if version is V1 or V2, false otherwise.
      */
     public boolean isV1V2() {
-        return versionId == 0x00000001 || versionId == 0x709a50c4;
+        return versionId == QUIC_version_1.versionId || versionId == QUIC_version_2.versionId;
     }
 
     /**
@@ -157,7 +157,7 @@ public class Version {
             case 0x00000001:
                 versionString = "v1";
                 break;
-            case 0x709a50c4:
+            case 0x6b3343cf:
                 versionString = "v2";
                 break;
             default:

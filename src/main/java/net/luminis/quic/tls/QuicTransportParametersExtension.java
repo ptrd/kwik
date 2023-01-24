@@ -352,8 +352,9 @@ public class QuicTransportParametersExtension extends Extension {
             if (parameterId == 0x2ab2) extension = "grease-quic-bit";
             if (parameterId == 0x7157) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-02#section-5
             if (parameterId == 0x7158) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-05#section-5
-            if (parameterId == 0x73db) extension = "version-negotiation";
+            if (parameterId == 0x73db) extension = "version-negotiation";  // https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/02/
             if (parameterId == 0xde1a) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-01#section-3
+            if (parameterId == 0xff73db) extension = "version-information-4-13";   // https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/4/
             if (parameterId == 0xff02de1aL) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-02#section-3
             String msg;
             if (extension.isBlank()) {

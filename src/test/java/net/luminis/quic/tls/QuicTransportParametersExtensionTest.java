@@ -248,8 +248,8 @@ class QuicTransportParametersExtensionTest {
 
     @Test
     void parseTruncatedVersionInformation() {
-        //                                                 id          sz
-        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0f 80 ff 73 db 0a 00 00 00 01 70 9a 50 c4 00 00");
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0c 11 0a 00 00 00 01 70 9a 50 c4 00 00");
         var transportParametersExtension = new QuicTransportParametersExtension(Version.QUIC_version_1);
         assertThatThrownBy(() ->
                 transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
@@ -258,8 +258,8 @@ class QuicTransportParametersExtensionTest {
 
     @Test
     void parseValidVersionInformation() throws Exception {
-        //                                                 id          sz
-        byte[] rawData = ByteUtils.hexToBytes("00 39 00 11 80 ff 73 db 0c 00 00 00 01 70 9a 50 c4 00 00 00 01");
+        //                                                 id sz
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0e 11 0c 00 00 00 01 6b 33 43 cf 00 00 00 01");
         var transportParametersExtension = new QuicTransportParametersExtension(Version.QUIC_version_1);
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Client, mock(Logger.class));
         var versionInfo = transportParametersExtension.getTransportParameters().getVersionInformation();

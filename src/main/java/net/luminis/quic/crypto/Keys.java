@@ -43,6 +43,20 @@ public class Keys {
 
     public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
+    // https://www.rfc-editor.org/rfc/rfc9001.html#name-packet-protection-keys
+    // "The current encryption level secret and the label "quic key" are input to the KDF to produce the AEAD key; the
+    //  label "quic iv" is used to derive the Initialization Vector (IV); see Section 5.3. The header protection key
+    //  uses the "quic hp" label; see Section 5.4. Using these labels provides key separation between QUIC and TLS;
+    //  see Section 9.6."
+    public static final String QUIC_V1_KDF_LABEL_PREFIX = "quic ";
+
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-hkdf-labels-2
+    // "The labels used in [QUIC-TLS] to derive packet protection keys (Section 5.1), header protection keys (Section 5.4),
+    //  Retry Integrity Tag keys (Section 5.8), and key updates (Section 6.1) change from "quic key" to "quicv2 key",
+    //  from "quic iv" to "quicv2 iv", from "quic hp" to "quicv2 hp", and from "quic ku" to "quicv2 ku", to meet the
+    //  guidance for new versions in Section 9.6 of that document."
+    public static final String QUIC_V2_KDF_LABEL_PREFIX = "quicv2 ";
+
     private final Role nodeRole;
     private final Logger log;
     private final Version quicVersion;
@@ -116,7 +130,8 @@ public class Keys {
      * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
      */
     public synchronized void computeKeyUpdate(boolean selfInitiated) {
-        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, "quic ku", "", (short) 32);
+        String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
+        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
         log.secret("Updated ApplicationTrafficSecret (" + (selfInitiated? "self":"peer") + "): ", newApplicationTrafficSecret);
         computeKeys(newApplicationTrafficSecret, false, selfInitiated);
         if (selfInitiated) {
@@ -176,22 +191,7 @@ public class Keys {
 
     private void computeKeys(byte[] secret, boolean includeHP, boolean replaceKeys) {
 
-        String prefix;
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
-        // "The current encryption level secret and the label "quic key" are
-        //   input to the KDF to produce the AEAD key; the label "quic iv" is used
-        //   to derive the IV, see Section 5.3.  The header protection key uses
-        //   the "quic hp" label, see Section 5.4).  Using these labels provides
-        //   key separation between QUIC and TLS, see Section 9.4."
-        prefix = "quic ";
-        if (quicVersion.isV2()) {
-            // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
-            // "The labels used in [QUIC-TLS] to derive packet protection keys (Section 5.1), header protection keys (Section 5.4),
-            //  Retry Integrity Tag keys (Section 5.8), and key updates (Section 6.1) change from "quic key" to "quicv2 key",
-            //  from "quic iv" to "quicv2 iv", from "quic hp" to "quicv2 hp", and from "quic ku" to "quicv2 ku", to meet
-            //  the guidance for new versions in Section 9.6 of that document."
-            prefix = "quicv2 ";
-        }
+        String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
         byte[] key = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
