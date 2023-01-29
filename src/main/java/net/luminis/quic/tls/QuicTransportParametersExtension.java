@@ -165,8 +165,11 @@ public class QuicTransportParametersExtension extends Extension {
         //  by which the endpoint will delay sending acknowledgments."
         addTransportParameter(buffer, max_ack_delay, params.getMaxAckDelay());
 
-        // Intentionally omitted (kwik server supports active migration)
-        // disable_active_migration
+        // "The disable active migration transport parameter is included if the endpoint does not support active
+        //  connection migration (Section 9) on the address being used during the handshake. "
+        if (params.getDisableMigration()) {
+            addTransportParameter(buffer, disable_active_migration);
+        }
 
         // Intentionally omitted (kwik server does not support preferred address)
         // preferred_address
@@ -407,6 +410,12 @@ public class QuicTransportParametersExtension extends Extension {
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
         addTransportParameter(buffer, id.value, value);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id) {
+        VariableLengthInteger.encode(id.value, buffer);
+        int valueLength = 0;
+        VariableLengthInteger.encode(valueLength, buffer);
     }
 
     private void addTransportParameter(ByteBuffer buffer, int id, long value) {
