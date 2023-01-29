@@ -27,6 +27,7 @@ import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import net.luminis.quic.test.FieldSetter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -50,13 +52,11 @@ class SenderImplTest extends AbstractSenderTest {
     private TestClock clock;
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
-    private DatagramSocket socket;
+    private ClientSocketManager socketManager;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         clock = new TestClock();
-        socket = mock(DatagramSocket.class);
-        InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
         ConnectionIdProvider connectionIdProvider = mock(ConnectionIdProvider.class);
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[4]);
         when(connectionIdProvider.getPeerConnectionId()).thenReturn(new byte[4]);
@@ -69,7 +69,8 @@ class SenderImplTest extends AbstractSenderTest {
         Keys keys = createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
-        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, 100, new NullLogger());
+        socketManager = mock(ClientSocketManager.class);
+        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socketManager, connection, 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
     }
 
@@ -146,7 +147,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.sendIfAny();
 
         // Then   (given fixed size of StreamFrames, only three packets will fit in the limit of 3 * 1200)
-        verify(socket, times(3)).send(any(DatagramPacket.class));
+        verify(socketManager, times(3)).send(any(ByteBuffer.class));
     }
 
     private void setupMockPacketAssember() throws NoSuchFieldException {
@@ -166,7 +167,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket, never()).send(any(DatagramPacket.class));
+        verify(socketManager, never()).send(any(ByteBuffer.class));
     }
 
     @Test
@@ -180,7 +181,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class));
     }
 
     @Test
@@ -194,7 +195,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class));
     }
 
     @Test
@@ -208,6 +209,6 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class));
     }
 }

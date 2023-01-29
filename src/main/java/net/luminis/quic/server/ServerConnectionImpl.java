@@ -26,6 +26,7 @@ import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.socket.ServerConnectionSocketManager;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
@@ -121,7 +122,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, closeWithErrorFunction, log);
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), new ServerConnectionSocketManager(serverSocket, initialClientAddress), this, initialRtt, this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }

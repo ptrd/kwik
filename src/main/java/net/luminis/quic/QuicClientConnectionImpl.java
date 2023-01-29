@@ -26,11 +26,14 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.tls.*;
+import net.luminis.tls.CertificateWithPrivateKey;
+import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
@@ -67,8 +70,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final int port;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
-    private final DatagramSocket socket;
-    private final InetAddress serverAddress;
+    private final ClientSocketManager socketManager;
     private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
@@ -102,13 +104,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.preferredVersion = preferredVersion;
         this.host = host;
         this.port = port;
-        serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
         this.clientCertificate = clientCertificate;
         this.clientCertificateKey = clientCertificateKey;
-
-        socket = new DatagramSocket();
 
         idleTimer = new IdleTimer(this, log);
 
@@ -117,14 +116,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         };
         connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
 
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
-                        this, initialRtt, log);
+        InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getByName(proxyHost != null ? proxyHost : host), port);
+        socketManager = new ClientSocketManager(serverAddress);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, initialRtt, log);
         sender.enableAllLevels();
         connectionIdManager.setSender(sender);
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
 
-        receiver = new Receiver(socket, log, this::abortConnection);
+        receiver = new Receiver(socketManager.getSocket(), log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
 
         connectionState = Status.Created;
@@ -604,7 +604,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         super.terminate();
         handshakeFinishedCondition.countDown();
         receiver.shutdown();
-        socket.close();
+        socketManager.close();
         if (receiverThread != null) {
             receiverThread.interrupt();
         }
@@ -613,7 +613,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public void changeAddress() {
         try {
             DatagramSocket newSocket = new DatagramSocket();
-            sender.changeAddress(newSocket);
+            socketManager.changeClientAddress(newSocket);
             receiver.changeAddress(newSocket);
             log.info("Changed local address to " + newSocket.getLocalPort());
         } catch (SocketException e) {
@@ -950,7 +950,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public InetSocketAddress getLocalAddress() {
-        return (InetSocketAddress) socket.getLocalSocketAddress();
+        return socketManager.getLocalSocketAddress();
     }
 
     @Override

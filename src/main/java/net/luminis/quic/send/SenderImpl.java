@@ -33,11 +33,9 @@ import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.recovery.RttEstimator;
+import net.luminis.quic.socket.SocketManager;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Clock;
@@ -74,9 +72,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private final Clock clock;
     private volatile int maxPacketSize;
-    private volatile DatagramSocket socket;
-    private final InetSocketAddress peerAddress;
     private final QuicConnectionImpl connection;
+    private final SocketManager socketManager;
     private final CongestionController congestionController;
     private final RttEstimator rttEstimater;
     private final Logger log;
@@ -107,17 +104,16 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile Runnable shutdownHook;
 
 
-    public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
-                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
-        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, initialRtt, log);
+    public SenderImpl(VersionHolder version, int maxPacketSize, SocketManager socketManager, QuicConnectionImpl connection,
+                      Integer initialRtt, Logger log) {
+        this(Clock.systemUTC(), version, maxPacketSize, socketManager, connection, initialRtt, log);
     }
 
-    public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+    public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, SocketManager socketManager,
                       QuicConnectionImpl connection, Integer initialRtt, Logger log) {
         this.clock = clock;
         this.maxPacketSize = maxPacketSize;
-        this.socket = socket;
-        this.peerAddress = peerAddress;
+        this.socketManager = socketManager;
         this.connection = connection;
         this.log = log;
         this.qlog = log.getQLog();
@@ -231,10 +227,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         wakeUpSenderLoop();
     }
     
-    public void changeAddress(DatagramSocket newSocket) {
-        socket = newSocket;
-    }
-
     public void discard(PnSpace space, String reason) {
         synchronized (discardedSpaces) {
             if (!discardedSpaces[space.ordinal()]) {
@@ -398,10 +390,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             // rethrow
             throw bufferOverflow;
         }
-        DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
-        Instant timeSent = clock.instant();
-        socket.send(datagram);
+        Instant timeSent = socketManager.send(buffer);
         datagramsSent++;
         packetsSent += itemsToSend.size();
         bytesSent += buffer.position();
