@@ -29,6 +29,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -49,13 +51,15 @@ class ConnectionIdManagerTest {
     private ConnectionIdManager serverConnectionIdManager;
     private ConnectionIdManager clientConnectionIdManager;
     private BiConsumer<Integer, String> closeCallback;
+    private byte[] initialClientCid;
 
     @BeforeEach
     void initObjectUnderTest() {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
-        serverConnectionIdManager = new ConnectionIdManager(new byte[4], new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
+        initialClientCid = new byte[] { 0x7f, 0x10, 0x49, 0x03 };
+        serverConnectionIdManager = new ConnectionIdManager(initialClientCid, new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
         serverConnectionIdManager.setSender(sender);
         clientConnectionIdManager = new ConnectionIdManager(4, 2, closeCallback, mock(Logger.class));
         clientConnectionIdManager.setSender(sender);
@@ -440,8 +444,10 @@ class ConnectionIdManagerTest {
     }
 
     @Test
-    void testRegisterInitialPeerCid() {
+    void testRegisterInitialPeerCid() throws Exception {
         // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        clientConnectionIdManager.registerClientAddress(clientAddress);
         assertThat(clientConnectionIdManager.getAllPeerConnectionIds().get(0).getConnectionId()).isNotEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
 
         // When
@@ -449,6 +455,7 @@ class ConnectionIdManagerTest {
 
         // Then
         assertThat(clientConnectionIdManager.getAllPeerConnectionIds().get(0).getConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+        assertThat(clientConnectionIdManager.getPeerConnectionId(clientAddress)).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
     }
 
     @Test
@@ -471,6 +478,9 @@ class ConnectionIdManagerTest {
 
     @Test
     void statelessResetTokenFromNewConnectiondIdFrameIsRecognisedWhenConnectionIdIsUsed() throws Exception {
+        // Given
+        clientConnectionIdManager.registerClientAddress(getArbitraryLocalAddress());
+        
         // When
         NewConnectionIdFrame newConnectionIdFrame = new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x35, 0x7a, 0x0f, 0x69 });
         clientConnectionIdManager.process(newConnectionIdFrame);
@@ -478,5 +488,68 @@ class ConnectionIdManagerTest {
 
         // Then
         assertThat(clientConnectionIdManager.isStatelessResetToken(newConnectionIdFrame.getStatelessResetToken())).isTrue();
+    }
+
+    @Test
+    void cidForInitialClientAddressIsInitialCid() throws Exception {
+        // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        serverConnectionIdManager.registerClientAddress(clientAddress);
+
+        // When
+        byte[] peerConnectionId = serverConnectionIdManager.getPeerConnectionId(clientAddress);
+
+        // Then
+        assertThat(peerConnectionId).isEqualTo(initialClientCid);
+    }
+
+    @Test
+    void cidForChangedClientAddressIsUnequalToInitialCid() throws Exception {
+        // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        serverConnectionIdManager.registerClientAddress(clientAddress);
+        serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[] { 0x35, 0x7a, 0x0f, 0x69 }));
+
+        // When
+        InetAddress otherAddress = InetAddress.getByAddress(new byte[] { 8, 8, 8, 8 });
+        byte[] peerConnectionId = serverConnectionIdManager.getPeerConnectionId(new InetSocketAddress(otherAddress, 4433));
+
+        // Then
+        assertThat(peerConnectionId).isNotEqualTo(initialClientCid);
+    }
+
+    @Test
+    void cidForChangedClientAddressWhenNoUnusedCids() throws Exception {
+        // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        serverConnectionIdManager.registerClientAddress(clientAddress);
+
+        // When
+        InetAddress otherAddress = InetAddress.getByAddress(new byte[] { 8, 8, 8, 8 });
+        byte[] peerConnectionId = serverConnectionIdManager.getPeerConnectionId(new InetSocketAddress(otherAddress, 4433));
+
+        // Then
+        assertThat(peerConnectionId).isEqualTo(initialClientCid);
+    }
+
+    @Test
+    void next() throws Exception {
+        // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        serverConnectionIdManager.registerClientAddress(clientAddress);
+        serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[] { 0x35, 0x7a, 0x0f, 0x69 }));
+
+        // When
+        serverConnectionIdManager.nextPeerId();
+
+        // Then
+        byte[] peerConnectionId = serverConnectionIdManager.getPeerConnectionId(clientAddress);
+
+        // Then
+        assertThat(peerConnectionId).isNotEqualTo(initialClientCid);
+    }
+
+    private static InetSocketAddress getArbitraryLocalAddress() throws Exception {
+        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }

@@ -53,4 +53,9 @@ public class ServerConnectionSocketManager implements SocketManager {
     public void close() {
         // Note that the serverSocket must not be closed here, as it is used for all server connections ;-)
     }
+
+    @Override
+    public InetSocketAddress getClientAddress() {
+        return initialClientAddress;
+    }
 }

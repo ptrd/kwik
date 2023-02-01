@@ -118,6 +118,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getByName(proxyHost != null ? proxyHost : host), port);
         socketManager = new ClientSocketManager(serverAddress);
+        connectionIdManager.registerClientAddress(socketManager.getClientAddress());
+
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, initialRtt, log);
         sender.enableAllLevels();
         connectionIdManager.setSender(sender);

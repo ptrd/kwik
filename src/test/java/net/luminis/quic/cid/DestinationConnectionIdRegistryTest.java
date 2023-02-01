@@ -22,6 +22,8 @@ import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,8 +35,9 @@ class DestinationConnectionIdRegistryTest {
     private DestinationConnectionIdRegistry connectionIdRegistry;
 
     @BeforeEach
-    void initObjectUnderTest() {
+    void initObjectUnderTest() throws Exception {
         connectionIdRegistry = new DestinationConnectionIdRegistry(new byte[]{ 0x01, 0x10, 0x78, 0x33 }, mock(Logger.class));
+        connectionIdRegistry.registerClientAddress(getArbitraryLocalAddress());
         connectionIdRegistry.setInitialStatelessResetToken(new byte[]{ 0x01, 0x10, 0x78, 0x33 });
         connectionIdRegistry.registerNewConnectionId(1, new byte[] { 0x02, 0x1c, 0x56, 0x0b }, new byte[] { 0x02, 0x1c, 0x56, 0x0b });
         connectionIdRegistry.registerNewConnectionId(2, new byte[] { 0x03, 0x2a, 0x1f, 0x7e }, new byte[] { 0x03, 0x2a, 0x1f, 0x7e });
@@ -73,5 +76,9 @@ class DestinationConnectionIdRegistryTest {
         connectionIdRegistry.useNext();
         connectionIdRegistry.useNext();
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x02, 0x1c, 0x56, 0x0b })).isTrue();
+    }
+
+    private static InetSocketAddress getArbitraryLocalAddress() throws Exception {
+        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }

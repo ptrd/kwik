@@ -28,6 +28,7 @@ import net.luminis.quic.send.Sender;
 import net.luminis.quic.server.ServerConnectionProxy;
 import net.luminis.quic.server.ServerConnectionRegistry;
 
+import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
@@ -314,8 +315,20 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     @Override
-    public byte[] getPeerConnectionId() {
-        return getCurrentPeerConnectionId();
+    public byte[] getPeerConnectionId(InetSocketAddress clientAddress) {
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.getCurrent(clientAddress);
+        }
+        else {
+            return new byte[0];
+        }
+    }
+
+    @Override
+    public void registerClientAddress(InetSocketAddress clientAddress) {
+        if (peerCidRegistry != null) {
+            peerCidRegistry.registerClientAddress(clientAddress);
+        }
     }
 
     /**

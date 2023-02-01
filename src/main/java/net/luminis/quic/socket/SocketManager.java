@@ -19,6 +19,7 @@
 package net.luminis.quic.socket;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -31,4 +32,6 @@ public interface SocketManager {
     Instant send(ByteBuffer data) throws IOException;
 
     void close();
+
+    InetSocketAddress getClientAddress();
 }

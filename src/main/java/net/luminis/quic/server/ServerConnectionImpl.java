@@ -120,6 +120,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, closeWithErrorFunction, log);
+        connectionIdManager.registerClientAddress(initialClientAddress);
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), new ServerConnectionSocketManager(serverSocket, initialClientAddress), this, initialRtt, this.log);

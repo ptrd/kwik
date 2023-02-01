@@ -25,6 +25,7 @@ import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.packet.InitialPacket;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.*;
 
@@ -81,9 +82,10 @@ public class GlobalPacketAssembler {
      *
      * @param remainingCwndSize
      * @param maxDatagramSize
+     * @param clientAddress
      * @return
      */
-    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize) {
+    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize, InetSocketAddress clientAddress) {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
@@ -95,7 +97,7 @@ public class GlobalPacketAssembler {
         for (EncryptionLevel level: enabledLevels) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
-                Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size);
+                Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, clientAddress);
                 if (item.isPresent()) {
                     packets.add(item.get());
                     int packetSize = item.get().getPacket().estimateLength(0);

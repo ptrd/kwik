@@ -33,6 +33,7 @@ public class ClientSocketManager implements SocketManager {
     private final InetSocketAddress serverAddress;
     private final Clock clock;
     private volatile DatagramSocket socket;
+    private InetSocketAddress clientAddress;
 
     public ClientSocketManager(InetSocketAddress serverAddress) throws SocketException {
         this(serverAddress, Clock.systemUTC());
@@ -42,6 +43,7 @@ public class ClientSocketManager implements SocketManager {
         this.serverAddress = serverAddress;
         this.clock = clock;
         this.socket = new DatagramSocket();
+        clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
     }
 
     @Override
@@ -55,6 +57,11 @@ public class ClientSocketManager implements SocketManager {
     @Override
     public void close() {
         socket.close();
+    }
+
+    @Override
+    public InetSocketAddress getClientAddress() {
+        return clientAddress;
     }
 
     public InetSocketAddress getLocalSocketAddress() {

@@ -61,7 +61,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
         connectionIdProvider = mock(ConnectionIdProvider.class);
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[0]);
-        when(connectionIdProvider.getPeerConnectionId()).thenReturn(new byte[0]);
+        when(connectionIdProvider.getPeerConnectionId(null)).thenReturn(new byte[0]);
         initialPacketAssembler = new InitialPacketAssembler(version, sendRequestQueue, initialAckGenerator, connectionIdProvider);
         handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
         handshakePacketAssembler = new PacketAssembler(version, EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator, connectionIdProvider);
@@ -73,13 +73,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
     void sendSingleShortPacket() {
         // Given
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
-        when(connectionIdProvider.getPeerConnectionId()).thenReturn(destCid);
+        when(connectionIdProvider.getPeerConnectionId(null)).thenReturn(destCid);
 
         // When
         sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[7], true), 4 + 7, null);
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
         assertThat(packet.getFrames()).containsExactly(new StreamFrame(0, new byte[7], true));
@@ -95,7 +95,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest(0);    // This means the caller wants to send an _explicit_ ack.
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
         assertThat(packet.getFrames())
                 .hasSize(1)
@@ -119,7 +119,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 (3 + 2) + 1, null);  // Send at least 1 byte of data
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
         assertThat(packet.getFrames()).anySatisfy(frame -> {
             assertThat(frame).isInstanceOf(StreamFrame.class);
@@ -140,7 +140,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true), (3 + 2) + 1, null);  // Stream length will be > 63, so 2 bytes
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet.getFrames()).hasOnlyElementsOfTypes(MaxStreamDataFrame.class, MaxDataFrame.class, StreamFrame.class);
         assertThat(packet.getFrames()).anySatisfy(frame -> {
             assertThat(frame).isInstanceOf(StreamFrame.class);
@@ -164,7 +164,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
                         5, null);
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(remainingCwndSize, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(remainingCwndSize, 1232, null).get().getPacket();
         assertThat(packet.getFrames())
                 .hasAtLeastOneElementOfType(DataBlockedFrame.class)
                 .hasAtLeastOneElementOfType(StreamFrame.class);
@@ -177,13 +177,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
         byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(srcCid);
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
-        when(connectionIdProvider.getPeerConnectionId()).thenReturn(destCid);
+        when(connectionIdProvider.getPeerConnectionId(null)).thenReturn(destCid);
 
         // When
         sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[maxSize - (2 + (maxSize < 64? 1: 2))]), (2 + 2) + 1, null);
 
         // Then
-        QuicPacket packet = handshakePacketAssembler.assemble(12000, MAX_PACKET_SIZE).get().getPacket();
+        QuicPacket packet = handshakePacketAssembler.assemble(12000, MAX_PACKET_SIZE, null).get().getPacket();
         int generatedPacketLength = packet.generatePacketBytes(keys).length;
 
         assertThat(packet).isInstanceOf(HandshakePacket.class);
@@ -203,7 +203,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(srcCid);
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
-        when(connectionIdProvider.getPeerConnectionId()).thenReturn(destCid);
+        when(connectionIdProvider.getPeerConnectionId(null)).thenReturn(destCid);
 
         initialPacketAssembler.setInitialToken(new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f });
 
@@ -211,7 +211,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234, null);
 
         // Then
-        QuicPacket packet = initialPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = initialPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(InitialPacket.class);
         assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
@@ -229,13 +229,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
         byte[] srcCid = new byte[] { (byte) 0xba, (byte) 0xbe };
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(srcCid);
         byte[] destCid = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e };
-        when(connectionIdProvider.getPeerConnectionId()).thenReturn(destCid);
+        when(connectionIdProvider.getPeerConnectionId(null)).thenReturn(destCid);
 
         // When
         sendRequestQueue.addRequest(maxSize -> new CryptoFrame(Version.getDefault(), 0, new byte[234]), (3 + 2) + 234, null);
 
         // Then
-        QuicPacket packet = initialPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = initialPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(InitialPacket.class);
         assertThat(((InitialPacket) packet).getSourceConnectionId()).isEqualTo(srcCid);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(destCid);
@@ -256,7 +256,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest(0);    // This means the caller wants to send an _explicit_ ack.
 
         // Then
-        InitialPacket packet = (InitialPacket) initialPacketAssembler.assemble(12000, 1232).get().getPacket();
+        InitialPacket packet = (InitialPacket) initialPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet.getFrames())
                 .hasOnlyElementsOfTypes(AckFrame.class, Padding.class);
         assertThat(packet.getToken()).hasSize(8);
@@ -274,13 +274,13 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest(ackDelay);
 
         // Then
-        Optional<SendItem> firstCheck = oneRttPacketAssembler.assemble(12000, 1232);
+        Optional<SendItem> firstCheck = oneRttPacketAssembler.assemble(12000, 1232, null);
 
         // When
         clock.fastForward(ackDelay);
 
         // Then
-        Optional<QuicPacket> packet = oneRttPacketAssembler.assemble(12000, 1232).map(e -> e.getPacket());
+        Optional<QuicPacket> packet = oneRttPacketAssembler.assemble(12000, 1232, null).map(e -> e.getPacket());
         assertThat(firstCheck).isEmpty();
         assertThat(packet.isPresent()).isTrue();
         assertThat(packet.get().getFrames()).allSatisfy(frame -> {
@@ -300,7 +300,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37, null);
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
         assertThat(packet.getFrames())
                 .hasSize(2)
@@ -323,7 +323,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 (3 + 2) + 1, null);  // Send at least 1 byte of data
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, MAX_PACKET_SIZE).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, MAX_PACKET_SIZE, null).get().getPacket();
         assertThat(packet.getFrames())
                 .hasSize(2)
                 .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class);
@@ -342,7 +342,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest();
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isNotNull();
         assertThat(packet.getFrames())
                 .hasSize(1)
@@ -356,10 +356,10 @@ class PacketAssemblerTest extends AbstractSenderTest {
 
         // When
         sendRequestQueue.addAckRequest();
-        oneRttPacketAssembler.assemble(12000, 1232);
+        oneRttPacketAssembler.assemble(12000, 1232, null);
 
         // Then
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(12000, 1232);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(12000, 1232, null);
         assertThat(optionalSendItem).isEmpty();
     }
 
@@ -372,7 +372,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Nothing, no explicit ack requested
 
         // Then
-        Optional<SendItem> packet = oneRttPacketAssembler.assemble(12000, 1232);
+        Optional<SendItem> packet = oneRttPacketAssembler.assemble(12000, 1232, null);
         assertThat(packet).isEmpty();
     }
 
@@ -383,7 +383,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         int currentCwndRemaining = 16;
 
         // Then
-        Optional<SendItem> packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232);
+        Optional<SendItem> packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null);
         assertThat(packet).isEmpty();
     }
 
@@ -393,7 +393,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addProbeRequest();
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null).get().getPacket();
         assertThat(packet).isNotNull();
         assertThat(packet.getFrames())
                 .hasSize(1)
@@ -408,14 +408,14 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addProbeRequest();
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null).get().getPacket();
         assertThat(packet).isNotNull();
         assertThat(packet.getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfType(PingFrame.class);
 
         // And
-        Optional<SendItem> another = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232);
+        Optional<SendItem> another = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null);
         assertThat(another).isEmpty();
     }
 
@@ -426,7 +426,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addProbeRequest();
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(60, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(60, 1232, null).get().getPacket();
         assertThat(packet).isNotNull();
         assertThat(packet.getFrames())
                 .hasSize(1)
@@ -440,7 +440,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[100])));
 
         // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, null).get().getPacket();
         assertThat(packet).isNotNull();
         assertThat(packet.getFrames())
                 .hasSize(1)
@@ -456,7 +456,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new StreamFrame(1, new byte[924], true), callback2);
 
         // When
-        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232).get();
+        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null).get();
         sendItem.getPacketLostCallback().accept(sendItem.getPacket());
 
         // Then
@@ -475,7 +475,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest(0);
 
         // When
-        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232).get();
+        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null).get();
         sendItem.getPacketLostCallback().accept(sendItem.getPacket());
 
         // Then
@@ -490,7 +490,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l), null);
 
         // When
-        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232).get().getPacket();
+        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, null).get().getPacket();
 
         // Then
         assertThat(packet.getPacketNumber()).isNotNull();
@@ -505,9 +505,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
 
         // When
-        QuicPacket packet1 = oneRttPacketAssembler.assemble(1200, 1232).get().getPacket();
-        QuicPacket packet2 = oneRttPacketAssembler.assemble(1200, 1232).get().getPacket();
-        QuicPacket packet3 = oneRttPacketAssembler.assemble(1200, 1232).get().getPacket();
+        QuicPacket packet1 = oneRttPacketAssembler.assemble(1200, 1232, null).get().getPacket();
+        QuicPacket packet2 = oneRttPacketAssembler.assemble(1200, 1232, null).get().getPacket();
+        QuicPacket packet3 = oneRttPacketAssembler.assemble(1200, 1232, null).get().getPacket();
 
         // Then
         assertThat(packet2.getPacketNumber()).isGreaterThan(packet1.getPacketNumber());
@@ -521,10 +521,10 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest(0);
 
         // When
-        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, 1232).get();
+        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, 1232, null).get();
 
         // Then
-        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, 1232);
+        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, 1232, null);
         assertThat(secondSendItem).isEmpty();
 
         assertThat(firstSendItem.getPacket().getFrames())
@@ -539,12 +539,12 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new StreamFrame(0, new byte[160], false), f -> {});
 
         // Simulate race condition where ack is picked up by a "normal" send
-        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, 1232).get();
+        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, 1232, null).get();
         // Before the ack request was actually queued.
         sendRequestQueue.addAckRequest(0);
 
         // Then
-        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, 1232);
+        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, 1232, null);
         assertThat(secondSendItem).isEmpty();
 
         assertThat(firstSendItem.getPacket().getFrames())
@@ -561,7 +561,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest();
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 20);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 20, null);
 
         // Then
         assertThat(optionalSendItem).isEmpty();
@@ -575,7 +575,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest();
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(0, 25);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(0, 25, null);
 
         // Then
         assertThat(optionalSendItem).isPresent();
@@ -589,10 +589,10 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Given
         oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
         sendRequestQueue.addAckRequest();
-        oneRttPacketAssembler.assemble(1200, 20);
+        oneRttPacketAssembler.assemble(1200, 20, null);
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(1200, 200, null);
 
         // Then
         assertThat(optionalSendItem).isPresent();
@@ -606,7 +606,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37, null);
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(4, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(4, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isEmpty();
@@ -619,7 +619,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new PingFrame(), f -> {});
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(18 + 4, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(18 + 4, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isPresent();
@@ -632,7 +632,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(size -> null, 20, f -> {});
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isEmpty();
@@ -645,7 +645,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(new PingFrame(), f -> {});
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isPresent();
@@ -660,7 +660,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest();
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isPresent();
@@ -674,7 +674,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addRequest(size -> null, 20, f -> {});
 
         // When
-        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> optionalSendItem = oneRttPacketAssembler.assemble(6000, 1200, null);
 
         // Then
         assertThat(optionalSendItem).isEmpty();
@@ -691,7 +691,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // When
         // ... it is send together with a ack-eliciting packet
         sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
-        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200, null);
 
         assertThat(firstPacket).isPresent();
         assertThat(firstPacket.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
@@ -700,7 +700,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // ... (even) after delay time
         clock.fastForward(ackDelay);
         // ... no ack is sent.
-        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200);
+        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200, null);
         assertThat(secondPacket).isEmpty();
     }
 
@@ -711,7 +711,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addAckRequest();  // As test is using mock sender, this call must be done explicitly in the test
 
         // When
-        oneRttPacketAssembler.assemble(6000, 2);
+        oneRttPacketAssembler.assemble(6000, 2, null);
 
         // Then
         assertThat(sendRequestQueue.mustSendAck()).isTrue();
@@ -726,7 +726,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
 
         // When
         int maxSize = 1229;
-        Optional<SendItem> item = handshakePacketAssembler.assemble(6000, maxSize);
+        Optional<SendItem> item = handshakePacketAssembler.assemble(6000, maxSize, null);
 
         // Then
         QuicPacket packet = item.get().getPacket();
@@ -736,7 +736,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
     @Test
     void whenPacketDoesNotFitInPacketSizeAssembleShouldNotReturnPacket() throws Exception {
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
-        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 500);
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 500, null);
         assertThat(item).isNotPresent();
     }
 
@@ -745,7 +745,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[90])));
 
         int maxAvailablePacketSize = 10;
-        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, maxAvailablePacketSize);
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, maxAvailablePacketSize, null);
         assertThat(item).isNotPresent();
     }
 }

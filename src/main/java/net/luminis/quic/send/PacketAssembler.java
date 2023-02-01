@@ -31,6 +31,7 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -76,12 +77,13 @@ public class PacketAssembler {
      *
      * @param remainingCwndSize
      * @param availablePacketSize
+     * @param clientAddress
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress clientAddress) {
         final int available = Integer.min(remainingCwndSize, availablePacketSize);
 
-        QuicPacket packet = createPacket();
+        QuicPacket packet = createPacket(clientAddress);
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
@@ -225,9 +227,9 @@ public class PacketAssembler {
         };
     }
 
-    protected QuicPacket createPacket() {
+    protected QuicPacket createPacket(InetSocketAddress clientAddress) {
         Version version = quicVersion.getVersion();
-        byte[] destinationConnectionId = cidProvider.getPeerConnectionId();
+        byte[] destinationConnectionId = cidProvider.getPeerConnectionId(clientAddress);
 
         QuicPacket packet;
         switch (level) {

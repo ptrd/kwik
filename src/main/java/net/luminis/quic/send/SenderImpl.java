@@ -420,9 +420,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 return Collections.emptyList();
             }
         }
-        byte[] srcCid = connection.getSourceConnectionId();
-        byte[] destCid = connection.getDestinationConnectionId();
-        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize);
+
+        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, socketManager.getClientAddress());
     }
 
     private Instant earliest(Instant instant1, Instant instant2) {

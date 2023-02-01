@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.cid;
 
+import java.net.InetSocketAddress;
+
 /**
  * Provides connection IDs for the current connection.
  */
@@ -34,5 +36,11 @@ public interface ConnectionIdProvider {
      * Returns the connection ID that this endpoint uses to address the peer.
      * @return
      */
-    byte[] getPeerConnectionId();
+    byte[] getPeerConnectionId(InetSocketAddress clientAddress);
+
+    /**
+     * Registers the (initial) client address, so it can be associated with the initial connection ID.
+     * @param clientAddress
+     */
+    void registerClientAddress(InetSocketAddress clientAddress);
 }

@@ -26,6 +26,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.util.Optional;
 
 
@@ -45,7 +46,7 @@ public class InitialPacketAssembler extends PacketAssembler {
     }
 
     @Override
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress clientAddress) {
         if (availablePacketSize < 1200) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
             // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
@@ -56,12 +57,13 @@ public class InitialPacketAssembler extends PacketAssembler {
             // when different packets are coalesced, the initial packet is always the first that is assembled.
             return Optional.empty();
         }
-        return super.assemble(remainingCwndSize, availablePacketSize);
+        return super.assemble(remainingCwndSize, availablePacketSize, clientAddress);
     }
 
     @Override
-    protected QuicPacket createPacket() {
-        InitialPacket packet = new InitialPacket(quicVersion.getVersion(), cidProvider.getInitialConnectionId(), cidProvider.getPeerConnectionId(), initialToken, (QuicFrame) null);
+    protected QuicPacket createPacket(InetSocketAddress clientAddress) {
+        InitialPacket packet = new InitialPacket(quicVersion.getVersion(), cidProvider.getInitialConnectionId(),
+                cidProvider.getPeerConnectionId(clientAddress), initialToken, (QuicFrame) null);
         packet.setPacketNumber(nextPacketNumber());
         return packet;
     }
