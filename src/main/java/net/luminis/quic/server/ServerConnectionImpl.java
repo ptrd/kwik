@@ -61,7 +61,7 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAME
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
 
-    private static final int TOKEN_SIZE = 37;
+    static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
     private final Version originalVersion;
@@ -77,6 +77,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final int maxOpenStreamsBidi;
     private final byte[] token;
     private final ConnectionIdManager connectionIdManager;
+    private final ServerConnectionSocketManager socketManager;
     private volatile String negotiatedApplicationProtocol;
     private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
@@ -123,7 +124,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionIdManager.registerClientAddress(initialClientAddress);
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), new ServerConnectionSocketManager(serverSocket, initialClientAddress), this, initialRtt, this.log);
+        socketManager = new ServerConnectionSocketManager(serverSocket, initialClientAddress);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, initialRtt, this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
@@ -434,8 +436,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
-        sender.send(retry);
+        try {
+            RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+            byte[] packetBytes = retry.generatePacketBytes(null);  // Retry packet is not encrypted, so no keys needed.
+            Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes));
+            log.sent(timeSent, retry);
+            log.getQLog().emitPacketSentEvent(retry, timeSent);
+        }
+        catch (IOException e) {
+            log.error("Sending retry packet failed", e);
+        }
     }
 
     @Override

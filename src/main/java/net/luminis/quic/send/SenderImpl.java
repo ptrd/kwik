@@ -158,14 +158,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         sendRequestQueue[level.ordinal()].addRequest(frameSupplier, minimumSize, lostCallback);
     }
 
-    public void send(RetryPacket retryPacket) {
-        try {
-            send(List.of(new SendItem(retryPacket)));
-        } catch (IOException e) {
-            log.error("Sending packet failed: " + retryPacket);
-        }
-    }
-
     @Override
     public void setInitialToken(byte[] token) {
         if (token != null) {
@@ -384,6 +376,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                         buffer.put(packetData);
                         log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
                     });
+            buffer.limit(buffer.position());
         }
         catch (BufferOverflowException bufferOverflow) {
             log.error("Buffer overflow while generating datagram for " + itemsToSend);

@@ -48,7 +48,7 @@ public class ClientSocketManager implements SocketManager {
 
     @Override
     public Instant send(ByteBuffer data) throws IOException {
-        DatagramPacket datagram = new DatagramPacket(data.array(), data.position(), serverAddress.getAddress(), serverAddress.getPort());
+        DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), serverAddress.getAddress(), serverAddress.getPort());
         Instant timeSent = clock.instant();
         socket.send(datagram);
         return timeSent;
