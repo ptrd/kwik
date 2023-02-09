@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.cid;
 
+import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -35,6 +36,8 @@ import java.util.function.BiConsumer;
 
 import static net.luminis.quic.EncryptionLevel.App;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
+import static net.luminis.quic.Role.Client;
+import static net.luminis.quic.Role.Server;
 
 /**
  * Manages the collections of connection ID's for the connection, both for this (side of the) connection and the peer's.
@@ -58,7 +61,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     private volatile int maxPeerCids;
     private volatile byte[] retrySourceCid;
     private final Version quicVersion = Version.QUIC_version_1;
-
+    private final Role role;
 
     /**
      * Creates a connection ID manager for server role.
@@ -79,6 +82,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         this.maxPeerCids = maxPeerCids;
         this.connectionRegistry = connectionRegistry;
         this.closeConnectionCallback = closeConnectionCallback;
+        role = Server;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         initialConnectionId = cidRegistry.currentConnectionId;
 
@@ -96,7 +100,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     /**
      * Creates a connection ID manager for client role.
      *
-     * @param connectionIdLength      the length of the connection ID's generated for this endpoint (server)
+     * @param connectionIdLength      the length of the connection ID's generated for this endpoint (client)
      * @param maxPeerCids             the maximum number of peer connection IDs this endpoint is willing to store
      * @param closeConnectionCallback callback for closing the connection with a transport error code
      * @param log                     logger
@@ -107,6 +111,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         this.connectionIdLength = cidRegistry.getConnectionIdlength();
         initialConnectionId = cidRegistry.getCurrent();
         this.closeConnectionCallback = closeConnectionCallback;
+        role = Client;
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-negotiating-connection-ids
         // "When an Initial packet is sent by a client (...), the client populates the Destination Connection ID field
@@ -133,6 +138,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     public void handshakeFinished() {
+        assert role == Server;
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
@@ -370,6 +376,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @param connectionId  the connection ID used in the (received) retry packet.
      */
     public void registerRetrySourceConnectionId(byte[] connectionId) {
+        assert role == Client;
         retrySourceCid = connectionId;
     }
 
@@ -379,6 +386,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @return  true if the given connection ID matches the retry source connection id registered earlier.
      */
     public boolean validateRetrySourceConnectionId(byte[] connectionId) {
+        assert role == Client;
         return Arrays.equals(retrySourceCid, connectionId);
     }
 
@@ -387,6 +395,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @param connectionId
      */
     public void registerInitialPeerCid(byte[] connectionId) {
+        assert role == Client;
         peerCidRegistry.replaceInitialConnectionId(connectionId);
     }
 
@@ -395,6 +404,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @param statelessResetToken
      */
     public void setInitialStatelessResetToken(byte[] statelessResetToken) {
+        assert role == Client;
         peerCidRegistry.setInitialStatelessResetToken(statelessResetToken);
     }
 
@@ -404,6 +414,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @return
      */
     public boolean isStatelessResetToken(byte[] data) {
+        assert role == Client;
         return peerCidRegistry.isStatelessResetToken(data);
     }
 

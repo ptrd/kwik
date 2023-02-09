@@ -39,6 +39,7 @@ sourceSets {
 
 test {
     useJUnitPlatform()
+    enableAssertions = true
     testLogging {
         showStandardStreams = true
         events "passed", "skipped", "failed"
