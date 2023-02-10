@@ -36,6 +36,7 @@ import net.luminis.quic.recovery.RttEstimator;
 import net.luminis.quic.socket.SocketManager;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.Clock;
@@ -156,6 +157,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     @Override
     public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
         sendRequestQueue[level.ordinal()].addRequest(frameSupplier, minimumSize, lostCallback);
+    }
+
+    @Override
+    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
+        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
+        wakeUpSenderLoop();
     }
 
     @Override
@@ -384,7 +391,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             throw bufferOverflow;
         }
 
-        Instant timeSent = socketManager.send(buffer);
+        Instant timeSent = socketManager.send(buffer, itemsToSend.stream().findAny().get().getClientAddress());
         datagramsSent++;
         packetsSent += itemsToSend.size();
         bytesSent += buffer.position();

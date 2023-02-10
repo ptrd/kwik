@@ -308,7 +308,7 @@ class ServerConnectionImplTest {
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
 
         // Then
-        verify(socketManager).send(argThat(this::isRetry));
+        verify(socketManager).send(argThat(this::isRetry), any(InetSocketAddress.class));
     }
 
     @Test
@@ -322,7 +322,7 @@ class ServerConnectionImplTest {
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
 
         // Then
-        verify(socketManager).send(argThat(byteArray -> Arrays.equals(getRetryToken(byteArray), retryToken)));
+        verify(socketManager).send(argThat(byteArray -> Arrays.equals(getRetryToken(byteArray), retryToken)), any(InetSocketAddress.class));
     }
 
     @Test
@@ -592,7 +592,7 @@ class ServerConnectionImplTest {
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         socketManager = mock(ServerConnectionSocketManager.class);
-        when(socketManager.send(any())).thenReturn(Instant.now());
+        when(socketManager.send(any(), any(InetSocketAddress.class))).thenReturn(Instant.now());
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("socketManager"), socketManager);
         return connection;
     }
@@ -668,13 +668,13 @@ class ServerConnectionImplTest {
 
     byte[] captureRetryToken(ServerConnectionSocketManager socketManager) throws Exception {
         ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
-        verify(socketManager).send(argumentCaptor.capture());
+        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
         return getRetryToken(argumentCaptor.getValue());
     }
 
     byte[] captureRetryPacket(ServerConnectionSocketManager socketManager) throws Exception {
         ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
-        verify(socketManager).send(argumentCaptor.capture());
+        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
         return argumentCaptor.getValue().array();
     }
 

@@ -29,7 +29,7 @@ import java.time.Instant;
  */
 public interface SocketManager {
 
-    Instant send(ByteBuffer data) throws IOException;
+    Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException;
 
     void close();
 

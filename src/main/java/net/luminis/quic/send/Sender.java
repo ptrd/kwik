@@ -21,8 +21,8 @@ package net.luminis.quic.send;
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.PnSpace;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -88,6 +88,14 @@ public interface Sender {
      * @param lostCallback
      */
     void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback);
+
+    /**
+     * Send one frame to (server role) or from (client role) an alternate client address.
+     * Gets priority over other queued reqeusts.
+     * @param frame
+     * @param clientAddress
+     */
+    void sendAlternateAddress(QuicFrame frame, InetSocketAddress clientAddress);
 
     /**
      * Set the initial token that should be used for all initial packets.

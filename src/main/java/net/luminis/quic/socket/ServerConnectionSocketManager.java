@@ -42,7 +42,7 @@ public class ServerConnectionSocketManager implements SocketManager {
     }
 
     @Override
-    public Instant send(ByteBuffer data) throws IOException {
+    public Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException {
         DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), initialClientAddress.getAddress(), initialClientAddress.getPort());
         Instant timeSent = clock.instant();
         serverSocket.send(datagram);

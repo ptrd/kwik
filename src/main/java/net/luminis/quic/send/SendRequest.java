@@ -20,6 +20,7 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -28,11 +29,19 @@ class SendRequest {
     private int estimatedSize;
     private Function<Integer, QuicFrame> frameSupplier;
     private Consumer<QuicFrame> lostCallback;
+    private InetSocketAddress alternateAddress;
 
     public SendRequest(int estimatedSize, Function<Integer, QuicFrame> frameSupplier, Consumer<QuicFrame> lostCallback) {
         this.estimatedSize = estimatedSize;
         this.frameSupplier = frameSupplier;
         this.lostCallback = lostCallback;
+    }
+
+    public SendRequest(int estimatedSize, Function<Integer, QuicFrame> frameSupplier, Consumer<QuicFrame> lostCallback, InetSocketAddress address) {
+        this.estimatedSize = estimatedSize;
+        this.frameSupplier = frameSupplier;
+        this.lostCallback = lostCallback;
+        this.alternateAddress = address;
     }
 
     public int getEstimatedSize() {
@@ -45,6 +54,10 @@ class SendRequest {
 
     public Consumer<QuicFrame> getLostCallback() {
         return lostCallback;
+    }
+
+    public InetSocketAddress getAlternateAddress() {
+        return alternateAddress;
     }
 }
 

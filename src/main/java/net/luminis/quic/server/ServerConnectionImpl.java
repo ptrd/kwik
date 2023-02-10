@@ -439,7 +439,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         try {
             RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
             byte[] packetBytes = retry.generatePacketBytes(null);  // Retry packet is not encrypted, so no keys needed.
-            Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes));
+            Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes), initialClientAddress);
             log.sent(timeSent, retry);
             log.getQLog().emitPacketSentEvent(retry, timeSent);
         }

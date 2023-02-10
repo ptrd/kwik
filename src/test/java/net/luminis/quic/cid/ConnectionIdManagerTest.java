@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.cid;
 
+import net.luminis.quic.TestUtils;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -37,6 +38,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static net.luminis.quic.TestUtils.*;
 import static net.luminis.quic.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -547,9 +549,5 @@ class ConnectionIdManagerTest {
 
         // Then
         assertThat(peerConnectionId).isNotEqualTo(initialClientCid);
-    }
-
-    private static InetSocketAddress getArbitraryLocalAddress() throws Exception {
-        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }

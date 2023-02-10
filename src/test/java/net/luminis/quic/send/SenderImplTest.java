@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import static net.luminis.quic.TestUtils.getArbitraryLocalAddress;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -52,6 +53,7 @@ class SenderImplTest extends AbstractSenderTest {
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
     private ClientSocketManager socketManager;
+    private InetSocketAddress clientAddress;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -72,6 +74,8 @@ class SenderImplTest extends AbstractSenderTest {
         when(socketManager.getClientAddress()).thenReturn(new InetSocketAddress(InetAddress.getLoopbackAddress(), 4433));
         sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socketManager, connection, 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
+        
+        clientAddress = getArbitraryLocalAddress();
     }
 
     @Test
@@ -93,10 +97,10 @@ class SenderImplTest extends AbstractSenderTest {
         ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
         ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
         packet1.setPacketNumber(10);
-        sender.send(List.of(new SendItem(packet1)));
+        sender.send(List.of(new SendItem(packet1, clientAddress)));
         packet1.setPacketNumber(11);
         packet2.setPacketNumber(12);
-        sender.send(List.of(new SendItem(packet1), new SendItem(packet2)));
+        sender.send(List.of(new SendItem(packet1, clientAddress), new SendItem(packet2, clientAddress)));
 
         assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
         assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
@@ -147,12 +151,13 @@ class SenderImplTest extends AbstractSenderTest {
         sender.sendIfAny();
 
         // Then   (given fixed size of StreamFrames, only three packets will fit in the limit of 3 * 1200)
-        verify(socketManager, times(3)).send(any(ByteBuffer.class));
+        verify(socketManager, times(3)).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
-    private void setupMockPacketAssember() throws NoSuchFieldException {
+    private void setupMockPacketAssember() throws Exception {
         packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(InetSocketAddress.class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(InetSocketAddress.class)))
+                .thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""), clientAddress)));
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
@@ -167,7 +172,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socketManager, never()).send(any(ByteBuffer.class));
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -181,7 +186,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socketManager).send(any(ByteBuffer.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -195,7 +200,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socketManager).send(any(ByteBuffer.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -209,6 +214,6 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socketManager).send(any(ByteBuffer.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 }

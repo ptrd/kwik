@@ -33,7 +33,9 @@ public class ClientSocketManager implements SocketManager {
     private final InetSocketAddress serverAddress;
     private final Clock clock;
     private volatile DatagramSocket socket;
+    private volatile DatagramSocket alternateSocket;
     private InetSocketAddress clientAddress;
+    private InetSocketAddress alternateClientAddress;
 
     public ClientSocketManager(InetSocketAddress serverAddress) throws SocketException {
         this(serverAddress, Clock.systemUTC());
@@ -47,10 +49,20 @@ public class ClientSocketManager implements SocketManager {
     }
 
     @Override
-    public Instant send(ByteBuffer data) throws IOException {
+    public Instant send(ByteBuffer data, InetSocketAddress address) throws IOException {
+        DatagramSocket sendSocket;
+        if (address.equals(clientAddress)) {
+            sendSocket = socket;
+        }
+        else if (address.equals(alternateClientAddress)) {
+            sendSocket = alternateSocket;
+        }
+        else {
+            throw new IllegalStateException("client address is not registered");
+        }
         DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), serverAddress.getAddress(), serverAddress.getPort());
         Instant timeSent = clock.instant();
-        socket.send(datagram);
+        sendSocket.send(datagram);
         return timeSent;
     }
 
@@ -74,5 +86,11 @@ public class ClientSocketManager implements SocketManager {
 
     public DatagramSocket getSocket() {
         return socket;
+    }
+
+    public InetSocketAddress bindNewLocalAddress() throws SocketException {
+        alternateSocket = new DatagramSocket();
+        alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
+        return alternateClientAddress;
     }
 }

@@ -75,15 +75,28 @@ public class PacketAssembler {
     /**
      * Assembles a QUIC packet for the encryption level handled by this instance.
      *
-     * @param remainingCwndSize
-     * @param availablePacketSize
-     * @param clientAddress
+     * @param remainingCwndSize     the maximum size the congestion window allows at this time
+     * @param availablePacketSize   the maximum size that is available for the packet
+     * @param defaultClientAddress  the client address to use if the queued request does not specify an (alternate) address
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress clientAddress) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress defaultClientAddress) {
         final int available = Integer.min(remainingCwndSize, availablePacketSize);
 
-        QuicPacket packet = createPacket(clientAddress);
+        // First check for alternate client address (has always priority)
+        if (requestQueue.hasAlternateAddressRequest()) {
+            assert level == EncryptionLevel.App;
+            Optional<SendRequest> request = requestQueue.getAlternateAddressRequest(available);
+            if (request.isPresent()) {
+                return request.map(sendRequest -> {
+                    QuicPacket packet = createPacket(sendRequest.getAlternateAddress());
+                    packet.addFrame(sendRequest.getFrameSupplier().apply(available));
+                    return new SendItem(packet, sendRequest.getAlternateAddress());
+                });
+            }
+        }
+
+        QuicPacket packet = createPacket(defaultClientAddress);
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
@@ -135,7 +148,7 @@ public class PacketAssembler {
             }
             packet.setIsProbe(true);
             packet.addFrames(probeData);
-            return Optional.of(new SendItem(packet));
+            return Optional.of(new SendItem(packet, defaultClientAddress));
         }
 
         if (requestQueue.hasRequests()) {
@@ -193,7 +206,7 @@ public class PacketAssembler {
             assembledItem = Optional.empty();
         }
         else {
-            assembledItem = Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
+            assembledItem = Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks), defaultClientAddress));
         }
 
         if (stopping && requestQueue.isEmpty(false)) {

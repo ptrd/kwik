@@ -25,6 +25,9 @@ import net.luminis.quic.test.FieldSetter;
 
 import javax.crypto.Cipher;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+
 import static net.luminis.quic.Version.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -98,6 +101,10 @@ public class TestUtils {
         else {
             throw new IllegalStateException("Unexpected value: " + quicVersion);
         }
+    }
+
+    public static InetSocketAddress getArbitraryLocalAddress() throws Exception {
+        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }
 

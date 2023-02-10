@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.cid;
 
+import net.luminis.quic.TestUtils;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
 
+import static net.luminis.quic.TestUtils.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -76,9 +78,5 @@ class DestinationConnectionIdRegistryTest {
         connectionIdRegistry.useNext();
         connectionIdRegistry.useNext();
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x02, 0x1c, 0x56, 0x0b })).isTrue();
-    }
-
-    private static InetSocketAddress getArbitraryLocalAddress() throws Exception {
-        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }
