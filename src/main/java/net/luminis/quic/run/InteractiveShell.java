@@ -22,7 +22,6 @@ import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Receiver;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.QuicStream;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.*;
@@ -34,7 +33,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -85,6 +83,7 @@ public class InteractiveShell {
         commands.put("stop", this::httpStop);
         commands.put("ping", this::sendPing);
         commands.put("params", this::printClientParams);
+        commands.put("probe", this::probePath);
         commands.put("server_params", this::printServerParams);
         commands.put("cid_new", this::newConnectionIds);
         commands.put("cid_next", this::nextDestinationConnectionId);
@@ -95,6 +94,17 @@ public class InteractiveShell {
         commands.put("statistics", this::printStatistics);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
+    }
+
+    private void probePath(String arg) {
+        if (List.of("new", "existing").stream().filter(opt -> opt.startsWith(arg.toLowerCase())).count() != 1) {
+            System.out.println("Expected argument: n[ew] | e[xisting]");
+            return;
+        }
+        else {
+            String option = List.of("new", "existing").stream().filter(opt -> opt.startsWith(arg.toLowerCase())).findFirst().get();
+            quicConnection.probePath(option.equals("new"));
+        }
     }
 
     private void repeatLastCommand(String arg) {

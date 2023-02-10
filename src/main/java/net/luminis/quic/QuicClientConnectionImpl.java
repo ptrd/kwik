@@ -25,6 +25,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.path.PathValidator;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.stream.EarlyDataStream;
@@ -92,6 +93,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
+    private PathValidator pathValidator;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
@@ -585,6 +587,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+        if (pathValidator != null) {
+            pathValidator.process(pathResponseFrame, packet);
+        }
+    }
+
+    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
@@ -622,6 +631,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // Fairly impossible, as we created a socket on an ephemeral port
             log.error("Changing local address failed", e);
         }
+    }
+
+    public void probePath(boolean probeNewPath) {
+        pathValidator = new PathValidator(quicVersion.getVersion(), socketManager, sender, log);
+        pathValidator.probePath(probeNewPath);
     }
 
     public void updateKeys() {

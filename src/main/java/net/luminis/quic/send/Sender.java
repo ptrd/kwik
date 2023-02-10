@@ -138,4 +138,10 @@ public interface Sender {
      * Notifies the sender that queued frames and packets should be sent as soon as possible.
      */
     void flush();
+
+    /**
+     * Returns the current PTO value for the current path in milliseconds.
+     * @return
+     */
+    int getPto();
 }
