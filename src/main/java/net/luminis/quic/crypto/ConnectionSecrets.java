@@ -51,13 +51,13 @@ public class ConnectionSecrets {
             (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad,
             (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-initial-salt
+    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-initial-salt-2
     // "The salt used to derive Initial keys in Section 5.2 of [QUIC-TLS] changes to:
-    //  initial_salt = 0xa707c203a59b47184a1d62ca570406ea7ae3e5d3"
+    //  initial_salt = 0x0dede3def700a6db819381be6e269dcbf9bd2ed9"
     public static final byte[] STATIC_SALT_V2 = new byte[] {
-            (byte) 0xa7, (byte) 0x07, (byte) 0xc2, (byte) 0x03, (byte) 0xa5, (byte) 0x9b, (byte) 0x47, (byte) 0x18,
-            (byte) 0x4a, (byte) 0x1d, (byte) 0x62, (byte) 0xca, (byte) 0x57, (byte) 0x04, (byte) 0x06, (byte) 0xea,
-            (byte) 0x7a, (byte) 0xe3, (byte) 0xe5, (byte) 0xd3 };
+            (byte) 0x0d, (byte) 0xed, (byte) 0xe3, (byte) 0xde, (byte) 0xf7, (byte) 0x00, (byte) 0xa6, (byte) 0xdb,
+            (byte) 0x81, (byte) 0x93, (byte) 0x81, (byte) 0xbe, (byte) 0x6e, (byte) 0x26, (byte) 0x9d, (byte) 0xcb,
+            (byte) 0xf9, (byte) 0xbd, (byte) 0x2e, (byte) 0xd9 };
 
     private final VersionHolder quicVersion;
     private final Role ownRole;
