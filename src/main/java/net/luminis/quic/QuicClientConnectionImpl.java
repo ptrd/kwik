@@ -26,6 +26,9 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.path.PathValidator;
+import net.luminis.quic.receive.RawPacket;
+import net.luminis.quic.receive.Receiver;
+import net.luminis.quic.receive.ReceiverImpl;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.stream.EarlyDataStream;
@@ -128,7 +131,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
 
-        receiver = new Receiver(socketManager.getSocket(), log, this::abortConnection);
+        receiver = new ReceiverImpl(socketManager.getSocket(), log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
 
         connectionState = Status.Created;

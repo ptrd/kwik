@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.receive.Receiver;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;

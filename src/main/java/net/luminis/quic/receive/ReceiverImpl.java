@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic;
+package net.luminis.quic.receive;
 
 import net.luminis.quic.log.Logger;
 
@@ -31,12 +31,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/**
- * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
- */
-public class Receiver {
 
-    public static final int MAX_DATAGRAM_SIZE = 1500;
+public class ReceiverImpl implements Receiver {
 
     private volatile DatagramSocket socket;
     private final Logger log;
@@ -46,7 +42,7 @@ public class Receiver {
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
-    public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
+    public ReceiverImpl(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
         this.socket = socket;
         this.log = log;
         this.abortCallback = abortCallback;

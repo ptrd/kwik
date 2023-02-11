@@ -19,7 +19,7 @@
 package net.luminis.quic.run;
 
 import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Receiver;
+import net.luminis.quic.receive.Receiver;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.tls.util.ByteUtils;

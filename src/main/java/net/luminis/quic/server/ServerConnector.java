@@ -22,6 +22,9 @@ import net.luminis.quic.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.receive.RawPacket;
+import net.luminis.quic.receive.Receiver;
+import net.luminis.quic.receive.ReceiverImpl;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
 
@@ -81,7 +84,7 @@ public class ServerConnector implements ServerConnectionRegistry {
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         currentConnections = new ConcurrentHashMap<>();
-        receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
+        receiver = new ReceiverImpl(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
     }
 
