@@ -32,17 +32,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 
-public class ReceiverImpl implements Receiver {
+public class FixedAddressReceiver implements Receiver {
 
-    private volatile DatagramSocket socket;
+    private final DatagramSocket socket;
     private final Logger log;
     private final Consumer<Throwable> abortCallback;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
     private volatile boolean isClosing = false;
-    private volatile boolean changing = false;
 
-    public ReceiverImpl(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
+    public FixedAddressReceiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
         this.socket = socket;
         this.log = log;
         this.abortCallback = abortCallback;
@@ -58,19 +57,23 @@ public class ReceiverImpl implements Receiver {
         }
     }
 
+    @Override
     public void start() {
         receiverThread.start();
     }
 
+    @Override
     public void shutdown() {
         isClosing = true;
         receiverThread.interrupt();
     }
 
+    @Override
     public RawPacket get() throws InterruptedException {
         return receivedPacketsQueue.take();
     }
 
+    @Override
     public boolean hasMore() {
         return !receivedPacketsQueue.isEmpty();
     }
@@ -81,6 +84,7 @@ public class ReceiverImpl implements Receiver {
      * @return
      * @throws InterruptedException
      */
+    @Override
     public RawPacket get(int timeout) throws InterruptedException {
         return receivedPacketsQueue.poll(timeout, TimeUnit.SECONDS);
     }
@@ -102,16 +106,6 @@ public class ReceiverImpl implements Receiver {
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set
                 }
-                catch (SocketException socketError) {
-                    if (changing) {
-                        // Expected
-                        log.debug("Ignoring socket closed exception, because changing socket", socketError);
-                        changing = false;  // Don't do it again.
-                    }
-                    else {
-                        throw socketError;
-                    }
-                }
             }
 
             log.debug("Terminating receive loop");
@@ -130,12 +124,5 @@ public class ReceiverImpl implements Receiver {
             log.error("IOException while receiving datagrams", fatal);
             abortCallback.accept(fatal);
         }
-    }
-
-    public void changeAddress(DatagramSocket newSocket) {
-        DatagramSocket oldSocket = socket;
-        socket = newSocket;
-        changing = true;
-        oldSocket.close();
     }
 }

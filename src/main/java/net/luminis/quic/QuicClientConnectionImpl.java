@@ -26,9 +26,8 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.path.PathValidator;
+import net.luminis.quic.receive.MultipleAddressReceiver;
 import net.luminis.quic.receive.RawPacket;
-import net.luminis.quic.receive.Receiver;
-import net.luminis.quic.receive.ReceiverImpl;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.stream.EarlyDataStream;
@@ -76,7 +75,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final TlsClientEngine tlsEngine;
     private final ClientSocketManager socketManager;
     private final SenderImpl sender;
-    private final Receiver receiver;
+    private final MultipleAddressReceiver receiver;
     private final StreamManager streamManager;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
@@ -121,8 +120,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         };
         connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
 
+        receiver = new MultipleAddressReceiver(log, this::abortConnection);
         InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getByName(proxyHost != null ? proxyHost : host), port);
-        socketManager = new ClientSocketManager(serverAddress);
+        socketManager = new ClientSocketManager(serverAddress, receiver);
         connectionIdManager.registerClientAddress(socketManager.getClientAddress());
 
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, initialRtt, log);
@@ -131,7 +131,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
 
-        receiver = new ReceiverImpl(socketManager.getSocket(), log, this::abortConnection);
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
 
         connectionState = Status.Created;
@@ -626,10 +625,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void changeAddress() {
         try {
-            DatagramSocket newSocket = new DatagramSocket();
-            socketManager.changeClientAddress(newSocket);
-            receiver.changeAddress(newSocket);
-            log.info("Changed local address to " + newSocket.getLocalPort());
+            InetSocketAddress newAddress = socketManager.changeClientPort();
+            log.info("Changed local address to " + newAddress.getPort());
         } catch (SocketException e) {
             // Fairly impossible, as we created a socket on an ephemeral port
             log.error("Changing local address failed", e);

@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.receive;
 
-import java.net.DatagramSocket;
 
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
@@ -36,6 +35,4 @@ public interface Receiver {
     RawPacket get(int timeout) throws InterruptedException;
 
     boolean hasMore();
-
-    void changeAddress(DatagramSocket newSocket);
 }

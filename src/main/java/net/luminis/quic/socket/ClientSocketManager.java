@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.socket;
 
+import net.luminis.quic.receive.MultipleAddressReceiver;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -31,21 +33,25 @@ import java.time.Instant;
 public class ClientSocketManager implements SocketManager {
 
     private final InetSocketAddress serverAddress;
+    private MultipleAddressReceiver receiver;
     private final Clock clock;
     private volatile DatagramSocket socket;
     private volatile DatagramSocket alternateSocket;
     private InetSocketAddress clientAddress;
     private InetSocketAddress alternateClientAddress;
 
-    public ClientSocketManager(InetSocketAddress serverAddress) throws SocketException {
-        this(serverAddress, Clock.systemUTC());
+    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver) throws SocketException {
+        this(serverAddress, receiver, Clock.systemUTC());
     }
 
-    public ClientSocketManager(InetSocketAddress serverAddress, Clock clock) throws SocketException {
+    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver, Clock clock) throws SocketException {
         this.serverAddress = serverAddress;
+        this.receiver = receiver;
         this.clock = clock;
         this.socket = new DatagramSocket();
         clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
+
+        receiver.addSocket(socket);
     }
 
     @Override
@@ -80,8 +86,13 @@ public class ClientSocketManager implements SocketManager {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }
 
-    public void changeClientAddress(DatagramSocket newSocket) {
+    public InetSocketAddress changeClientPort() throws SocketException {
+        DatagramSocket newSocket = new DatagramSocket();
+        receiver.addSocket(newSocket);
+        receiver.removeSocket(socket);
         socket = newSocket;
+        clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
+        return clientAddress;
     }
 
     public DatagramSocket getSocket() {
@@ -91,6 +102,7 @@ public class ClientSocketManager implements SocketManager {
     public InetSocketAddress bindNewLocalAddress() throws SocketException {
         alternateSocket = new DatagramSocket();
         alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
+        receiver.addSocket(alternateSocket);
         return alternateClientAddress;
     }
 }
