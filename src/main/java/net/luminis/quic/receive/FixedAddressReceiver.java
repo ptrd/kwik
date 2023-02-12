@@ -32,23 +32,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 
-public class FixedAddressReceiver implements Receiver {
+public class FixedAddressReceiver extends AbstractReceiver {
 
     private final DatagramSocket socket;
-    private final Logger log;
-    private final Consumer<Throwable> abortCallback;
     private final Thread receiverThread;
-    private final BlockingQueue<RawPacket> receivedPacketsQueue;
-    private volatile boolean isClosing = false;
 
     public FixedAddressReceiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
+        super(log, abortCallback);
         this.socket = socket;
-        this.log = log;
-        this.abortCallback = abortCallback;
 
-        receiverThread = new Thread(() -> run(), "receiver");
+        receiverThread = new Thread(() -> runSocketReceiveLoop(socket), "receiver");
         receiverThread.setDaemon(true);
-        receivedPacketsQueue = new LinkedBlockingQueue<>();
 
         try {
             log.debug("Socket receive buffer size: " + socket.getReceiveBufferSize());
@@ -66,63 +60,5 @@ public class FixedAddressReceiver implements Receiver {
     public void shutdown() {
         isClosing = true;
         receiverThread.interrupt();
-    }
-
-    @Override
-    public RawPacket get() throws InterruptedException {
-        return receivedPacketsQueue.take();
-    }
-
-    @Override
-    public boolean hasMore() {
-        return !receivedPacketsQueue.isEmpty();
-    }
-
-    /**
-     * Retrieves a received packet from the queue.
-     * @param timeout    the wait timeout in seconds
-     * @return
-     * @throws InterruptedException
-     */
-    @Override
-    public RawPacket get(int timeout) throws InterruptedException {
-        return receivedPacketsQueue.poll(timeout, TimeUnit.SECONDS);
-    }
-
-    private void run() {
-        int counter = 0;
-
-        try {
-            while (! isClosing) {
-                byte[] receiveBuffer = new byte[MAX_DATAGRAM_SIZE];
-                DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-                try {
-                    socket.receive(receivedPacket);
-
-                    Instant timeReceived = Instant.now();
-                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                    receivedPacketsQueue.add(rawPacket);
-                }
-                catch (SocketTimeoutException timeout) {
-                    // Impossible, as no socket timeout set
-                }
-            }
-
-            log.debug("Terminating receive loop");
-        }
-        catch (IOException e) {
-            if (! isClosing) {
-                // This is probably fatal
-                log.error("IOException while receiving datagrams", e);
-                abortCallback.accept(e);
-            }
-            else {
-                log.debug("closing receiver");
-            }
-        }
-        catch (Throwable fatal) {
-            log.error("IOException while receiving datagrams", fatal);
-            abortCallback.accept(fatal);
-        }
     }
 }

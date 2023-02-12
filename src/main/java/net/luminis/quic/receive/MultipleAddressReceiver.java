@@ -38,22 +38,15 @@ import java.util.function.Consumer;
  * they are received, but this order is not strictly maintained (so a caller might see two packets that are received on
  * different orders in reverse order of when they were received by the network interface).
  */
-public class MultipleAddressReceiver implements Receiver {
+public class MultipleAddressReceiver extends AbstractReceiver {
 
-    private final Logger log;
-    private final Consumer<Throwable> abortCallback;
-    private final BlockingQueue<RawPacket> receivedPacketsQueue;
-    private volatile boolean isClosing;
     private final List<DatagramSocket> sockets;
     private final List<Thread> threads;
 
     public MultipleAddressReceiver(Logger log, Consumer<Throwable> abortCallback) {
-        this.log = log;
-        this.abortCallback = abortCallback;
-
+        super(log, abortCallback);
         sockets = new CopyOnWriteArrayList<>();
         threads = new CopyOnWriteArrayList<>();
-        receivedPacketsQueue = new LinkedBlockingQueue<>();
     }
 
     @Override
@@ -74,27 +67,6 @@ public class MultipleAddressReceiver implements Receiver {
         threads.forEach(t -> t.interrupt());
     }
 
-    @Override
-    public RawPacket get() throws InterruptedException {
-        return receivedPacketsQueue.take();
-    }
-
-    /**
-     * Retrieves a received packet from the queue.
-     * @param timeout    the wait timeout in seconds
-     * @return
-     * @throws InterruptedException
-     */
-    @Override
-    public RawPacket get(int timeout) throws InterruptedException {
-        return receivedPacketsQueue.poll(timeout, TimeUnit.SECONDS);
-    }
-
-    @Override
-    public boolean hasMore() {
-        return !receivedPacketsQueue.isEmpty();
-    }
-
     public synchronized void addSocket(DatagramSocket socket) {
         // Sync'd to ensure that lists of sockets and threads always match
         sockets.add(socket);
@@ -111,43 +83,8 @@ public class MultipleAddressReceiver implements Receiver {
         }
     }
 
-    private void runSocketReceiveLoop(DatagramSocket socket) {
-        log.debug("Start listen loop on port " + socket.getLocalPort());
-        int counter = 0;
-
-        try {
-            while (! isClosing) {
-                byte[] receiveBuffer = new byte[MAX_DATAGRAM_SIZE];
-                DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-                try {
-                    socket.receive(receivedPacket);
-
-                    Instant timeReceived = Instant.now();
-                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                    log.info("Received packet on port " + socket.getLocalPort());
-                    receivedPacketsQueue.add(rawPacket);
-                }
-                catch (SocketTimeoutException timeout) {
-                    // Impossible, as no socket timeout set
-                }
-                System.out.println("interrupted (i guess) " + Thread.currentThread());
-            }
-
-            log.debug("Terminating receive loop");
-        }
-        catch (IOException e) {
-            if (! isClosing && threads.contains(Thread.currentThread())) {
-                // This is probably fatal
-                log.error("IOException while receiving datagrams", e);
-                abortCallback.accept(e);
-            }
-            else {
-                log.debug("closing receiver");
-            }
-        }
-        catch (Throwable fatal) {
-            log.error("IOException while receiving datagrams", fatal);
-            abortCallback.accept(fatal);
-        }
+    @Override
+    protected boolean isFatal(IOException ioException) {
+        return !isClosing && threads.contains(Thread.currentThread());
     }
 }
