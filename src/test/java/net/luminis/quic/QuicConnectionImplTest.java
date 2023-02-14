@@ -27,6 +27,7 @@ import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
+import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,6 +200,10 @@ class QuicConnectionImplTest {
 
         @Override
         public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+        }
+
+        @Override
+        protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
         }
 
         @Override

@@ -193,6 +193,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         return connectionIdManager.getInitialConnectionId().length;
     }
 
+    @Override
+    protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
+    }
+
     public byte[] getInitialConnectionId() {
         return connectionIdManager.getInitialConnectionId();
     }

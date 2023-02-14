@@ -89,6 +89,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
+    private volatile Throwable handshakeError;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
@@ -228,7 +229,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
             else if (connectionState != Status.Connected) {
                 abortHandshake();
-                throw new ConnectException("Handshake error");
+                throw new ConnectException("Handshake error: " + (handshakeError != null? handshakeError.toString(): ""));
             }
         }
         catch (InterruptedException e) {
@@ -333,7 +334,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             log.debug("Terminating receiver loop because of interrupt");
         }
         catch (Exception error) {
-            log.error("Terminating receiver loop because of error", error);
+            log.debug("Terminating receiver loop because of error", error);
             abortConnection(error);
         }
     }
@@ -592,6 +593,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         super.immediateCloseWithError(level, error, errorReason);
     }
 
+    @Override
+    protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
+        if (connectionState == Status.Handshaking) {
+            handshakeError = exception;
+        }
+        else {
+            log.error("Processing crypto frame failed with ", exception);
+        }
+    }
+
     /**
      * Closes the connection by discarding all connection state. Do not call directly, should be called after
      * closing state or draining state ends.
@@ -777,6 +788,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      */
     @Override
     public void abortConnection(Throwable error) {
+        if (connectionState == Status.Handshaking) {
+            handshakeError = error;
+        }
         connectionState = Status.Closing;
 
         if (error != null) {
