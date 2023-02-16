@@ -23,6 +23,7 @@ import net.luminis.quic.log.Logger;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
@@ -80,8 +81,7 @@ public abstract class AbstractReceiver implements Receiver {
                     socket.receive(receivedPacket);
 
                     Instant timeReceived = Instant.now();
-                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                    log.info("Received packet on port " + socket.getLocalPort());
+                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, (InetSocketAddress) socket.getLocalSocketAddress());
                     receivedPacketsQueue.add(rawPacket);
                 }
                 catch (SocketTimeoutException timeout) {
