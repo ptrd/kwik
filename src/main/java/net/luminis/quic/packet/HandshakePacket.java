@@ -24,6 +24,7 @@ import net.luminis.quic.PnSpace;
 import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -87,7 +88,7 @@ public class HandshakePacket extends LongHeaderPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress) {
         return processor.process(this, time);
     }
 

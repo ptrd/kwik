@@ -23,6 +23,7 @@ import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
+import java.net.InetSocketAddress;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -512,7 +513,7 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time);
+    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress);
 
     /**
      * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2

@@ -147,7 +147,7 @@ public class ConnectionQLog implements QLogEventProcessor {
         jsonGenerator.writeEnd();  // header
 
         jsonGenerator.writeStartArray("frames");
-        packet.getFrames().stream().forEach(frame -> frame.accept(frameFormatter, null, null));
+        packet.getFrames().stream().forEach(frame -> frame.accept(frameFormatter, null, null, null));
         jsonGenerator.writeEnd()  // frames
                 .writeStartObject("raw")
                 .write("length", packet.getSize())

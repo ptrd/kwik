@@ -24,6 +24,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -159,8 +160,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
-        return processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress) {
+        return processor.process(this, time, clientAddress);
     }
 
     protected void checkPacketType(byte flags) {

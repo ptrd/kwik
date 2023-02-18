@@ -345,8 +345,8 @@ class QuicClientConnectionImplTest {
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new MaxStreamDataFrame(stream.getStreamId(), 10_000)), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new MaxStreamDataFrame(stream.getStreamId(), 10_000)),
+                Instant.now(), null);
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(10_000);
     }
@@ -363,8 +363,8 @@ class QuicClientConnectionImplTest {
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(1000);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new MaxDataFrame(4_000)), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new MaxDataFrame(4_000)),
+                Instant.now(), null);
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(4_000);
     }
@@ -376,8 +376,8 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new ConnectionCloseFrame(Version.getDefault())),
+                Instant.now(), null);
 
         verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -388,14 +388,14 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
 
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new ConnectionCloseFrame(Version.getDefault())),
+                Instant.now(), null);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new ConnectionCloseFrame(Version.getDefault())),
+                Instant.now(), null);
         connection.processFrames(
-                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                new ShortHeaderPacket(Version.getDefault(), destinationConnectionId, new ConnectionCloseFrame(Version.getDefault())),
+                Instant.now(), null);
 
         verify(sender, times(1)).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -418,7 +418,8 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
 
         RetireConnectionIdFrame retireFrame = new RetireConnectionIdFrame(Version.getDefault(), 0);
-        connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame), Instant.now());
+        connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame),
+                Instant.now(), null);
 
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
         verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -434,7 +435,7 @@ class QuicClientConnectionImplTest {
         assertThat(newUnusedConnectionId).isNotEqualTo(connection.getSourceConnectionId());
         clearInvocations(sender);
 
-        connection.process(new ShortHeaderPacket(Version.getDefault(), newUnusedConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), newUnusedConnectionId, new Padding(20)), Instant.now(), null);
 
         // Then
         assertThat(connection.getSourceConnectionIds().get(0).getConnectionIdStatus()).isEqualTo(ConnectionIdStatus.USED);
@@ -454,7 +455,7 @@ class QuicClientConnectionImplTest {
         assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
 
         clearInvocations(sender);
-        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now(), null);
 
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -472,10 +473,10 @@ class QuicClientConnectionImplTest {
         byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
         byte[] nextConnectionId = newConnectionIds[0];
         assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
-        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now(), null);
 
         clearInvocations(sender);
-        connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)), Instant.now(), null);
 
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }

@@ -207,7 +207,7 @@ class ServerConnectorTest {
         // Then
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
         // And
-        verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), any(ByteBuffer.class), argThat(packet -> packet instanceof InitialPacket));
+        verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any(), argThat(packet -> packet instanceof InitialPacket));
     }
 
     @Test

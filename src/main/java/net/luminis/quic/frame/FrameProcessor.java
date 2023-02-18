@@ -2,6 +2,7 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 
 /**
@@ -33,7 +34,7 @@ public interface FrameProcessor {
 
     void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived);
 
-    void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived);
+    void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress);
 
     void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived);
 

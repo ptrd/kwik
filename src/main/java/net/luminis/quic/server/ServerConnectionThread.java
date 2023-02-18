@@ -76,11 +76,11 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private void process() {
         try {
             if (firstInitialPacket != null) {
-                serverConnection.parseAndProcessPackets(0, firstPacketReceived, firstDatagram, firstInitialPacket);
+                serverConnection.parseAndProcessPackets(0, firstPacketReceived, firstDatagram, null, firstInitialPacket);
             }
             while (true) {
                 ReceivedDatagram datagram = queue.take();
-                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data, null);
+                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data, null, null);
             }
         }
         catch (InterruptedException e) {

@@ -77,14 +77,14 @@ public class PathValidator {
         }
     }
 
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, InetSocketAddress clientAddress) {
         if (challengePayload != null) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-successful-path-validation
             // "Path validation succeeds when a PATH_RESPONSE frame is received that contains the data that was sent
             //  in a previous PATH_CHALLENGE frame. A PATH_RESPONSE frame received on any network path validates the
             //  path on which the PATH_CHALLENGE was sent."
             if (Arrays.equals(pathResponseFrame.getData(), challengePayload)) {
-                log.info("Path validation succeeded");
+                log.info("Path validation succeeded; got path challenge response on port " + clientAddress.getPort());
                 pathValidatedCondition.countDown();
                 challengePayload = null;
             }

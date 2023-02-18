@@ -25,6 +25,7 @@ import net.luminis.quic.ack.Range;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -220,7 +221,7 @@ public class AckFrame extends QuicFrame {
         delayScale = (int) Math.pow(2, exponent);
     }
 
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         frameProcessor.process(this, packet, timeReceived);
     }
 }

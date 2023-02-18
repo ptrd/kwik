@@ -283,8 +283,8 @@ class ServerConnectionImplTest {
         connection.process(packet1, Instant.now());
         connection.process(packet2, Instant.now());
 
-        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
-        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
+        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class), any());
+        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class), any());
     }
 
     @Test
@@ -393,12 +393,12 @@ class ServerConnectionImplTest {
         ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
         paddedInitial.put(initialPacketBytes);
 
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null, null);
         byte[] retryPacket1 = captureRetryPacket(socketManager);
         clearInvocations(socketManager);
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null, null);
         byte[] retryPacket2 = captureRetryPacket(socketManager);
 
         // Then
@@ -427,7 +427,7 @@ class ServerConnectionImplTest {
 
         // When
         byte[] validInitial = TestUtils.createValidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(validInitial), null);
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(validInitial), null, null);
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
 
         // Then
@@ -439,7 +439,7 @@ class ServerConnectionImplTest {
     void receivingInvalidInitialPacketShouldAddToAntiAmplificationLimit() throws Exception {
         // When
         byte[] invalidInitial = TestUtils.createInvalidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(invalidInitial), null);
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(invalidInitial), null, null);
 
         // Then
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -481,7 +481,7 @@ class ServerConnectionImplTest {
         connection = createServerConnection(tlsServerEngineFactory, false, odcid);
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null, null);
 
         // Then
         verify(connection.getSender(), never()).send(any(QuicFrame.class), any(EncryptionLevel.class));
@@ -497,7 +497,7 @@ class ServerConnectionImplTest {
         // When
         ByteBuffer buffer = ByteBuffer.allocate(1200);
         buffer.put(initialPacketBytes);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
+        connection.parseAndProcessPackets(0, Instant.now(), buffer, null, null);
 
         // Then
         verify(connection.getSender(), atLeastOnce()).send(any(QuicFrame.class), any(EncryptionLevel.class));
@@ -513,7 +513,7 @@ class ServerConnectionImplTest {
         // When
         ByteBuffer buffer = ByteBuffer.allocate(1200);
         buffer.put(initialPacketBytes);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
+        connection.parseAndProcessPackets(0, Instant.now(), buffer, null, null);
 
         // Then
         ArgumentCaptor<Integer> antiAmplicationLimitCaptor = ArgumentCaptor.forClass(Integer.class);

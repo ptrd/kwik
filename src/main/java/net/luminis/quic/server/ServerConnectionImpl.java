@@ -379,7 +379,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
+    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, InetSocketAddress clientAddress, QuicPacket parsedPacket) {
         if (InitialPacket.isInitial(data) && data.limit() < 1200) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14.1
             // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller
@@ -400,7 +400,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             sender.setAntiAmplificationLimit(3 * (int) bytesReceived);
         }
 
-        super.parseAndProcessPackets(datagram, timeReceived, data, parsedPacket);
+        super.parseAndProcessPackets(datagram, timeReceived, data, clientAddress, parsedPacket);
     }
 
     @Override
@@ -425,12 +425,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 addressValidated = true;
                 sender.unsetAntiAmplificationLimit();
                 // Valid token, proceed as usual.
-                processFrames(packet, time);
+                processFrames(packet, time, null);
                 return ProcessResult.Continue;
             }
         }
         else {
-            processFrames(packet, time);
+            processFrames(packet, time, null);
             return ProcessResult.Continue;
         }
     }
@@ -449,9 +449,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time, InetSocketAddress clientAddress) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, time, clientAddress);
         return ProcessResult.Continue;
     }
 
@@ -474,7 +474,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
-        processFrames(packet, time);
+        processFrames(packet, time, null);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
         // TODO: discard keys too
@@ -491,7 +491,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public ProcessResult process(ZeroRttPacket packet, Instant time) {
        if (acceptedEarlyData) {
-            processFrames(packet, time);
+            processFrames(packet, time, null);
         }
         else {
             log.warn("Ignoring 0-RTT packet because server connection does not accept early data.");

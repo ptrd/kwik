@@ -333,7 +333,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData(), null);
+                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData(), rawPacket.getLocalAddress(), null);
                     sender.datagramProcessed(receiver.hasMore());
                 }
             }
@@ -472,7 +472,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             handleVersionNegotiation(packet.getVersion());
         }
         connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, time, null);
         ignoreVersionNegotiation = true;
         return ProcessResult.Continue;
     }
@@ -489,14 +489,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(HandshakePacket packet, Instant time) {
-        processFrames(packet, time);
+        processFrames(packet, time, null);
         return ProcessResult.Continue;
     }
 
     @Override
-    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, Instant time, InetSocketAddress clientAddress) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, time, clientAddress);
         return ProcessResult.Continue;
     }
 
@@ -589,9 +589,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         if (pathValidator != null) {
-            pathValidator.process(pathResponseFrame, packet);
+            pathValidator.process(pathResponseFrame, packet, clientAddress);
         }
     }
 

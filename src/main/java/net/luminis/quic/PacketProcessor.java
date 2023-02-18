@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.packet.*;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 
 public interface PacketProcessor {
@@ -31,7 +32,7 @@ public interface PacketProcessor {
 
     ProcessResult process(InitialPacket packet, Instant time);
 
-    ProcessResult process(ShortHeaderPacket packet, Instant time);
+    ProcessResult process(ShortHeaderPacket packet, Instant time, InetSocketAddress clientAddress);
 
     ProcessResult process(VersionNegotiationPacket packet, Instant time);
 

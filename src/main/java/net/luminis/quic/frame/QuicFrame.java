@@ -21,6 +21,7 @@ package net.luminis.quic.frame;
 
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -44,7 +45,7 @@ public abstract class QuicFrame {
         return true;
     }
 
-    public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived);
+    public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress);
 
     public abstract int getFrameLength();
 

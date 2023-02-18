@@ -36,6 +36,7 @@ import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.ErrorAlert;
 import net.luminis.tls.handshake.TlsEngine;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -181,7 +182,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return getStreamManager().createStream(bidirectional);
     }
 
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
+    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, InetSocketAddress clientAddress, QuicPacket parsedPacket) {
         while (data.remaining() > 0 || parsedPacket != null) {
             try {
                 QuicPacket packet;
@@ -195,7 +196,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                     parsedPacket = null;
                 }
 
-                processPacket(timeReceived, packet);
+                processPacket(timeReceived, packet, clientAddress);
                 getSender().packetProcessed(data.hasRemaining());
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
@@ -334,9 +335,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return packet;
     }
 
-    protected void processFrames(QuicPacket packet, Instant timeReceived) {
+    protected void processFrames(QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         for (QuicFrame frame: packet.getFrames()) {
-            frame.accept(this, packet, timeReceived);
+            frame.accept(this, packet, timeReceived, clientAddress);
         }
     }
 
@@ -395,11 +396,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
-    protected void processPacket(Instant timeReceived, QuicPacket packet) {
+    protected void processPacket(Instant timeReceived, QuicPacket packet, InetSocketAddress clientAddress) {
         log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
 
         if (! connectionState.closingOrDraining()) {
-            ProcessResult result = packet.accept(this, timeReceived);
+            ProcessResult result = packet.accept(this, timeReceived, clientAddress);
             if (result == ProcessResult.Abort) {
                 return;
             }
@@ -481,7 +482,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
     }
 
     @Override

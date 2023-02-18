@@ -25,6 +25,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.stream.StreamElement;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
@@ -199,7 +200,7 @@ public class StreamFrame extends QuicFrame implements StreamElement, Comparable<
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         frameProcessor.process(this, packet, timeReceived);
     }
 }

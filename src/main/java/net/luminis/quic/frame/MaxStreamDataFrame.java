@@ -23,6 +23,7 @@ import net.luminis.quic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -81,7 +82,7 @@ public class MaxStreamDataFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         frameProcessor.process(this, packet, timeReceived);
     }
 }

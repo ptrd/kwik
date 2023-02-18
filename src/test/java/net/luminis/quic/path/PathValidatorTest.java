@@ -93,7 +93,7 @@ class PathValidatorTest {
         byte[] challenge = frameCapturer.getValue().getData();
 
         // When
-        pathValidator.process(new PathResponseFrame(Version.getDefault(), challenge), null);
+        pathValidator.process(new PathResponseFrame(Version.getDefault(), challenge), null, TestUtils.getArbitraryLocalAddress());
 
         // Then
         pathValidatorThread.join(100);

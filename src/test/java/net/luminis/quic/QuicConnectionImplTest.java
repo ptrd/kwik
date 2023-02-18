@@ -23,7 +23,6 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
-import net.luminis.quic.QuicStream;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
@@ -32,6 +31,7 @@ import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -64,10 +64,10 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.process(packet, Instant.now());
+        connection.process(packet, Instant.now(), null);
 
         // Then
-        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class), any());
     }
 
     @Test
@@ -78,7 +78,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        connection.processPacket(Instant.now(), packet, null);
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -122,10 +122,10 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.process(packet, Instant.now());
+        connection.process(packet, Instant.now(), null);
 
         // Then
-        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class), any());
     }
 
     @Test
@@ -166,7 +166,7 @@ class QuicConnectionImplTest {
         // When
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame());
         for (int i = 0; i < 100; i++) {
-            connection.processPacket(Instant.now(), packet);
+            connection.processPacket(Instant.now(), packet, null);
         }
 
         // Then
@@ -241,7 +241,7 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
 
         }
 
@@ -284,8 +284,8 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public ProcessResult process(ShortHeaderPacket packet, Instant time) {
-            processFrames(packet, time);
+        public ProcessResult process(ShortHeaderPacket packet, Instant time, InetSocketAddress clientAddress) {
+            processFrames(packet, time, null);
             return null;
         }
 

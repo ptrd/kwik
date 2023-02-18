@@ -25,6 +25,7 @@ import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -128,7 +129,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress) {
         return PacketProcessor.ProcessResult.Continue;
     }
 

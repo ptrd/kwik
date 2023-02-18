@@ -23,6 +23,7 @@ import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.tls.util.ByteUtils;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -112,7 +113,7 @@ public class InitialPacket extends LongHeaderPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress) {
         return processor.process(this, time);
     }
 

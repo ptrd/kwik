@@ -24,6 +24,7 @@ import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.json.stream.JsonGenerator;
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.ListIterator;
 
@@ -135,7 +136,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived, InetSocketAddress clientAddress) {
         jsonGenerator.writeStartObject().write("frame_type", "path_response").writeEnd();
     }
 

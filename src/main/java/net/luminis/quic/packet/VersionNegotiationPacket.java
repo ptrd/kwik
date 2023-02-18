@@ -22,6 +22,7 @@ import net.luminis.quic.*;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -155,7 +156,7 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time, InetSocketAddress clientAddress) {
         return processor.process(this, time);
     }
 

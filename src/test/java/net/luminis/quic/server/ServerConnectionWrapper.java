@@ -19,8 +19,6 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.server.ServerConnectionImpl;
-import net.luminis.quic.server.ServerConnectionProxy;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -35,7 +33,7 @@ class ServerConnectionWrapper implements ServerConnectionProxy {
 
     public ServerConnectionWrapper(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
         this.connection = connection;
-        connection.parseAndProcessPackets(0, time, data, packet);
+        connection.parseAndProcessPackets(0, time, data, null, packet);
     }
 
     @Override
@@ -45,7 +43,7 @@ class ServerConnectionWrapper implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
-        connection.parseAndProcessPackets(datagramNumber, timeReceived, data, null);
+        connection.parseAndProcessPackets(datagramNumber, timeReceived, data, null, null);
     }
 
     @Override
