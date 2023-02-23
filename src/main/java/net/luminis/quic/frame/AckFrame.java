@@ -129,7 +129,7 @@ public class AckFrame extends QuicFrame {
         log.debug("Parsing AckFrame");
         acknowledgedRanges = new ArrayList<>();
 
-        buffer.get();  // Eat type.
+        int frameType = buffer.get();
 
         largestAcknowledged = VariableLengthInteger.parseLong(buffer);
 
@@ -163,6 +163,12 @@ public class AckFrame extends QuicFrame {
             currentSmallest -= (gapSize + addAcknowledgeRange(currentSmallest - gapSize - 1, contiguousPacketsPreceding));
         }
 
+        if (frameType == 0x03) {
+            // Parse ECN counts (in order to read the complete frame from the buffer)
+            VariableLengthInteger.parseLong(buffer);
+            VariableLengthInteger.parseLong(buffer);
+            VariableLengthInteger.parseLong(buffer);
+        }
         return this;
     }
 

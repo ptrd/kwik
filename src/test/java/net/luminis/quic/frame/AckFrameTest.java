@@ -32,7 +32,7 @@ class AckFrameTest extends FrameTest {
 
     @Test
     void testParse() throws Exception {
-        byte[] data = new byte[] { 0x0d, 0x00, 0x00, 0x00, 0x00 };
+        byte[] data = new byte[] { 0x02, 0x00, 0x00, 0x00, 0x00 };
 
         AckFrame ack = new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class));
         assertThat(ack.getLargestAcknowledged()).isEqualTo(0);
@@ -44,7 +44,7 @@ class AckFrameTest extends FrameTest {
     @Test
     void testParseAckRangeWithSingleGap() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below
-        byte[] data = new byte[] { 0x0d,      0x02,    0x00, 0x01,           0x00,                0x00,      0x00 };
+        byte[] data = new byte[] { 0x02,      0x02,    0x00, 0x01,           0x00,                0x00,      0x00 };
 
         AckFrame ack = new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class));
         assertThat(ack.getLargestAcknowledged()).isEqualTo(2);
@@ -57,7 +57,7 @@ class AckFrameTest extends FrameTest {
     @Test
     void testParseAckRangeWithLargerGap() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below
-        byte[] data = new byte[] { 0x0d,      0x08,    0x00, 0x01,           0x01,                0x03,      0x01 };
+        byte[] data = new byte[] { 0x02,      0x08,    0x00, 0x01,           0x01,                0x03,      0x01 };
 
         AckFrame ack = new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class));
         assertThat(ack.getLargestAcknowledged()).isEqualTo(8);
@@ -70,7 +70,7 @@ class AckFrameTest extends FrameTest {
     @Test
     void testParseAckRangeWithTwoAckBlocks() throws Exception {
         //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below gap (size) #acked-below
-        byte[] data = new byte[] { 0x0d,      0x0a,    0x00, 0x02,           0x02,                0x01,      0x01,        0x00,      0x02 };
+        byte[] data = new byte[] { 0x02,      0x0a,    0x00, 0x02,           0x02,                0x01,      0x01,        0x00,      0x02 };
 
         AckFrame ack = new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class));
         assertThat(ack.getLargestAcknowledged()).isEqualTo(10);
@@ -140,5 +140,19 @@ class AckFrameTest extends FrameTest {
         assertThat(ackFrame.toString()).contains("[5-4,2-0|");
     }
 
+    @Test
+    void parseAckFrameWithECNCounts() throws Exception {
+        //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below ecn-counts
+        byte[] data = new byte[] { 0x03,      0x02,    0x00, 0x01,           0x00,                0x00,      0x00,        0x70, 0x39, 0x70, 0x39, 0x70, 0x39 };
+
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        AckFrame ack = new AckFrame().parse(buffer, mock(Logger.class));
+        assertThat(buffer.position()).isEqualTo(data.length);
+        assertThat(ack.getLargestAcknowledged()).isEqualTo(2);
+        assertThat(ack.getAckDelay()).isEqualTo(0);
+
+        assertThat(ack.getAckedPacketNumbers()).containsOnly(2L, 0L);
+        assertThat(ack.toString()).contains("[2,0|");
+    }
 
 }
