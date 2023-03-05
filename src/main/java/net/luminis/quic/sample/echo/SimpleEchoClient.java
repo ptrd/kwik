@@ -60,7 +60,7 @@ public class SimpleEchoClient {
         SysOutLogger log = new SysOutLogger();
         // log.logPackets(true);     // Set various log categories with log.logABC()
 
-        connection = QuicClientConnectionImpl.newBuilder()
+        connection = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .noServerCertificateCheck()

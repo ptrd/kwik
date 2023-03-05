@@ -75,7 +75,7 @@ public class EchoClientUsing0RTT {
         log.logPackets(true);    // When 0-RTT is used, log will show a 0-RTT packet like "Packet Z|0|Z|52|1  StreamFrame[0(CIB),0,11,fin]"
 
         // Create connection builder (do not yet create connection!)
-        QuicClientConnectionImpl.Builder connectionBuilder = QuicClientConnectionImpl.newBuilder()
+        QuicClientConnection.Builder connectionBuilder = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .version(Version.QUIC_version_1)
@@ -93,7 +93,7 @@ public class EchoClientUsing0RTT {
         }
 
         // Create connection with 0-RTT data
-        QuicClientConnectionImpl connection = connectionBuilder.build();
+        QuicClientConnection connection = connectionBuilder.build();
         List<QuicStream> earlyStreams = connection.connect(5000, "echo", null, earlyData);
         // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
