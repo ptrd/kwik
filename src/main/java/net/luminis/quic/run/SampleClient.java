@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.SysOutLogger;
@@ -47,8 +48,8 @@ public class SampleClient {
         log.logInfo(true);
 
 
-        QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-        QuicClientConnectionImpl connection =
+        QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
+        QuicClientConnection connection =
                 builder.version(Version.QUIC_version_1)
                         .uri(new URI(args[0]))
                         .build();

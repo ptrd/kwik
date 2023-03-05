@@ -1009,43 +1009,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public static Builder newBuilder() {
         return new BuilderImpl();
     }
-
-    public interface Builder {
-        QuicClientConnectionImpl build() throws SocketException, UnknownHostException;
-
-        Builder connectTimeout(Duration duration);
-
-        Builder version(Version version);
-
-        Builder initialVersion(Version version);
-
-        Builder preferredVersion(Version version);
-
-        Builder logger(Logger log);
-
-        Builder sessionTicket(QuicSessionTicket ticket);
-
-        Builder proxy(String host);
-
-        Builder secrets(Path secretsFile);
-
-        Builder uri(URI uri);
-
-        Builder connectionIdLength(int length);
-
-        Builder initialRtt(int initialRtt);
-
-        Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
-
-        Builder noServerCertificateCheck();
-
-        Builder quantumReadinessTest(int nrOfDummyBytes);
-
-        Builder clientCertificate(X509Certificate certificate);
-
-        Builder clientCertificateKey(PrivateKey privateKey);
-    }
-
     private static class BuilderImpl implements Builder {
         private String host;
         private int port;

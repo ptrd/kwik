@@ -18,12 +18,19 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.QuicStream;
+import net.luminis.tls.TlsConstants;
+import net.luminis.quic.log.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
+import java.net.URI;
+import java.net.UnknownHostException;
+import java.nio.file.Path;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.time.Duration;
 
 
 public interface QuicClientConnection extends QuicConnection {
@@ -46,6 +53,10 @@ public interface QuicClientConnection extends QuicConnection {
 
     boolean isConnected();
 
+    static Builder newBuilder() {
+        return QuicClientConnectionImpl.newBuilder();
+    }
+
     class StreamEarlyData {
         byte[] data;
         boolean closeOutput;
@@ -55,4 +66,41 @@ public interface QuicClientConnection extends QuicConnection {
             closeOutput = closeImmediately;
         }
     }
+
+    interface Builder {
+        QuicClientConnectionImpl build() throws SocketException, UnknownHostException;
+
+        Builder connectTimeout(Duration duration);
+
+        Builder version(Version version);
+
+        Builder initialVersion(Version version);
+
+        Builder preferredVersion(Version version);
+
+        Builder logger(Logger log);
+
+        Builder sessionTicket(QuicSessionTicket ticket);
+
+        Builder proxy(String host);
+
+        Builder secrets(Path secretsFile);
+
+        Builder uri(URI uri);
+
+        Builder connectionIdLength(int length);
+
+        Builder initialRtt(int initialRtt);
+
+        Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
+
+        Builder noServerCertificateCheck();
+
+        Builder quantumReadinessTest(int nrOfDummyBytes);
+
+        Builder clientCertificate(X509Certificate certificate);
+
+        Builder clientCertificateKey(PrivateKey privateKey);
+    }
+
 }

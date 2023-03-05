@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.run;
 
+import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.SysOutLogger;
@@ -40,8 +41,8 @@ public class SendUnlimited {
             log.logPackets(true);
             log.logInfo(true);
 
-            QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-            QuicClientConnectionImpl connection =
+            QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
+            QuicClientConnection connection =
                     builder.version(Version.IETF_draft_32)
                             .noServerCertificateCheck()
                             .logger(log)
