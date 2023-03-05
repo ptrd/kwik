@@ -637,7 +637,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         //  peer is closing or draining."
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
             if (closing.hasError()) {
-                log.error("Connection closed by peer with " + determineClosingErrorMessage(closing));
+                peerClosedWithError(closing);
             }
             else {
                 log.info("Peer is closing");
@@ -654,6 +654,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
             drain();
         }
+    }
+
+    protected void peerClosedWithError(ConnectionCloseFrame closeFrame) {
+        log.error("Connection closed by peer with " + determineClosingErrorMessage(closeFrame));
     }
 
     private void drain() {

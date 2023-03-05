@@ -89,7 +89,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
-    private volatile Throwable handshakeError;
+    private volatile String handshakeError;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
@@ -229,7 +229,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
             else if (connectionState != Status.Connected) {
                 abortHandshake();
-                throw new ConnectException("Handshake error: " + (handshakeError != null? handshakeError.toString(): ""));
+                throw new ConnectException("Handshake error: " + (handshakeError != null? handshakeError: ""));
             }
         }
         catch (InterruptedException e) {
@@ -596,10 +596,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
         if (connectionState == Status.Handshaking) {
-            handshakeError = exception;
+            handshakeError = exception.toString();
         }
         else {
             log.error("Processing crypto frame failed with ", exception);
+        }
+    }
+
+    @Override
+    protected void peerClosedWithError(ConnectionCloseFrame closeFrame) {
+        super.peerClosedWithError(closeFrame);
+        if (connectionState == Status.Handshaking) {
+            handshakeError = "Server closed connection: " + determineClosingErrorMessage(closeFrame);
         }
     }
 
@@ -789,7 +797,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public void abortConnection(Throwable error) {
         if (connectionState == Status.Handshaking) {
-            handshakeError = error;
+            handshakeError = error.toString();
         }
         connectionState = Status.Closing;
 
