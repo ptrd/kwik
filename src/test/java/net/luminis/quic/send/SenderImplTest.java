@@ -63,7 +63,7 @@ class SenderImplTest extends AbstractSenderTest {
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
 
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
-        Keys keys = createKeys();
+        Keys keys = TestUtils.createKeys();
         when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
 
         sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, 100, new NullLogger());

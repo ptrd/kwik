@@ -55,6 +55,7 @@ public class TestUtils {
         when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
 
         when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
+        when(keys.aeadDecrypt(any(), any(), any())).thenCallRealMethod();
         when(keys.createHeaderProtectionMask(any())).thenCallRealMethod();
 
         return keys;

@@ -717,7 +717,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
 
         // Then
         QuicPacket packet = item.get().getPacket();
-        assertThat(packet.generatePacketBytes(createKeys()).length).isLessThanOrEqualTo(maxSize);
+        assertThat(packet.generatePacketBytes(TestUtils.createKeys()).length).isLessThanOrEqualTo(maxSize);
     }
 
     @Test
