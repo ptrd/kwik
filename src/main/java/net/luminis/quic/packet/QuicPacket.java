@@ -101,7 +101,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys keys, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
         if (buffer.remaining() < remainingLength) {
             throw new InvalidPacketException();
         }
@@ -132,7 +132,7 @@ abstract public class QuicPacket {
         // "Header protection is applied after packet protection is applied (see
         //   Section 5.3).  The ciphertext of the packet is sampled and used as
         //   input to an encryption algorithm."
-        byte[] mask = createHeaderProtectionMask(sample, serverSecrets);
+        byte[] mask = createHeaderProtectionMask(sample, keys);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1
         // "The output of this algorithm is a 5 byte mask which is applied to the
         //   protected header fields using exclusive OR.  The least significant
@@ -194,7 +194,7 @@ abstract public class QuicPacket {
         buffer.get(payload, 0, encryptedPayloadLength);
         log.encrypted("Encrypted payload", payload);
 
-        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
+        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, keys);
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
@@ -419,7 +419,7 @@ abstract public class QuicPacket {
         return frameBytes;
     }
 
-    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
+    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys keys) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
@@ -434,12 +434,12 @@ abstract public class QuicPacket {
 
         byte[] paddedPayload = new byte[payload.limit() + paddingSize];
         payload.get(paddedPayload, 0, payload.limit());
-        byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
+        byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, keys);
         packetBuffer.put(encryptedPayload);
 
         byte[] protectedPacketNumber;
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
-        byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, clientSecrets);
+        byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, keys);
 
         protectedPacketNumber = new byte[encodedPacketNumber.length];
         for (int i = 0; i < encodedPacketNumber.length; i++) {

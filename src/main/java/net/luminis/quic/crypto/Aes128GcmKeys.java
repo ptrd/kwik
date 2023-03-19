@@ -26,14 +26,17 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         super(quicVersion, initialSecret, nodeRole, log);
     }
 
+    @Override
     protected short getKeyLength() {
         return 16;
     }
 
+    @Override
     protected short getHashLength() {
         return 32;
     }
 
+    @Override
     public Cipher getHeaderProtectionCipher() {
         if (hpCipher == null) {
             try {
@@ -53,6 +56,7 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         return hpCipher;
     }
 
+    @Override
     public byte[] createHeaderProtectionMask(byte[] sample) {
         Cipher hpCipher = getHeaderProtectionCipher();
         byte[] mask;
@@ -65,6 +69,7 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         return mask;
     }
 
+    @Override
     public SecretKeySpec getWriteKeySpec() {
         if (possibleKeyUpdateInProgresss) {
             if (newWriteKeySpec == null) {
@@ -80,6 +85,7 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         }
     }
 
+    @Override
     public Cipher getWriteCipher() {
         if (writeCipher == null) {
             try {
@@ -95,6 +101,7 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         return writeCipher;
     }
 
+    @Override
     public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
         Cipher aeadCipher = getWriteCipher();
         SecretKeySpec secretKey = getWriteKeySpec();
@@ -110,6 +117,7 @@ public class Aes128GcmKeys extends BaseKeysImpl {
         }
     }
 
+    @Override
     public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
         if (message.length <= 16) {
             // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
