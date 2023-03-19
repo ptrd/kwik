@@ -52,7 +52,11 @@ class QuicSessionTicketTest {
         int activeConnectionIdLimit = 7;
         tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
         NewSessionTicket tlsTicket = mock(NewSessionTicket.class);
-        when(tlsTicket.serialize()).thenReturn(new byte[16]);   // Exact size doesn't matter
+        byte[] serializedTlsTicket = new byte[36];  // Exact size doesn't matter that much, as long as deserialize succeeds
+        // And to make the deserialize succeed, the cipher must be a valid value, e.g. 0x13 0x01
+        serializedTlsTicket[28] = 0x13;
+        serializedTlsTicket[29] = 0x01;
+        when(tlsTicket.serialize()).thenReturn(serializedTlsTicket);
         QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsTicket, tp);
 
         byte[] serializedData = quicSessionTicket.serialize();
