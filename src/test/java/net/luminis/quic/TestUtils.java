@@ -18,7 +18,9 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.crypto.Aes128GcmKeys;
 import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.BaseKeysImpl;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import net.luminis.quic.test.FieldSetter;
@@ -38,15 +40,15 @@ public class TestUtils {
      * @throws Exception
      */
     public static Keys createKeys() throws Exception {
-        Keys keys = mock(Keys.class);
+        Aes128GcmKeys keys = mock(Aes128GcmKeys.class);
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
         when(keys.getWriteKey()).thenReturn(new byte[16]);
-        Keys dummyKeys = new Keys(Version.getDefault(), new byte[16], null, mock(Logger.class));
-        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("hp"), new byte[16]);
+        Aes128GcmKeys dummyKeys = new Aes128GcmKeys(Version.getDefault(), new byte[16], null, mock(Logger.class));
+        FieldSetter.setField(dummyKeys, BaseKeysImpl.class.getDeclaredField("hp"), new byte[16]);
         Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
         when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
-        FieldSetter.setField(dummyKeys, Keys.class.getDeclaredField("writeKey"), new byte[16]);
+        FieldSetter.setField(dummyKeys, BaseKeysImpl.class.getDeclaredField("writeKey"), new byte[16]);
         Cipher wCipher = dummyKeys.getWriteCipher();
         // The Java implementation of this cipher (GCM), prevents re-use with the same iv.
         // As various tests often use the same packet numbers (used for creating the nonce), the cipher must be re-initialized for each test.

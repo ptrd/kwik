@@ -36,10 +36,15 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 
-public class Chacha20Keys extends Keys {
+public class Chacha20Keys extends BaseKeysImpl {
 
     public Chacha20Keys(Version quicVersion, Role server, Logger log) {
         super(quicVersion, server, log);
+    }
+
+    @Override
+    protected short getHashLength() {
+        return 32;
     }
 
     @Override

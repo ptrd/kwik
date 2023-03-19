@@ -99,8 +99,8 @@ public class ConnectionSecrets {
         byte[] initialSecret = computeInitialSecret(actualVersion);
         log.secret("Initial secret", initialSecret);
 
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128GcmKeys(actualVersion, initialSecret, Role.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128GcmKeys(actualVersion, initialSecret, Role.Server, log);
     }
 
     /**
@@ -110,7 +110,7 @@ public class ConnectionSecrets {
      * @return
      */
     public Keys getInitialPeerSecretsForVersion(Version version) {
-        return new Keys(version, computeInitialSecret(version), ownRole.other(), log);
+        return new Aes128GcmKeys(version, computeInitialSecret(version), ownRole.other(), log);
     }
 
     private byte[] computeInitialSecret(Version actualVersion) {
@@ -129,7 +129,7 @@ public class ConnectionSecrets {
     public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
         // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
         // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
-        Keys zeroRttSecrets = new Keys(originalVersion, Role.Client, log);
+        Keys zeroRttSecrets = new Aes128GcmKeys(originalVersion, Role.Client, log);
         zeroRttSecrets.computeZeroRttKeys(secrets);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
     }
@@ -140,8 +140,8 @@ public class ConnectionSecrets {
         Version actualVersion = this.quicVersion.getVersion();
         
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Keys(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new Keys(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new Aes128GcmKeys(actualVersion, Role.Client, log);
+            serverHandshakeSecrets = new Aes128GcmKeys(actualVersion, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
             clientHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Client, log);
