@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.crypto;
 
+import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.DecryptionException;
 import net.luminis.quic.QuicRuntimeException;
 import net.luminis.quic.Role;
@@ -35,10 +36,15 @@ import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
+/**
+ * https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+ * "QUIC can use any of the cipher suites defined in [TLS13] with the exception of TLS_AES_128_CCM_8_SHA256."
+ * https://www.rfc-editor.org/rfc/rfc8446.html#appendix-B.4
+ * "AEAD_CHACHA20_POLY1305 is defined in [RFC8439]."
+ */
+public class ChaCha20 extends BaseKeysImpl {
 
-public class Chacha20Keys extends BaseKeysImpl {
-
-    public Chacha20Keys(Version quicVersion, Role server, Logger log) {
+    public ChaCha20(Version quicVersion, Role server, Logger log) {
         super(quicVersion, server, log);
     }
 
@@ -50,6 +56,11 @@ public class Chacha20Keys extends BaseKeysImpl {
     @Override
     protected short getKeyLength() {
         return 32;
+    }
+
+    @Override
+    protected HKDF getHKDF() {
+        return HKDF.fromHmacSha256();
     }
 
     @Override

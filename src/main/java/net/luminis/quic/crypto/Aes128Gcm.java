@@ -1,5 +1,6 @@
 package net.luminis.quic.crypto;
 
+import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.DecryptionException;
 import net.luminis.quic.QuicRuntimeException;
 import net.luminis.quic.Role;
@@ -14,15 +15,18 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Keys and header protection algorithm for AEAD_AES_128_GCM
+ * https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+ * "QUIC can use any of the cipher suites defined in [TLS13] with the exception of TLS_AES_128_CCM_8_SHA256."
+ * https://www.rfc-editor.org/rfc/rfc8446.html#appendix-B.4
+ * "The corresponding AEAD algorithms AEAD_AES_128_GCM (...) are defined in [RFC5116]."
  */
-public class Aes128GcmKeys extends BaseKeysImpl {
+public class Aes128Gcm extends BaseKeysImpl {
 
-    public Aes128GcmKeys(Version quicVersion, Role nodeRole, Logger log) {
+    public Aes128Gcm(Version quicVersion, Role nodeRole, Logger log) {
         super(quicVersion, nodeRole, log);
     }
 
-    public Aes128GcmKeys(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
+    public Aes128Gcm(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
         super(quicVersion, initialSecret, nodeRole, log);
     }
 
@@ -34,6 +38,11 @@ public class Aes128GcmKeys extends BaseKeysImpl {
     @Override
     protected short getHashLength() {
         return 32;
+    }
+
+    @Override
+    protected HKDF getHKDF() {
+        return HKDF.fromHmacSha256();
     }
 
     @Override

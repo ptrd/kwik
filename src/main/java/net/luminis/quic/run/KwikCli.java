@@ -23,7 +23,6 @@ import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.QuicStream;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
@@ -40,17 +39,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.rmi.RemoteException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.*;
-import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -102,6 +99,9 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
         cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");
         cmdLineOptions.addOption(null, "clientKey", true, "private key (file) for client certificate");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 cipher suite");
+        cmdLineOptions.addOption(null, "aes128gcm", false, "use AEAD_AES_128_GCM cipher suite");
+        cmdLineOptions.addOption(null, "aes256gcm", false, "use AEAD_AES_256_GCM cipher suite");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -169,9 +169,7 @@ public class KwikCli {
             return;
         }
 
-        if (cmd.hasOption("chacha20")) {
-            builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
-        }
+        processCipherArgs(cmd, builder);
 
         if (cmd.hasOption("noCertificateCheck")) {
             builder.noServerCertificateCheck();
@@ -519,6 +517,30 @@ public class KwikCli {
         if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
             System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
+    }
+
+    private static QuicClientConnection.Builder processCipherArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
+        List<String> cipherOpts = List.of("aes128gcm", "aes256gcm", "chacha20");
+
+        // Process cipher options in order, as order has meaning! (preference)
+        List<Option> cipherOptions = Arrays.stream(cmd.getOptions())
+                .filter(option -> cipherOpts.contains(option.getLongOpt()))
+                .distinct()
+                .collect(Collectors.toList());
+
+        for (Option cipherOption: cipherOptions) {
+            if (cipherOption.getLongOpt().equals("aes128gcm")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
+            }
+            if (cipherOption.getLongOpt().equals("aes256gcm")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+            }
+            if (cipherOption.getLongOpt().equals("chacha20")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+            }
+        }
+
+        return builder;
     }
 
     private static boolean loadHttp3ClientClass() {

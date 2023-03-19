@@ -112,7 +112,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.closeCallback = closeCallback;
 
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
-        tlsEngine.addSupportedCiphers(List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256));
+        tlsEngine.addSupportedCiphers(List.of(
+                TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256,
+                TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384,
+                TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256
+                // TlsConstants.CipherSuite.TLS_AES_128_CCM_SHA256 not yet support by Kwik
+                // TlsConstants.CipherSuite.TLS_AES_128_CCM_8_SHA256 not used in QUIC!
+        ));
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);

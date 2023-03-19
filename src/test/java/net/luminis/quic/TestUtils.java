@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.crypto.Aes128GcmKeys;
+import net.luminis.quic.crypto.Aes128Gcm;
 import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.crypto.BaseKeysImpl;
 import net.luminis.quic.log.Logger;
@@ -40,11 +40,11 @@ public class TestUtils {
      * @throws Exception
      */
     public static Keys createKeys() throws Exception {
-        Aes128GcmKeys keys = mock(Aes128GcmKeys.class);
+        Aes128Gcm keys = mock(Aes128Gcm.class);
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
         when(keys.getWriteKey()).thenReturn(new byte[16]);
-        Aes128GcmKeys dummyKeys = new Aes128GcmKeys(Version.getDefault(), new byte[16], null, mock(Logger.class));
+        Aes128Gcm dummyKeys = new Aes128Gcm(Version.getDefault(), new byte[16], null, mock(Logger.class));
         FieldSetter.setField(dummyKeys, BaseKeysImpl.class.getDeclaredField("hp"), new byte[16]);
         Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
         when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);

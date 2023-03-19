@@ -90,6 +90,8 @@ public abstract class BaseKeysImpl implements Keys {
 
     protected abstract short getHashLength();
 
+    protected abstract HKDF getHKDF();
+
     public synchronized void computeZeroRttKeys(TrafficSecrets secrets) {
         byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
         computeKeys(earlySecret, true, true);
@@ -223,7 +225,7 @@ public abstract class BaseKeysImpl implements Keys {
     }
 
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
-    static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
+    byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
 
         byte[] prefix;
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
@@ -237,7 +239,7 @@ public abstract class BaseKeysImpl implements Keys {
         hkdfLabel.put(label.getBytes(ISO_8859_1));
         hkdfLabel.put((byte) (context.getBytes(ISO_8859_1).length));
         hkdfLabel.put(context.getBytes(ISO_8859_1));
-        HKDF hkdf = HKDF.fromHmacSha256();
+        HKDF hkdf = getHKDF();
         return hkdf.expand(secret, hkdfLabel.array(), length);
     }
 
