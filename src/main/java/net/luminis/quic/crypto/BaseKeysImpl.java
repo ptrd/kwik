@@ -92,35 +92,10 @@ public abstract class BaseKeysImpl implements Keys {
 
     protected abstract HKDF getHKDF();
 
-    public synchronized void computeZeroRttKeys(TrafficSecrets secrets) {
-        byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
-        computeKeys(earlySecret, true, true);
-    }
-
-    public synchronized void computeHandshakeKeys(TrafficSecrets secrets) {
-        if (nodeRole == Client) {
-            trafficSecret = secrets.getClientHandshakeTrafficSecret();
-            log.secret("ClientHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-        if (nodeRole == Server) {
-            trafficSecret = secrets.getServerHandshakeTrafficSecret();
-            log.secret("ServerHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-    }
-
-    public synchronized void computeApplicationKeys(TrafficSecrets secrets) {
-        if (nodeRole == Client) {
-            trafficSecret = secrets.getClientApplicationTrafficSecret();
-            log.secret("ClientApplicationTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-        if (nodeRole == Server) {
-            trafficSecret = secrets.getServerApplicationTrafficSecret();
-            log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
+    @Override
+    public synchronized void computeKeys(byte[] trafficSecret) {
+        this.trafficSecret = trafficSecret;
+        computeKeys(trafficSecret, true, true);
     }
 
     /**
@@ -128,6 +103,7 @@ public abstract class BaseKeysImpl implements Keys {
      * the write secrets (role that initiates the key update) or the read secrets (role that responds to the key update).
      * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
      */
+    @Override
     public synchronized void computeKeyUpdate(boolean selfInitiated) {
         String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
         newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
@@ -147,6 +123,7 @@ public abstract class BaseKeysImpl implements Keys {
      * Confirm that, if a key update was in progress, it has been successful and thus the new keys can (and should) be
      * used for decrypting all incoming packets.
      */
+    @Override
     public synchronized void confirmKeyUpdateIfInProgress() {
         if (possibleKeyUpdateInProgresss) {
             log.info("Installing updated keys (initiated by peer)");
@@ -163,6 +140,7 @@ public abstract class BaseKeysImpl implements Keys {
         }
     }
 
+    @Override
     public int getKeyUpdateCounter() {
         return keyUpdateCounter;
     }
@@ -181,6 +159,7 @@ public abstract class BaseKeysImpl implements Keys {
      * Confirm that, if a key update was in progress, it has been unsuccessful and thus the new keys should not be
      * used for decrypting all incoming packets.
      */
+    @Override
     public synchronized void cancelKeyUpdateIfInProgress() {
         if (possibleKeyUpdateInProgresss) {
             log.info("Discarding updated keys (initiated by peer)");
@@ -243,6 +222,7 @@ public abstract class BaseKeysImpl implements Keys {
         return hkdf.expand(secret, hkdfLabel.array(), length);
     }
 
+    @Override
     public byte[] getTrafficSecret() {
         return trafficSecret;
     }
@@ -254,6 +234,7 @@ public abstract class BaseKeysImpl implements Keys {
         return writeKey;
     }
 
+    @Override
     public byte[] getWriteIV() {
         if (possibleKeyUpdateInProgresss) {
             return newIV;

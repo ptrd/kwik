@@ -19,15 +19,11 @@
 package net.luminis.quic.crypto;
 
 import net.luminis.quic.DecryptionException;
-import net.luminis.tls.TrafficSecrets;
+
 
 public interface Keys {
 
-    void computeZeroRttKeys(TrafficSecrets secrets);
-
-    void computeHandshakeKeys(TrafficSecrets secrets);
-
-    void computeApplicationKeys(TrafficSecrets secrets);
+    void computeKeys(byte[] trafficSecret);
 
     byte[] createHeaderProtectionMask(byte[] sample);
 

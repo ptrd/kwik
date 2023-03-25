@@ -129,7 +129,9 @@ public class ConnectionSecrets {
     public synchronized void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
         // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
         createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion);
-        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeZeroRttKeys(secrets);
+
+        byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
+        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeKeys(earlySecret);
     }
 
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
@@ -165,8 +167,13 @@ public class ConnectionSecrets {
         this.selectedCipherSuite = selectedCipherSuite;
         createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion());
 
-        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
+        byte[] clientHandshakeTrafficSecret = secrets.getClientHandshakeTrafficSecret();
+        log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
+        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(clientHandshakeTrafficSecret);
+
+        byte[] serverHandshakeTrafficSecret = secrets.getServerHandshakeTrafficSecret();
+        log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(serverHandshakeTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
@@ -176,8 +183,13 @@ public class ConnectionSecrets {
     public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
         createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion());
 
-        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
+        byte[] clientApplicationTrafficSecret = secrets.getClientApplicationTrafficSecret();
+        log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
+        clientSecrets[EncryptionLevel.App.ordinal()].computeKeys(clientApplicationTrafficSecret);
+
+        byte[] serverApplicationTrafficSecret = secrets.getServerApplicationTrafficSecret();
+        log.secret("ServerApplicationTrafficSecret: ", serverApplicationTrafficSecret);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeKeys(serverApplicationTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
