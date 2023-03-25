@@ -221,7 +221,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public void earlySecretsKnown() {
         // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
         // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
-        connectionSecrets.computeEarlySecrets(tlsEngine, originalVersion);
+        connectionSecrets.computeEarlySecrets(tlsEngine, tlsEngine.getSelectedCipher(), originalVersion);
     }
 
     @Override

@@ -126,9 +126,9 @@ public class ConnectionSecrets {
         computeInitialKeys(originalDestinationConnectionId);
     }
 
-    public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
+    public synchronized void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
         // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
-        createKeys(EncryptionLevel.ZeroRTT, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256, originalVersion);
+        createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion);
         clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeZeroRttKeys(secrets);
     }
 

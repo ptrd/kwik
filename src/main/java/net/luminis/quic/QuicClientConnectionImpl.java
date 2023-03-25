@@ -385,7 +385,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void earlySecretsKnown() {
-        connectionSecrets.computeEarlySecrets(tlsEngine, quicVersion.getVersion());
+        if (sessionTicket != null) {
+            TlsConstants.CipherSuite cipher = sessionTicket.getCipher();
+            connectionSecrets.computeEarlySecrets(tlsEngine, cipher, quicVersion.getVersion());
+        }
     }
 
     @Override
