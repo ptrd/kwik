@@ -425,6 +425,11 @@ public class KwikCli {
             }
         }
 
+        if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
+            System.out.println("0-RTT is not yet supported by this HTTP3 implementation.");
+            System.exit(1);
+        }
+
         try {
             if (interactiveMode) {
                 new InteractiveShell(builder, alpn, httpVersion).start();
@@ -524,6 +529,7 @@ public class KwikCli {
 
         // Process cipher options in order, as order has meaning! (preference)
         List<Option> cipherOptions = Arrays.stream(cmd.getOptions())
+                .filter(option -> option.hasLongOpt())
                 .filter(option -> cipherOpts.contains(option.getLongOpt()))
                 .distinct()
                 .collect(Collectors.toList());
