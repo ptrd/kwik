@@ -127,36 +127,34 @@ public class ConnectionSecrets {
     }
 
     public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
-        Keys zeroRttSecrets = new Aes128Gcm(originalVersion, Role.Client, log);
-        zeroRttSecrets.computeZeroRttKeys(secrets);
-        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
+        // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
+        createKeys(EncryptionLevel.ZeroRTT, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256, originalVersion);
+        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeZeroRttKeys(secrets);
     }
 
-    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
+    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
         Keys clientHandshakeSecrets;
         Keys serverHandshakeSecrets;
-        Version actualVersion = this.quicVersion.getVersion();
-        
+
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Aes128Gcm(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new Aes128Gcm(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new Aes128Gcm(version, Role.Client, log);
+            serverHandshakeSecrets = new Aes128Gcm(version, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384) {
-            System.out.println("Creating keys with cipher AES_256_GCM_SHA384 for level " + level);
-            clientHandshakeSecrets = new Aes256Gcm(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new Aes256Gcm(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new Aes256Gcm(version, Role.Client, log);
+            serverHandshakeSecrets = new Aes256Gcm(version, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new ChaCha20(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new ChaCha20(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new ChaCha20(version, Role.Client, log);
+            serverHandshakeSecrets = new ChaCha20(version, Role.Server, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
         }
         clientSecrets[level.ordinal()] = clientHandshakeSecrets;
-        serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+        if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
+            serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+        }
 
         // Keys for peer and keys for self must be able to signal each other of a key update.
         clientHandshakeSecrets.setPeerKeys(serverHandshakeSecrets);
@@ -165,7 +163,7 @@ public class ConnectionSecrets {
 
     public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
         this.selectedCipherSuite = selectedCipherSuite;
-        createKeys(EncryptionLevel.Handshake, selectedCipherSuite);
+        createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion());
 
         clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
         serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
@@ -176,7 +174,7 @@ public class ConnectionSecrets {
     }
 
     public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
-        createKeys(EncryptionLevel.App, selectedCipherSuite);
+        createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion());
 
         clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
         serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
