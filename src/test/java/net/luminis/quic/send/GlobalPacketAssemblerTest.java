@@ -84,7 +84,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, new byte[0], new byte[0]);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(keys).length).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(aead).length).sum();
         assertThat(datagramLength).isCloseTo(18 + 3 + 36, Percentage.withPercentage(5));
     }
 

@@ -20,8 +20,12 @@ package net.luminis.quic.crypto;
 
 import net.luminis.quic.DecryptionException;
 
-
-public interface Keys {
+/**
+ * https://www.rfc-editor.org/rfc/rfc9001.html#name-packet-protection
+ * "As with TLS over TCP, QUIC protects packets with keys derived from the TLS handshake, using the AEAD algorithm [AEAD]
+ *  negotiated by TLS."
+ */
+public interface Aead {
 
     void computeKeys(byte[] trafficSecret);
 
@@ -65,7 +69,7 @@ public interface Keys {
 
     int getKeyUpdateCounter();
 
-    void setPeerKeys(Keys peerKeys);
+    void setPeerAead(Aead peerAead);
 
     byte[] getTrafficSecret();
 }

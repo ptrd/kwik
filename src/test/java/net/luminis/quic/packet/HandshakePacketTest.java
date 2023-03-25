@@ -19,8 +19,8 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsConstants;
@@ -39,11 +39,11 @@ import static org.mockito.Mockito.when;
 
 class HandshakePacketTest {
 
-    private Keys keys;
+    private Aead aead;
 
     @BeforeEach
     void initDummyKeys() throws Exception {
-        keys = TestUtils.createKeys();
+        aead = TestUtils.createKeys();
     }
 
     @Test
@@ -52,7 +52,7 @@ class HandshakePacketTest {
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
-        handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4);
+        handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4);
     }
 
     @Test
@@ -63,7 +63,7 @@ class HandshakePacketTest {
         HandshakePacket handshakePacket = new HandshakePacket(Version.IETF_draft_27);
 
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -75,7 +75,7 @@ class HandshakePacketTest {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
 
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -86,7 +86,7 @@ class HandshakePacketTest {
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
         assertThatThrownBy(
-                () ->         handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () ->         handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -97,7 +97,7 @@ class HandshakePacketTest {
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -108,7 +108,7 @@ class HandshakePacketTest {
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -119,7 +119,7 @@ class HandshakePacketTest {
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -130,7 +130,7 @@ class HandshakePacketTest {
 
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault());
         assertThatThrownBy(
-                () -> handshakePacket.parse(buffer, keys, 0, mock(Logger.class), 4)
+                () -> handshakePacket.parse(buffer, aead, 0, mock(Logger.class), 4)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -139,8 +139,8 @@ class HandshakePacketTest {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
         handshakePacket.setPacketNumber(1);
 
-        Keys keys = TestUtils.createKeys();
-        handshakePacket.generatePacketBytes(keys);
+        Aead aead = TestUtils.createKeys();
+        handshakePacket.generatePacketBytes(aead);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(handshakePacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
@@ -158,7 +158,7 @@ class HandshakePacketTest {
         connectionSecrets.computeHandshakeSecrets(tlsClientEngine, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
 
         HandshakePacket handshakePacket = new HandshakePacket(IETF_draft_29);
-        handshakePacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerSecrets(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
+        handshakePacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerAead(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
 
         assertThat(handshakePacket.packetNumber).isEqualTo(0);
         assertThat(handshakePacket.frames).hasAtLeastOneElementOfType(CryptoFrame.class);
@@ -176,7 +176,7 @@ class HandshakePacketTest {
         connectionSecrets.computeHandshakeSecrets(tlsClientEngine, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
 
         QuicPacket packet = new HandshakePacket(IETF_draft_29);
-        packet.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerSecrets(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
+        packet.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), connectionSecrets.getServerAead(EncryptionLevel.Handshake), 0, mock(Logger.class), 0);
 
         assertThat(packet.packetNumber).isEqualTo(9);
         assertThat(packet.frames).hasAtLeastOneElementOfType(AckFrame.class);
@@ -235,8 +235,8 @@ class HandshakePacketTest {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());
         handshakePacket.addFrame(new Padding(9));
 
-        Keys keys = TestUtils.createKeys();
-        byte[] bytes = handshakePacket.generatePacketBytes(keys);
+        Aead aead = TestUtils.createKeys();
+        byte[] bytes = handshakePacket.generatePacketBytes(aead);
         System.out.println(ByteUtils.bytesToHex(bytes));
 
     }

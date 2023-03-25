@@ -20,7 +20,7 @@ import java.security.NoSuchAlgorithmException;
  * https://www.rfc-editor.org/rfc/rfc8446.html#appendix-B.4
  * "The corresponding AEAD algorithms AEAD_AES_128_GCM (...) are defined in [RFC5116]."
  */
-public class Aes128Gcm extends BaseKeysImpl {
+public class Aes128Gcm extends BaseAeadImpl {
 
     public Aes128Gcm(Version quicVersion, Role nodeRole, Logger log) {
         super(quicVersion, nodeRole, log);

@@ -22,7 +22,6 @@ import at.favre.lib.crypto.HKDF;
 import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.TrafficSecrets;
 
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
@@ -30,9 +29,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 import static net.luminis.quic.Role.Client;
-import static net.luminis.quic.Role.Server;
 
-public abstract class BaseKeysImpl implements Keys {
+public abstract class BaseAeadImpl implements Aead {
 
     public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
@@ -67,15 +65,15 @@ public abstract class BaseKeysImpl implements Keys {
     protected Cipher writeCipher;
     private int keyUpdateCounter = 0;
     protected boolean possibleKeyUpdateInProgresss = false;
-    private volatile Keys peerKeys;
+    private volatile Aead peerAead;
 
-    public BaseKeysImpl(Version quicVersion, Role nodeRole, Logger log) {
+    public BaseAeadImpl(Version quicVersion, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
     }
 
-    public BaseKeysImpl(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
+    public BaseAeadImpl(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
@@ -144,14 +142,15 @@ public abstract class BaseKeysImpl implements Keys {
     public int getKeyUpdateCounter() {
         return keyUpdateCounter;
     }
+
     /**
      * In case keys are updated, check if the peer keys are already updated too (which depends on who initiated the
      * key update).
      */
     private void checkPeerKeys() {
-        if (peerKeys.getKeyUpdateCounter() < keyUpdateCounter) {
+        if (peerAead.getKeyUpdateCounter() < keyUpdateCounter) {
             log.debug("Keys out of sync; updating keys for peer");
-            peerKeys.computeKeyUpdate(true);
+            peerAead.computeKeyUpdate(true);
         }
     }
 
@@ -171,11 +170,10 @@ public abstract class BaseKeysImpl implements Keys {
     }
 
     private void computeKeys(byte[] secret, boolean includeHP, boolean replaceKeys) {
-
-        String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
+        String labelPrefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        byte[] key = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
+        byte[] key = hkdfExpandLabel(quicVersion, secret, labelPrefix + "key", "", getKeyLength());
         if (replaceKeys) {
             writeKey = key;
             writeKeySpec = null;
@@ -186,7 +184,7 @@ public abstract class BaseKeysImpl implements Keys {
         }
         log.secret(nodeRole + " key", key);
 
-        byte[] iv = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
+        byte[] iv = hkdfExpandLabel(quicVersion, secret, labelPrefix + "iv", "", (short) 12);
         if (replaceKeys) {
             writeIV = iv;
         }
@@ -198,7 +196,7 @@ public abstract class BaseKeysImpl implements Keys {
         if (includeHP) {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
             // "The header protection key uses the "quic hp" label"
-            hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", getKeyLength());
+            hp = hkdfExpandLabel(quicVersion, secret, labelPrefix + "hp", "", getKeyLength());
             log.secret(nodeRole + " hp", hp);
         }
     }
@@ -206,10 +204,7 @@ public abstract class BaseKeysImpl implements Keys {
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
     byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
 
-        byte[] prefix;
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
-        // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
-        prefix = "tls13 ".getBytes(ISO_8859_1);
+        byte[] prefix = "tls13 ".getBytes(ISO_8859_1);
 
         ByteBuffer hkdfLabel = ByteBuffer.allocate(2 + 1 + prefix.length + label.getBytes(ISO_8859_1).length + 1 + context.getBytes(ISO_8859_1).length);
         hkdfLabel.putShort(length);
@@ -276,7 +271,7 @@ public abstract class BaseKeysImpl implements Keys {
     }
 
     @Override
-    public void setPeerKeys(Keys peerKeys) {
-        this.peerKeys = peerKeys;
+    public void setPeerAead(Aead peerAead) {
+        this.peerAead = peerAead;
     }
 }

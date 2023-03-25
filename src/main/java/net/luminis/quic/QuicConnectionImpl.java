@@ -20,7 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -275,9 +275,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Keys keys = null;
+            Aead aead = null;
             if (packet.getVersion().equals(quicVersion.getVersion())) {
-                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+                aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
                 if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
                     versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
                 }
@@ -294,23 +294,23 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
                 ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
                 altSecrets.computeInitialKeys(getDestinationConnectionId());
-                keys = altSecrets.getPeerSecrets(packet.getEncryptionLevel());
+                aead = altSecrets.getPeerAead(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
                 // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
                 // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
-                keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
+                aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
                 // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
                 // "The server MUST NOT discard its original version Initial receive keys until it successfully processes a packet with the negotiated version."
-                keys = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
+                aead = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
             }
             else {
                 log.warn("Dropping packet not using negotiated version");
                 throw new InvalidPacketException("invalid version");
             }
-            if (keys == null) {
+            if (aead == null) {
                 // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
                 // "Due to reordering and loss, protected packets might be received by an
@@ -319,7 +319,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             }
 
             long largestPN = packet.getPnSpace() != null? largestPacketNumber[packet.getPnSpace().ordinal()]: 0;
-            packet.parse(data, keys, largestPN, log, getSourceConnectionIdLength());
+            packet.parse(data, aead, largestPN, log, getSourceConnectionIdLength());
         }
         else {
             // Packet has no encryption level, i.e. a VersionNegotiationPacket

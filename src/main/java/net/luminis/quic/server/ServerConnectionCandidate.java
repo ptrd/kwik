@@ -19,8 +19,8 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.InitialPacket;
@@ -30,7 +30,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -168,8 +167,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
             ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
             byte[] originalDcid = dcid;
             connectionSecrets.computeInitialKeys(originalDcid);
-            Keys keys = connectionSecrets.getPeerSecrets(packet.getEncryptionLevel());
-            packet.parse(data, keys, 0, new NullLogger(), 0);
+            Aead aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
+            packet.parse(data, aead, 0, new NullLogger(), 0);
             return packet;
         }
         throw new InvalidPacketException();

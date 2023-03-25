@@ -63,8 +63,8 @@ public class ConnectionSecrets {
     private final Role ownRole;
     private Logger log;
     private byte[] clientRandom;
-    private Keys[] clientSecrets = new Keys[EncryptionLevel.values().length];
-    private Keys[] serverSecrets = new Keys[EncryptionLevel.values().length];
+    private Aead[] clientSecrets = new Aead[EncryptionLevel.values().length];
+    private Aead[] serverSecrets = new Aead[EncryptionLevel.values().length];
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
     private byte[] originalDestinationConnectionId;
@@ -99,6 +99,9 @@ public class ConnectionSecrets {
         byte[] initialSecret = computeInitialSecret(actualVersion);
         log.secret("Initial secret", initialSecret);
 
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+        // "Initial packets use AEAD_AES_128_GCM with keys derived from the Destination Connection ID field of the first
+        //  Initial packet sent by the client; "
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Client, log);
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Server, log);
     }
@@ -109,7 +112,7 @@ public class ConnectionSecrets {
      * @param version
      * @return
      */
-    public Keys getInitialPeerSecretsForVersion(Version version) {
+    public Aead getInitialPeerSecretsForVersion(Version version) {
         return new Aes128Gcm(version, computeInitialSecret(version), ownRole.other(), log);
     }
 
@@ -135,8 +138,8 @@ public class ConnectionSecrets {
     }
 
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
-        Keys clientHandshakeSecrets;
-        Keys serverHandshakeSecrets;
+        Aead clientHandshakeSecrets;
+        Aead serverHandshakeSecrets;
 
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
             clientHandshakeSecrets = new Aes128Gcm(version, Role.Client, log);
@@ -159,8 +162,8 @@ public class ConnectionSecrets {
         }
 
         // Keys for peer and keys for self must be able to signal each other of a key update.
-        clientHandshakeSecrets.setPeerKeys(serverHandshakeSecrets);
-        serverHandshakeSecrets.setPeerKeys(clientHandshakeSecrets);
+        clientHandshakeSecrets.setPeerAead(serverHandshakeSecrets);
+        serverHandshakeSecrets.setPeerAead(clientHandshakeSecrets);
     }
 
     public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
@@ -217,21 +220,19 @@ public class ConnectionSecrets {
         this.clientRandom = clientRandom;
     }
 
-    public synchronized Keys getClientSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getClientAead(EncryptionLevel encryptionLevel) {
         return clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getServerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getServerAead(EncryptionLevel encryptionLevel) {
         return serverSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getPeerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getPeerAead(EncryptionLevel encryptionLevel) {
         return (ownRole == Role.Client)? serverSecrets[encryptionLevel.ordinal()]: clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getOwnSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) {
         return (ownRole == Role.Client)? clientSecrets[encryptionLevel.ordinal()]: serverSecrets[encryptionLevel.ordinal()];
     }
-
-
 }

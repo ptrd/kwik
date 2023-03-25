@@ -42,7 +42,7 @@ import java.util.Arrays;
  * https://www.rfc-editor.org/rfc/rfc8446.html#appendix-B.4
  * "AEAD_CHACHA20_POLY1305 is defined in [RFC8439]."
  */
-public class ChaCha20 extends BaseKeysImpl {
+public class ChaCha20 extends BaseAeadImpl {
 
     public ChaCha20(Version quicVersion, Role server, Logger log) {
         super(quicVersion, server, log);

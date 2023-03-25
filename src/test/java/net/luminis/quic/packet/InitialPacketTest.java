@@ -19,8 +19,8 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -65,8 +65,8 @@ class InitialPacketTest {
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(Version.IETF_draft_29), Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
-        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
-        initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0);
+        Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
+        initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), aead, 0, logger, 0);
 
         assertThat(initialPacket.getToken()).isNullOrEmpty();
         assertThat(initialPacket.getFrames()).hasOnlyElementsOfTypes(AckFrame.class);
@@ -82,9 +82,9 @@ class InitialPacketTest {
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
-        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
+        Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
         assertThatThrownBy( () ->
-                initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0)
+                initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), aead, 0, logger, 0)
         ).isInstanceOf(DecryptionException.class);   // Decryption will fail...
 
         // ... but the token is parsed already
@@ -101,10 +101,10 @@ class InitialPacketTest {
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(Version.IETF_draft_29), Role.Client, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
-        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
+        Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
 
         assertThatThrownBy(() ->
-                initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0)
+                initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), aead, 0, logger, 0)
         ).isInstanceOf(InvalidPacketException.class);
     }
 
@@ -113,10 +113,10 @@ class InitialPacketTest {
         String data = "ccff00001d08375e1a9f9d7e49bd14e8ebf718bfe9d10f558ae55ed56b1ef95f013d8c0041210b832235e803ddc629f3e614d6168361e7b1f48b0ec251ba4f1039c4d1c3d397733eab73515b95f76274b1240ba93f8858ac365a61d41894884f15c87e74a9e87c149f48fa6b07f0d2a52e7fef829ea8a35815771a70db0b11458dfc0f56c9b89a3cd205b52898b64a92e9a2880a571d2af24d978b2110d74a6f8a993442073ece74c626755df1165cd1fc89cca4f0bdfa965eec62557145a63ee0a05fe372e2fcaba92c25c9de1dbfdcad3e29fd19c39fcab47fbeb8588411566a047de41b5a304ebd0e79bd803288127d6e7490fdd31fd6aa04a01d91875d0fd0126e1ddb4b2ccff51fe0dc65a711147fe6450c751e5a66cf2ed2bebccc9986c8797f1179b34383c934cadaa2a035c1eca267d050fdecc3b9f5af46a677f5fb130c10bb757ba4";
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(IETF_draft_29), Role.Client, null, mock(Logger.class));
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("1bc4ad22be1868b2"));
-        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
+        Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
 
         InitialPacket initialPacket = new InitialPacket(IETF_draft_29);
-        initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), keys, 0, logger, 0);
+        initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), aead, 0, logger, 0);
 
         assertThat(initialPacket.packetNumber).isEqualTo(321);
         assertThat(initialPacket.frames)
@@ -165,8 +165,8 @@ class InitialPacketTest {
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(Version.IETF_draft_29), Role.Server, null, logger);
         connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
 
-        Keys keys = connectionSecrets.getServerSecrets(EncryptionLevel.Initial);
-        byte[] bytes = initialPacket.generatePacketBytes(keys);
+        Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
+        byte[] bytes = initialPacket.generatePacketBytes(aead);
         System.out.println(ByteUtils.bytesToHex(bytes));
     }
 }

@@ -19,7 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 
@@ -126,7 +126,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.remaining() < MIN_PACKET_LENGTH) {
             throw new InvalidPacketException();
@@ -212,7 +212,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
         ByteBuffer buffer = ByteBuffer.allocate(packetSize);
         byte flags = (byte) (0b1100_0000 | (getPacketType() << 4));
