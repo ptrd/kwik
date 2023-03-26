@@ -19,7 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 
@@ -101,7 +101,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Keys serverSecrets, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
         if (buffer.remaining() < remainingLength) {
             throw new InvalidPacketException();
         }
@@ -132,7 +132,7 @@ abstract public class QuicPacket {
         // "Header protection is applied after packet protection is applied (see
         //   Section 5.3).  The ciphertext of the packet is sampled and used as
         //   input to an encryption algorithm."
-        byte[] mask = createHeaderProtectionMask(sample, serverSecrets);
+        byte[] mask = createHeaderProtectionMask(sample, aead);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1
         // "The output of this algorithm is a 5 byte mask which is applied to the
         //   protected header fields using exclusive OR.  The least significant
@@ -194,7 +194,7 @@ abstract public class QuicPacket {
         buffer.get(payload, 0, encryptedPayloadLength);
         log.encrypted("Encrypted payload", payload);
 
-        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, serverSecrets);
+        byte[] frameBytes = decryptPayload(payload, frameHeader, packetNumber, aead);
         log.decrypted("Decrypted payload", frameBytes);
 
         frames = new ArrayList<>();
@@ -203,11 +203,11 @@ abstract public class QuicPacket {
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
 
-    byte[] createHeaderProtectionMask(byte[] sample, Keys secrets) {
-        return createHeaderProtectionMask(sample, 4, secrets);
+    byte[] createHeaderProtectionMask(byte[] sample, Aead aead) {
+        return createHeaderProtectionMask(sample, 4, aead);
     }
 
-    byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, Keys secrets) {
+    byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, Aead aead) {
         // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4
         // "The same number of bytes are always sampled, but an allowance needs
         //   to be made for the endpoint removing protection, which will not know
@@ -218,10 +218,10 @@ abstract public class QuicPacket {
         byte[] sample = new byte[16];
         System.arraycopy(ciphertext, sampleOffset, sample, 0, 16);
 
-        return secrets.createHeaderProtectionMask(sample);
+        return aead.createHeaderProtectionMask(sample);
     }
 
-    byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) {
+    byte[] encryptPayload(byte[] message, byte[] associatedData, long packetNumber, Aead aead) {
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
         // "The nonce, N, is formed by combining the packet
@@ -229,7 +229,7 @@ abstract public class QuicPacket {
         //   reconstructed QUIC packet number in network byte order are left-
         //   padded with zeros to the size of the IV.  The exclusive OR of the
         //   padded packet number and the IV forms the AEAD nonce"
-        byte[] writeIV = secrets.getWriteIV();
+        byte[] writeIV = aead.getWriteIV();
         ByteBuffer nonceInput = ByteBuffer.allocate(writeIV.length);
         for (int i = 0; i < nonceInput.capacity() - 8; i++)
             nonceInput.put((byte) 0x00);
@@ -240,25 +240,25 @@ abstract public class QuicPacket {
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
-        return secrets.aeadEncrypt(associatedData, message, nonce);
+        return aead.aeadEncrypt(associatedData, message, nonce);
     }
 
-    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, Keys secrets) throws DecryptionException {
+    byte[] decryptPayload(byte[] message, byte[] associatedData, long packetNumber, Aead aead) throws DecryptionException {
         ByteBuffer nonceInput = ByteBuffer.allocate(12);
         nonceInput.putInt(0);
         nonceInput.putLong(packetNumber);
 
         if (this instanceof ShortHeaderPacket) {
-            secrets.checkKeyPhase(((ShortHeaderPacket) this).keyPhaseBit);
+            aead.checkKeyPhase(((ShortHeaderPacket) this).keyPhaseBit);
         }
 
-        byte[] writeIV = secrets.getWriteIV();
+        byte[] writeIV = aead.getWriteIV();
         byte[] nonce = new byte[12];
         int i = 0;
         for (byte b : nonceInput.array())
             nonce[i] = (byte) (b ^ writeIV[i++]);
 
-        return secrets.aeadDecrypt(associatedData, message, nonce);
+        return aead.aeadDecrypt(associatedData, message, nonce);
     }
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {
@@ -419,7 +419,7 @@ abstract public class QuicPacket {
         return frameBytes;
     }
 
-    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Keys clientSecrets) {
+    protected void protectPacketNumberAndPayload(ByteBuffer packetBuffer, int packetNumberSize, ByteBuffer payload, int paddingSize, Aead aead) {
         int packetNumberPosition = packetBuffer.position() - packetNumberSize;
 
         // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
@@ -434,12 +434,12 @@ abstract public class QuicPacket {
 
         byte[] paddedPayload = new byte[payload.limit() + paddingSize];
         payload.get(paddedPayload, 0, payload.limit());
-        byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, clientSecrets);
+        byte[] encryptedPayload = encryptPayload(paddedPayload, additionalData, packetNumber, aead);
         packetBuffer.put(encryptedPayload);
 
         byte[] protectedPacketNumber;
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);
-        byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, clientSecrets);
+        byte[] mask = createHeaderProtectionMask(encryptedPayload, encodedPacketNumber.length, aead);
 
         protectedPacketNumber = new byte[encodedPacketNumber.length];
         for (int i = 0; i < encodedPacketNumber.length; i++) {
@@ -504,9 +504,9 @@ abstract public class QuicPacket {
 
     public abstract PnSpace getPnSpace();
 
-    public abstract byte[] generatePacketBytes(Keys keys);
+    public abstract byte[] generatePacketBytes(Aead aead);
 
-    public abstract void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
+    public abstract void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
 
     public List<QuicFrame> getFrames() {
         return frames;

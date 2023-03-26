@@ -63,8 +63,8 @@ public class ConnectionSecrets {
     private final Role ownRole;
     private Logger log;
     private byte[] clientRandom;
-    private Keys[] clientSecrets = new Keys[EncryptionLevel.values().length];
-    private Keys[] serverSecrets = new Keys[EncryptionLevel.values().length];
+    private Aead[] clientSecrets = new Aead[EncryptionLevel.values().length];
+    private Aead[] serverSecrets = new Aead[EncryptionLevel.values().length];
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
     private byte[] originalDestinationConnectionId;
@@ -99,8 +99,11 @@ public class ConnectionSecrets {
         byte[] initialSecret = computeInitialSecret(actualVersion);
         log.secret("Initial secret", initialSecret);
 
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Keys(actualVersion, initialSecret, Role.Server, log);
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+        // "Initial packets use AEAD_AES_128_GCM with keys derived from the Destination Connection ID field of the first
+        //  Initial packet sent by the client; "
+        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Client, log);
+        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Server, log);
     }
 
     /**
@@ -109,8 +112,8 @@ public class ConnectionSecrets {
      * @param version
      * @return
      */
-    public Keys getInitialPeerSecretsForVersion(Version version) {
-        return new Keys(version, computeInitialSecret(version), ownRole.other(), log);
+    public Aead getInitialPeerSecretsForVersion(Version version) {
+        return new Aes128Gcm(version, computeInitialSecret(version), ownRole.other(), log);
     }
 
     private byte[] computeInitialSecret(Version actualVersion) {
@@ -126,44 +129,54 @@ public class ConnectionSecrets {
         computeInitialKeys(originalDestinationConnectionId);
     }
 
-    public synchronized void computeEarlySecrets(TrafficSecrets secrets, Version originalVersion) {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
-        Keys zeroRttSecrets = new Keys(originalVersion, Role.Client, log);
-        zeroRttSecrets.computeZeroRttKeys(secrets);
-        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()] = zeroRttSecrets;
+    public synchronized void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
+        // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
+        createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion);
+
+        byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
+        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeKeys(earlySecret);
     }
 
-    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite) {
-        Keys clientHandshakeSecrets;
-        Keys serverHandshakeSecrets;
-        Version actualVersion = this.quicVersion.getVersion();
-        
+    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
+        Aead clientHandshakeSecrets;
+        Aead serverHandshakeSecrets;
+
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Keys(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new Keys(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new Aes128Gcm(version, Role.Client, log);
+            serverHandshakeSecrets = new Aes128Gcm(version, Role.Server, log);
+        }
+        else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384) {
+            clientHandshakeSecrets = new Aes256Gcm(version, Role.Client, log);
+            serverHandshakeSecrets = new Aes256Gcm(version, Role.Server, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Client, log);
-            serverHandshakeSecrets = new Chacha20Keys(actualVersion, Role.Server, log);
+            clientHandshakeSecrets = new ChaCha20(version, Role.Client, log);
+            serverHandshakeSecrets = new ChaCha20(version, Role.Server, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
         }
         clientSecrets[level.ordinal()] = clientHandshakeSecrets;
-        serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+        if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
+            serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+        }
 
         // Keys for peer and keys for self must be able to signal each other of a key update.
-        clientHandshakeSecrets.setPeerKeys(serverHandshakeSecrets);
-        serverHandshakeSecrets.setPeerKeys(clientHandshakeSecrets);
+        clientHandshakeSecrets.setPeerAead(serverHandshakeSecrets);
+        serverHandshakeSecrets.setPeerAead(clientHandshakeSecrets);
     }
 
     public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
         this.selectedCipherSuite = selectedCipherSuite;
-        createKeys(EncryptionLevel.Handshake, selectedCipherSuite);
+        createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion());
 
-        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeHandshakeKeys(secrets);
+        byte[] clientHandshakeTrafficSecret = secrets.getClientHandshakeTrafficSecret();
+        log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
+        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(clientHandshakeTrafficSecret);
+
+        byte[] serverHandshakeTrafficSecret = secrets.getServerHandshakeTrafficSecret();
+        log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
+        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(serverHandshakeTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
@@ -171,10 +184,15 @@ public class ConnectionSecrets {
     }
 
     public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
-        createKeys(EncryptionLevel.App, selectedCipherSuite);
+        createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion());
 
-        clientSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeApplicationKeys(secrets);
+        byte[] clientApplicationTrafficSecret = secrets.getClientApplicationTrafficSecret();
+        log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
+        clientSecrets[EncryptionLevel.App.ordinal()].computeKeys(clientApplicationTrafficSecret);
+
+        byte[] serverApplicationTrafficSecret = secrets.getServerApplicationTrafficSecret();
+        log.secret("ServerApplicationTrafficSecret: ", serverApplicationTrafficSecret);
+        serverSecrets[EncryptionLevel.App.ordinal()].computeKeys(serverApplicationTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
@@ -202,21 +220,19 @@ public class ConnectionSecrets {
         this.clientRandom = clientRandom;
     }
 
-    public synchronized Keys getClientSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getClientAead(EncryptionLevel encryptionLevel) {
         return clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getServerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getServerAead(EncryptionLevel encryptionLevel) {
         return serverSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getPeerSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getPeerAead(EncryptionLevel encryptionLevel) {
         return (ownRole == Role.Client)? serverSecrets[encryptionLevel.ordinal()]: clientSecrets[encryptionLevel.ordinal()];
     }
 
-    public synchronized Keys getOwnSecrets(EncryptionLevel encryptionLevel) {
+    public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) {
         return (ownRole == Role.Client)? clientSecrets[encryptionLevel.ordinal()]: serverSecrets[encryptionLevel.ordinal()];
     }
-
-
 }

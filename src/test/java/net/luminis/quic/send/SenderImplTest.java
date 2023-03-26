@@ -19,8 +19,8 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -37,7 +37,6 @@ import net.luminis.quic.test.FieldSetter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -63,8 +62,8 @@ class SenderImplTest extends AbstractSenderTest {
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
 
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
-        Keys keys = TestUtils.createKeys();
-        when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
+        Aead aead = TestUtils.createKeys();
+        when(connectionSecrets.getOwnAead(any(EncryptionLevel.class))).thenReturn(aead);
 
         sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);

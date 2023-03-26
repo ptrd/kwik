@@ -20,19 +20,19 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.EncryptionLevel;
 import net.luminis.quic.TestUtils;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import org.junit.jupiter.api.BeforeEach;
 
 public class AbstractSenderTest {
 
     public static final int MAX_PACKET_SIZE = 1232;
 
-    protected Keys keys;
-    protected Keys[] levelKeys = new Keys[4];
+    protected Aead aead;
+    protected Aead[] levelKeys = new Aead[4];
 
     @BeforeEach
     void initKeys() throws Exception {
-        keys = TestUtils.createKeys();
+        aead = TestUtils.createKeys();
         for (int i = 0; i < EncryptionLevel.values().length; i++) {
             levelKeys[i] = TestUtils.createKeys();
         }

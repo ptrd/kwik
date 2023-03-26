@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
@@ -104,7 +104,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         assert(packetNumber >= 0);
         ByteBuffer buffer = ByteBuffer.allocate(Integer.max(12, packetSize));
         buffer.putLong(packetNumber);
@@ -113,7 +113,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer data, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
+    public void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException {
     }
 
     @Override

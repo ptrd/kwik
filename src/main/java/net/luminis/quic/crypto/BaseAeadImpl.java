@@ -19,27 +19,18 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.QuicRuntimeException;
 import net.luminis.quic.Role;
 import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.TrafficSecrets;
-
 
 import javax.crypto.*;
-import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 
 import static net.luminis.quic.Role.Client;
-import static net.luminis.quic.Role.Server;
 
-public class Keys {
+public abstract class BaseAeadImpl implements Aead {
 
     public static final Charset ISO_8859_1 = Charset.forName("ISO-8859-1");
 
@@ -73,55 +64,36 @@ public class Keys {
     protected SecretKeySpec newWriteKeySpec;
     protected Cipher writeCipher;
     private int keyUpdateCounter = 0;
-    private boolean possibleKeyUpdateInProgresss = false;
-    private volatile Keys peerKeys;
+    protected boolean possibleKeyUpdateInProgresss = false;
+    private volatile Aead peerAead;
 
-    public Keys(Version quicVersion, Role nodeRole, Logger log) {
+    public BaseAeadImpl(Version quicVersion, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
     }
 
-    public Keys(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
+    public BaseAeadImpl(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
 
-        byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) 32);
+        byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) getHashLength());
         log.secret(nodeRole + " initial secret", initialNodeSecret);
 
         computeKeys(initialNodeSecret, true, true);
     }
 
-    public synchronized void computeZeroRttKeys(TrafficSecrets secrets) {
-        byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
-        computeKeys(earlySecret, true, true);
-    }
+    protected abstract short getKeyLength();
 
-    public synchronized void computeHandshakeKeys(TrafficSecrets secrets) {
-        if (nodeRole == Client) {
-            trafficSecret = secrets.getClientHandshakeTrafficSecret();
-            log.secret("ClientHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-        if (nodeRole == Server) {
-            trafficSecret = secrets.getServerHandshakeTrafficSecret();
-            log.secret("ServerHandshakeTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-    }
+    protected abstract short getHashLength();
 
-    public synchronized void computeApplicationKeys(TrafficSecrets secrets) {
-        if (nodeRole == Client) {
-            trafficSecret = secrets.getClientApplicationTrafficSecret();
-            log.secret("ClientApplicationTrafficSecret: ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
-        if (nodeRole == Server) {
-            trafficSecret = secrets.getServerApplicationTrafficSecret();
-            log.secret("Got new serverApplicationTrafficSecret from TLS (recomputing secrets): ", trafficSecret);
-            computeKeys(trafficSecret, true, true);
-        }
+    protected abstract HKDF getHKDF();
+
+    @Override
+    public synchronized void computeKeys(byte[] trafficSecret) {
+        this.trafficSecret = trafficSecret;
+        computeKeys(trafficSecret, true, true);
     }
 
     /**
@@ -129,6 +101,7 @@ public class Keys {
      * the write secrets (role that initiates the key update) or the read secrets (role that responds to the key update).
      * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
      */
+    @Override
     public synchronized void computeKeyUpdate(boolean selfInitiated) {
         String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
         newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
@@ -148,6 +121,7 @@ public class Keys {
      * Confirm that, if a key update was in progress, it has been successful and thus the new keys can (and should) be
      * used for decrypting all incoming packets.
      */
+    @Override
     public synchronized void confirmKeyUpdateIfInProgress() {
         if (possibleKeyUpdateInProgresss) {
             log.info("Installing updated keys (initiated by peer)");
@@ -164,14 +138,19 @@ public class Keys {
         }
     }
 
+    @Override
+    public int getKeyUpdateCounter() {
+        return keyUpdateCounter;
+    }
+
     /**
      * In case keys are updated, check if the peer keys are already updated too (which depends on who initiated the
      * key update).
      */
     private void checkPeerKeys() {
-        if (peerKeys.keyUpdateCounter < keyUpdateCounter) {
+        if (peerAead.getKeyUpdateCounter() < keyUpdateCounter) {
             log.debug("Keys out of sync; updating keys for peer");
-            peerKeys.computeKeyUpdate(true);
+            peerAead.computeKeyUpdate(true);
         }
     }
 
@@ -179,6 +158,7 @@ public class Keys {
      * Confirm that, if a key update was in progress, it has been unsuccessful and thus the new keys should not be
      * used for decrypting all incoming packets.
      */
+    @Override
     public synchronized void cancelKeyUpdateIfInProgress() {
         if (possibleKeyUpdateInProgresss) {
             log.info("Discarding updated keys (initiated by peer)");
@@ -190,11 +170,10 @@ public class Keys {
     }
 
     private void computeKeys(byte[] secret, boolean includeHP, boolean replaceKeys) {
-
-        String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
+        String labelPrefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        byte[] key = hkdfExpandLabel(quicVersion, secret, prefix + "key", "", getKeyLength());
+        byte[] key = hkdfExpandLabel(quicVersion, secret, labelPrefix + "key", "", getKeyLength());
         if (replaceKeys) {
             writeKey = key;
             writeKeySpec = null;
@@ -205,7 +184,7 @@ public class Keys {
         }
         log.secret(nodeRole + " key", key);
 
-        byte[] iv = hkdfExpandLabel(quicVersion, secret, prefix + "iv", "", (short) 12);
+        byte[] iv = hkdfExpandLabel(quicVersion, secret, labelPrefix + "iv", "", (short) 12);
         if (replaceKeys) {
             writeIV = iv;
         }
@@ -217,22 +196,15 @@ public class Keys {
         if (includeHP) {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
             // "The header protection key uses the "quic hp" label"
-            hp = hkdfExpandLabel(quicVersion, secret, prefix + "hp", "", getKeyLength());
+            hp = hkdfExpandLabel(quicVersion, secret, labelPrefix + "hp", "", getKeyLength());
             log.secret(nodeRole + " hp", hp);
         }
     }
 
-    protected short getKeyLength() {
-        return 16;
-    }
-
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
-    static byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
+    byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
 
-        byte[] prefix;
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1:
-        // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
-        prefix = "tls13 ".getBytes(ISO_8859_1);
+        byte[] prefix = "tls13 ".getBytes(ISO_8859_1);
 
         ByteBuffer hkdfLabel = ByteBuffer.allocate(2 + 1 + prefix.length + label.getBytes(ISO_8859_1).length + 1 + context.getBytes(ISO_8859_1).length);
         hkdfLabel.putShort(length);
@@ -241,10 +213,11 @@ public class Keys {
         hkdfLabel.put(label.getBytes(ISO_8859_1));
         hkdfLabel.put((byte) (context.getBytes(ISO_8859_1).length));
         hkdfLabel.put(context.getBytes(ISO_8859_1));
-        HKDF hkdf = HKDF.fromHmacSha256();
+        HKDF hkdf = getHKDF();
         return hkdf.expand(secret, hkdfLabel.array(), length);
     }
 
+    @Override
     public byte[] getTrafficSecret() {
         return trafficSecret;
     }
@@ -256,6 +229,7 @@ public class Keys {
         return writeKey;
     }
 
+    @Override
     public byte[] getWriteIV() {
         if (possibleKeyUpdateInProgresss) {
             return newIV;
@@ -267,101 +241,11 @@ public class Keys {
         return hp;
     }
 
-    public Cipher getHeaderProtectionCipher() {
-        if (hpCipher == null) {
-            try {
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.3
-                // "AEAD_AES_128_GCM and AEAD_AES_128_CCM use 128-bit AES [AES] in electronic code-book (ECB) mode."
-                hpCipher = Cipher.getInstance("AES/ECB/NoPadding");
-                SecretKeySpec keySpec = new SecretKeySpec(getHp(), "AES");
-                hpCipher.init(Cipher.ENCRYPT_MODE, keySpec);
-            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-                // Inappropriate runtime environment
-                throw new QuicRuntimeException(e);
-            } catch (InvalidKeyException e) {
-                // Programming error
-                throw new RuntimeException();
-            }
-        }
-        return hpCipher;
-    }
+    public abstract Cipher getHeaderProtectionCipher();
 
-    public SecretKeySpec getWriteKeySpec() {
-        if (possibleKeyUpdateInProgresss) {
-            if (newWriteKeySpec == null) {
-                newWriteKeySpec = new SecretKeySpec(newKey, "AES");
-            }
-            return newWriteKeySpec;
-        }
-        else {
-            if (writeKeySpec == null) {
-                writeKeySpec = new SecretKeySpec(writeKey, "AES");
-            }
-            return writeKeySpec;
-        }
-    }
+    public abstract SecretKeySpec getWriteKeySpec();
 
-    public Cipher getWriteCipher() {
-        if (writeCipher == null) {
-            try {
-                // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
-                // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
-                String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-                writeCipher = Cipher.getInstance(AES_GCM_NOPADDING);
-            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-                // Inappropriate runtime environment
-                throw new QuicRuntimeException(e);
-            }
-        }
-        return writeCipher;
-    }
-
-    public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
-        Cipher aeadCipher = getWriteCipher();
-        SecretKeySpec secretKey = getWriteKeySpec();
-        try {
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
-            aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
-            aeadCipher.updateAAD(associatedData);
-            return aeadCipher.doFinal(message);
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-    }
-
-    public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
-        if (message.length <= 16) {
-            // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
-            // "These cipher suites have a 16-byte authentication tag and produce an output 16 bytes larger than their input."
-            throw new DecryptionException("ciphertext must be longer than 16 bytes");
-        }
-        SecretKeySpec secretKey = getWriteKeySpec();
-        Cipher aeadCipher = getWriteCipher();
-        try {
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
-            aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
-            aeadCipher.updateAAD(associatedData);
-            return aeadCipher.doFinal(message);
-        } catch (AEADBadTagException decryptError) {
-            throw new DecryptionException();
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-    }
-
-    public byte[] createHeaderProtectionMask(byte[] sample) {
-        Cipher hpCipher = getHeaderProtectionCipher();
-        byte[] mask;
-        try {
-            mask = hpCipher.doFinal(sample);
-        } catch (IllegalBlockSizeException | BadPaddingException e) {
-            // Programming error
-            throw new RuntimeException();
-        }
-        return mask;
-    }
+    public abstract Cipher getWriteCipher();
 
     public short getKeyPhase() {
         return (short) (keyUpdateCounter % 2);
@@ -386,7 +270,8 @@ public class Keys {
         }
     }
 
-    void setPeerKeys(Keys peerKeys) {
-        this.peerKeys = peerKeys;
+    @Override
+    public void setPeerAead(Aead peerAead) {
+        this.peerAead = peerAead;
     }
 }

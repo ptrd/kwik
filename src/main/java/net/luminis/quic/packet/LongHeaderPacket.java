@@ -20,7 +20,7 @@ package net.luminis.quic.packet;
 
 
 import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 
@@ -85,7 +85,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         assert(packetNumber >= 0);
 
         ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -96,7 +96,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         addLength(packetBuffer, encodedPacketNumber.length, frameBytes.limit());
         packetBuffer.put(encodedPacketNumber);
 
-        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, frameBytes, 0, keys);
+        protectPacketNumberAndPayload(packetBuffer, encodedPacketNumber.length, frameBytes, 0, aead);
 
         packetBuffer.limit(packetBuffer.position());
         packetSize = packetBuffer.limit();
@@ -171,7 +171,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.position() != 0) {
             // parsePacketNumberAndPayload method requires packet to start at 0.
@@ -228,7 +228,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
         log.debug("Length (PN + payload): " + length);
 
         try {
-            parsePacketNumberAndPayload(buffer, flags, length, keys, largestPacketNumber, log);
+            parsePacketNumberAndPayload(buffer, flags, length, aead, largestPacketNumber, log);
         }
         finally {
             packetSize = buffer.position() - 0;

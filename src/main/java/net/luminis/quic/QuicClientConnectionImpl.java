@@ -385,7 +385,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void earlySecretsKnown() {
-        connectionSecrets.computeEarlySecrets(tlsEngine, quicVersion.getVersion());
+        if (sessionTicket != null) {
+            TlsConstants.CipherSuite cipher = sessionTicket.getCipher();
+            connectionSecrets.computeEarlySecrets(tlsEngine, cipher, quicVersion.getVersion());
+        }
     }
 
     @Override
@@ -642,7 +645,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // https://tools.ietf.org/html/draft-ietf-quic-tls-31#section-6
         // "Once the handshake is confirmed (see Section 4.1.2), an endpoint MAY initiate a key update."
         if (handshakeState == HandshakeState.Confirmed) {
-            connectionSecrets.getClientSecrets(App).computeKeyUpdate(true);
+            connectionSecrets.getClientAead(App).computeKeyUpdate(true);
         }
         else {
             log.error("Refusing key update because handshake is not yet confirmed");

@@ -19,7 +19,7 @@
 package net.luminis.quic.packet;
 
 import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
@@ -70,7 +70,7 @@ public class VersionNegotiationPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing VersionNegotationPacket");
         int packetLength = buffer.limit() - buffer.position();
         if (packetLength < MIN_PACKET_LENGTH) {
@@ -136,7 +136,7 @@ public class VersionNegotiationPacket extends QuicPacket {
 
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4 * serverSupportedVersions.size());
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.1

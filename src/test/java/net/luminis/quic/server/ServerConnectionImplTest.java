@@ -392,7 +392,7 @@ class ServerConnectionImplTest {
         initialPacket.setPacketNumber(0);
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
-        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
+        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial));
         ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
         paddedInitial.put(initialPacketBytes);
 
