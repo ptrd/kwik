@@ -32,8 +32,8 @@ public class HandshakePacket extends LongHeaderPacket {
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-handshake-packet
     // "A Handshake packet uses long headers with a type value of 0x02, ..."
     private static int V1_type = 2;
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
-    // "Handshake packets use a packet type field of 0b11."
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-long-header-packet-types
+    // "Handshake: 0b11"
     private static int V2_type = 3;
 
     public static boolean isHandshake(int type, Version quicVersion) {

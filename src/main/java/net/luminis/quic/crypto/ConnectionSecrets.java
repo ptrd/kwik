@@ -51,7 +51,7 @@ public class ConnectionSecrets {
             (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad,
             (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-initial-salt-2
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-initial-salt
     // "The salt used to derive Initial keys in Section 5.2 of [QUIC-TLS] changes to:
     //  initial_salt = 0x0dede3def700a6db819381be6e269dcbf9bd2ed9"
     public static final byte[] STATIC_SALT_V2 = new byte[] {

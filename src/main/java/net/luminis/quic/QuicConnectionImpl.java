@@ -283,7 +283,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
             }
             else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
-                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
                 // "Both endpoints MUST send Handshake or 1-RTT packets using the negotiated version. An endpoint MUST
                 //  drop packets using any other version."
                 log.warn("Dropping packet not using negotiated version");
@@ -297,13 +297,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 aead = altSecrets.getPeerAead(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
-                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-compatible-negotiation-requ
+                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
                 // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
                 aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
             }
             else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
-                // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-                // "The server MUST NOT discard its original version Initial receive keys until it successfully processes a packet with the negotiated version."
+                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+                // "The server MUST NOT discard its original version Initial receive keys until it successfully processes
+                //  a packet with the negotiated version."
                 aead = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
             }
             else {

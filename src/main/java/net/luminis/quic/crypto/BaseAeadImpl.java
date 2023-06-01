@@ -41,7 +41,7 @@ public abstract class BaseAeadImpl implements Aead {
     //  see Section 9.6."
     public static final String QUIC_V1_KDF_LABEL_PREFIX = "quic ";
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-hkdf-labels-2
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-hmac-based-key-derivation-f
     // "The labels used in [QUIC-TLS] to derive packet protection keys (Section 5.1), header protection keys (Section 5.4),
     //  Retry Integrity Tag keys (Section 5.8), and key updates (Section 6.1) change from "quic key" to "quicv2 key",
     //  from "quic iv" to "quicv2 iv", from "quic hp" to "quicv2 hp", and from "quic ku" to "quicv2 ku", to meet the

@@ -44,8 +44,8 @@ public class RetryPacket extends QuicPacket {
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-retry-packet
     // "a Retry packet uses a long packet header with a type value of 0x03."
     private static int V1_type = 3;
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
-    // "Retry packets use a packet type field of 0b00."
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-long-header-packet-types
+    // "Retry: 0b00"
     private static int V2_type = 0;
 
 
@@ -63,7 +63,7 @@ public class RetryPacket extends QuicPacket {
             (byte) 0xbe, (byte) 0x0c, (byte) 0x69, (byte) 0x0b, (byte) 0x9f, (byte) 0x66, (byte) 0x57, (byte) 0x5a,
             (byte) 0x1d, (byte) 0x76, (byte) 0x6b, (byte) 0x54, (byte) 0xe3, (byte) 0x68, (byte) 0xc8, (byte) 0x4e };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-retry-integrity-tag-2
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-retry-integrity-tag
     // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
     //  (...)
     //  key = 0x8fb4b01b56ac48e260fbcbcead7ccc92
@@ -83,7 +83,7 @@ public class RetryPacket extends QuicPacket {
             (byte) 0x46, (byte) 0x15, (byte) 0x99, (byte) 0xd3, (byte) 0x5d, (byte) 0x63, (byte) 0x2b, (byte) 0xf2,
             (byte) 0x23, (byte) 0x98, (byte) 0x25, (byte) 0xbb };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html#name-retry-integrity-tag-2
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-retry-integrity-tag
     // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
     //  (...)
     //  nonce = 0xd86969bc2d7c6d9990efb04a

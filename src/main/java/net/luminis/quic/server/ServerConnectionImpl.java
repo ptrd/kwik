@@ -219,8 +219,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void earlySecretsKnown() {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+        // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
         connectionSecrets.computeEarlySecrets(tlsEngine, tlsEngine.getSelectedCipher(), originalVersion);
     }
 
@@ -309,8 +309,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-version-negotiation-conside
-        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information transport parameter"
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-version-negotiation-conside
+        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information
+        //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."
         serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
@@ -326,8 +327,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     boolean acceptSessionResumption(ByteBuffer storedSessionData) {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-tls-resumption-and-new_toke
-        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from a different version."
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-tls-resumption-and-new_toke
+        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from
+        //  a different version."
         if (quicVersion.getVersion().equals(Version.parse(storedSessionData.getInt()))) {
             return true;
         }
