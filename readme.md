@@ -5,7 +5,7 @@
 Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in (100%) Java. 
 Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
-QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
+QUIC is a brand-new transport protocol developed by the IETF, and is the transport layer for the (also new) HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
 "next generation TCP". It has similar properties as TCP, e.g. provide a reliable ordered stream, but is better in many ways:
 
@@ -24,17 +24,17 @@ Kwik is created and maintained by Peter Doornbosch. The latest greatest can alwa
 
 ## Status
 
-Kwik implements all QUIC features, except that the server does not yet support connection migration.
+Kwik implements all QUIC features, except that the server does not yet support connection migration (work in progress).
 With respect to the interface Kwik offers to applications, it provides all necessary operations to exchange data, but
 it does not support specifying stream priorities.
 For both roles, interoperability is tested with a large number of other implementations, see [automated interoperability tests](https://interop.seemann.io/). 
-Due the to fact that most implementations are still in active development, and that some test cases
+Due to the fact that most implementations are still in active development, and that some test cases
 (specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
 interoperability test vary with each run, but usually, Kwik is amongst the best w.r.t. the number of successful testcases.  
 
 Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
 
-HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
+HTTP3 on top of Kwik is supported by [Flupke, the pure Java HTTP3 implementation](https://bitbucket.org/pjtr/flupke).
 
 Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html))
 and QUIC v2 ([draft-ietf-quic-v2-10](https://www.ietf.org/archive/id/draft-ietf-quic-v2-10.html))
