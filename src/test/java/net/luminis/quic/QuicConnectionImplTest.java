@@ -171,7 +171,19 @@ class QuicConnectionImplTest {
 
         // Then
         verify(sender, atMost(50)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
+    }
 
+    @Test
+    void applicationCloseWithErrorSendsConnectionCloseFrame1d() {
+        // Given
+
+        // When
+        connection.close(999, "application error induced close");
+
+        // Then
+        verify(sender, atLeast(1)).send(
+                argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
+                any(EncryptionLevel.class) );
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {

@@ -56,5 +56,12 @@ public interface QuicConnection {
 
     void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
 
+    /**
+     * Close the connection with an application error code and reason.
+     * @param applicationErrorCode
+     * @param errorReason
+     */
+    void close(long applicationErrorCode, String errorReason);
+
     Statistics getStats();
 }

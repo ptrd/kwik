@@ -589,11 +589,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected void immediateCloseWithError(EncryptionLevel level, int error, String errorReason) {
+    protected void immediateCloseWithError(EncryptionLevel level, long error, ErrorType errorType, String errorReason) {
         if (keepAliveActor != null) {
             keepAliveActor.shutdown();
         }
-        super.immediateCloseWithError(level, error, errorReason);
+        super.immediateCloseWithError(level, error, errorType, errorReason);
     }
 
     @Override

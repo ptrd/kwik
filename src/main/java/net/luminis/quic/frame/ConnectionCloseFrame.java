@@ -65,6 +65,17 @@ public class ConnectionCloseFrame extends QuicFrame {
         }
     }
 
+    public ConnectionCloseFrame(Version quicVersion, long error, boolean quicError, String reason) {
+        frameType = quicError? 0x1c: 0x1d;
+        errorCode = error;
+        if (errorCode >= 0x0100 && errorCode < 0x0200) {
+            tlsError = (int) (errorCode - 256);
+        }
+        if (reason != null && !reason.isBlank()) {
+            reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
+        }
+    }
+
     public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
         frameType = buffer.get() & 0xff;
         if (frameType != 0x1c && frameType != 0x1d) {
@@ -128,6 +139,10 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     public boolean hasError() {
         return hasTransportError() || hasApplicationProtocolError();
+    }
+
+    public int getFrameType() {
+        return frameType;
     }
 
     @Override

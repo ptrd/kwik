@@ -167,8 +167,8 @@ class QuicClientConnectionImplTest {
         // Simulate a TransportParametersExtension is received that does not contain the right original destination id
         connection.setPeerTransportParameters(new TransportParameters());
 
-        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -187,8 +187,8 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
-        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -237,8 +237,8 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
         connection.setPeerTransportParameters(transportParameters);
 
-        ArgumentCaptor<Integer> errorCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any());
+        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 

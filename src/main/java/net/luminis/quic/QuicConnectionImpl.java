@@ -46,6 +46,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static net.luminis.quic.EncryptionLevel.*;
+import static net.luminis.quic.QuicConnectionImpl.ErrorType.APPLICATION_ERROR;
+import static net.luminis.quic.QuicConnectionImpl.ErrorType.QUIC_LAYER_ERROR;
 import static net.luminis.quic.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
@@ -77,6 +79,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         NotStarted,
         VersionChangeUnconfirmed,
         VersionNegotiated
+    }
+
+    protected enum ErrorType {
+        QUIC_LAYER_ERROR,
+        APPLICATION_ERROR
     }
 
     protected final VersionHolder quicVersion;
@@ -566,21 +573,38 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     protected void immediateClose(EncryptionLevel level) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
-        immediateCloseWithError(level, NO_ERROR.value, null);
+        immediateCloseWithError(level, NO_ERROR.value, QUIC_LAYER_ERROR, null);
         log.getQLog().emitConnectionClosedEvent(Instant.now(), NO_ERROR.value, null);
     }
 
     /**
-     * Immediately closes the connection (with or without error) and enters the "closing state".
-     * Connection close frame with indicated error (or "NO_ERROR") is send to peer and after 3 x PTO, the closing state
+     * Immediately closes the connection (with or without a QUIC layer error) and enters the "closing state".
+     * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
      * is ended and all connection state is discarded.
      * If this method is called outside received-message-processing, post-processing actions (including flushing the
      * sender) should be performed by the caller.
-     * @param level         The level that should be used for sending the connection close frame
-     * @param error         The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
+     *
+     * @param level       The level that should be used for sending the connection close frame
+     * @param error       The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
      * @param errorReason
      */
-    protected void immediateCloseWithError(EncryptionLevel level, int error, String errorReason) {
+    protected void immediateCloseWithError(EncryptionLevel level, long error, String errorReason) {
+        immediateCloseWithError(level, error, QUIC_LAYER_ERROR, errorReason);
+    }
+    
+    /**
+     * Immediately closes the connection (with or without error) and enters the "closing state".
+     * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
+     * is ended and all connection state is discarded.
+     * If this method is called outside received-message-processing, post-processing actions (including flushing the
+     * sender) should be performed by the caller.
+     *
+     * @param level       The level that should be used for sending the connection close frame
+     * @param error       The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
+     * @param errorType   whether the error is at the QUIC layer or an application error
+     * @param errorReason
+     */
+    protected void immediateCloseWithError(EncryptionLevel level, long error, ErrorType errorType, String errorReason) {
         if (connectionState == Status.Closing || connectionState == Status.Draining) {
             log.debug("Immediate close ignored because already closing");
             return;
@@ -589,7 +613,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
-        getSender().send(new ConnectionCloseFrame(quicVersion.getVersion(), error, errorReason), level);
+        getSender().send(new ConnectionCloseFrame(quicVersion.getVersion(), error, errorType == QUIC_LAYER_ERROR, errorReason), level);
         // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
         connectionState = Status.Closing;
 
@@ -782,7 +806,15 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void close(QuicConstants.TransportErrorCode applicationError, String errorReason) {
-        immediateCloseWithError(App, applicationError.value, errorReason);
+        immediateCloseWithError(App, applicationError.value, QUIC_LAYER_ERROR, errorReason);
+        // Because this method is not called in the context of processing received messages,
+        // sender flush must be called explicitly.
+        getSender().flush();
+    }
+
+    @Override
+    public void close(long applicationError, String errorReason) {
+        immediateCloseWithError(App, applicationError, APPLICATION_ERROR, errorReason);
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
