@@ -752,6 +752,18 @@ class QuicStreamImplTest {
     }
 
     @Test
+    void readReturnsZeroWhenRequestedReadLengthIsZero() throws IOException {
+        // Given
+        quicStream.add(new StreamFrame(9, new byte[10], true));
+
+        // When
+        int read = quicStream.getInputStream().read(new byte[100], 0, 0);
+
+        // Then
+        assertThat(read).isEqualTo(0);
+    }
+
+    @Test
     void availableReturnsNegativeWhenEndOfStreamIsReached() {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));

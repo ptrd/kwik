@@ -229,6 +229,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         //   otherwise, at least one byte is read and stored into the given byte array.
         @Override
         public int read(byte[] buffer, int offset, int len) throws IOException {
+            if (len == 0) {
+                return 0;
+            }
             Instant readAttemptStarted = Instant.now();
             long waitPeriod = waitForNextFrameTimeout;
             while (true) {
