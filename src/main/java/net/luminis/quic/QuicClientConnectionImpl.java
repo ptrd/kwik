@@ -90,6 +90,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private Integer clientHelloEnlargement;
     private volatile Thread receiverThread;
     private volatile String handshakeError;
+    private volatile ClientHello originalClientHello;
 
 
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
@@ -134,6 +135,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
                 log.sentPacketInfo(cryptoStream.toStringSent());
+                originalClientHello = clientHello;
             }
 
             @Override
@@ -536,11 +538,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 //   resetting congestion control..."
                 sender.getCongestionController().reset();
 
-                try {
-                    tlsEngine.startHandshake();
-                } catch (IOException e) {
-                    // Will not happen, as our ClientMessageSender implementation will not throw.
-                }
+                // https://www.rfc-editor.org/rfc/rfc9002.html#name-handling-retry-packets
+                // "Other connection state, in particular cryptographic handshake messages, is retained (...)"
+                CryptoStream cryptoStream = getCryptoStream(Initial);
+                cryptoStream.write(originalClientHello, true);
+
             } else {
                 log.error("Ignoring RetryPacket, because already processed one.");
             }

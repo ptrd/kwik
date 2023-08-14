@@ -26,18 +26,23 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
+import net.luminis.tls.handshake.ClientHello;
 import net.luminis.tls.handshake.TlsClientEngine;
 import net.luminis.tls.util.ByteUtils;
-import net.luminis.quic.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import net.luminis.quic.test.FieldReader;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -45,6 +50,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.tls.TlsConstants.NamedGroup.secp256r1;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -59,6 +65,7 @@ class QuicClientConnectionImplTest {
     private QuicClientConnectionImpl connection;
     private byte[] originalDestinationId;
     private SenderImpl sender;
+    private TlsClientEngine tlsClientEngine;
 
     @BeforeAll
     static void initLogger() {
@@ -211,6 +218,15 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
+    void processingRetryPacketShouldNotRestartTlsEngine() throws Exception {
+        // When
+        simulateConnectionReceivingRetryPacket();
+
+        // Then
+        verify(tlsClientEngine, never()).startHandshake();
+    }
+
+    @Test
     void testWithNormalConnectionTransportParametersShouldNotContainRetrySourceId() throws Exception {
         byte[] originalSourceConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         setFixedOriginalDestinationConnectionId(originalSourceConnectionId);
@@ -255,11 +271,13 @@ class QuicClientConnectionImplTest {
         return retryPacket;
     }
     
-    private void simulateSuccessfulConnect() throws NoSuchFieldException {
+    private void simulateSuccessfulConnect() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
-        FieldSetter.setField(connection, "tlsEngine", mock(TlsClientEngine.class));
+        tlsClientEngine = mock(TlsClientEngine.class);
+        FieldSetter.setField(connection, "tlsEngine", tlsClientEngine);
+        FieldSetter.setField(connection, "originalClientHello", createClientHello());
     }
     
     @Test
@@ -606,5 +624,13 @@ class QuicClientConnectionImplTest {
         params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
         params.setActiveConnectionIdLimit(connectionIdLimit);
         connection.setPeerTransportParameters(params);
+    }
+
+    private ClientHello createClientHello() throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
+        keyPairGenerator.initialize(new ECGenParameterSpec(secp256r1.toString()));
+        KeyPair keyPair = keyPairGenerator.genKeyPair();
+        ECPublicKey publicKey = (ECPublicKey) keyPair.getPublic();
+        return new ClientHello("example.com", publicKey);
     }
 }
