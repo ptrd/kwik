@@ -19,6 +19,7 @@
 package net.luminis.quic;
 
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
 
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -56,6 +57,7 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
         wrappedTicket = tlsTicket;
+        ticketCreationDate = tlsTicket.getTicketCreationDate();
         maxIdleTimeout = serverParameters.getMaxIdleTimeout();
         maxPacketSize = serverParameters.getMaxUdpPayloadSize();
         initialMaxData = serverParameters.getInitialMaxData();
@@ -145,6 +147,16 @@ public class QuicSessionTicket extends NewSessionTicket {
         }
         else {
             return super.getSessionTicketIdentity();
+        }
+    }
+
+    @Override
+    public TlsConstants.CipherSuite getCipher() {
+        if (wrappedTicket != this) {
+            return wrappedTicket.getCipher();
+        }
+        else {
+            return super.getCipher();
         }
     }
 
