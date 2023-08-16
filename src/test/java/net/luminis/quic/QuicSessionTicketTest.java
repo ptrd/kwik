@@ -19,10 +19,14 @@
 package net.luminis.quic;
 
 import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
+import net.luminis.tls.TlsState;
+import net.luminis.tls.handshake.NewSessionTicketMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -115,4 +119,33 @@ class QuicSessionTicketTest {
         assertThat(copiedTransportParameters.getActiveConnectionIdLimit()).isEqualTo(activeConnectionIdLimit);
     }
 
+    @Test
+    void ticketShouldContainCipher() {
+        // Given
+        TlsState tlsState = mock(TlsState.class);
+        when(tlsState.computePSK(any(byte[].class))).thenReturn(new byte[32]);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(tlsState, new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        TransportParameters peerTransportParams = new TransportParameters();
+
+        // When
+        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsSessionTicket, peerTransportParams);
+
+        // Then
+        assertThat(quicSessionTicket.getCipher()).isEqualTo(TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+    }
+
+    @Test
+    void ticketToStringShouldNotThrow() {
+        // Given
+        TlsState tlsState = mock(TlsState.class);
+        when(tlsState.computePSK(any(byte[].class))).thenReturn(new byte[32]);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(tlsState, new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        TransportParameters peerTransportParams = new TransportParameters();
+
+        // When
+        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsSessionTicket, peerTransportParams);
+
+        // Then
+        assertThat(quicSessionTicket.toString()).isNotNull();
+    }
 }
