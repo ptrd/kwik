@@ -42,7 +42,6 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1 + 4;
 
-    private NewSessionTicket wrappedTicket;
     private long maxIdleTimeout;
     private int maxPacketSize;
     private long initialMaxData;
@@ -56,7 +55,15 @@ public class QuicSessionTicket extends NewSessionTicket {
 
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
-        wrappedTicket = tlsTicket;
+        psk = tlsTicket.getPSK();
+        ticketCreationDate = tlsTicket.getTicketCreationDate();
+        ticketAgeAdd = tlsTicket.getTicketAgeAdd();
+        ticket = tlsTicket.getTicket();
+        ticketLifeTime = tlsTicket.getTicketLifeTime();
+        hasEarlyDataExtension = tlsTicket.hasEarlyDataExtension();
+        earlyDataMaxSize = tlsTicket.getEarlyDataMaxSize();
+        cipher = tlsTicket.getCipher();
+
         ticketCreationDate = tlsTicket.getTicketCreationDate();
         maxIdleTimeout = serverParameters.getMaxIdleTimeout();
         maxPacketSize = serverParameters.getMaxUdpPayloadSize();
@@ -73,7 +80,6 @@ public class QuicSessionTicket extends NewSessionTicket {
     public QuicSessionTicket(byte[] data) {
         super(data);
         ByteBuffer buffer = ByteBuffer.wrap(data, data.length - SERIALIZED_SIZE, SERIALIZED_SIZE);
-        wrappedTicket = this;
         maxIdleTimeout = buffer.getLong();
         maxPacketSize = buffer.getInt();
         initialMaxData = buffer.getLong();
@@ -89,12 +95,7 @@ public class QuicSessionTicket extends NewSessionTicket {
     @Override
     public byte[] serialize() {
         byte[] serializedTicket;
-        if (wrappedTicket != this) {
-            serializedTicket = wrappedTicket.serialize();
-        }
-        else {
-            serializedTicket = super.serialize();
-        }
+        serializedTicket = super.serialize();
         ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + SERIALIZED_SIZE);
         buffer.put(serializedTicket);
         buffer.putLong(maxIdleTimeout);
@@ -108,56 +109,6 @@ public class QuicSessionTicket extends NewSessionTicket {
         buffer.put((byte) (disableActiveMigration? 1: 0));
         buffer.putInt(activeConnectionIdLimit);
         return buffer.array();
-    }
-
-    @Override
-    public byte[] getPSK() {
-        if (wrappedTicket != this) {
-            return wrappedTicket.getPSK();
-        }
-        else {
-            return super.getPSK();
-        }
-    }
-
-    @Override
-    public Date getTicketCreationDate() {
-        if (wrappedTicket != this) {
-            return wrappedTicket.getTicketCreationDate();
-        }
-        else {
-            return super.getTicketCreationDate();
-        }
-    }
-
-    @Override
-    public long getTicketAgeAdd() {
-        if (wrappedTicket != this) {
-            return wrappedTicket.getTicketAgeAdd();
-        }
-        else {
-            return super.getTicketAgeAdd();
-        }
-    }
-
-    @Override
-    public byte[] getSessionTicketIdentity() {
-        if (wrappedTicket != this) {
-            return wrappedTicket.getSessionTicketIdentity();
-        }
-        else {
-            return super.getSessionTicketIdentity();
-        }
-    }
-
-    @Override
-    public TlsConstants.CipherSuite getCipher() {
-        if (wrappedTicket != this) {
-            return wrappedTicket.getCipher();
-        }
-        else {
-            return super.getCipher();
-        }
     }
 
     public void copyTo(TransportParameters tp) {
