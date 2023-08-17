@@ -43,7 +43,6 @@ public class TestUtils {
         Aes128Gcm keys = mock(Aes128Gcm.class);
         when(keys.getHp()).thenReturn(new byte[16]);
         when(keys.getWriteIV()).thenReturn(new byte[12]);
-        when(keys.getWriteKey()).thenReturn(new byte[16]);
         Aes128Gcm dummyKeys = new Aes128Gcm(Version.getDefault(), new byte[16], null, mock(Logger.class));
         FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("hp"), new byte[16]);
         Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();

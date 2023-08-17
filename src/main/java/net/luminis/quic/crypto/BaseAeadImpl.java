@@ -222,13 +222,6 @@ public abstract class BaseAeadImpl implements Aead {
         return trafficSecret;
     }
 
-    public byte[] getWriteKey() {
-        if (possibleKeyUpdateInProgresss) {
-            return newKey;
-        }
-        return writeKey;
-    }
-
     @Override
     public byte[] getWriteIV() {
         if (possibleKeyUpdateInProgresss) {
