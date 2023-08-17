@@ -81,10 +81,19 @@ public class ChaCha20 extends BaseAeadImpl {
 
     @Override
     public SecretKeySpec getWriteKeySpec() {
-        if (writeKeySpec == null) {
-            writeKeySpec = new SecretKeySpec(writeKey, "ChaCha20-Poly1305");
+        if (possibleKeyUpdateInProgresss) {
+            System.out.println("HIERO");
+            if (newWriteKeySpec == null) {
+                newWriteKeySpec = new SecretKeySpec(newKey, "ChaCha20-Poly1305");
+            }
+            return newWriteKeySpec;
         }
-        return writeKeySpec;
+        else {
+            if (writeKeySpec == null) {
+                writeKeySpec = new SecretKeySpec(writeKey, "ChaCha20-Poly1305");
+            }
+            return writeKeySpec;
+        }
     }
 
     @Override
