@@ -101,7 +101,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
-                                     X509Certificate clientCertificate, PrivateKey clientCertificateKey) throws UnknownHostException, SocketException {
+                                     X509Certificate clientCertificate, PrivateKey clientCertificateKey,
+                                     DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
         super(originalVersion, Role.Client, secretsFile, log);
         log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
         this.originalVersion = originalVersion;
@@ -122,7 +123,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         receiver = new MultipleAddressReceiver(log, this::abortConnection);
         InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getByName(proxyHost != null ? proxyHost : host), port);
-        socketManager = new ClientSocketManager(serverAddress, receiver);
+        socketManager = new ClientSocketManager(serverAddress, receiver, socketFactory);
         connectionIdManager.registerClientAddress(socketManager.getClientAddress());
 
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, initialRtt, log);
@@ -1046,6 +1047,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         Builder clientCertificate(X509Certificate certificate);
 
         Builder clientCertificateKey(PrivateKey privateKey);
+
+        Builder socketFactory(DatagramSocketFactory socketFactory);
     }
 
     private static class BuilderImpl implements Builder {
@@ -1064,6 +1067,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private Integer quantumReadinessTest;
         private X509Certificate clientCertificate;
         private PrivateKey clientCertificateKey;
+        private DatagramSocketFactory socketFactory;
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1082,7 +1086,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             QuicClientConnectionImpl quicConnection =
                     new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, preferredVersion, log, proxyHost,
-                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
+                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey,
+                            socketFactory);
 
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
@@ -1190,6 +1195,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder clientCertificateKey(PrivateKey privateKey) {
             this.clientCertificateKey = privateKey;
+            return this;
+        }
+
+        @Override
+        public Builder socketFactory(DatagramSocketFactory socketFactory) {
+            this.socketFactory = socketFactory;
             return this;
         }
     }

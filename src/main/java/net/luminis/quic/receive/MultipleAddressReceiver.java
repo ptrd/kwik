@@ -124,13 +124,11 @@ public class MultipleAddressReceiver implements Receiver {
 
                     Instant timeReceived = Instant.now();
                     RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                    log.info("Received packet on port " + socket.getLocalPort());
                     receivedPacketsQueue.add(rawPacket);
                 }
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set
                 }
-                System.out.println("interrupted (i guess) " + Thread.currentThread());
             }
 
             log.debug("Terminating receive loop");
