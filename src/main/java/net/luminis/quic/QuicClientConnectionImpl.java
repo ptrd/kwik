@@ -76,6 +76,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final ConnectionIdManager connectionIdManager;
     private final Version originalVersion;
     private final Version preferredVersion;
+    private final DatagramSocketFactory socketFactory;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -96,7 +97,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
-                                     X509Certificate clientCertificate, PrivateKey clientCertificateKey) throws UnknownHostException, SocketException {
+                                     X509Certificate clientCertificate, PrivateKey clientCertificateKey,
+                                     DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
         super(originalVersion, Role.Client, secretsFile, log);
         log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
         this.originalVersion = originalVersion;
@@ -108,8 +110,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.cipherSuites = cipherSuites;
         this.clientCertificate = clientCertificate;
         this.clientCertificateKey = clientCertificateKey;
+        this.socketFactory = socketFactory != null? socketFactory: (address) -> new DatagramSocket();
 
-        socket = new DatagramSocket();
+        socket = this.socketFactory.createSocket(serverAddress);
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
@@ -633,7 +636,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void changeAddress() {
         try {
-            DatagramSocket newSocket = new DatagramSocket();
+            DatagramSocket newSocket = socketFactory.createSocket(serverAddress);
             sender.changeAddress(newSocket);
             receiver.changeAddress(newSocket);
             log.info("Changed local address to " + newSocket.getLocalPort());
@@ -1030,6 +1033,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private Integer quantumReadinessTest;
         private X509Certificate clientCertificate;
         private PrivateKey clientCertificateKey;
+        private DatagramSocketFactory socketFactory;
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
@@ -1048,7 +1052,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             QuicClientConnectionImpl quicConnection =
                     new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, preferredVersion, log, proxyHost,
-                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey);
+                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey,
+                            socketFactory);
 
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
@@ -1156,6 +1161,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder clientCertificateKey(PrivateKey privateKey) {
             this.clientCertificateKey = privateKey;
+            return this;
+        }
+
+        @Override
+        public Builder socketFactory(DatagramSocketFactory socketFactory) {
+            this.socketFactory = socketFactory;
             return this;
         }
     }
