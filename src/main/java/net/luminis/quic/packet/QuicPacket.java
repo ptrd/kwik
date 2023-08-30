@@ -262,13 +262,15 @@ abstract public class QuicPacket {
     }
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#sample-packet-number-decoding
+        // "Figure 47: Sample Packet Number Decoding Algorithm"
         long expectedPacketNumber = largestPacketNumber + 1;
         long pnWindow = 1L << bits;
         long pnHalfWindow = pnWindow / 2;
         long pnMask = ~ (pnWindow - 1);
 
         long candidatePn = (expectedPacketNumber & pnMask) | truncatedPacketNumber;
-        if (candidatePn <= expectedPacketNumber - pnHalfWindow && candidatePn < (1 << 62) - pnWindow) {
+        if (candidatePn <= expectedPacketNumber - pnHalfWindow && candidatePn < (1L << 62) - pnWindow) {
             return candidatePn + pnWindow;
         }
         if (candidatePn > expectedPacketNumber + pnHalfWindow && candidatePn >= pnWindow) {
