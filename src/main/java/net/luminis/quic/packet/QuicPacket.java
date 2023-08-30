@@ -164,8 +164,8 @@ abstract public class QuicPacket {
             //   result from a shorter packet number encoding are unused."
             unprotectedPacketNumber[i] = (byte) (protectedPackageNumber[i] ^ mask[1+i]);
         }
-        packetNumber = bytesToInt(unprotectedPacketNumber);
-        packetNumber = decodePacketNumber(packetNumber, largestPacketNumber, protectedPackageNumberLength * 8);
+        long truncatedPacketNumber = bytesToInt(unprotectedPacketNumber);
+        packetNumber = decodePacketNumber(truncatedPacketNumber, largestPacketNumber, protectedPackageNumberLength * 8);
         log.decrypted("Unprotected packet number: " + packetNumber);
 
         currentPosition = buffer.position();
