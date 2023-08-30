@@ -465,8 +465,8 @@ abstract public class QuicPacket {
         packetBuffer.position(currentPosition);
     }
 
-    static int bytesToInt(byte[] data) {
-        int value = 0;
+    static long bytesToInt(byte[] data) {
+        long value = 0;
         for (int i = 0; i < data.length; i++) {
             value = (value << 8) | (data[i] & 0xff);
 

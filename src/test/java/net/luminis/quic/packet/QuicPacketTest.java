@@ -186,4 +186,16 @@ class QuicPacketTest {
         long pn = QuicPacket.decodePacketNumber(0, 1690820350, 8);
         assertThat(pn).isEqualTo(1690820352);
     }
+
+    @Test
+    void byteToIntShouldWorkForVeryLargeValues() {
+        // Given
+        byte[] unprotectedPacketNumber = new byte[] { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
+
+        // When
+        long candidatePacketNumber = QuicPacket.bytesToInt(unprotectedPacketNumber);
+
+        // Then
+        assertThat(candidatePacketNumber).isEqualTo(0x00000000ffffffffL);
+    }
 }
