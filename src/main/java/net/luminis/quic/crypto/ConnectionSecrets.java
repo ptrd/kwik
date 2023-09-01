@@ -246,4 +246,9 @@ public class ConnectionSecrets {
             return aead;
         }
     }
+
+    public void discardKeys(EncryptionLevel encryptionLevel) {
+        clientSecrets[encryptionLevel.ordinal()] = null;
+        serverSecrets[encryptionLevel.ordinal()] = null;
+    }
 }
