@@ -247,6 +247,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().packetProcessed(false);
 
         // Finally, execute actions that need to be executed after all responses and acks are sent.
+        runPostProcessingActions();
+    }
+
+    protected void runPostProcessingActions() {
         postProcessingActions.forEach(action -> action.run());
         postProcessingActions.clear();
     }

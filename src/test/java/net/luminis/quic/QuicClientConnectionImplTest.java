@@ -21,6 +21,7 @@ package net.luminis.quic;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -616,6 +617,35 @@ class QuicClientConnectionImplTest {
         assertThatThrownBy(() ->
                 connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }))
         ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void whenHandshakePacketIsSendInitialKeysShouldBeDiscarded() throws Exception {
+        // Given
+        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
+        simulateSuccessfulConnect();
+
+        // When
+        connection.handshakeSecretsKnown();
+        // And
+        connection.runPostProcessingActions();
+
+        // Then
+        verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Initial));
+    }
+
+    @Test
+    void whenHandshakeIsConfirmedHandshakeKeysShouldBeDiscarded() throws Exception {
+        // Given
+        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
+
+        // When
+        connection.process(new HandshakeDoneFrame(Version.getDefault()), mock(QuicPacket.class), Instant.now());
+
+        // Then
+        verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Handshake));
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
