@@ -97,7 +97,7 @@ public class ServerConnector implements ServerConnectionRegistry {
         receiver.start();
 
         new Thread(this::receiveLoop, "server receive loop").start();
-        log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protcols: "
+        log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protocols: "
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 

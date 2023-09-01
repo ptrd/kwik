@@ -103,7 +103,7 @@ public class SampleWebServer {
         registerHttp3(serverConnector, wwwDir, supportedVersions, log);
 
         serverConnector.start();
-        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protcols: "
+        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protocols: "
                 + serverConnector.getRegisteredApplicationProtocols());
     }
 

@@ -112,7 +112,7 @@ public class InteropServer {
         }
 
         serverConnector.start();
-        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protcols: "
+        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protocols: "
                 + serverConnector.getRegisteredApplicationProtocols());
     }
 
