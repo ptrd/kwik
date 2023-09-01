@@ -21,6 +21,7 @@ package net.luminis.quic.server;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.InitialPacket;
@@ -167,9 +168,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
             ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
             byte[] originalDcid = dcid;
             connectionSecrets.computeInitialKeys(originalDcid);
-            Aead aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
-            packet.parse(data, aead, 0, new NullLogger(), 0);
-            return packet;
+            try {
+                Aead aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
+                packet.parse(data, aead, 0, new NullLogger(), 0);
+                return packet;
+            } catch (MissingKeysException e) {
+                // Impossible, as initial keys have just been computed.
+                throw new RuntimeException(e);
+            }
         }
         throw new InvalidPacketException();
     }

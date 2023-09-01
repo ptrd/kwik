@@ -24,6 +24,7 @@ import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
@@ -384,13 +385,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             itemsToSend.stream()
                     .map(item -> item.getPacket())
                     .forEach(packet -> {
-                        Aead aead = connectionSecrets.getOwnAead(packet.getEncryptionLevel());
-                        if (aead == null) {
+                        try {
+                            Aead aead = connectionSecrets.getOwnAead(packet.getEncryptionLevel());
+                            byte[] packetData = packet.generatePacketBytes(aead);
+                            buffer.put(packetData);
+                            log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
+                        } catch (MissingKeysException e) {
                             throw new IllegalStateException("Missing keys for encryption level " + packet.getEncryptionLevel());
                         }
-                        byte[] packetData = packet.generatePacketBytes(aead);
-                        buffer.put(packetData);
-                        log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
                     });
         }
         catch (BufferOverflowException bufferOverflow) {

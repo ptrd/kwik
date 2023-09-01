@@ -220,19 +220,30 @@ public class ConnectionSecrets {
         this.clientRandom = clientRandom;
     }
 
-    public synchronized Aead getClientAead(EncryptionLevel encryptionLevel) {
-        return clientSecrets[encryptionLevel.ordinal()];
+    public synchronized Aead getClientAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        return checkNotNull(clientSecrets[encryptionLevel.ordinal()], encryptionLevel);
     }
 
-    public synchronized Aead getServerAead(EncryptionLevel encryptionLevel) {
-        return serverSecrets[encryptionLevel.ordinal()];
+    public synchronized Aead getServerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        return checkNotNull(serverSecrets[encryptionLevel.ordinal()], encryptionLevel);
     }
 
-    public synchronized Aead getPeerAead(EncryptionLevel encryptionLevel) {
-        return (ownRole == Role.Client)? serverSecrets[encryptionLevel.ordinal()]: clientSecrets[encryptionLevel.ordinal()];
+    public synchronized Aead getPeerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        Aead aead = (ownRole == Role.Client) ? serverSecrets[encryptionLevel.ordinal()] : clientSecrets[encryptionLevel.ordinal()];
+        return checkNotNull(aead, encryptionLevel);
     }
 
-    public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) {
-        return (ownRole == Role.Client)? clientSecrets[encryptionLevel.ordinal()]: serverSecrets[encryptionLevel.ordinal()];
+    public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        Aead aead = (ownRole == Role.Client) ? clientSecrets[encryptionLevel.ordinal()] : serverSecrets[encryptionLevel.ordinal()];
+        return checkNotNull(aead, encryptionLevel);
+    }
+
+    private Aead checkNotNull(Aead aead, EncryptionLevel encryptionLevel) throws MissingKeysException {
+        if (aead == null) {
+            throw new MissingKeysException(encryptionLevel);
+        }
+        else {
+            return aead;
+        }
     }
 }

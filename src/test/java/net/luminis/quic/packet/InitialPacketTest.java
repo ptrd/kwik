@@ -21,6 +21,7 @@ package net.luminis.quic.packet;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -159,7 +160,7 @@ class InitialPacketTest {
     }
 
     // Used to generate bytes for a valid initial packet, used in the parse packet tests above.
-    void generateValidInitial() {
+    void generateValidInitial() throws MissingKeysException {
         InitialPacket initialPacket = new InitialPacket(IETF_draft_29, new byte[0], ByteUtils.hexToBytes("dcd29c5480f39a24"), new byte[0], new AckFrame(0));
 
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(Version.IETF_draft_29), Role.Server, null, logger);

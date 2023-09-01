@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -650,7 +651,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // https://tools.ietf.org/html/draft-ietf-quic-tls-31#section-6
         // "Once the handshake is confirmed (see Section 4.1.2), an endpoint MAY initiate a key update."
         if (handshakeState == HandshakeState.Confirmed) {
-            connectionSecrets.getClientAead(App).computeKeyUpdate(true);
+            try {
+                connectionSecrets.getClientAead(App).computeKeyUpdate(true);
+            } catch (MissingKeysException e) {
+                throw new IllegalStateException(e);
+            }
         }
         else {
             log.error("Refusing key update because handshake is not yet confirmed");
