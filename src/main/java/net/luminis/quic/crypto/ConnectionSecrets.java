@@ -68,6 +68,7 @@ public class ConnectionSecrets {
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
     private byte[] originalDestinationConnectionId;
+    private boolean[] discarded = new boolean[EncryptionLevel.values().length];
 
 
     public ConnectionSecrets(VersionHolder quicVersion, Role role, Path wiresharksecrets, Logger log) {
@@ -240,7 +241,7 @@ public class ConnectionSecrets {
 
     private Aead checkNotNull(Aead aead, EncryptionLevel encryptionLevel) throws MissingKeysException {
         if (aead == null) {
-            throw new MissingKeysException(encryptionLevel);
+            throw new MissingKeysException(encryptionLevel, discarded[encryptionLevel.ordinal()]);
         }
         else {
             return aead;
@@ -248,6 +249,7 @@ public class ConnectionSecrets {
     }
 
     public void discardKeys(EncryptionLevel encryptionLevel) {
+        discarded[encryptionLevel.ordinal()] = true;
         clientSecrets[encryptionLevel.ordinal()] = null;
         serverSecrets[encryptionLevel.ordinal()] = null;
     }

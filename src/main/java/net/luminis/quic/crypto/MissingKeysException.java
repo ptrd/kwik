@@ -22,10 +22,22 @@ import net.luminis.quic.EncryptionLevel;
 
 public class MissingKeysException extends Exception {
 
-    private final EncryptionLevel encryptionLevel;
+    enum Cause {
+        MissingKeys,
+        DiscardedKeys
+    }
 
-    public MissingKeysException(EncryptionLevel encryptionLevel) {
-        super("Missing keys for encryption level " + encryptionLevel);
+    private final EncryptionLevel encryptionLevel;
+    private final Cause cause;
+
+    public MissingKeysException(EncryptionLevel encryptionLevel, boolean discarded) {
+        super("Missing keys for encryption level " + encryptionLevel
+                + (discarded? " (keys discarded)": " (keys not installed)"));
         this.encryptionLevel = encryptionLevel;
+        this.cause = discarded ? MissingKeysException.Cause.DiscardedKeys : MissingKeysException.Cause.MissingKeys;
+    }
+
+    public Cause getMissingKeysCause() {
+        return cause;
     }
 }
