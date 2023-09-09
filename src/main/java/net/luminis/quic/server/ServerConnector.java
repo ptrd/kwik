@@ -220,12 +220,12 @@ public class ServerConnector implements ServerConnectionRegistry {
         return false;
     }
 
-    private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
+    private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
         Version version = Version.parse(versionValue);
-        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, originalDcid, serverConnectionFactory, this, log);
         // Register new connection now with the original connection id, as retransmitted initial packets with the
         // same original dcid might be received, which should _not_ lead to another connection candidate)
-        currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
+        currentConnections.put(new ConnectionSource(originalDcid), connectionCandidate);
 
         return connectionCandidate;
     }
