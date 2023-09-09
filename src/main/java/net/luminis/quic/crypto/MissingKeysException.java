@@ -22,7 +22,7 @@ import net.luminis.quic.EncryptionLevel;
 
 public class MissingKeysException extends Exception {
 
-    enum Cause {
+    public enum Cause {
         MissingKeys,
         DiscardedKeys
     }

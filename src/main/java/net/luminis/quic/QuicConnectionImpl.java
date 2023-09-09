@@ -210,7 +210,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 // "For example, if decryption fails (because the keys are not available or for any other reason), the
                 //  receiver MAY either discard or buffer the packet for later processing and MUST attempt to process the
                 //  remaining packets."
-                // hiero
                 int nrOfPacketBytes = data.position();
                 if (nrOfPacketBytes == 0) {
                     // Nothing could be made out of it, so the whole datagram will be discarded

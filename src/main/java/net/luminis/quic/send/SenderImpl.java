@@ -382,24 +382,36 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
         try {
-            itemsToSend.stream()
-                    .map(item -> item.getPacket())
-                    .forEach(packet -> {
-                        try {
-                            Aead aead = connectionSecrets.getOwnAead(packet.getEncryptionLevel());
-                            byte[] packetData = packet.generatePacketBytes(aead);
-                            buffer.put(packetData);
-                            log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
-                        } catch (MissingKeysException e) {
-                            throw new IllegalStateException(e.getMessage());
-                        }
-                    });
+            Iterator<SendItem> packetIterator = itemsToSend.iterator();
+            while (packetIterator.hasNext()) {
+                QuicPacket packet = packetIterator.next().getPacket();
+                try {
+                    Aead aead = connectionSecrets.getOwnAead(packet.getEncryptionLevel());
+                    byte[] packetData = packet.generatePacketBytes(aead);
+                    buffer.put(packetData);
+                    log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
+                }
+                catch (MissingKeysException e) {
+                    if (e.getMissingKeysCause() == MissingKeysException.Cause.DiscardedKeys) {
+                        log.warn("Packet not sent because keys are discarded: " + packet);
+                        packetIterator.remove();
+                    }
+                    else {
+                        throw new IllegalStateException(e.getMessage());
+                    }
+                }
+            }
         }
         catch (BufferOverflowException bufferOverflow) {
             log.error("Buffer overflow while generating datagram for " + itemsToSend);
             // rethrow
             throw bufferOverflow;
         }
+        if (buffer.position() == 0) {
+            // Nothing to send
+            return;
+        }
+        
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
         Instant timeSent = clock.instant();

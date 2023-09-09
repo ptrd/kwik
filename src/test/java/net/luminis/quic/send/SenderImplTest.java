@@ -21,10 +21,13 @@ package net.luminis.quic.send;
 import net.luminis.quic.*;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
@@ -37,6 +40,7 @@ import net.luminis.quic.test.FieldSetter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +54,7 @@ class SenderImplTest extends AbstractSenderTest {
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
     private DatagramSocket socket;
+    private ConnectionSecrets connectionSecrets;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -61,7 +66,7 @@ class SenderImplTest extends AbstractSenderTest {
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
 
-        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        connectionSecrets = mock(ConnectionSecrets.class);
         Aead aead = TestUtils.createKeys();
         when(connectionSecrets.getOwnAead(any(EncryptionLevel.class))).thenReturn(aead);
 
@@ -205,5 +210,25 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then
         verify(socket).send(any(DatagramPacket.class));
+    }
+
+    @Test
+    void whenInitialKeysAreDiscardedSendShouldNotThrowButJustIgnoreThePacket() throws Exception {
+        // Given
+        when(connectionSecrets.getOwnAead(EncryptionLevel.Initial)).thenThrow(new MissingKeysException(EncryptionLevel.Initial, true));
+
+        // When
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new AckFrame(0));
+        initialPacket.setPacketNumber(1);
+        sender.send(mutableListOf(new SendItem(initialPacket)));
+
+        // Then
+        verify(socket, never()).send(any(DatagramPacket.class));
+    }
+
+    private <T> List<T> mutableListOf(T item) {
+        ArrayList<T> list = new ArrayList<>();
+        list.add(item);
+        return list;
     }
 }
