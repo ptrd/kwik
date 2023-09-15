@@ -224,8 +224,10 @@ public class ServerConnector implements ServerConnectionRegistry {
         Version version = Version.parse(versionValue);
         ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, originalDcid, serverConnectionFactory, this, log);
         // Register new connection now with the original connection id, as retransmitted initial packets with the
-        // same original dcid might be received, which should _not_ lead to another connection candidate)
-        currentConnections.put(new ConnectionSource(originalDcid), connectionCandidate);
+        // same original dcid might be received (for example when the server response does not reach the client).
+        // Such packets must _not_ lead to new connection candidate. Moreover, if it is an initial packet, it must be
+        // passed to the connection, because (if valid) it will change the anti-amplification limit.
+        currentConnections.put(new ConnectionSource(originalDcid), new InitialPacketFilterProxy(connectionCandidate, version, log));
 
         return connectionCandidate;
     }
