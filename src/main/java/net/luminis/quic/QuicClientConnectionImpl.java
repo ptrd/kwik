@@ -881,6 +881,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    protected ConnectionIdManager getConnectionIdManager() {
+        return connectionIdManager;
+    }
+
+    @Override
     protected int getSourceConnectionIdLength() {
         return connectionIdManager.getConnectionIdLength();
     }

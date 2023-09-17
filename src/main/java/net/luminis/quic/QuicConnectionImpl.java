@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Aead;
@@ -201,8 +202,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                     parsedPacket = null;
                 }
 
-                processPacket(timeReceived, packet);
-                getSender().packetProcessed(data.hasRemaining());
+                if (checkDestinationConnectionId(packet)) {
+                    processPacket(timeReceived, packet);
+                    getSender().packetProcessed(data.hasRemaining());
+                }
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
@@ -248,6 +251,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // Finally, execute actions that need to be executed after all responses and acks are sent.
         postProcessingActions.forEach(action -> action.run());
         postProcessingActions.clear();
+    }
+
+    protected boolean checkDestinationConnectionId(QuicPacket packet) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-client-packet-handling
+        // "Packets that do not match an existing connection -- based on Destination Connection ID or, if this
+        //  value is zero length, local IP address and port -- are discarded."
+        byte[] cid = packet.getDestinationConnectionId();
+        if (getConnectionIdManager().isActiveCid(cid)) {
+            return true;
+        }
+        else {
+            log.error(String.format("Dropping packet because dcid %s is not an active connection ID.", bytesToHex(cid)));
+            return false;
+        }
     }
 
     protected boolean checkForStatelessResetToken(ByteBuffer data) {
@@ -846,6 +863,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected abstract GlobalAckGenerator getAckGenerator();
 
     protected abstract StreamManager getStreamManager();
+
+    protected abstract ConnectionIdManager getConnectionIdManager();
 
     public abstract long getInitialMaxStreamData();
 

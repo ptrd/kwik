@@ -189,6 +189,19 @@ class ConnectionIdManagerTest {
     }
 
     @Test
+    void checkActiveCid() {
+        // Given
+        byte[] originalCid = connectionIdManager.getActiveConnectionIds().get(0);
+        byte[] cid = Arrays.copyOf(originalCid, originalCid.length);
+
+        // When
+        boolean isActive = connectionIdManager.isActiveCid(cid);
+
+        // Then
+        assertThat(isActive).isTrue();
+    }
+
+    @Test
     void initiallyAtLeastOneNewCidShouldBeAccepted() {
         // Given
 

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
@@ -352,6 +353,11 @@ class QuicConnectionImplTest {
         @Override
         protected StreamManager getStreamManager() {
             return streamManager;
+        }
+
+        @Override
+        protected ConnectionIdManager getConnectionIdManager() {
+            return null;
         }
 
         @Override
