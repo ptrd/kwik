@@ -423,6 +423,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         int currentMaxPacketSize = maxPacketSize;
         if (antiAmplificationLimit >= 0) {
             if (bytesSent < antiAmplificationLimit) {
+                if (antiAmplificationLimit - bytesSent < currentMaxPacketSize) {
+                    // Note that when anti-amplification limit is limiting the packet size, it is quite likely that no
+                    // packets will be sent at all, because initial packets have a minimum size of 1200 bytes.
+                    log.warn(String.format("Sending data may be limited by remaining anti-amplification limit of %d bytes", antiAmplificationLimit - bytesSent));
+                }
                 currentMaxPacketSize = Integer.min(currentMaxPacketSize, (int) (antiAmplificationLimit - bytesSent));
             }
             else {
