@@ -106,7 +106,7 @@ class VersionNegotiationPacketTest {
         vnPacket.parse(ByteBuffer.wrap(packetBytes), null, 0, log, 0);
 
         // Then
-        assertThat(vnPacket.getScid()).isEqualTo(new byte[]{ 0x01, 0x02, 0x03, 0x04 });
+        assertThat(vnPacket.getSourceConnectionId()).isEqualTo(new byte[]{ 0x01, 0x02, 0x03, 0x04 });
         assertThat(vnPacket.getDestinationConnectionId()).isEqualTo(new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
     }
 

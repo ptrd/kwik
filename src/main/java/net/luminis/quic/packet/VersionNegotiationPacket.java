@@ -176,7 +176,7 @@ public class VersionNegotiationPacket extends QuicPacket {
                 + serverSupportedVersions.stream().map(v -> v.toString()).collect(Collectors.joining(", "));
     }
 
-    public byte[] getScid() {
+    public byte[] getSourceConnectionId() {
         return sourceConnectionId;
     }
 }
