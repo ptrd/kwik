@@ -157,7 +157,7 @@ class ServerConnectorTest {
             VersionNegotiationPacket vn = new VersionNegotiationPacket();
             try {
                 vn.parse(ByteBuffer.wrap(returnedPacket.getData()), null, 0, mock(Logger.class), 0);
-                return Arrays.equals(vn.getDcid(), new byte[] { 11, 12, 13, 14 })
+                return Arrays.equals(vn.getDestinationConnectionId(), new byte[] { 11, 12, 13, 14 })
                         &&
                         Arrays.equals(vn.getScid(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
             }

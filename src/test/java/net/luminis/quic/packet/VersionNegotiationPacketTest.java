@@ -107,7 +107,14 @@ class VersionNegotiationPacketTest {
 
         // Then
         assertThat(vnPacket.getScid()).isEqualTo(new byte[]{ 0x01, 0x02, 0x03, 0x04 });
-        assertThat(vnPacket.getDcid()).isEqualTo(new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
+        assertThat(vnPacket.getDestinationConnectionId()).isEqualTo(new byte[]{ 0x0a, 0x0b, 0x0c, 0x0d });
+    }
+
+    @Test
+    void versionNegotiationPacketShouldHaveDcid() {
+        VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(Version.getDefault(), new byte[] { 0x01, 0x02, 0x03, 0x04 }, new byte[] { 0x0a, 0x0b, 0x0c, 0x0d });
+
+        assertThat(versionNegotiationPacket.getDestinationConnectionId()).isNotNull();
     }
 
     private String generateHexBytes(int length) {
