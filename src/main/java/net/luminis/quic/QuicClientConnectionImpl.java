@@ -49,6 +49,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.EarlyDataStatus.*;
@@ -63,7 +64,7 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, TlsStatusEventHandler, FrameProcessor {
 
     private final String host;
-    private final int port;
+    private final int serverPort;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
     private final DatagramSocket socket;
@@ -104,7 +105,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.originalVersion = originalVersion;
         this.preferredVersion = preferredVersion;
         this.host = host;
-        this.port = port;
+        this.serverPort = port;
         serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
@@ -121,7 +122,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();
 
-        receiver = new Receiver(socket, log, this::abortConnection);
+        receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
@@ -162,6 +163,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
+    }
+
+    private Predicate<DatagramPacket> createPacketFilter() {
+        return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
     }
 
     /**
@@ -968,7 +973,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public URI getUri() {
         try {
-            return new URI("//" + host + ":" + port);
+            return new URI("//" + host + ":" + serverPort);
         } catch (URISyntaxException e) {
             // Impossible
             throw new IllegalStateException();
@@ -982,7 +987,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public InetSocketAddress getServerAddress() {
-        return new InetSocketAddress(host, port);
+        return new InetSocketAddress(host, serverPort);
     }
 
     @Override

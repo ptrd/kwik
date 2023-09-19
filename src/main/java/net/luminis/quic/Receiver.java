@@ -26,10 +26,12 @@ import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
@@ -41,15 +43,21 @@ public class Receiver {
     private volatile DatagramSocket socket;
     private final Logger log;
     private final Consumer<Throwable> abortCallback;
+    private final Predicate<DatagramPacket> packetFilter;
     private final Thread receiverThread;
     private final BlockingQueue<RawPacket> receivedPacketsQueue;
     private volatile boolean isClosing = false;
     private volatile boolean changing = false;
 
     public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
-        this.socket = socket;
-        this.log = log;
-        this.abortCallback = abortCallback;
+        this(socket, log, abortCallback, d -> true);
+    }
+
+    public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback, Predicate<DatagramPacket> packetFilter) {
+        this.socket = Objects.requireNonNull(socket);
+        this.log = Objects.requireNonNull(log);
+        this.abortCallback = Objects.requireNonNull(abortCallback);
+        this.packetFilter = Objects.requireNonNull(packetFilter);
 
         receiverThread = new Thread(() -> run(), "receiver");
         receiverThread.setDaemon(true);
@@ -99,9 +107,11 @@ public class Receiver {
                 try {
                     socket.receive(receivedPacket);
 
-                    Instant timeReceived = Instant.now();
-                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                    receivedPacketsQueue.add(rawPacket);
+                    if (packetFilter.test(receivedPacket)) {
+                        Instant timeReceived = Instant.now();
+                        RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
+                        receivedPacketsQueue.add(rawPacket);
+                    }
                 }
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set
