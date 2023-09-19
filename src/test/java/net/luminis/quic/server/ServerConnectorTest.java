@@ -264,9 +264,9 @@ class ServerConnectorTest {
         server.process(invalidRepeatedFirstPacket);
         testExecutor.check();
 
-        Map serverConnections = (Map) new FieldReader(server, server.getClass().getDeclaredField("currentConnections")).read();
+        ServerConnectionRegistryImpl connectionRegistry = (ServerConnectionRegistryImpl) new FieldReader(server, server.getClass().getDeclaredField("connectionRegistry")).read();
         // As the first packet was valid, there must be an entry with the original DCID
-        assertThat(serverConnections).containsKey(new ConnectionSource(ByteUtils.hexToBytes("8f609080b6d8a632")));
+        assertThat(connectionRegistry.isExistingConnection(null, ByteUtils.hexToBytes("8f609080b6d8a632"))).isPresent();
     }
 
     private RawPacket createPacket(ByteBuffer buffer) {
