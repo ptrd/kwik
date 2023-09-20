@@ -23,6 +23,7 @@ import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,28 +75,27 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     }
 
     void removeConnection(ServerConnectionImpl connection) {
-        ServerConnectionProxy removed = null;
-        for (byte[] connectionId: connection.getActiveConnectionIds()) {
-            if (removed == null) {
-                removed = currentConnections.remove(new ConnectionSource(connectionId));
-                if (removed == null) {
-                    log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(connectionId));
-                }
-            }
-            else {
-                if (removed != currentConnections.remove(new ConnectionSource(connectionId))) {
-                    log.error("Removed connections for set of active cids are not identical");
-                }
-            }
-        }
+        // Remove the entry this is registered with the original dcid
         currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
 
-        if (! removed.isClosed()) {
-            log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed...");
+        // Remove all entries that are registered with the active cids
+        List<ServerConnectionProxy> removedConnections = connection.getActiveConnectionIds().stream()
+                .map(cid -> new ConnectionSource(cid))
+                .map(cs -> currentConnections.remove(cs))
+                .collect(Collectors.toList());
+        // For the active connection IDs, all entries must have pointed to the same connection.
+        if (removedConnections.stream().distinct().count() != 1) {
+            log.error("Removed connections for set of active connection IDs are not all referring to the same connection.");
         }
-        removed.terminate();
+
+        if (! connection.isClosed()) {
+            log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed.");
+        }
     }
 
+    boolean isEmpty() {
+        return currentConnections.isEmpty();
+    }
 
     /**
      * Logs the entire connection table. For debugging purposed only.
