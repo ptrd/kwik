@@ -46,12 +46,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
 
     @Override
     public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {
-        boolean removed = currentConnections.remove(new ConnectionSource(connectionId), connection);
-        if (! removed && currentConnections.containsKey(new ConnectionSource(connectionId))) {
-            log.error("Connection " + connection + " not removed, because "
-                    + currentConnections.get(new ConnectionSource(connectionId)) + " is registered for "
-                    + ByteUtils.bytesToHex(connectionId));
-        }
+        currentConnections.remove(new ConnectionSource(connectionId));
     }
 
     @Override
