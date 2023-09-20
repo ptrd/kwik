@@ -77,7 +77,7 @@ class ServerConnectionCandidateTest {
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
         testExecutor.check();
 
         // Then
@@ -96,7 +96,7 @@ class ServerConnectionCandidateTest {
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
         testExecutor.check();
 
         // Then
@@ -117,7 +117,7 @@ class ServerConnectionCandidateTest {
         ByteBuffer datagramBytes = ByteBuffer.allocate(1200);
         datagramBytes.put(initialPacketBytes);
         datagramBytes.rewind();
-        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes);
+        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes, null);
         testExecutor.check();
 
         // Then

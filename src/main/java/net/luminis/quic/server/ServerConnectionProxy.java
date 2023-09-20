@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -26,7 +27,7 @@ public interface ServerConnectionProxy {
 
     byte[] getOriginalDestinationConnectionId();
 
-    void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data);
+    void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress);
 
     boolean isClosed();
 

@@ -34,7 +34,6 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -178,7 +177,7 @@ public class ServerConnector {
                             }
                         }
                     }
-                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
+                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data, clientAddress));
                 }
             }
         }
@@ -190,7 +189,7 @@ public class ServerConnector {
         data.get(dcid);
         data.rewind();
         Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
-        connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data),
+        connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data, clientAddress),
                 () -> log.warn("Discarding short header packet addressing non existent connection " + ByteUtils.bytesToHex(dcid)));
     }
 

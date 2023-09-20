@@ -69,7 +69,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     }
 
     @Override
-    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
+    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
         // Execute packet parsing on separate thread, to make this method return a.s.a.p.
         executor.submit(() -> {
             // Serialize processing (per connection candidate): duplicate initial packets might arrive faster than they are processed.
@@ -77,7 +77,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                 // Because of possible queueing in the executor, a connection might already exist (i.e. when multiple
                 // packets queued before the connection was registered).
                 if (registeredConnection != null) {
-                    registeredConnection.parsePackets(datagramNumber, timeReceived, data);
+                    registeredConnection.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
                     return;
                 }
 

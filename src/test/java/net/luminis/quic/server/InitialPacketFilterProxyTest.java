@@ -50,10 +50,10 @@ class InitialPacketFilterProxyTest {
         byte[] initialPacket = new byte[] {(byte) 0b1100_0000, 0x00, 0x00, 0x00, 0x00 };
 
         // When
-        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacket));
+        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacket), null);
 
         // Then
-        verify(connectionCandidate).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class));
+        verify(connectionCandidate).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any());
     }
 
     @Test
@@ -62,10 +62,10 @@ class InitialPacketFilterProxyTest {
         byte[] handshakePacket = new byte[] {(byte) 0b1110_0000, 0x00, 0x00, 0x00, 0x00 };
 
         // When
-        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(handshakePacket));
+        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(handshakePacket), null);
 
         // Then
-        verify(connectionCandidate, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class));
+        verify(connectionCandidate, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any());
     }
 
     @Test
@@ -74,10 +74,10 @@ class InitialPacketFilterProxyTest {
         byte[] appPacket = new byte[] {(byte) 0b0100_0000, 0x00, 0x00, 0x00, 0x00 };
 
         // When
-        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(appPacket));
+        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(appPacket), null);
 
         // Then
-        verify(connectionCandidate, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class));
+        verify(connectionCandidate, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any());
     }
 
     @Test
@@ -89,7 +89,7 @@ class InitialPacketFilterProxyTest {
         int startPosition = buffer.position();
 
         // When
-        initialPacketFilterProxy.parsePackets(0, Instant.now(), buffer);
+        initialPacketFilterProxy.parsePackets(0, Instant.now(), buffer, null);
 
         // Then
         assertThat(buffer.position()).isEqualTo(startPosition);

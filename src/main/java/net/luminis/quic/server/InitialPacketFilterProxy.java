@@ -24,6 +24,7 @@ import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.tls.util.ByteUtils;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -49,13 +50,13 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
     }
 
     @Override
-    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
+    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
         data.mark();
         byte flags = data.get();
         data.reset();
         if (LongHeaderPacket.isLongHeaderPacket(flags, version) &&
                 InitialPacket.isInitial((flags & 0x30) >> 4, version)) {
-            connectionCandidate.parsePackets(datagramNumber, timeReceived, data);
+            connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
         }
         else {
             log.info(String.format("Dropping packet (%d bytes) sent to odcid %s.", data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
