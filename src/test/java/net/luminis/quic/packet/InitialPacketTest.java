@@ -167,6 +167,5 @@ class InitialPacketTest {
 
         Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
         byte[] bytes = initialPacket.generatePacketBytes(aead);
-        System.out.println(ByteUtils.bytesToHex(bytes));
     }
 }

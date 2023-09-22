@@ -754,7 +754,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-08.html
             // "clients MUST validate that the server's Chosen Version is equal to the negotiated version; if they do not
             //  match, the client MUST close the connection with a version negotiation error. "
-            log.error(String.format("HIERO: connection version: %s, version info: %s", quicVersion, versionInformation));
+            log.error(String.format("Chosen version is not equal to negotiated version: connection version: %s, version info: %s", quicVersion, versionInformation));
             immediateCloseWithError(Handshake, VERSION_NEGOTIATION_ERROR.value, "Chosen version does not match packet version");
         }
         else {

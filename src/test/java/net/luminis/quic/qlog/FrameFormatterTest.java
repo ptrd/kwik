@@ -48,30 +48,24 @@ class FrameFormatterTest {
     @Test
     void formatAckFrameWithRanges() {
         AckFrame ackFrame = new AckFrame(List.of(new Range(6l, 7l), new Range(1l, 3l)));
-        System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();
-        System.out.println("Json:" + output.toString());
         assertThat(output.toString()).contains("\"acked_ranges\":[[1,3],[6,7]");
     }
 
     @Test
     void formatAckFrameWithSingleElementRanges() {
         AckFrame ackFrame = new AckFrame(List.of(new Range(8l, 9l), new Range(6l), new Range(1l, 3l)));
-        System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();
-        System.out.println("Json:" + output.toString());
         assertThat(output.toString()).contains("\"acked_ranges\":[[1,3],[6,6],[8,9]]");
     }
 
     @Test
     void formatAckFrameWithSingleElement() {
         AckFrame ackFrame = new AckFrame(3l);
-        System.out.println("String:" + ackFrame);
         frameFormatter.process(ackFrame, null, null);
         jsonGenerator.flush();
-        System.out.println("Json:" + output.toString());
         assertThat(output.toString()).contains("\"acked_ranges\":[[3,3]]");
     }
 }

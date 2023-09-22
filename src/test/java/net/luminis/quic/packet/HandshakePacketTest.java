@@ -237,7 +237,5 @@ class HandshakePacketTest {
 
         Aead aead = TestUtils.createKeys();
         byte[] bytes = handshakePacket.generatePacketBytes(aead);
-        System.out.println(ByteUtils.bytesToHex(bytes));
-
     }
 }
