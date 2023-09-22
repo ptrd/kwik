@@ -22,6 +22,7 @@ import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.LongHeaderPacket;
+import net.luminis.quic.packet.ZeroRttPacket;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -55,7 +56,7 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
         byte flags = data.get();
         data.reset();
         if (LongHeaderPacket.isLongHeaderPacket(flags, version)) {
-            if (InitialPacket.isInitial((flags & 0x30) >> 4, version)) {
+            if (InitialPacket.isInitial((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
                 connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
             }
             else {

@@ -41,7 +41,7 @@ class InitialPacketFilterProxyTest {
     void initObjectUnderTest() {
         connectionCandidate = mock(ServerConnectionProxy.class);
         when(connectionCandidate.getOriginalDestinationConnectionId()).thenReturn(new byte[] { 0x01, 0x02, 0x03 });
-        initialPacketFilterProxy = new InitialPacketFilterProxy(connectionCandidate, Version.getDefault(), mock(LogProxy.class));
+        initialPacketFilterProxy = new InitialPacketFilterProxy(connectionCandidate, Version.QUIC_version_1, mock(LogProxy.class));
     }
 
     @Test
@@ -71,13 +71,25 @@ class InitialPacketFilterProxyTest {
     @Test
     void oneRttPacketShouldNotBeForwarded() {
         // Given
-        byte[] appPacket = new byte[] {(byte) 0b0100_0000, 0x00, 0x00, 0x00, 0x00 };
+        byte[] appPacket = new byte[] {(byte) 0b0100_0000, 0x00, 0x00, 0x00, 0x00 };  // Short header packet!
 
         // When
         initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(appPacket), null);
 
         // Then
         verify(connectionCandidate, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any());
+    }
+
+    @Test
+    void zeroRttPacketShouldBeForwarded() {
+        // Given
+        byte[] appPacket = new byte[] {(byte) 0b1101_0000, 0x00, 0x00, 0x00, 0x00 };
+
+        // When
+        initialPacketFilterProxy.parsePackets(0, Instant.now(), ByteBuffer.wrap(appPacket), null);
+
+        // Then
+        verify(connectionCandidate).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any());
     }
 
     @Test
