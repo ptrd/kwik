@@ -42,6 +42,26 @@ public abstract class LongHeaderPacket extends QuicPacket {
         return (flags & 0b1100_0000) == 0b1100_0000;
     }
 
+    public static Class determineType(byte flags, Version version) {
+        int type = (flags & 0x30) >> 4;
+        if (InitialPacket.isInitial(type, version)) {
+            return InitialPacket.class;
+        }
+        else if (HandshakePacket.isHandshake(type, version)) {
+            return HandshakePacket.class;
+        }
+        else if (RetryPacket.isRetry(type, version)) {
+            return RetryPacket.class;
+        }
+        else if (ZeroRttPacket.isZeroRTT(type, version)) {
+            return ZeroRttPacket.class;
+        }
+        else {
+            // Impossible, conditions are exhaustive
+            throw new RuntimeException();
+        }
+    }
+
     /**
      * Constructs an empty packet for parsing a received one
      * @param quicVersion

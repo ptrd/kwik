@@ -54,12 +54,17 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
         data.mark();
         byte flags = data.get();
         data.reset();
-        if (LongHeaderPacket.isLongHeaderPacket(flags, version) &&
-                InitialPacket.isInitial((flags & 0x30) >> 4, version)) {
-            connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
+        if (LongHeaderPacket.isLongHeaderPacket(flags, version)) {
+            if (InitialPacket.isInitial((flags & 0x30) >> 4, version)) {
+                connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
+            }
+            else {
+                String type = LongHeaderPacket.determineType(flags, version).getSimpleName();
+                log.info(String.format("Dropping %s (%d bytes) sent to odcid %s.", type, data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
+            }
         }
         else {
-            log.info(String.format("Dropping packet (%d bytes) sent to odcid %s.", data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
+            log.info(String.format("Dropping ShortHeaderPacket (%d bytes) sent to odcid %s.", data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
         }
     }
 
