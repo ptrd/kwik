@@ -92,7 +92,7 @@ public class InteropRunner extends KwikCli {
             }
 
             QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-            builder.version(Version.QUIC_version_1);
+            builder.version(QuicConnection.QuicVersion.V1);
             builder.noServerCertificateCheck();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
@@ -173,7 +173,7 @@ public class InteropRunner extends KwikCli {
         }
 
         builder = QuicClientConnectionImpl.newBuilder();
-        builder.version(Version.QUIC_version_1);
+        builder.version(QuicConnection.QuicVersion.V1);
         builder.uri(url2.toURI());
         builder.noServerCertificateCheck();  // Not necessary if server accepts PSK, but when not, test would fail for wrong reason.
         builder.logger(logger);

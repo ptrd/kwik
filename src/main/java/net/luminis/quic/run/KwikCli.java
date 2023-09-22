@@ -77,7 +77,6 @@ public class KwikCli {
         cmdLineOptions.addOption("v1", "use Quic version 1");
         cmdLineOptions.addOption("v2", "use Quic version 2");
         cmdLineOptions.addOption("v1v2", "use Quic version 1, request version 2");
-        cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
         cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
         cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
         cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
@@ -231,35 +230,20 @@ public class KwikCli {
             }
         }
 
-        Version quicVersion = Version.getDefault();
-        Version preferredVersion = null;
+        QuicConnection.QuicVersion quicVersion = QuicConnection.QuicVersion.V1;
+        QuicConnection.QuicVersion preferredVersion = null;
 
         if (cmd.hasOption("v1v2")) {
-            quicVersion = Version.QUIC_version_1;
-            preferredVersion = Version.QUIC_version_2;
+            quicVersion = QuicConnection.QuicVersion.V1;
+            preferredVersion = QuicConnection.QuicVersion.V2;
         }
         else if (cmd.hasOption("v2")) {
-            quicVersion = Version.QUIC_version_2;
+            quicVersion = QuicConnection.QuicVersion.V2;
         }
         else if (cmd.hasOption("v1")) {
-            quicVersion = Version.QUIC_version_1;
-        }
-        else if (cmd.hasOption("32")) {
-            quicVersion = Version.IETF_draft_32;
-        }
-        else if (cmd.hasOption("31")) {
-            quicVersion = Version.IETF_draft_31;
-        }
-        else if (cmd.hasOption("30")) {
-            quicVersion = Version.IETF_draft_30;
-        }
-        else if (cmd.hasOption("29")) {
-            quicVersion = Version.IETF_draft_29;
+            quicVersion = QuicConnection.QuicVersion.V1;
         }
 
-        if (cmd.hasOption("reservedVersion")) {
-            quicVersion = Version.reserved_1;
-        }
         builder.version(quicVersion);
         builder.preferredVersion(preferredVersion);
 
@@ -274,11 +258,11 @@ public class KwikCli {
             }
         }
         else {
-            if (quicVersion.isV1() || quicVersion.isV2()) {
+            if (quicVersion == QuicConnection.QuicVersion.V1 || quicVersion == QuicConnection.QuicVersion.V2) {
                 alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
             }
             else {
-                alpn = (httpVersion == HttpVersion.HTTP3? "h3-": "hq-") + quicVersion.getDraftVersion();
+                alpn = (httpVersion == HttpVersion.HTTP3? "h3-34": "hq-34");
             }
         }
 

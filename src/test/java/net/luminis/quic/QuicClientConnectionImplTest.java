@@ -317,26 +317,6 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void testMinimumQuicVersionIs23() {
-        assertThatThrownBy(
-                () -> QuicClientConnectionImpl.newBuilder()
-                        .version(Version.IETF_draft_19)
-                        .uri(new URI("//localhost:443"))
-                        .logger(logger).build())
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void testQuicVersion29IsSupported() throws Exception {
-        assertThat(QuicClientConnectionImpl.newBuilder()
-                .version(Version.IETF_draft_29)
-                .connectionIdLength(4)
-                .uri(new URI("//localhost:443"))
-                .logger(logger).build())
-                .isNotNull();
-    }
-
-    @Test
     void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
         QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
         assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);

@@ -47,6 +47,21 @@ public class Version {
 
     private int versionId;
 
+    static Version of(QuicConnection.QuicVersion version) {
+        if (version == null) {
+            return null;
+        }
+        switch (version) {
+            case V1:
+                return QUIC_version_1;
+            case V2:
+                return QUIC_version_2;
+            case Draft:
+                return IETF_draft_34;
+        }
+        return null;
+    }
+    
     Version(int versionId) {
         this.versionId = versionId;
     }
@@ -184,5 +199,20 @@ public class Version {
     @Override
     public int hashCode() {
         return versionId;
+    }
+
+    public QuicConnection.QuicVersion toQuicVersion() {
+        if (versionId == QUIC_version_1.versionId) {
+            return QuicConnection.QuicVersion.V1;
+        }
+        else if (versionId == QUIC_version_2.versionId) {
+            return QuicConnection.QuicVersion.V2;
+        }
+        else if (versionId == IETF_draft_34.versionId) {
+            return QuicConnection.QuicVersion.Draft;
+        }
+        else {
+            return null;
+        }
     }
 }

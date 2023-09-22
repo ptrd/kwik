@@ -78,7 +78,7 @@ public class EchoClientUsing0RTT {
         QuicClientConnection.Builder connectionBuilder = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
-                .version(Version.QUIC_version_1)
+                .version(QuicConnection.QuicVersion.V1)
                 .noServerCertificateCheck();
 
         // Try to load session ticket and if it can be loaded, create early data.

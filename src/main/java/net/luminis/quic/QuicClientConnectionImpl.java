@@ -1037,12 +1037,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public static Builder newBuilder() {
         return new BuilderImpl();
     }
+
     private static class BuilderImpl implements Builder {
         private String host;
         private int port;
         private QuicSessionTicket sessionTicket;
-        private Version quicVersion = Version.getDefault();
-        private Version preferredVersion;
+        private QuicVersion quicVersion = QuicVersion.V1;
+        private QuicVersion preferredVersion;
         private Logger log = new NullLogger();
         private String proxyHost;
         private Path secretsFile;
@@ -1057,9 +1058,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
-            if (!quicVersion.isKnown() || !quicVersion.atLeast(Version.IETF_draft_29)) {
-                throw new IllegalArgumentException("Quic version " + quicVersion + " not supported");
-            }
             if (host == null) {
                 throw new IllegalStateException("Cannot create connection when URI is not set");
             }
@@ -1071,9 +1069,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, sessionTicket, quicVersion, preferredVersion, log, proxyHost,
-                            secretsFile, initialRtt, connectionIdLength, cipherSuites, clientCertificate, clientCertificateKey,
-                            socketFactory);
+                    new QuicClientConnectionImpl(host, port, sessionTicket, Version.of(quicVersion), Version.of(preferredVersion),
+                            log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites,
+                            clientCertificate, clientCertificateKey, socketFactory);
 
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
@@ -1091,19 +1089,19 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         @Override
-        public Builder version(Version version) {
+        public Builder version(QuicVersion version) {
             quicVersion = version;
             return this;
         }
 
         @Override
-        public Builder initialVersion(Version version) {
+        public Builder initialVersion(QuicVersion version) {
             quicVersion = version;
             return this;
         }
 
         @Override
-        public Builder preferredVersion(Version version) {
+        public Builder preferredVersion(QuicVersion version) {
             preferredVersion = version;
             return this;
         }

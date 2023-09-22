@@ -852,8 +852,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public Version getQuicVersion() {
-        return quicVersion.getVersion();
+    public QuicVersion getQuicVersion() {
+        return quicVersion.getVersion().toQuicVersion();
     }
 
     protected abstract SenderImpl getSender();

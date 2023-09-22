@@ -72,11 +72,11 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder connectTimeout(Duration duration);
 
-        Builder version(Version version);
+        Builder version(QuicVersion version);
 
-        Builder initialVersion(Version version);
+        Builder initialVersion(QuicVersion version);
 
-        Builder preferredVersion(Version version);
+        Builder preferredVersion(QuicVersion version);
 
         Builder logger(Logger log);
 

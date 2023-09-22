@@ -19,10 +19,9 @@
 package net.luminis.quic.sample;
 
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Version;
-import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.log.SysOutLogger;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -50,7 +49,7 @@ public class SampleClient {
 
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         QuicClientConnection connection =
-                builder.version(Version.QUIC_version_1)
+                builder.version(QuicConnection.QuicVersion.V1)
                         .uri(new URI(args[0]))
                         .build();
 

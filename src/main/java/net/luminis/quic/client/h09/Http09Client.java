@@ -19,6 +19,7 @@
 package net.luminis.quic.client.h09;
 
 import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 
@@ -181,10 +182,10 @@ public class Http09Client extends HttpClient {
 
             if (!quicConnection.isConnected()) {
                 String alpn;
-                if (quicConnection.getQuicVersion().isV1V2()) {
+                if (quicConnection.getQuicVersion() == QuicConnection.QuicVersion.V1 || quicConnection.getQuicVersion() == QuicConnection.QuicVersion.V2) {
                     alpn = "hq-interop";
                 } else {
-                    String draftVersion = quicConnection.getQuicVersion().getDraftVersion();
+                    String draftVersion = "34";
                     alpn = "hq-" + draftVersion;
                 }
 
