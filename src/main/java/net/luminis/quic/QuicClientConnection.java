@@ -18,8 +18,9 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.TlsConstants;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.tls.TlsConstants;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -29,8 +30,8 @@ import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.time.Duration;
+import java.util.List;
 
 
 public interface QuicClientConnection extends QuicConnection {
@@ -65,10 +66,18 @@ public interface QuicClientConnection extends QuicConnection {
             this.data = data;
             closeOutput = closeImmediately;
         }
+
+        public byte[] getData() {
+            return data;
+        }
+
+        public boolean isCloseOutput() {
+            return closeOutput;
+        }
     }
 
     interface Builder {
-        QuicClientConnectionImpl build() throws SocketException, UnknownHostException;
+        QuicClientConnection build() throws SocketException, UnknownHostException;
 
         Builder connectTimeout(Duration duration);
 

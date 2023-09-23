@@ -18,8 +18,12 @@
  */
 package net.luminis.quic.sample.echo;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.core.QuicSessionTicketImpl;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

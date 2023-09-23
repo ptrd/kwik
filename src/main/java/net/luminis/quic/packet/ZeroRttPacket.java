@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.PacketProcessor;
-import net.luminis.quic.PnSpace;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.PacketProcessor;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.QuicFrame;
 
 import java.nio.ByteBuffer;

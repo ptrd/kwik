@@ -19,10 +19,10 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
-import net.luminis.quic.VersionHolder;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
+import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.*;
 import net.luminis.tls.util.ByteUtils;

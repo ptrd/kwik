@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.RawPacket;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.RawPacket;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
@@ -40,7 +40,6 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;

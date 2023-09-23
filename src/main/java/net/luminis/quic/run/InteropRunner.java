@@ -18,18 +18,25 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.QuicClientConnectionImpl;
 
-import java.io.*;
-import java.net.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalTime;

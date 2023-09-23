@@ -18,7 +18,8 @@
  */
 package net.luminis.quic.sample.echo;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;

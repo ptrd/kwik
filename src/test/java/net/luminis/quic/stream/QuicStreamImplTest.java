@@ -18,13 +18,12 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
-import org.assertj.core.internal.AtomicReferenceArrayElementComparisonStrategy;
+import net.luminis.quic.core.*;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;

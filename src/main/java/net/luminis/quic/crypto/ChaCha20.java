@@ -19,10 +19,10 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
-import net.luminis.quic.DecryptionException;
-import net.luminis.quic.QuicRuntimeException;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.DecryptionException;
+import net.luminis.quic.core.QuicRuntimeException;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
 import javax.crypto.*;

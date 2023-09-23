@@ -18,14 +18,16 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Receiver;
 import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.Receiver;
 import net.luminis.tls.util.ByteUtils;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -34,7 +36,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -158,7 +159,7 @@ public class InteractiveShell {
         }
 
         try {
-            quicConnection = builder.build();
+            quicConnection = (QuicClientConnectionImpl) builder.build();
             quicConnection.connect(connectionTimeout, alpn, params, null);
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {

@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.*;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -27,14 +26,16 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static net.luminis.quic.Version.IETF_draft_29;
-import static org.assertj.core.api.Assertions.*;
+import static net.luminis.quic.core.Version.IETF_draft_29;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class InitialPacketTest {

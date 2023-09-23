@@ -18,12 +18,14 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
@@ -53,9 +55,9 @@ import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {

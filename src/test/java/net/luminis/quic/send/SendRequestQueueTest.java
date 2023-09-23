@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import org.junit.jupiter.api.Test;

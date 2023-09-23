@@ -18,21 +18,22 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicConstants;
+import net.luminis.quic.TransportParameters;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.tls.alert.DecodeErrorException;
-import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.extension.Extension;
+import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
-import static net.luminis.quic.Role.Server;
+import static net.luminis.quic.core.Role.Server;
 
 /**
  * Quic transport parameter TLS extension.

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.test;
 
-import net.luminis.quic.NotYetImplementedException;
+import net.luminis.quic.core.NotYetImplementedException;
 
 import java.time.Instant;
 import java.util.ArrayList;

@@ -19,7 +19,7 @@
 package net.luminis.quic.frame;
 
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

@@ -18,13 +18,10 @@
  */
 package net.luminis.quic.cc;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.MockPacket;
-import net.luminis.quic.cc.CongestionController;
-import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.frame.Padding;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.MockPacket;
 import net.luminis.quic.packet.PacketInfo;
 import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.BeforeEach;

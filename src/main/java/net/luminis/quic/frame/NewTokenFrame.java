@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.VariableLengthInteger;
+import net.luminis.quic.core.InvalidIntegerEncodingException;
+import net.luminis.quic.core.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;

@@ -21,12 +21,12 @@ package net.luminis.quic.run;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
-import net.luminis.quic.QuicSessionTicketImpl;
-import net.luminis.quic.VersionNegotiationFailure;
 import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.core.QuicSessionTicketImpl;
+import net.luminis.quic.core.VersionNegotiationFailure;
 import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 

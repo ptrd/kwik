@@ -19,8 +19,8 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
 import javax.crypto.*;
@@ -28,7 +28,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
-import static net.luminis.quic.Role.Client;
+import static net.luminis.quic.core.Role.Client;
 
 public abstract class BaseAeadImpl implements Aead {
 

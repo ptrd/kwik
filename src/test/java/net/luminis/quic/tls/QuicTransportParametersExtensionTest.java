@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.ProtocolError;
-import net.luminis.quic.Role;
 import net.luminis.quic.TransportParameters;
-import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.ProtocolError;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;

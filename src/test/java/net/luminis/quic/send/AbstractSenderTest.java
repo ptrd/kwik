@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.TestUtils;
 import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 
 public class AbstractSenderTest {

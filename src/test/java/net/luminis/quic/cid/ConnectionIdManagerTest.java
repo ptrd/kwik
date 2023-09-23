@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.cid;
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
