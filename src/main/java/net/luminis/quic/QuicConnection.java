@@ -25,7 +25,6 @@ import java.util.function.Consumer;
 public interface QuicConnection {
 
     enum QuicVersion {
-        Draft,
         V1,
         V2,
     }

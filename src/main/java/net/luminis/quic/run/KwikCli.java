@@ -18,7 +18,11 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicSessionTicketImpl;
+import net.luminis.quic.VersionNegotiationFailure;
 import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
@@ -70,10 +74,6 @@ public class KwikCli {
                 "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (w)arning, (R)aw bytes, (S)ecrets, (D)ebug; "
                 + " default is \"" + DEFAULT_LOG_ARGS + "\", use (n)one to disable");
         cmdLineOptions.addOption("h", "help", false, "show help");
-        cmdLineOptions.addOption("29", "use Quic version IETF_draft_29");
-        cmdLineOptions.addOption("30", "use Quic version IETF_draft_30");
-        cmdLineOptions.addOption("31", "use Quic version IETF_draft_31");
-        cmdLineOptions.addOption("32", "use Quic version IETF_draft_32");
         cmdLineOptions.addOption("v1", "use Quic version 1");
         cmdLineOptions.addOption("v2", "use Quic version 2");
         cmdLineOptions.addOption("v1v2", "use Quic version 1, request version 2");
@@ -258,12 +258,7 @@ public class KwikCli {
             }
         }
         else {
-            if (quicVersion == QuicConnection.QuicVersion.V1 || quicVersion == QuicConnection.QuicVersion.V2) {
-                alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
-            }
-            else {
-                alpn = (httpVersion == HttpVersion.HTTP3? "h3-34": "hq-34");
-            }
+            alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
         }
 
         int connectionTimeout = 5;
