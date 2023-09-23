@@ -29,7 +29,10 @@ import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.tls.*;
+import net.luminis.tls.CertificateWithPrivateKey;
+import net.luminis.tls.NewSessionTicket;
+import net.luminis.tls.TlsConstants;
+import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
@@ -383,7 +386,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             tlsEngine.add(new EarlyDataExtension());
         }
         if (sessionTicket != null) {
-            tlsEngine.setNewSessionTicket(sessionTicket);
+            tlsEngine.setNewSessionTicket(sessionTicket.getTlsSessionTicket());
         }
 
         try {

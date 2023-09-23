@@ -22,10 +22,9 @@ import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 
 import java.nio.ByteBuffer;
-import java.util.Date;
 
 /**
- * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to being able to
+ * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to be able to
  * send 0-RTT packets.
  *
  * https://www.rfc-editor.org/rfc/rfc9000.html#name-values-of-transport-paramet
@@ -38,10 +37,11 @@ import java.util.Date;
  *  "A client that attempts to send 0-RTT data MUST remember all other transport parameters used by the server that
  *  it is able to process."
  */
-public class QuicSessionTicket extends NewSessionTicket {
+public class QuicSessionTicket {
 
     private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1 + 4;
 
+    private NewSessionTicket tlsTicket;
     private long maxIdleTimeout;
     private int maxPacketSize;
     private long initialMaxData;
@@ -55,16 +55,8 @@ public class QuicSessionTicket extends NewSessionTicket {
 
 
     QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
-        psk = tlsTicket.getPSK();
-        ticketCreationDate = tlsTicket.getTicketCreationDate();
-        ticketAgeAdd = tlsTicket.getTicketAgeAdd();
-        ticket = tlsTicket.getTicket();
-        ticketLifeTime = tlsTicket.getTicketLifeTime();
-        hasEarlyDataExtension = tlsTicket.hasEarlyDataExtension();
-        earlyDataMaxSize = tlsTicket.getEarlyDataMaxSize();
-        cipher = tlsTicket.getCipher();
+        this.tlsTicket = tlsTicket;
 
-        ticketCreationDate = tlsTicket.getTicketCreationDate();
         maxIdleTimeout = serverParameters.getMaxIdleTimeout();
         maxPacketSize = serverParameters.getMaxUdpPayloadSize();
         initialMaxData = serverParameters.getInitialMaxData();
@@ -77,9 +69,13 @@ public class QuicSessionTicket extends NewSessionTicket {
         activeConnectionIdLimit = serverParameters.getActiveConnectionIdLimit();
     }
 
-    public QuicSessionTicket(byte[] data) {
-        super(data);
-        ByteBuffer buffer = ByteBuffer.wrap(data, data.length - SERIALIZED_SIZE, SERIALIZED_SIZE);
+    private QuicSessionTicket(byte[] data) {
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+        int tlsTicketSize = buffer.getInt();
+        byte[] tlsTicketData = new byte[tlsTicketSize];
+        buffer.get(tlsTicketData);
+        tlsTicket = NewSessionTicket.deserialize(tlsTicketData);
+        buffer.position(4 + tlsTicketSize);
         maxIdleTimeout = buffer.getLong();
         maxPacketSize = buffer.getInt();
         initialMaxData = buffer.getLong();
@@ -92,11 +88,10 @@ public class QuicSessionTicket extends NewSessionTicket {
         activeConnectionIdLimit = buffer.getInt();
     }
 
-    @Override
     public byte[] serialize() {
-        byte[] serializedTicket;
-        serializedTicket = super.serialize();
-        ByteBuffer buffer = ByteBuffer.allocate(serializedTicket.length + SERIALIZED_SIZE);
+        byte[] serializedTicket = tlsTicket.serialize();
+        ByteBuffer buffer = ByteBuffer.allocate(4 + serializedTicket.length + SERIALIZED_SIZE);
+        buffer.putInt(serializedTicket.length);
         buffer.put(serializedTicket);
         buffer.putLong(maxIdleTimeout);
         buffer.putInt(maxPacketSize);
@@ -109,6 +104,10 @@ public class QuicSessionTicket extends NewSessionTicket {
         buffer.put((byte) (disableActiveMigration? 1: 0));
         buffer.putInt(activeConnectionIdLimit);
         return buffer.array();
+    }
+
+    public NewSessionTicket getTlsSessionTicket() {
+        return tlsTicket;
     }
 
     public void copyTo(TransportParameters tp) {
@@ -166,6 +165,10 @@ public class QuicSessionTicket extends NewSessionTicket {
 
     public int getActiveConnectionIdLimit() {
         return activeConnectionIdLimit;
+    }
+
+    public TlsConstants.CipherSuite getCipher() {
+        return tlsTicket.getCipher();
     }
 }
 
