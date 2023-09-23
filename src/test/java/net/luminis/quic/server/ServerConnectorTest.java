@@ -157,9 +157,9 @@ class ServerConnectorTest {
             VersionNegotiationPacket vn = new VersionNegotiationPacket();
             try {
                 vn.parse(ByteBuffer.wrap(returnedPacket.getData()), null, 0, mock(Logger.class), 0);
-                return Arrays.equals(vn.getDcid(), new byte[] { 11, 12, 13, 14 })
+                return Arrays.equals(vn.getDestinationConnectionId(), new byte[] { 11, 12, 13, 14 })
                         &&
-                        Arrays.equals(vn.getScid(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+                        Arrays.equals(vn.getSourceConnectionId(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
             }
             catch (Exception e) {
                 return false;
@@ -264,9 +264,9 @@ class ServerConnectorTest {
         server.process(invalidRepeatedFirstPacket);
         testExecutor.check();
 
-        Map serverConnections = (Map) new FieldReader(server, server.getClass().getDeclaredField("currentConnections")).read();
+        ServerConnectionRegistryImpl connectionRegistry = (ServerConnectionRegistryImpl) new FieldReader(server, server.getClass().getDeclaredField("connectionRegistry")).read();
         // As the first packet was valid, there must be an entry with the original DCID
-        assertThat(serverConnections).containsKey(new ConnectionSource(ByteUtils.hexToBytes("8f609080b6d8a632")));
+        assertThat(connectionRegistry.isExistingConnection(null, ByteUtils.hexToBytes("8f609080b6d8a632"))).isPresent();
     }
 
     private RawPacket createPacket(ByteBuffer buffer) {

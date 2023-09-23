@@ -456,4 +456,12 @@ public class ConnectionIdManager {
         return cidRegistry.getActive();
     }
 
+    /**
+     * Returns whether the given connection ID is currently active (as connection ID for this endpoint).
+     * @param cid
+     * @return
+     */
+    public boolean isActiveCid(byte[] cid) {
+        return getActiveConnectionIds().stream().anyMatch(activeCid -> Arrays.equals(activeCid, cid));
+    }
 }

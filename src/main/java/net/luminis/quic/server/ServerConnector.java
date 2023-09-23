@@ -34,7 +34,6 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -43,7 +42,7 @@ import java.util.stream.Collectors;
 /**
  * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
-public class ServerConnector implements ServerConnectionRegistry {
+public class ServerConnector {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
     private static final int CONNECTION_ID_LENGTH = 4;
@@ -55,14 +54,13 @@ public class ServerConnector implements ServerConnectionRegistry {
     private final DatagramSocket serverSocket;
     private final boolean requireRetry;
     private Integer initalRtt = 100;
-    private Map<ConnectionSource, ServerConnectionProxy> currentConnections;
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
     private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private Context context;
-
+    private ServerConnectionRegistryImpl connectionRegistry;
 
     public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
@@ -76,11 +74,11 @@ public class ServerConnector implements ServerConnectionRegistry {
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
+        connectionRegistry = new ServerConnectionRegistryImpl(log);
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                this.requireRetry, applicationProtocolRegistry, initalRtt, this, this::removeConnection, log);
+                this.requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, connectionRegistry::removeConnection, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
-        currentConnections = new ConcurrentHashMap<>();
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
     }
@@ -166,10 +164,10 @@ public class ServerConnector implements ServerConnectionRegistry {
                     data.get(scid);
                     data.rewind();
 
-                    Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
+                    Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
                     if (connection.isEmpty()) {
                         synchronized (this) {
-                            if (mightStartNewConnection(data, version, dcid) && isExistingConnection(clientAddress, dcid).isEmpty()) {
+                            if (mightStartNewConnection(data, version, dcid) && connectionRegistry.isExistingConnection(clientAddress, dcid).isEmpty()) {
                                 connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
                             } else if (initialWithUnspportedVersion(data, version)) {
                                 log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
@@ -179,7 +177,7 @@ public class ServerConnector implements ServerConnectionRegistry {
                             }
                         }
                     }
-                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data));
+                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data, clientAddress));
                 }
             }
         }
@@ -190,8 +188,8 @@ public class ServerConnector implements ServerConnectionRegistry {
         data.position(1);
         data.get(dcid);
         data.rewind();
-        Optional<ServerConnectionProxy> connection = isExistingConnection(clientAddress, dcid);
-        connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data),
+        Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
+        connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data, clientAddress),
                 () -> log.warn("Discarding short header packet addressing non existent connection " + ByteUtils.bytesToHex(dcid)));
     }
 
@@ -220,44 +218,19 @@ public class ServerConnector implements ServerConnectionRegistry {
         return false;
     }
 
-    private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] dcid) {
+    private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
         Version version = Version.parse(versionValue);
-        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, this, log);
+        ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, originalDcid,
+                serverConnectionFactory, connectionRegistry, log);
         // Register new connection now with the original connection id, as retransmitted initial packets with the
-        // same original dcid might be received, which should _not_ lead to another connection candidate)
-        currentConnections.put(new ConnectionSource(dcid), connectionCandidate);
+        // same original dcid might be received (for example when the server response does not reach the client).
+        // Such packets must _not_ lead to new connection candidate. Moreover, if it is an initial packet, it must be
+        // passed to the connection, because (if valid) it will change the anti-amplification limit.
+        connectionRegistry.registerConnection(new InitialPacketFilterProxy(connectionCandidate, version, log), originalDcid);
 
         return connectionCandidate;
     }
 
-    private void removeConnection(ServerConnectionImpl connection) {
-        ServerConnectionProxy removed = null;
-        for (byte[] connectionId: connection.getActiveConnectionIds()) {
-            if (removed == null) {
-                removed = currentConnections.remove(new ConnectionSource(connectionId));
-                if (removed == null) {
-                    log.error("Cannot remove connection with cid " + ByteUtils.bytesToHex(connectionId));
-                }
-            }
-            else {
-                if (removed != currentConnections.remove(new ConnectionSource(connectionId))) {
-                    log.error("Removed connections for set of active cids are not identical");
-                }
-            }
-        }
-        currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
-
-        if (! removed.isClosed()) {
-            log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed...");
-        }
-        removed.terminate();
-    }
-
-
-    private Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
-        return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
-    }
-    
     private void sendVersionNegotiationPacket(InetSocketAddress clientAddress, ByteBuffer data, int dcidLength) {
         data.rewind();
         if (data.remaining() >= 1 + 4 + 1 + dcidLength + 1) {
@@ -283,54 +256,6 @@ public class ServerConnector implements ServerConnectionRegistry {
                 log.error("Sending version negotiation packet failed", e);
             }
         }
-    }
-
-    @Override
-    public void registerConnection(ServerConnectionProxy connection, byte[] connectionId) {
-        currentConnections.put(new ConnectionSource(connectionId), connection);
-    }
-
-    @Override
-    public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {
-        boolean removed = currentConnections.remove(new ConnectionSource(connectionId), connection);
-        if (! removed && currentConnections.containsKey(new ConnectionSource(connectionId))) {
-            log.error("Connection " + connection + " not removed, because "
-                    + currentConnections.get(new ConnectionSource(connectionId)) + " is registered for "
-                    + ByteUtils.bytesToHex(connectionId));
-        }
-    }
-
-    @Override
-    public void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId) {
-        ServerConnectionProxy connection = currentConnections.get(new ConnectionSource(currentConnectionId));
-        if (connection != null) {
-            currentConnections.put(new ConnectionSource(newConnectionId), connection);
-        }
-        else {
-            log.error("Cannot add additional cid to non-existing connection " + ByteUtils.bytesToHex(currentConnectionId));
-        }
-    }
-
-    @Override
-    public void deregisterConnectionId(byte[] connectionId) {
-        currentConnections.remove(new ConnectionSource(connectionId));
-    }
-
-    /**
-     * Logs the entire connection table. For debugging purposed only.
-     */
-    private void logConnectionTable() {
-        log.info("Connection table: \n" +
-                currentConnections.entrySet().stream()
-                        .sorted(new Comparator<Map.Entry<ConnectionSource, ServerConnectionProxy>>() {
-                            @Override
-                            public int compare(Map.Entry<ConnectionSource, ServerConnectionProxy> o1, Map.Entry<ConnectionSource, ServerConnectionProxy> o2) {
-                                return o1.getValue().toString().compareTo(o2.getValue().toString());
-                            }
-                        })
-                        .map(e -> e.getKey() + "->" + e.getValue())
-                        .collect(Collectors.joining("\n")));
-
     }
 
     private class ServerConnectorContext implements Context {

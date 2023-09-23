@@ -182,6 +182,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    protected ConnectionIdManager getConnectionIdManager() {
+        return connectionIdManager;
+    }
+
+    @Override
     public long getInitialMaxStreamData() {
         return initialMaxStreamData;
     }
@@ -402,6 +407,17 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         super.parseAndProcessPackets(datagram, timeReceived, data, parsedPacket);
+    }
+
+    @Override
+    protected boolean checkDestinationConnectionId(QuicPacket packet) {
+        byte[] cid = packet.getDestinationConnectionId();
+        if ((packet instanceof InitialPacket || packet instanceof ZeroRttPacket) && Arrays.equals(cid, getOriginalDestinationConnectionId())) {
+            return true;
+        }
+        else {
+            return super.checkDestinationConnectionId(packet);
+        }
     }
 
     @Override

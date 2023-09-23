@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022, 2023 Peter Doornbosch
+ * Copyright © 2023 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,42 +18,46 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.log.Logger;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-/**
- * This class is a test replacement for ServerConnectionThread; it has the same behaviour as ServerConnectionThread,
- * but does not execute on a separate thread (which makes testing difficult). Just like the ServerConnectionThread,
- * this class receives the first parse initial packet in its constructor and passes it to the ServerConnectionImpl.
- */
-class ServerConnectionWrapper implements ServerConnectionProxy {
-    private final ServerConnectionImpl connection;
+public class ClientAddressFilter implements ServerConnectionProxy {
 
-    public ServerConnectionWrapper(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
-        this.connection = connection;
-        connection.parseAndProcessPackets(0, time, data, packet);
+    private final ServerConnectionProxy connectionCandidate;
+    private final InetSocketAddress clientAddress;
+    private final Logger log;
+
+    public ClientAddressFilter(ServerConnectionProxy connectionCandidate, InetSocketAddress clientAddress, Logger log) {
+        this.connectionCandidate = connectionCandidate;
+        this.clientAddress = clientAddress;
+        this.log = log;
     }
 
     @Override
     public byte[] getOriginalDestinationConnectionId() {
-        return connection.getOriginalDestinationConnectionId();
+        return connectionCandidate.getOriginalDestinationConnectionId();
     }
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        connection.parseAndProcessPackets(datagramNumber, timeReceived, data, null);
+        if (sourceAddress.equals(clientAddress)) {
+            connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
+        }
+        else {
+            log.warn(String.format("Dropping packet with unmatched source address %s (expected %s).", sourceAddress, clientAddress));
+        }
     }
 
     @Override
     public boolean isClosed() {
-        return connection.isClosed();
+        return connectionCandidate.isClosed();
     }
 
     @Override
     public void terminate() {
-        connection.terminate();
+        connectionCandidate.terminate();
     }
 }

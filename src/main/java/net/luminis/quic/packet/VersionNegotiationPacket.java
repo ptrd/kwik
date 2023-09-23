@@ -40,7 +40,6 @@ public class VersionNegotiationPacket extends QuicPacket {
     private static Random random = new Random();
 
     private byte[] sourceConnectionId;
-    private byte[] destinationConnectionId;
     private int packetSize;
     private List<Version> serverSupportedVersions = new ArrayList<>();
 
@@ -177,11 +176,7 @@ public class VersionNegotiationPacket extends QuicPacket {
                 + serverSupportedVersions.stream().map(v -> v.toString()).collect(Collectors.joining(", "));
     }
 
-    public byte[] getScid() {
+    public byte[] getSourceConnectionId() {
         return sourceConnectionId;
-    }
-
-    public byte[] getDcid() {
-        return destinationConnectionId;
     }
 }
