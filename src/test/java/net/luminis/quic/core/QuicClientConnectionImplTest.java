@@ -46,6 +46,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -79,6 +80,7 @@ class QuicClientConnectionImplTest {
     @BeforeEach
     void initConnectionUnderTest() throws Exception {
         connection = (QuicClientConnectionImpl) QuicClientConnectionImpl.newBuilder()
+                .connectTimeout(Duration.ofSeconds(1))
                 .connectionIdLength(4)
                 .uri(new URI("//localhost:443"))
                 .logger(logger).build();
@@ -90,14 +92,14 @@ class QuicClientConnectionImplTest {
     @Test
     void connectRequiresAlpn() {
         assertThatThrownBy(() ->
-                connection.connect(1000, null)
+                connection.connect(null)
         ).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void connectRequiresNonEmptyAlpn() {
         assertThatThrownBy(() ->
-                connection.connect(1000, " ")
+                connection.connect(" ")
         ).isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -18,8 +18,8 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsConstants;
 
 import java.io.IOException;
@@ -36,11 +36,11 @@ import java.util.List;
 
 public interface QuicClientConnection extends QuicConnection {
 
-    void connect(int connectionTimeout, String alpn) throws IOException;
+    void connect(String alpn) throws IOException;
 
-    void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException;
+    void connect(String alpn, TransportParameters transportParameters) throws IOException;
 
-    List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
+    List<QuicStream> connect(String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 

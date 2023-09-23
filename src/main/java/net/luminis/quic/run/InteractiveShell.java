@@ -159,8 +159,9 @@ public class InteractiveShell {
         }
 
         try {
+            builder.connectTimeout(Duration.ofMillis(connectionTimeout));
             quicConnection = (QuicClientConnectionImpl) builder.build();
-            quicConnection.connect(connectionTimeout, alpn, params, null);
+            quicConnection.connect(alpn, params, null);
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);

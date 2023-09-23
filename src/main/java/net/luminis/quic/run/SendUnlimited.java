@@ -48,7 +48,7 @@ public class SendUnlimited {
                             .uri(new URI("https://localhost:4433"))
                             .build();
 
-            connection.connect(10_000, "hq-32");
+            connection.connect("hq-32");
 
             stream = connection.createStream(true);
 

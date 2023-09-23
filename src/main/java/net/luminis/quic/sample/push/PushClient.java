@@ -75,7 +75,7 @@ public class PushClient {
 
         connection.setPeerInitiatedStreamCallback(quicStream -> new Thread(() -> handlePushMessages(quicStream)).start());
 
-        connection.connect(5000, "push");
+        connection.connect("push");
     }
 
     private void handlePushMessages(QuicStream quicStream) {

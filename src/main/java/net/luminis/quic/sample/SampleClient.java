@@ -55,7 +55,7 @@ public class SampleClient {
 
         // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
         // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
-        connection.connect(10_000, "hq-interop");
+        connection.connect("hq-interop");
 
         QuicStream stream = connection.createStream(true);
 

@@ -67,7 +67,7 @@ public class SimpleEchoClient {
                 .noServerCertificateCheck()
                 .build();
 
-        connection.connect(5000, "echo");
+        connection.connect("echo");
 
         echo("hello mate!");
         echo("look, a second request on a separate stream!");

@@ -83,6 +83,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final Version originalVersion;
     private final Version preferredVersion;
     private final DatagramSocketFactory socketFactory;
+    private final long connectTimeout;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -100,12 +101,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile ClientHello originalClientHello;
 
 
-    private QuicClientConnectionImpl(String host, int port, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
+    private QuicClientConnectionImpl(String host, int port, long connectTimeout, QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
         super(originalVersion, Role.Client, secretsFile, log);
+        this.connectTimeout = connectTimeout;
         log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
         this.originalVersion = originalVersion;
         this.preferredVersion = preferredVersion;
@@ -178,13 +180,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * Set up the connection with the server.
      */
     @Override
-    public void connect(int connectionTimeout, String alpn) throws IOException {
-        connect(connectionTimeout, alpn, null, null);
+    public void connect(String alpn) throws IOException {
+        connect(alpn, null, null);
     }
 
     @Override
-    public void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException {
-        connect(connectionTimeout, alpn, transportParameters, null);
+    public void connect(String alpn, TransportParameters transportParameters) throws IOException {
+        connect(alpn, transportParameters, null);
     }
 
     /**
@@ -195,17 +197,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * the connect method can only be successfully called once. Use the <code>isConnected</code> method to check whether
      * it can be connected.
      *
-     * @param connectionTimeout  the connection timeout in milliseconds
-     * @param applicationProtocol  the ALPN of the protocol that will be used on top of the QUIC connection
-     * @param transportParameters  the transport parameters to use for the connection
-     * @param earlyData            early data to send (RTT-0), each element of the list will lead to a bidirectional stream
-     * @return                     list of streams that was created for the early data; the size of the list will be equal
+     * @param applicationProtocol the ALPN of the protocol that will be used on top of the QUIC connection
+     * @param transportParameters the transport parameters to use for the connection
+     * @param earlyData           early data to send (RTT-0), each element of the list will lead to a bidirectional stream
+     * @return list of streams that was created for the early data; the size of the list will be equal
      * to the size of the list of the <code>earlyData</code> parameter, but may contain <code>null</code>s if a stream
      * could not be created due to reaching the max initial streams limit.
      * @throws IOException
      */
     @Override
-    public synchronized List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
+    public synchronized List<QuicStream> connect(String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
         if (applicationProtocol.trim().isEmpty()) {
             throw new IllegalArgumentException("ALPN cannot be empty");
         }
@@ -237,10 +238,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         List<QuicStream> earlyDataStreams = sendEarlyData(earlyData);
 
         try {
-            boolean handshakeFinished = handshakeFinishedCondition.await(connectionTimeout, TimeUnit.MILLISECONDS);
+            boolean handshakeFinished = handshakeFinishedCondition.await(connectTimeout, TimeUnit.MILLISECONDS);
             if (!handshakeFinished) {
                 abortHandshake();
-                throw new ConnectException("Connection timed out after " + connectionTimeout + " ms");
+                throw new ConnectException("Connection timed out after " + connectTimeout + " ms");
             }
             else if (connectionState != Status.Connected) {
                 abortHandshake();
@@ -1040,6 +1041,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private static class BuilderImpl implements Builder {
+        private static final long DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 10_000;
         private String host;
         private int port;
         private QuicSessionTicket sessionTicket;
@@ -1056,11 +1058,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private X509Certificate clientCertificate;
         private PrivateKey clientCertificateKey;
         private DatagramSocketFactory socketFactory;
+        private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
             if (host == null) {
                 throw new IllegalStateException("Cannot create connection when URI is not set");
+            }
+            if (connectTimeoutInMillis < 1) {
+                throw new IllegalArgumentException("Connect timeout must be larger than 0.");
             }
             if (initialRtt != null && initialRtt < 1) {
                 throw new IllegalArgumentException("Initial RTT must be larger than 0.");
@@ -1070,7 +1076,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, sessionTicket, Version.of(quicVersion), Version.of(preferredVersion),
+                    new QuicClientConnectionImpl(host, port, connectTimeoutInMillis, sessionTicket, Version.of(quicVersion), Version.of(preferredVersion),
                             log, proxyHost, secretsFile, initialRtt, connectionIdLength, cipherSuites,
                             clientCertificate, clientCertificateKey, socketFactory);
 
@@ -1086,6 +1092,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder connectTimeout(Duration duration) {
+            connectTimeoutInMillis = duration.toMillis();
             return this;
         }
 
@@ -1109,7 +1116,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder logger(Logger log) {
-            this.log = log;
+            this.log = Objects.requireNonNull(log);
             return this;
         }
 
@@ -1155,7 +1162,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder cipherSuite(TlsConstants.CipherSuite cipherSuite) {
-            cipherSuites.add(cipherSuite);
+            cipherSuites.add(Objects.requireNonNull(cipherSuite));
             return this;
         }
 

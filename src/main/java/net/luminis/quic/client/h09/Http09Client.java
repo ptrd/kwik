@@ -53,7 +53,6 @@ public class Http09Client extends HttpClient {
 
     private final QuicClientConnection quicConnection;
     private final boolean with0RTT;
-    private final int connectionTimeout = 10_000;
     private final ExecutorService executorService;
 
     public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
@@ -191,10 +190,10 @@ public class Http09Client extends HttpClient {
 
                 if (with0RTT) {
                     QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
-                    httpStream = quicConnection.connect(connectionTimeout, alpn, null, List.of(earlyData)).get(0);
+                    httpStream = quicConnection.connect(alpn, null, List.of(earlyData)).get(0);
                 }
                 else {
-                    quicConnection.connect(connectionTimeout, alpn, null, null);
+                    quicConnection.connect(alpn, null, null);
                 }
             }
             if (httpStream == null) {
