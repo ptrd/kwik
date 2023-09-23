@@ -63,11 +63,12 @@ public class SimpleEchoClient {
 
         connection = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
+                .applicationProtocol("echo")
                 .logger(log)
                 .noServerCertificateCheck()
                 .build();
 
-        connection.connect("echo");
+        connection.connect();
 
         echo("hello mate!");
         echo("look, a second request on a separate stream!");

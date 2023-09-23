@@ -83,24 +83,11 @@ class QuicClientConnectionImplTest {
                 .connectTimeout(Duration.ofSeconds(1))
                 .connectionIdLength(4)
                 .uri(new URI("//localhost:443"))
+                .applicationProtocol("hq-interop")
                 .logger(logger).build();
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
-    }
-
-    @Test
-    void connectRequiresAlpn() {
-        assertThatThrownBy(() ->
-                connection.connect(null)
-        ).isInstanceOf(NullPointerException.class);
-    }
-
-    @Test
-    void connectRequiresNonEmptyAlpn() {
-        assertThatThrownBy(() ->
-                connection.connect(" ")
-        ).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

@@ -69,13 +69,14 @@ public class PushClient {
 
         connection = newBuilder()
                 .uri(URI.create("push://localhost:" + serverPort))
+                .applicationProtocol("push")
                 .logger(log)
                 .noServerCertificateCheck()
                 .build();
 
         connection.setPeerInitiatedStreamCallback(quicStream -> new Thread(() -> handlePushMessages(quicStream)).start());
 
-        connection.connect("push");
+        connection.connect();
     }
 
     private void handlePushMessages(QuicStream quicStream) {

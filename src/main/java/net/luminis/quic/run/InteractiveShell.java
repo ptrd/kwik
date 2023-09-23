@@ -51,7 +51,6 @@ public class InteractiveShell {
     private boolean running;
     private Map<String, String> history;
     private final QuicClientConnectionImpl.Builder builder;
-    private final String alpn;
     private QuicClientConnectionImpl quicConnection;
     private TransportParameters params;
     private KwikCli.HttpVersion httpVersion;
@@ -62,7 +61,7 @@ public class InteractiveShell {
         Objects.requireNonNull(builder);
         Objects.requireNonNull(alpn);
         this.builder = builder;
-        this.alpn = alpn;
+        builder.applicationProtocol(alpn);
         this.httpVersion = httpVersion;
 
         commands = new LinkedHashMap<>();
@@ -161,7 +160,7 @@ public class InteractiveShell {
         try {
             builder.connectTimeout(Duration.ofMillis(connectionTimeout));
             quicConnection = (QuicClientConnectionImpl) builder.build();
-            quicConnection.connect(alpn, params, null);
+            quicConnection.connect(params, null);
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
         } catch (IOException e) {
             System.out.println("\nError: " + e);

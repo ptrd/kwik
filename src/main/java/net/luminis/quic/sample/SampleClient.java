@@ -48,14 +48,15 @@ public class SampleClient {
 
 
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
-        QuicClientConnection connection =
-                builder.version(QuicConnection.QuicVersion.V1)
-                        .uri(new URI(args[0]))
-                        .build();
+        QuicClientConnection connection = builder
+                .version(QuicConnection.QuicVersion.V1)
+                .uri(new URI(args[0]))
+                .applicationProtocol("hq-interop")
+                .build();
 
         // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
         // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
-        connection.connect("hq-interop");
+        connection.connect();
 
         QuicStream stream = connection.createStream(true);
 

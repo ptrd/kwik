@@ -414,6 +414,12 @@ public class KwikCli {
                 new InteractiveShell(builder, alpn, httpVersion).start();
             }
             else {
+                if (httpVersion == HttpVersion.HTTP3) {
+                    builder.applicationProtocol("h3");
+                }
+                else {
+                    builder.applicationProtocol("hq-interop");
+                }
                 QuicClientConnection quicConnection = builder.build();
 
                 if (httpRequestPath != null) {
@@ -464,7 +470,7 @@ public class KwikCli {
                     }
                 }
                 else {
-                    quicConnection.connect(alpn, null, null);
+                    quicConnection.connect(null, null);
 
                     if (keepAliveTime > 0) {
                         quicConnection.keepAlive(keepAliveTime);

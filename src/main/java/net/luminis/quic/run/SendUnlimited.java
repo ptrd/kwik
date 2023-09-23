@@ -43,12 +43,13 @@ public class SendUnlimited {
             QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
             QuicClientConnection connection =
                     builder.version(QuicConnection.QuicVersion.V1)
+                            .applicationProtocol("hq-interop")
                             .noServerCertificateCheck()
                             .logger(log)
                             .uri(new URI("https://localhost:4433"))
                             .build();
 
-            connection.connect("hq-32");
+            connection.connect();
 
             stream = connection.createStream(true);
 

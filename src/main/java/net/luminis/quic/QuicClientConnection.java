@@ -36,11 +36,11 @@ import java.util.List;
 
 public interface QuicClientConnection extends QuicConnection {
 
-    void connect(String alpn) throws IOException;
+    void connect() throws IOException;
 
-    void connect(String alpn, TransportParameters transportParameters) throws IOException;
+    void connect(TransportParameters transportParameters) throws IOException;
 
-    List<QuicStream> connect(String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
+    List<QuicStream> connect(TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 
@@ -77,7 +77,10 @@ public interface QuicClientConnection extends QuicConnection {
     }
 
     interface Builder {
+
         QuicClientConnection build() throws SocketException, UnknownHostException;
+
+        Builder applicationProtocol(String applicationProtocol);
 
         Builder connectTimeout(Duration duration);
 

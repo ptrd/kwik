@@ -83,6 +83,7 @@ public class EchoClientUsing0RTT {
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .version(QuicConnection.QuicVersion.V1)
+                .applicationProtocol("echo")
                 .noServerCertificateCheck();
 
         // Try to load session ticket and if it can be loaded, create early data.
@@ -98,7 +99,7 @@ public class EchoClientUsing0RTT {
 
         // Create connection with 0-RTT data
         QuicClientConnection connection = connectionBuilder.build();
-        List<QuicStream> earlyStreams = connection.connect("echo", null, earlyData);
+        List<QuicStream> earlyStreams = connection.connect(null, earlyData);
         // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
                 .findAny()
