@@ -85,7 +85,7 @@ public class EchoClientUsing0RTT {
         List<QuicClientConnection.StreamEarlyData> earlyData = Collections.emptyList();
         try {
             byte[] ticketData = Files.readAllBytes(Path.of(SESSIONTICKET_FILE));
-            connectionBuilder.sessionTicket(QuicSessionTicket.deserialize(ticketData));   // This is why the connection should not yet have been created!
+            connectionBuilder.sessionTicket(QuicSessionTicketImpl.deserialize(ticketData));   // This is why the connection should not yet have been created!
             earlyData = List.of(new QuicClientConnection.StreamEarlyData(requestData, true));
         }
         catch (IOException e) {

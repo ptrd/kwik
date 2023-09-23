@@ -23,14 +23,13 @@ import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsState;
 import net.luminis.tls.handshake.NewSessionTicketMessage;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class QuicSessionTicketTest {
+class QuicSessionTicketImplTest {
 
     @Test
     void serializeAndDeserializeReturnsSameResult() throws Exception {
@@ -62,11 +61,11 @@ class QuicSessionTicketTest {
         // And to make the deserialize succeed, the cipher must be a valid value, e.g. 0x13 0x01
         serializedTlsTicket[28] = 0x13;
         serializedTlsTicket[29] = 0x01;
-        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsTicket, tp);
+        QuicSessionTicketImpl quicSessionTicket = new QuicSessionTicketImpl(tlsTicket, tp);
 
         byte[] serializedData = quicSessionTicket.serialize();
 
-        QuicSessionTicket restoredTicket = QuicSessionTicket.deserialize(serializedData);
+        QuicSessionTicketImpl restoredTicket = QuicSessionTicketImpl.deserialize(serializedData);
         assertThat(restoredTicket.getMaxIdleTimeout()).isEqualTo(maxIdleTime);
         assertThat(restoredTicket.getMaxPacketSize()).isEqualTo(maxPacketSize);
         assertThat(restoredTicket.getInitialMaxData()).isEqualTo(maxData);
@@ -103,7 +102,7 @@ class QuicSessionTicketTest {
         int activeConnectionIdLimit = 5;
         tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
         NewSessionTicket tlsTicket = mock(NewSessionTicket.class);
-        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsTicket, tp);
+        QuicSessionTicketImpl quicSessionTicket = new QuicSessionTicketImpl(tlsTicket, tp);
 
         TransportParameters copiedTransportParameters = new TransportParameters();
         quicSessionTicket.copyTo(copiedTransportParameters);
@@ -129,7 +128,7 @@ class QuicSessionTicketTest {
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When
-        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsSessionTicket, peerTransportParams);
+        QuicSessionTicketImpl quicSessionTicket = new QuicSessionTicketImpl(tlsSessionTicket, peerTransportParams);
 
         // Then
         assertThat(quicSessionTicket.getCipher()).isEqualTo(TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
@@ -144,7 +143,7 @@ class QuicSessionTicketTest {
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When
-        QuicSessionTicket quicSessionTicket = new QuicSessionTicket(tlsSessionTicket, peerTransportParams);
+        QuicSessionTicketImpl quicSessionTicket = new QuicSessionTicketImpl(tlsSessionTicket, peerTransportParams);
 
         // Then
         assertThat(quicSessionTicket.toString()).isNotNull();

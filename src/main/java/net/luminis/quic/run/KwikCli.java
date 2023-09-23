@@ -375,7 +375,7 @@ public class KwikCli {
             byte[] ticketData = new byte[0];
             try {
                 ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
-                sessionTicket = QuicSessionTicket.deserialize(ticketData);
+                sessionTicket = QuicSessionTicketImpl.deserialize(ticketData);
                 builder.sessionTicket(sessionTicket);
             } catch (IOException e) {
                 System.err.println("Error while reading session ticket file.");

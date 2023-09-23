@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2023 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -21,154 +21,33 @@ package net.luminis.quic;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 
-import java.nio.ByteBuffer;
+public interface QuicSessionTicket {
 
-/**
- * Extension of TLS NewSessionTicket to hold (relevant) QUIC transport parameters too, in order to be able to
- * send 0-RTT packets.
- *
- * https://www.rfc-editor.org/rfc/rfc9000.html#name-values-of-transport-paramet
- * "To enable 0-RTT, endpoints store the values of the server transport parameters with any session tickets it receives
- *  on the connection. (...) The values of stored transport parameters are used when attempting 0-RTT using the session
- *  tickets."
- * "A client MUST NOT use remembered values for the following parameters: ack_delay_exponent, max_ack_delay,
- *  initial_source_connection_id, original_destination_connection_id, preferred_address, retry_source_connection_id,
- *  and stateless_reset_token."
- *  "A client that attempts to send 0-RTT data MUST remember all other transport parameters used by the server that
- *  it is able to process."
- */
-public class QuicSessionTicket {
+    NewSessionTicket getTlsSessionTicket();
 
-    private static final int SERIALIZED_SIZE = 7 * 8 + 2 * 4 + 1 + 4;
+    void copyTo(TransportParameters rememberedTransportParameters);
 
-    private NewSessionTicket tlsTicket;
-    private long maxIdleTimeout;
-    private int maxPacketSize;
-    private long initialMaxData;
-    private long initialMaxStreamDataBidiLocal;
-    private long initialMaxStreamDataBidiRemote;
-    private long initialMaxStreamDataUni;
-    private long initialMaxStreamsBidi;
-    private long initialMaxStreamsUni;
-    private boolean disableActiveMigration;
-    private int activeConnectionIdLimit;
+    byte[] serialize();
 
+    TlsConstants.CipherSuite getCipher();
 
-    QuicSessionTicket(NewSessionTicket tlsTicket, TransportParameters serverParameters) {
-        this.tlsTicket = tlsTicket;
+    long getMaxIdleTimeout();
 
-        maxIdleTimeout = serverParameters.getMaxIdleTimeout();
-        maxPacketSize = serverParameters.getMaxUdpPayloadSize();
-        initialMaxData = serverParameters.getInitialMaxData();
-        initialMaxStreamDataBidiLocal = serverParameters.getInitialMaxStreamDataBidiLocal();
-        initialMaxStreamDataBidiRemote = serverParameters.getInitialMaxStreamDataBidiRemote();
-        initialMaxStreamDataUni = serverParameters.getInitialMaxStreamDataUni();
-        initialMaxStreamsBidi = serverParameters.getInitialMaxStreamsBidi();
-        initialMaxStreamsUni = serverParameters.getInitialMaxStreamsUni();
-        disableActiveMigration = serverParameters.getDisableMigration();
-        activeConnectionIdLimit = serverParameters.getActiveConnectionIdLimit();
-    }
+    int getMaxPacketSize();
 
-    private QuicSessionTicket(byte[] data) {
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        int tlsTicketSize = buffer.getInt();
-        byte[] tlsTicketData = new byte[tlsTicketSize];
-        buffer.get(tlsTicketData);
-        tlsTicket = NewSessionTicket.deserialize(tlsTicketData);
-        buffer.position(4 + tlsTicketSize);
-        maxIdleTimeout = buffer.getLong();
-        maxPacketSize = buffer.getInt();
-        initialMaxData = buffer.getLong();
-        initialMaxStreamDataBidiLocal = buffer.getLong();
-        initialMaxStreamDataBidiRemote = buffer.getLong();
-        initialMaxStreamDataUni = buffer.getLong();
-        initialMaxStreamsBidi = buffer.getLong();
-        initialMaxStreamsUni = buffer.getLong();
-        disableActiveMigration = buffer.get() == 1;
-        activeConnectionIdLimit = buffer.getInt();
-    }
+    long getInitialMaxData();
 
-    public byte[] serialize() {
-        byte[] serializedTicket = tlsTicket.serialize();
-        ByteBuffer buffer = ByteBuffer.allocate(4 + serializedTicket.length + SERIALIZED_SIZE);
-        buffer.putInt(serializedTicket.length);
-        buffer.put(serializedTicket);
-        buffer.putLong(maxIdleTimeout);
-        buffer.putInt(maxPacketSize);
-        buffer.putLong(initialMaxData);
-        buffer.putLong(initialMaxStreamDataBidiLocal);
-        buffer.putLong(initialMaxStreamDataBidiRemote);
-        buffer.putLong(initialMaxStreamDataUni);
-        buffer.putLong(initialMaxStreamsBidi);
-        buffer.putLong(initialMaxStreamsUni);
-        buffer.put((byte) (disableActiveMigration? 1: 0));
-        buffer.putInt(activeConnectionIdLimit);
-        return buffer.array();
-    }
+    long getInitialMaxStreamDataBidiLocal();
 
-    public NewSessionTicket getTlsSessionTicket() {
-        return tlsTicket;
-    }
+    long getInitialMaxStreamDataBidiRemote();
 
-    public void copyTo(TransportParameters tp) {
-        tp.setMaxIdleTimeout(maxIdleTimeout);
-        tp.setMaxUdpPayloadSize(maxPacketSize);
-        tp.setInitialMaxData(initialMaxData);
-        tp.setInitialMaxStreamDataBidiLocal(initialMaxStreamDataBidiLocal);
-        tp.setInitialMaxStreamDataBidiRemote(initialMaxStreamDataBidiRemote);
-        tp.setInitialMaxStreamDataUni(initialMaxStreamDataUni);
-        tp.setInitialMaxStreamsBidi(initialMaxStreamsBidi);
-        tp.setInitialMaxStreamsUni(initialMaxStreamsUni);
-        tp.setDisableMigration(disableActiveMigration);
-        tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
-    }
+    long getInitialMaxStreamDataUni();
 
-    public static QuicSessionTicket deserialize(byte[] data) {
-        return new QuicSessionTicket(data);
-    }
+    long getInitialMaxStreamsBidi();
 
-    public long getMaxIdleTimeout() {
-        return maxIdleTimeout;
-    }
+    long getInitialMaxStreamsUni();
 
-    public int getMaxPacketSize() {
-        return maxPacketSize;
-    }
+    boolean getDisableActiveMigration();
 
-    public long getInitialMaxData() {
-        return initialMaxData;
-    }
-
-    public long getInitialMaxStreamDataBidiLocal() {
-        return initialMaxStreamDataBidiLocal;
-    }
-
-    public long getInitialMaxStreamDataBidiRemote() {
-        return initialMaxStreamDataBidiRemote;
-    }
-
-    public long getInitialMaxStreamDataUni() {
-        return initialMaxStreamDataUni;
-    }
-
-    public long getInitialMaxStreamsBidi() {
-        return initialMaxStreamsBidi;
-    }
-
-    public long getInitialMaxStreamsUni() {
-        return initialMaxStreamsUni;
-    }
-
-    public boolean getDisableActiveMigration() {
-        return disableActiveMigration;
-    }
-
-    public int getActiveConnectionIdLimit() {
-        return activeConnectionIdLimit;
-    }
-
-    public TlsConstants.CipherSuite getCipher() {
-        return tlsTicket.getCipher();
-    }
+    int getActiveConnectionIdLimit();
 }
-

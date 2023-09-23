@@ -958,7 +958,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.error("Invalid quic new session ticket (invalid early data size); ignoring ticket.");
             }
         }
-        newSessionTickets.add(new QuicSessionTicket(tlsSessionTicket, peerTransportParams));
+        newSessionTickets.add(new QuicSessionTicketImpl(tlsSessionTicket, peerTransportParams));
     }
 
     @Override
