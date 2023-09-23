@@ -22,6 +22,7 @@ import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -208,8 +209,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.2
-                // "if decryption fails (...), the receiver (...) MUST attempt to process the remaining packets."
+                // https://www.rfc-editor.org/rfc/rfc9000.html#name-coalescing-packets
+                // "For example, if decryption fails (because the keys are not available or for any other reason), the
+                //  receiver MAY either discard or buffer the packet for later processing and MUST attempt to process the
+                //  remaining packets."
                 int nrOfPacketBytes = data.position();
                 if (nrOfPacketBytes == 0) {
                     // Nothing could be made out of it, so the whole datagram will be discarded
@@ -249,6 +252,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().packetProcessed(false);
 
         // Finally, execute actions that need to be executed after all responses and acks are sent.
+        runPostProcessingActions();
+    }
+
+    protected void runPostProcessingActions() {
         postProcessingActions.forEach(action -> action.run());
         postProcessingActions.clear();
     }
@@ -299,7 +306,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Aead aead = null;
+            Aead aead;
             if (packet.getVersion().equals(quicVersion.getVersion())) {
                 aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
                 if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
@@ -334,13 +341,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             else {
                 log.warn("Dropping packet not using negotiated version");
                 throw new InvalidPacketException("invalid version");
-            }
-            if (aead == null) {
-                // Could happen when, due to packet reordering, the first short header packet arrives before handshake is finished.
-                // https://tools.ietf.org/html/draft-ietf-quic-tls-18#section-5.7
-                // "Due to reordering and loss, protected packets might be received by an
-                //   endpoint before the final TLS handshake messages are received."
-                throw new MissingKeysException(packet.getEncryptionLevel());
             }
 
             long largestPN = packet.getPnSpace() != null? largestPacketNumber[packet.getPnSpace().ordinal()]: 0;

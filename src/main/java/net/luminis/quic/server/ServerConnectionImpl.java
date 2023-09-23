@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.*;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
@@ -238,12 +239,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public void handshakeFinished() {
         connectionSecrets.computeApplicationSecrets(tlsEngine);
         sender.enableAppLevel();
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-handshake-keys
         // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.1.2
-        // "the TLS handshake is considered confirmed at the server when the handshake completes"
-        getSender().discard(PnSpace.Handshake, "tls handshake confirmed");
-        // TODO: discard keys too
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-handshake-confirmed
+        // "In this document, the TLS handshake is considered confirmed at the server when the handshake completes."
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-handshake-complete
+        // "In this document, the TLS handshake is considered complete when the TLS stack has reported that the handshake
+        //  is complete. This happens when the TLS stack has both sent a Finished message and verified the peer's Finished message."
+        sender.discard(PnSpace.Handshake, "tls handshake confirmed");
+        connectionSecrets.discardKeys(EncryptionLevel.Handshake);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion.getVersion()));
@@ -484,9 +488,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
         processFrames(packet, time);
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-initial-keys
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
-        // TODO: discard keys too
+        connectionSecrets.discardKeys(EncryptionLevel.Initial);
 
         return ProcessResult.Continue;
     }

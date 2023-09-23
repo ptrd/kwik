@@ -20,6 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
@@ -406,12 +407,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void handshakeSecretsKnown() {
-        // Server Hello provides a new secret, so:
+        // Called by TLS engine when handshake secrets are known. So this is the time to compute QUIC's handshake secrets.
         connectionSecrets.computeHandshakeSecrets(tlsEngine, tlsEngine.getSelectedCipher());
         hasHandshakeKeys();
     }
 
-    public void hasHandshakeKeys() {
+    private void hasHandshakeKeys() {
         synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.HasHandshakeKeys)) {
                 handshakeState = HandshakeState.HasHandshakeKeys;
@@ -428,6 +429,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // This is done as post-processing action to ensure ack on Initial level is sent.
         postProcessingActions.add(() -> {
             discard(PnSpace.Initial, "first Handshake message is being sent");
+            connectionSecrets.discardKeys(Initial);
         });
     }
 
@@ -580,12 +582,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.debug("Handshake state cannot be set to Confirmed");
             }
         }
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-handshake-keys
+        // "An endpoint MUST discard its Handshake keys when the TLS handshake is confirmed"
+        // https://www.rfc-editor.org/rfc/rfc9001.html#handshake-confirmed
+        // "At the client, the handshake is considered confirmed when a HANDSHAKE_DONE frame is received."
         sender.discard(PnSpace.Handshake, "HandshakeDone is received");
-        // TODO: discard handshake keys:
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-25#section-4.10.2
-        // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
+        connectionSecrets.discardKeys(Handshake);
     }
-
 
     @Override
     public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
@@ -658,7 +661,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // https://tools.ietf.org/html/draft-ietf-quic-tls-31#section-6
         // "Once the handshake is confirmed (see Section 4.1.2), an endpoint MAY initiate a key update."
         if (handshakeState == HandshakeState.Confirmed) {
-            connectionSecrets.getClientAead(App).computeKeyUpdate(true);
+            try {
+                connectionSecrets.getClientAead(App).computeKeyUpdate(true);
+            } catch (MissingKeysException e) {
+                throw new IllegalStateException(e);
+            }
         }
         else {
             log.error("Refusing key update because handshake is not yet confirmed");
