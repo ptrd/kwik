@@ -95,7 +95,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
     protected final ConnectionSecrets connectionSecrets;
-    protected volatile TransportParameters transportParams;
     protected volatile HandshakeState handshakeState = HandshakeState.Initial;
     protected final Object handshakeStateLock = new Object();
     protected List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
@@ -126,11 +125,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
-        transportParams = new TransportParameters(60, 250_000, 3 , 3);
-        flowControlMax = transportParams.getInitialMaxData();
-        flowControlLastAdvertised = flowControlMax;
-        flowControlIncrement = flowControlMax / 10;
-
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
@@ -138,6 +132,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addHandshakeStateListener(RecoveryManager recoveryManager) {
         handshakeStateListeners.add(recoveryManager);
+    }
+
+    protected void initConnectionFlowControl(long initialMaxData) {
+        flowControlMax = initialMaxData;
+        flowControlLastAdvertised = flowControlMax;
+        flowControlIncrement = flowControlMax / 10;
     }
 
     public void updateConnectionFlowControl(int size) {

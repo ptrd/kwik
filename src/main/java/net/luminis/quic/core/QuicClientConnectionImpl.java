@@ -77,6 +77,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
+    private final TransportParameters transportParams;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
     private final ConnectionIdManager connectionIdManager;
@@ -132,6 +133,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         ackGenerator = sender.getGlobalAckGenerator();
 
         receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
+
+        transportParams = new TransportParameters(60, 250_000, 3, 3);
+        initConnectionFlowControl(transportParams.getInitialMaxData());
         streamManager = new StreamManager(this, Role.Client, log, 10, 10);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {

@@ -320,6 +320,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        initConnectionFlowControl(serverTransportParams.getInitialMaxData());
+
         // https://www.rfc-editor.org/rfc/rfc9369.html#name-version-negotiation-conside
         // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information
         //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."
