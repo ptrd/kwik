@@ -183,12 +183,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      */
     @Override
     public void connect() throws IOException {
-        connect(null, null);
-    }
-
-    @Override
-    public void connect(TransportParameters transportParameters) throws IOException {
-        connect(transportParameters, null);
+        connect(null);
     }
 
     /**
@@ -199,26 +194,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
      * the connect method can only be successfully called once. Use the <code>isConnected</code> method to check whether
      * it can be connected.
      *
-     * @param transportParameters the transport parameters to use for the connection
-     * @param earlyData           early data to send (RTT-0), each element of the list will lead to a bidirectional stream
+     * @param earlyData early data to send (RTT-0), each element of the list will lead to a bidirectional stream
      * @return list of streams that was created for the early data; the size of the list will be equal
      * to the size of the list of the <code>earlyData</code> parameter, but may contain <code>null</code>s if a stream
      * could not be created due to reaching the max initial streams limit.
      * @throws IOException
      */
     @Override
-    public synchronized List<QuicStream> connect(TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException {
+    public synchronized List<QuicStream> connect(List<StreamEarlyData> earlyData) throws IOException {
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot connect a connection that is in state " + connectionState);
         }
         if (earlyData != null && !earlyData.isEmpty() && sessionTicket == null) {
             throw new IllegalStateException("Cannot send early data without session ticket");
         }
-        if (transportParameters != null) {
-            this.transportParams = transportParameters;
-            connectionIdManager.setMaxPeerConnectionIds(transportParams.getActiveConnectionIdLimit());
-        }
-        this.transportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
+        transportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         if (earlyData == null) {
             earlyData = Collections.emptyList();
         }

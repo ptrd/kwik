@@ -38,9 +38,7 @@ public interface QuicClientConnection extends QuicConnection {
 
     void connect() throws IOException;
 
-    void connect(TransportParameters transportParameters) throws IOException;
-
-    List<QuicStream> connect(TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
+    List<QuicStream> connect(List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 

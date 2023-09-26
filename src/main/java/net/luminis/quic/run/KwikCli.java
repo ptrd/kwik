@@ -470,7 +470,7 @@ public class KwikCli {
                     }
                 }
                 else {
-                    quicConnection.connect(null, null);
+                    quicConnection.connect();
 
                     if (keepAliveTime > 0) {
                         quicConnection.keepAlive(keepAliveTime);

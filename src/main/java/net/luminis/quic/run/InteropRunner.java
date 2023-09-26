@@ -140,7 +140,7 @@ public class InteropRunner extends KwikCli {
         // logger.logPackets(true);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(null, null);
+        connection.connect();
 
         ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
         try {
@@ -168,7 +168,7 @@ public class InteropRunner extends KwikCli {
         URL url2 = downloadUrls.get(1);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(null, null);
+        connection.connect();
 
         http09Request(connection, url1, outputDir);
         logger.info("Downloaded " + url1);
@@ -190,7 +190,7 @@ public class InteropRunner extends KwikCli {
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
         QuicClientConnection connection2 = builder.build();
-        connection2.connect(null, null);
+        connection2.connect();
         http09Request(connection2, url2, outputDir);
         logger.info("Downloaded " + url2);
         connection2.close();
@@ -207,7 +207,7 @@ public class InteropRunner extends KwikCli {
                 logger.info("Start downloading " + download.getFile() + " at " + timeNow());
 
                 QuicClientConnection connection = builder.build();
-                connection.connect(null, null);
+                connection.connect();
 
                 http09Request(connection, download, outputDir);
                 logger.info("Downloaded " + download + " finished at " + timeNow());
@@ -227,7 +227,7 @@ public class InteropRunner extends KwikCli {
 
         builder.connectTimeout(Duration.ofSeconds(15));
         QuicClientConnection connection = builder.build();
-        connection.connect(null, null);
+        connection.connect();
 
         http09Request(connection, downloadUrls.get(0), outputDir);
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
@@ -253,7 +253,7 @@ public class InteropRunner extends KwikCli {
         }
 
         String alpn = "hq-interop";
-        List<QuicStream> earlyDataStreams = connection2.connect(null, earlyDataRequests);
+        List<QuicStream> earlyDataStreams = connection2.connect(earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
             if (earlyDataStreams.get(i) == null) {
                 logger.info("Attempting to create new stream after connect, because it failed on 0-rtt");
@@ -273,7 +273,7 @@ public class InteropRunner extends KwikCli {
         logger.info("Starting download at " + timeNow());
 
         QuicClientConnection connection = builder.build();
-        connection.connect(null, null);
+        connection.connect();
 
         String requestPath = downloadUrls.get(0).getPath();
         String outputFile = outputDir.getAbsolutePath();

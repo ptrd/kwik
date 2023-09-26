@@ -99,7 +99,7 @@ public class EchoClientUsing0RTT {
 
         // Create connection with 0-RTT data
         QuicClientConnection connection = connectionBuilder.build();
-        List<QuicStream> earlyStreams = connection.connect(null, earlyData);
+        List<QuicStream> earlyStreams = connection.connect(earlyData);
         // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
                 .findAny()

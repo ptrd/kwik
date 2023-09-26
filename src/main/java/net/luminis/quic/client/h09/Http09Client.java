@@ -190,10 +190,10 @@ public class Http09Client extends HttpClient {
 
                 if (with0RTT) {
                     QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
-                    httpStream = quicConnection.connect(null, List.of(earlyData)).get(0);
+                    httpStream = quicConnection.connect(List.of(earlyData)).get(0);
                 }
                 else {
-                    quicConnection.connect(null, null);
+                    quicConnection.connect();
                 }
             }
             if (httpStream == null) {
