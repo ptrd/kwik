@@ -68,6 +68,12 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, TlsStatusEventHandler, FrameProcessor {
 
+    public static final int DEFAULT_MAX_IDLE_TIMEOUT = 60_000;
+    public static final int MIN_MAX_IDLE_TIMEOUT = 10;
+    public static final int MIN_RECEIVER_BUFFER_SIZE = 1500;
+    private static final long DEFAULT_MAX_STREAM_DATA = 250_000;
+    public static final int MAX_DATA_FACTOR = 10;
+
     private final String host;
     private final int serverPort;
     private final QuicSessionTicket sessionTicket;
@@ -103,7 +109,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
 
     private QuicClientConnectionImpl(String host, int port, String applicationProtocol, long connectTimeout,
-                                     QuicSessionTicket sessionTicket, Version originalVersion, Version preferredVersion, Logger log,
+                                     TransportParameters connectionProperties, QuicSessionTicket sessionTicket,
+                                     Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
@@ -134,9 +141,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
 
-        transportParams = new TransportParameters(60, 250_000, 3, 3);
+        transportParams = initTransportParameters(connectionProperties);
         initConnectionFlowControl(transportParams.getInitialMaxData());
-        streamManager = new StreamManager(this, Role.Client, log, 10, 10);
+        streamManager = new StreamManager(this, Role.Client, log, (int) transportParams.getInitialMaxStreamsUni(), (int) transportParams.getInitialMaxStreamsBidi());
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
@@ -180,6 +187,25 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     private Predicate<DatagramPacket> createPacketFilter() {
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
+    }
+
+    private TransportParameters initTransportParameters(TransportParameters customizedConnectionProperties) {
+        TransportParameters parameters = new TransportParameters(60, 250_000, 3, 3);
+        if (customizedConnectionProperties.getMaxIdleTimeout() > 0) {
+            parameters.setMaxIdleTimeout(customizedConnectionProperties.getMaxIdleTimeout());
+        }
+        else {
+            parameters.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
+        }
+        if (customizedConnectionProperties.getInitialMaxStreamData() > 0) {
+            parameters.setInitialMaxStreamData(customizedConnectionProperties.getInitialMaxStreamData());
+            parameters.setInitialMaxData(MAX_DATA_FACTOR * parameters.getInitialMaxStreamData());
+        }
+        else {
+            parameters.setInitialMaxStreamData(DEFAULT_MAX_STREAM_DATA);
+            parameters.setInitialMaxData(MAX_DATA_FACTOR * parameters.getInitialMaxStreamData());
+        }
+        return parameters;
     }
 
     /**
@@ -939,7 +965,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
+        if (size < MIN_RECEIVER_BUFFER_SIZE) {
+            throw new IllegalArgumentException("Receiver buffer size must be at least " + MIN_RECEIVER_BUFFER_SIZE);
+        }
         transportParams.setInitialMaxStreamData(size);
+        transportParams.setInitialMaxData(MAX_DATA_FACTOR * transportParams.getInitialMaxStreamData());
     }
 
     public FlowControl getFlowController() {
@@ -1034,6 +1064,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private static class BuilderImpl implements Builder {
 
         private static final long DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 10_000;
+        private final TransportParameters customizedConnectionProperties = new TransportParameters();
         private String host;
         private int port;
         private QuicSessionTicket sessionTicket;
@@ -1072,7 +1103,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, applicationProtocol, connectTimeoutInMillis, sessionTicket, Version.of(quicVersion),
+                    new QuicClientConnectionImpl(host, port, applicationProtocol, connectTimeoutInMillis, customizedConnectionProperties, sessionTicket, Version.of(quicVersion),
                             Version.of(preferredVersion), log, proxyHost, secretsFile, initialRtt, connectionIdLength,
                             cipherSuites, clientCertificate, clientCertificateKey, socketFactory);
 
@@ -1095,6 +1126,24 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder connectTimeout(Duration duration) {
             connectTimeoutInMillis = duration.toMillis();
+            return this;
+        }
+
+        @Override
+        public Builder maxIdleTimeout(Duration duration) {
+            if (duration.toMillis() < MIN_MAX_IDLE_TIMEOUT) {
+                throw new IllegalArgumentException("Max idle timeout must be larger than " + MIN_MAX_IDLE_TIMEOUT + ".");
+            }
+            customizedConnectionProperties.setMaxIdleTimeout(duration.toMillis());
+            return this;
+        }
+
+        @Override
+        public Builder defaultStreamReceiveBufferSize(Long bufferSize) {
+            if (bufferSize < MIN_RECEIVER_BUFFER_SIZE) {
+                throw new IllegalArgumentException("Default stream receive buffer size must be larger than " + MIN_RECEIVER_BUFFER_SIZE + ".");
+            }
+            customizedConnectionProperties.setInitialMaxStreamData(bufferSize);
             return this;
         }
 

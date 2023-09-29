@@ -138,8 +138,13 @@ public class TransportParameters {
         this.initialMaxStreamDataUni = initialMaxStreamDataUni;
     }
 
+    public long getInitialMaxStreamData() {
+        // All max stream data values are equal in this implementation.
+        return initialMaxStreamDataBidiLocal;
+    }
+
     public void setInitialMaxStreamData(long maxStreamData) {
-        // All stream data values are equal. When changing this, also change the getter in QuicConnection, used by the streams.
+        // All max stream data values are equal in this implementation. When changing this, also change the getter in QuicConnection, used by the streams.
         initialMaxStreamDataBidiLocal = maxStreamData;
         initialMaxStreamDataBidiRemote = maxStreamData;
         initialMaxStreamDataUni = maxStreamData;

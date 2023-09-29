@@ -345,7 +345,7 @@ public class InteractiveShell {
     }
 
     private void printSupportedParameters() {
-        System.out.println("- idle (idle timeout)");
+        System.out.println("- idle (max idle timeout in seconds)");
         System.out.println("- cids (active connection id limit)");
         System.out.println("- maxstreamdata (receive buffer size)");
         System.out.println("- payload (max udp payload)");
@@ -354,14 +354,14 @@ public class InteractiveShell {
     private void setClientParameter(String name, String value) {
         switch (name) {
             case "idle":
-                params.setMaxIdleTimeout(toInt(value));
+                builder.maxIdleTimeout(Duration.ofSeconds(toInt(value)));
                 break;
             case "cids":
                 params.setActiveConnectionIdLimit(toInt(value));
                 break;
             case "maxStreamData":
             case "maxstreamdata":
-                params.setInitialMaxStreamData(toLong(value));
+                builder.defaultStreamReceiveBufferSize(toLong(value));
                 break;
             case "payload":
                 params.setMaxUdpPayloadSize(toInt(value));

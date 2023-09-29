@@ -82,6 +82,10 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder connectTimeout(Duration duration);
 
+        Builder maxIdleTimeout(Duration duration);
+
+        Builder defaultStreamReceiveBufferSize(Long bufferSize);
+
         Builder version(QuicVersion version);
 
         Builder initialVersion(QuicVersion version);

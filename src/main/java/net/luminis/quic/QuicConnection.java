@@ -35,6 +35,11 @@ public interface QuicConnection {
 
     void setMaxAllowedUnidirectionalStreams(int max);
 
+    /**
+     * Set the maximum size of the stream receive buffer.
+     * Must be set before calling connect().
+     * @param size
+     */
     void setDefaultStreamReceiveBufferSize(long size);
 
     QuicStream createStream(boolean bidirectional);
