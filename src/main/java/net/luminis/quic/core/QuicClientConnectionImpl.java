@@ -73,6 +73,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public static final int MIN_RECEIVER_BUFFER_SIZE = 1500;
     private static final long DEFAULT_MAX_STREAM_DATA = 250_000;
     public static final int MAX_DATA_FACTOR = 10;
+    public static final int MAX_OPEN_PEER_INITIATED_BIDI_STREAMS = 3;
+    private static final int MAX_OPEN_PEER_INITIATED_UNI_STREAMS = 3;
 
     private final String host;
     private final int serverPort;
@@ -190,13 +192,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private TransportParameters initTransportParameters(TransportParameters customizedConnectionProperties) {
-        TransportParameters parameters = new TransportParameters(60, 250_000, 3, 3);
+        TransportParameters parameters = new TransportParameters();
+
         if (customizedConnectionProperties.getMaxIdleTimeout() > 0) {
             parameters.setMaxIdleTimeout(customizedConnectionProperties.getMaxIdleTimeout());
         }
         else {
             parameters.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
         }
+
         if (customizedConnectionProperties.getInitialMaxStreamData() > 0) {
             parameters.setInitialMaxStreamData(customizedConnectionProperties.getInitialMaxStreamData());
             parameters.setInitialMaxData(MAX_DATA_FACTOR * parameters.getInitialMaxStreamData());
@@ -205,6 +209,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             parameters.setInitialMaxStreamData(DEFAULT_MAX_STREAM_DATA);
             parameters.setInitialMaxData(MAX_DATA_FACTOR * parameters.getInitialMaxStreamData());
         }
+
+        if (customizedConnectionProperties.getInitialMaxStreamsBidi() > 0) {
+            parameters.setInitialMaxStreamsBidi(customizedConnectionProperties.getInitialMaxStreamsBidi());
+        }
+        else {
+            parameters.setInitialMaxStreamsBidi(MAX_OPEN_PEER_INITIATED_BIDI_STREAMS);
+        }
+
+        if (customizedConnectionProperties.getInitialMaxStreamsUni() > 0) {
+            parameters.setInitialMaxStreamsUni(customizedConnectionProperties.getInitialMaxStreamsUni());
+        }
+        else {
+            parameters.setInitialMaxStreamsUni(MAX_OPEN_PEER_INITIATED_UNI_STREAMS);
+        }
+
         return parameters;
     }
 
@@ -1144,6 +1163,24 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 throw new IllegalArgumentException("Default stream receive buffer size must be larger than " + MIN_RECEIVER_BUFFER_SIZE + ".");
             }
             customizedConnectionProperties.setInitialMaxStreamData(bufferSize);
+            return this;
+        }
+
+        @Override
+        public Builder maxOpenPeerInitiatedBidirectionalStreams(int max) {
+            if (max < 0) {
+                throw new IllegalArgumentException("Max open peer initiated bidirectional streams must be larger than 0.");
+            }
+            customizedConnectionProperties.setInitialMaxStreamsBidi(max);
+            return this;
+        }
+
+        @Override
+        public Builder maxOpenPeerInitiatedUnidirectionalStreams(int max) {
+            if (max < 0) {
+                throw new IllegalArgumentException("Max open peer initiated unidirectional streams must be larger than 0.");
+            }
+            customizedConnectionProperties.setInitialMaxStreamsUni(max);
             return this;
         }
 

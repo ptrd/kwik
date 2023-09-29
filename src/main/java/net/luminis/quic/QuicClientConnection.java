@@ -86,6 +86,22 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder defaultStreamReceiveBufferSize(Long bufferSize);
 
+        /**
+         * The maximum number of peer initiated bidirectional streams that the peer is allowed to have open at any time.
+         * If the value is 0, the peer is not allowed to open any bidirectional stream.
+         * @param max
+         * @return
+         */
+        Builder maxOpenPeerInitiatedBidirectionalStreams(int max);
+
+        /**
+         * The maximum number of peer initiated unidirectional streams that the peer is allowed to have open at any time.
+         * If the value is 0, the peer is not allowed to open any unidirectional stream.
+         * @param max
+         * @return
+         */
+        Builder maxOpenPeerInitiatedUnidirectionalStreams(int max);
+
         Builder version(QuicVersion version);
 
         Builder initialVersion(QuicVersion version);

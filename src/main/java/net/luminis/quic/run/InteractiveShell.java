@@ -348,6 +348,8 @@ public class InteractiveShell {
         System.out.println("- idle (max idle timeout in seconds)");
         System.out.println("- cids (active connection id limit)");
         System.out.println("- maxstreamdata (receive buffer size)");
+        System.out.println("- maxuni (max peer initiated unidirectional streams)");
+        System.out.println("- maxbidi (max peer initiated bidirectional streams)");
         System.out.println("- payload (max udp payload)");
     }
 
@@ -362,6 +364,14 @@ public class InteractiveShell {
             case "maxStreamData":
             case "maxstreamdata":
                 builder.defaultStreamReceiveBufferSize(toLong(value));
+                break;
+            case "maxuni":
+            case "maxUni":
+                builder.maxOpenPeerInitiatedUnidirectionalStreams(toInt(value));
+                break;
+            case "maxbidi":
+            case "maxBidi":
+                builder.maxOpenPeerInitiatedBidirectionalStreams(toInt(value));
                 break;
             case "payload":
                 params.setMaxUdpPayloadSize(toInt(value));

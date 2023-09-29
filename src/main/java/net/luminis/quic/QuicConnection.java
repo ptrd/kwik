@@ -31,8 +31,22 @@ public interface QuicConnection {
 
     QuicVersion getQuicVersion();
 
+    /**
+     * Sets the maximum number of peer initiated bidirectional streams that the peer is allowed to have open at any time.
+     * If the value is 0, the peer is not allowed to open any bidirectional stream.
+     * This method must be called before calling connect().
+     * @param max
+     * @return
+     */
     void setMaxAllowedBidirectionalStreams(int max);
 
+    /**
+     * Sets the maximum number of peer initiated unidirectional streams that the peer is allowed to have open at any time.
+     * If the value is 0, the peer is not allowed to open any unidirectional stream.
+     * This method must be called before calling connect().
+     * @param max
+     * @return
+     */
     void setMaxAllowedUnidirectionalStreams(int max);
 
     /**
