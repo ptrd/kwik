@@ -22,6 +22,7 @@ import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.client.h09.Http09Client;
+import net.luminis.quic.core.QuicClientConnectionImpl;
 import net.luminis.quic.core.QuicSessionTicketImpl;
 import net.luminis.quic.core.VersionNegotiationFailure;
 import net.luminis.quic.log.FileLogger;
@@ -81,7 +82,9 @@ public class KwikCli {
     public void run(String[] rawArgs) throws Exception {
         CommandLine cmd = getCommandLine(rawArgs);
 
-        QuicClientConnection.Builder connectionBuilder = createConnectionBuilder();
+        boolean interactiveMode = cmd.hasOption("i");
+
+        QuicClientConnection.Builder connectionBuilder = createConnectionBuilder(interactiveMode);
 
         String httpRequestPath = processUrlArgs(cmd, connectionBuilder);
 
@@ -130,8 +133,6 @@ public class KwikCli {
 
         processQuantumReadinessTestArg(cmd, connectionBuilder);
 
-        boolean interactiveMode = cmd.hasOption("i");
-
         processInitialRttArg(cmd, connectionBuilder);
 
         if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
@@ -140,7 +141,7 @@ public class KwikCli {
 
         try {
             if (interactiveMode) {
-                new InteractiveShell(connectionBuilder, alpn, httpVersion).start();
+                new InteractiveShell((QuicClientConnectionImpl.ExtendedBuilder) connectionBuilder, alpn, httpVersion).start();
             }
             else {
                 executeRequest(httpRequestPath, outputFile, connectionBuilder);
@@ -183,8 +184,13 @@ public class KwikCli {
         }
     }
 
-    private QuicClientConnection.Builder createConnectionBuilder() {
-        return QuicClientConnection.newBuilder();
+    private QuicClientConnection.Builder createConnectionBuilder(boolean interactiveMode) {
+        if (interactiveMode) {
+            return QuicClientConnectionImpl.newExtendedBuilder();
+        }
+        else {
+            return QuicClientConnection.newBuilder();
+        }
     }
 
     private String processUrlArgs(CommandLine cmd, QuicClientConnection.Builder builder) {

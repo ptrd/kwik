@@ -50,14 +50,14 @@ public class InteractiveShell {
     private final Map<String, Consumer<String>> commands;
     private boolean running;
     private Map<String, String> history;
-    private final QuicClientConnectionImpl.Builder builder;
+    private final QuicClientConnectionImpl.ExtendedBuilder builder;
     private QuicClientConnectionImpl quicConnection;
-    private TransportParameters params;
+    private ClientParameters params;
     private KwikCli.HttpVersion httpVersion;
     private HttpClient httpClient;
     private CompletableFuture<HttpResponse<Path>> currentHttpGetResult;
 
-    public InteractiveShell(QuicClientConnectionImpl.Builder builder, String alpn, KwikCli.HttpVersion httpVersion) {
+    public InteractiveShell(QuicClientConnectionImpl.ExtendedBuilder builder, String alpn, KwikCli.HttpVersion httpVersion) {
         Objects.requireNonNull(builder);
         Objects.requireNonNull(alpn);
         this.builder = builder;
@@ -68,11 +68,7 @@ public class InteractiveShell {
         history = new LinkedHashMap<>();
         setupCommands();
 
-        initParams();
-    }
-
-    private void initParams() {
-        params = new TransportParameters(60, 250_000, 3 , 3);
+        params = new ClientParameters();
     }
 
     private void setupCommands() {
@@ -315,20 +311,8 @@ public class InteractiveShell {
         quicConnection.ping();
     }
 
-    private void printParams(String arg) {
-        TransportParameters parameters = quicConnection.getPeerTransportParameters();
-        System.out.println("Server idle time: " + parameters.getMaxIdleTimeout());
-        System.out.println("Server initial max data: " + parameters.getInitialMaxData());
-    }
-
     private void printClientParams(String arg) {
-        System.out.print("Client transport parameters: ");
-        if (quicConnection != null) {
-            System.out.println(quicConnection.getTransportParameters());
-        }
-        else {
-            System.out.println(params);
-        }
+        System.out.print("Client transport parameters: \n" + params + "\n");
     }
 
     private void setClientParameter(String argLine) {
@@ -357,24 +341,30 @@ public class InteractiveShell {
         switch (name) {
             case "idle":
                 builder.maxIdleTimeout(Duration.ofSeconds(toInt(value)));
+                params.maxIdleTimeout = toInt(value);
                 break;
             case "cids":
-                params.setActiveConnectionIdLimit(toInt(value));
+                builder.activeConnectionIdLimit(toInt(value));
+                params.activeConnectionIdLimit = toInt(value);
                 break;
             case "maxStreamData":
             case "maxstreamdata":
                 builder.defaultStreamReceiveBufferSize(toLong(value));
+                params.defaultStreamReceiveBufferSize = toLong(value);
                 break;
             case "maxuni":
             case "maxUni":
                 builder.maxOpenPeerInitiatedUnidirectionalStreams(toInt(value));
+                params.maxOpenPeerInitiatedUnidirectionalStreams = toInt(value);
                 break;
             case "maxbidi":
             case "maxBidi":
                 builder.maxOpenPeerInitiatedBidirectionalStreams(toInt(value));
+                params.maxOpenPeerInitiatedBidirectionalStreams = toInt(value);
                 break;
             case "payload":
-                params.setMaxUdpPayloadSize(toInt(value));
+                builder.maxUdpPayloadSize(toInt(value));
+                params.maxUdpPayloadSize = toInt(value);
                 if (toInt(value) > Receiver.MAX_DATAGRAM_SIZE) {
                     System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));
                 }
@@ -435,6 +425,23 @@ public class InteractiveShell {
         } catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0L;
+        }
+    }
+
+    private class ClientParameters {
+
+        public Integer maxIdleTimeout = QuicClientConnectionImpl.DEFAULT_MAX_IDLE_TIMEOUT / 1000;
+        public Integer activeConnectionIdLimit = QuicClientConnectionImpl.DEFAULT_ACTIVE_CONNECTION_ID_LIMIT;
+        public Long defaultStreamReceiveBufferSize = QuicClientConnectionImpl.DEFAULT_MAX_STREAM_DATA;
+        public Integer maxOpenPeerInitiatedUnidirectionalStreams = QuicClientConnectionImpl.MAX_OPEN_PEER_INITIATED_UNI_STREAMS;
+        public Integer maxOpenPeerInitiatedBidirectionalStreams = QuicClientConnectionImpl.MAX_OPEN_PEER_INITIATED_BIDI_STREAMS;
+        public Integer maxUdpPayloadSize = QuicClientConnectionImpl.DEFAULT_MAX_UDP_PAYLOAD_SIZE;
+
+        @Override
+        public String toString() {
+            return "idle=" + maxIdleTimeout + " (seconds)\ncids=" + activeConnectionIdLimit + "\nmaxStreamData=" + defaultStreamReceiveBufferSize +
+                    "\nmaxUni=" + maxOpenPeerInitiatedUnidirectionalStreams + "\nmaxBidi=" + maxOpenPeerInitiatedBidirectionalStreams +
+                    "\npayload=" + maxUdpPayloadSize;
         }
     }
 }

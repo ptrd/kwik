@@ -68,13 +68,22 @@ import static net.luminis.tls.util.ByteUtils.bytesToHex;
  */
 public class QuicClientConnectionImpl extends QuicConnectionImpl implements QuicClientConnection, PacketProcessor, TlsStatusEventHandler, FrameProcessor {
 
+    public static final long DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 10_000;
     public static final int DEFAULT_MAX_IDLE_TIMEOUT = 60_000;
     public static final int MIN_MAX_IDLE_TIMEOUT = 10;
     public static final int MIN_RECEIVER_BUFFER_SIZE = 1500;
-    private static final long DEFAULT_MAX_STREAM_DATA = 250_000;
+    public static final long DEFAULT_MAX_STREAM_DATA = 250_000;
     public static final int MAX_DATA_FACTOR = 10;
     public static final int MAX_OPEN_PEER_INITIATED_BIDI_STREAMS = 3;
-    private static final int MAX_OPEN_PEER_INITIATED_UNI_STREAMS = 3;
+    public static final int MAX_OPEN_PEER_INITIATED_UNI_STREAMS = 3;
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+    // "The value of the active_connection_id_limit parameter MUST be at least 2."
+    public static final int MIN_ACTIVE_CONNECTION_ID_LIMIT = 2;
+    public static final int DEFAULT_ACTIVE_CONNECTION_ID_LIMIT = 2;
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+    // "Values below 1200 are invalid."
+    public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
+    public static final int DEFAULT_MAX_UDP_PAYLOAD_SIZE = Receiver.MAX_DATAGRAM_SIZE;
 
     private final String host;
     private final int serverPort;
@@ -224,6 +233,19 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             parameters.setInitialMaxStreamsUni(MAX_OPEN_PEER_INITIATED_UNI_STREAMS);
         }
 
+        if (customizedConnectionProperties.getActiveConnectionIdLimit() > MIN_ACTIVE_CONNECTION_ID_LIMIT) {
+            parameters.setActiveConnectionIdLimit(customizedConnectionProperties.getActiveConnectionIdLimit());
+        }
+        else {
+            parameters.setActiveConnectionIdLimit(DEFAULT_ACTIVE_CONNECTION_ID_LIMIT);
+        }
+
+        if (customizedConnectionProperties.getMaxUdpPayloadSize() > MIN_MAX_UDP_PAYLOAD_SIZE) {
+            parameters.setMaxUdpPayloadSize(customizedConnectionProperties.getMaxUdpPayloadSize());
+        }
+        else {
+            parameters.setMaxUdpPayloadSize(DEFAULT_MAX_UDP_PAYLOAD_SIZE);
+        }
         return parameters;
     }
 
@@ -1080,10 +1102,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return new BuilderImpl();
     }
 
+    public static ExtendedBuilder newExtendedBuilder() {
+        return new ExtendedBuilder();
+    }
+
     private static class BuilderImpl implements Builder {
 
-        private static final long DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 10_000;
-        private final TransportParameters customizedConnectionProperties = new TransportParameters();
+        protected final TransportParameters customizedConnectionProperties = new TransportParameters();
         private String host;
         private int port;
         private QuicSessionTicket sessionTicket;
@@ -1282,6 +1307,27 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         public Builder socketFactory(DatagramSocketFactory socketFactory) {
             this.socketFactory = socketFactory;
             return this;
+        }
+    }
+
+    /**
+     * Extended builder that allows setting additional parameters, that normally don't have to be customized.
+     */
+    public static class ExtendedBuilder extends BuilderImpl implements Builder {
+
+        public ExtendedBuilder activeConnectionIdLimit(int limit) {
+            if (limit < MIN_ACTIVE_CONNECTION_ID_LIMIT) {
+                throw new IllegalArgumentException("Active connection id limit must be at least " + MIN_ACTIVE_CONNECTION_ID_LIMIT + ".");
+            }
+            customizedConnectionProperties.setActiveConnectionIdLimit(limit);
+            return this;
+        }
+
+        public void maxUdpPayloadSize(int maxSize) {
+            if (maxSize < MIN_MAX_UDP_PAYLOAD_SIZE) {
+                throw new IllegalArgumentException("Max UDP payload size must be at least " + MIN_MAX_UDP_PAYLOAD_SIZE + ".");
+            }
+            customizedConnectionProperties.setMaxUdpPayloadSize(maxSize);
         }
     }
 }
