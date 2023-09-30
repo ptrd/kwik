@@ -19,7 +19,7 @@
 package net.luminis.quic.tls;
 
 import net.luminis.quic.QuicConstants;
-import net.luminis.quic.TransportParameters;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.*;
 import net.luminis.tls.alert.DecodeErrorException;

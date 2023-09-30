@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.TransportParameters;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.ProtocolError;
 import net.luminis.quic.core.Role;

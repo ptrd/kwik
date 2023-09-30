@@ -19,7 +19,7 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.TransportParameters;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.core.QuicConnectionImpl;

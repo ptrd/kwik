@@ -19,7 +19,6 @@
 package net.luminis.quic.core;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.TransportParameters;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdStatus;

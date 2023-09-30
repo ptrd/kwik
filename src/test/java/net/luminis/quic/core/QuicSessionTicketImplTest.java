@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.core;
 
-import net.luminis.quic.TransportParameters;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsState;

@@ -19,7 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.TransportParameters;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.ConnectionCloseFrame;

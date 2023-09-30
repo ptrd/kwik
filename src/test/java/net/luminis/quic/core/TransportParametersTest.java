@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.core;
 
-import net.luminis.quic.TransportParameters;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
