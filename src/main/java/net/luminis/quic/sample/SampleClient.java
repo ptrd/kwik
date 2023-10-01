@@ -49,18 +49,18 @@ public class SampleClient {
 
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
         QuicClientConnection connection = builder
-                .version(QuicConnection.QuicVersion.V1)
                 .uri(new URI(args[0]))
+                // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
+                // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
                 .applicationProtocol("hq-interop")
                 .build();
 
-        // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
-        // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
         connection.connect();
 
         QuicStream stream = connection.createStream(true);
 
         BufferedOutputStream outputStream = new BufferedOutputStream(stream.getOutputStream());
+        // HTTP 0.9 really is very simple: a GET request without any headers.
         outputStream.write("GET / \r\n".getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
 
