@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.ack.AckGenerator;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;

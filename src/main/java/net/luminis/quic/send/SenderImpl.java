@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;

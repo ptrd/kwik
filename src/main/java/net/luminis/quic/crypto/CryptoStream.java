@@ -16,8 +16,11 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.core;
+package net.luminis.quic.crypto;
 
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;

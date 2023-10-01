@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.core.*;
 import net.luminis.quic.packet.QuicPacket;

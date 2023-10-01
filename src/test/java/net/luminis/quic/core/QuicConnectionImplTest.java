@@ -19,6 +19,7 @@
 package net.luminis.quic.core;
 
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;

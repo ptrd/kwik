@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.core.AckGenerator;
+import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.AckFrame;

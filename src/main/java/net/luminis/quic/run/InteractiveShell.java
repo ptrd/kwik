@@ -21,7 +21,7 @@ package net.luminis.quic.run;
 import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.core.QuicClientConnectionImpl;
-import net.luminis.quic.core.Receiver;
+import net.luminis.quic.receive.Receiver;
 import net.luminis.tls.util.ByteUtils;
 
 import java.io.BufferedReader;

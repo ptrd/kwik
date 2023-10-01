@@ -16,9 +16,14 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.core;
+package net.luminis.quic.ack;
 
+import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.ack.Range;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
