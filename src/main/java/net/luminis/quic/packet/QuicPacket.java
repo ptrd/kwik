@@ -20,6 +20,7 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.*;
 

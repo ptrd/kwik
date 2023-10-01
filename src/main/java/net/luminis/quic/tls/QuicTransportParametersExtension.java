@@ -20,6 +20,8 @@ package net.luminis.quic.tls;
 
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.*;
 import net.luminis.quic.util.Bytes;
