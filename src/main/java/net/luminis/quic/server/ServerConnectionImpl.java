@@ -18,12 +18,16 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.ack.GlobalAckGenerator;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
@@ -53,9 +57,9 @@ import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
@@ -318,6 +322,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
+        initConnectionFlowControl(serverTransportParams.getInitialMaxData());
+
         // https://www.rfc-editor.org/rfc/rfc9369.html#name-version-negotiation-conside
         // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information
         //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."

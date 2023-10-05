@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
 import java.io.IOException;

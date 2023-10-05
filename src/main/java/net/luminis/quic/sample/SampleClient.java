@@ -19,10 +19,9 @@
 package net.luminis.quic.sample;
 
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Version;
-import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.log.SysOutLogger;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -49,18 +48,19 @@ public class SampleClient {
 
 
         QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
-        QuicClientConnection connection =
-                builder.version(Version.QUIC_version_1)
-                        .uri(new URI(args[0]))
-                        .build();
+        QuicClientConnection connection = builder
+                .uri(new URI(args[0]))
+                // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
+                // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
+                .applicationProtocol("hq-interop")
+                .build();
 
-        // The early QUIC implementors choose "hq-interop" as the ALPN identifier for running HTTP 0.9 on top of QUIC,
-        // see https://github.com/quicwg/base-drafts/wiki/21st-Implementation-Draft
-        connection.connect(10_000, "hq-interop");
+        connection.connect();
 
         QuicStream stream = connection.createStream(true);
 
         BufferedOutputStream outputStream = new BufferedOutputStream(stream.getOutputStream());
+        // HTTP 0.9 really is very simple: a GET request without any headers.
         outputStream.write("GET / \r\n".getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
 

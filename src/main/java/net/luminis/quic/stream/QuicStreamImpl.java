@@ -18,13 +18,13 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.QuicConnectionImpl;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.Version;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.Version;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static net.luminis.quic.EncryptionLevel.App;
+import static net.luminis.quic.core.EncryptionLevel.App;
 
 
 public class QuicStreamImpl extends BaseStream implements QuicStream {

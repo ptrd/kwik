@@ -21,7 +21,7 @@ package net.luminis.quic.packet;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 
 class LongHeaderPacketTest {
 

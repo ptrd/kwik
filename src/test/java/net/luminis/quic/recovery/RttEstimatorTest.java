@@ -18,15 +18,14 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.MockPacket;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.recovery.RttEstimator;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
 import java.util.Collections;

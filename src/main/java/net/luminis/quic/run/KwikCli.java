@@ -18,8 +18,13 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.client.h09.Http09Client;
+import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.QuicSessionTicketImpl;
+import net.luminis.quic.core.VersionNegotiationFailure;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -56,76 +61,141 @@ import java.util.stream.Collectors;
  */
 public class KwikCli {
 
-    private static Options cmdLineOptions;
     private static String DEFAULT_LOG_ARGS = "wip";
+    private static Options cmdLineOptions;
+
+    private String newSessionTicketsFilename;
+    private boolean useZeroRtt;
+    private String serverCertificatesFile;
+    private int keepAliveTime;
 
     public enum HttpVersion {
         HTTP09,
         HTTP3
     }
 
-    public static void main(String[] rawArgs) throws ParseException {
-        cmdLineOptions = new Options();
-        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
-                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (w)arning, (R)aw bytes, (S)ecrets, (D)ebug; "
-                + " default is \"" + DEFAULT_LOG_ARGS + "\", use (n)one to disable");
-        cmdLineOptions.addOption("h", "help", false, "show help");
-        cmdLineOptions.addOption("29", "use Quic version IETF_draft_29");
-        cmdLineOptions.addOption("30", "use Quic version IETF_draft_30");
-        cmdLineOptions.addOption("31", "use Quic version IETF_draft_31");
-        cmdLineOptions.addOption("32", "use Quic version IETF_draft_32");
-        cmdLineOptions.addOption("v1", "use Quic version 1");
-        cmdLineOptions.addOption("v2", "use Quic version 2");
-        cmdLineOptions.addOption("v1v2", "use Quic version 1, request version 2");
-        cmdLineOptions.addOption(null, "reservedVersion", false, "use reserved version to trigger version negotiation");
-        cmdLineOptions.addOption("A", "alpn", true, "set alpn (default is hq-xx)");
-        cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
-        cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
-        cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
-        cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
-        cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
-        cmdLineOptions.addOption("O", "output", true, "write server response to file");
-        cmdLineOptions.addOption("H", "http", true, "send HTTP GET request, arg is path, e.g. '/index.html'");
-        cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
-        cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
-        cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
-        cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
-        cmdLineOptions.addOption("v", "version", false, "show Kwik version");
-        cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
-        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
-        cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
-        cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
-        cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
-        cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");
-        cmdLineOptions.addOption(null, "clientKey", true, "private key (file) for client certificate");
-        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 cipher suite");
-        cmdLineOptions.addOption(null, "aes128gcm", false, "use AEAD_AES_128_GCM cipher suite");
-        cmdLineOptions.addOption(null, "aes256gcm", false, "use AEAD_AES_256_GCM cipher suite");
+    private HttpVersion httpVersion;
+    private String alpn;
+    private Logger logger;
 
-        CommandLineParser parser = new DefaultParser();
-        CommandLine cmd = null;
+
+    public void run(String[] rawArgs) throws Exception {
+        CommandLine cmd = getCommandLine(rawArgs);
+
+        boolean interactiveMode = cmd.hasOption("i");
+
+        QuicClientConnection.Builder connectionBuilder = createConnectionBuilder(interactiveMode);
+
+        String httpRequestPath = processUrlArgs(cmd, connectionBuilder);
+
+        processCipherArgs(cmd, connectionBuilder);
+
+        if (cmd.hasOption("noCertificateCheck")) {
+            connectionBuilder.noServerCertificateCheck();
+        }
+
+        if (cmd.hasOption("saveServerCertificates")) {
+            serverCertificatesFile = cmd.getOptionValue("saveServerCertificates");
+        }
+
+        processLoggerArgs(cmd, connectionBuilder);
+
+        processVersionArgs(cmd, connectionBuilder);
+
+        httpVersion = determineHttpVersion();
+
+        alpn = determineAlpn(cmd);
+
+        processConnectTimeoutArgs(cmd, connectionBuilder);
+
+        processKeepAliveArg(cmd);
+
+        httpRequestPath = extractHttpRequestPath(cmd, connectionBuilder, httpRequestPath);
+
+        useZeroRtt = cmd.hasOption("Z");
+        if (useZeroRtt && httpRequestPath == null) {
+            throw new IllegalArgumentException("Option --use0RTT requires option --http");
+        }
+
+        String outputFile = extractOutputFile(cmd);
+
+        processSecretsArgs(cmd, connectionBuilder);
+
+        processSessionTicketSaveArg(cmd, connectionBuilder);
+
+        boolean useSessionTicket = processSessionTicketArg(cmd, connectionBuilder);
+
+        if (useZeroRtt && !useSessionTicket) {
+            throw new IllegalArgumentException("Option --use0RTT requires option --sessionTicket");
+        }
+
+        processClientCertificateArgs(cmd, connectionBuilder);
+
+        processQuantumReadinessTestArg(cmd, connectionBuilder);
+
+        processInitialRttArg(cmd, connectionBuilder);
+
+        if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
+            throw new IllegalArgumentException("Option --use0RTT is not yet supported by this HTTP3 implementation.");
+        }
+
         try {
+            if (interactiveMode) {
+                new InteractiveShell((QuicClientConnectionImpl.ExtendedBuilder) connectionBuilder, alpn, httpVersion).start();
+            }
+            else {
+                executeRequest(httpRequestPath, outputFile, connectionBuilder);
+                Thread.sleep(1000);
+            }
+
+            System.out.println("Terminating Kwik");
+
+            if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
+                System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
+            }
+        }
+        catch (IOException e) {
+            System.out.println("Got IO error: " + e);
+        }
+        catch (VersionNegotiationFailure e) {
+            System.out.println("Client and server could not agree on a compatible QUIC version.");
+        }
+    }
+
+    private CommandLine getCommandLine(String[] rawArgs) {
+        CommandLine cmd;
+        try {
+            CommandLineParser parser = new DefaultParser();
             cmd = parser.parse(cmdLineOptions, rawArgs);
+
+            if (cmd.hasOption("v")) {
+                System.out.println("Kwik build nr: " + KwikVersion.getVersion());
+                System.exit(0);
+            }
+
+            if (cmd.getArgList().isEmpty()) {
+                throw new IllegalArgumentException("Missing arguments");
+            }
+
+            return cmd;
         }
         catch (ParseException argError) {
-            System.out.println("Invalid argument: " + argError.getMessage());
-            usage();
-            System.exit(1);
+            throw new IllegalArgumentException("Invalid argument: " + argError.getMessage());
         }
+    }
 
-        if (cmd.hasOption("v")) {
-            System.out.println("Kwik build nr: " + KwikVersion.getVersion());
-            System.exit(0);
+    private QuicClientConnection.Builder createConnectionBuilder(boolean interactiveMode) {
+        if (interactiveMode) {
+            return QuicClientConnectionImpl.newExtendedBuilder();
         }
-
-        List<String> args = cmd.getArgList();
-        if (args.size() == 0) {
-            usage();
-            return;
+        else {
+            return QuicClientConnection.newBuilder();
         }
+    }
 
-        QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
+    private String processUrlArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
         String httpRequestPath = null;
+        List<String> args = cmd.getArgList();
         if (args.size() == 1) {
             String arg = args.get(0);
             try {
@@ -137,49 +207,63 @@ public class KwikCli {
                             httpRequestPath = url.getPath();
                         }
                     } catch (MalformedURLException e) {
-                        System.out.println("Cannot parse URL '" + arg + "'");
-                        return;
+                        throw new IllegalArgumentException("Cannot parse URL '" + arg + "'");
                     }
-                } else if (arg.contains(":")) {
+                }
+                else if (arg.contains(":")) {
                     builder.uri(new URI("//" + arg));
-                } else {
+                }
+                else {
                     if (arg.matches("\\d+")) {
-                        System.out.println("Error: invalid hostname (did you forget to specify an option argument?).");
-                        usage();
-                        return;
+                        throw new IllegalArgumentException("Invalid hostname (did you forget to specify an option argument?).");
                     }
                     builder.uri(new URI("//" + arg + ":" + 443));
                 }
-            } catch (URISyntaxException invalidUri) {
-                System.out.println("Cannot parse URI '" + arg + "'");
-                return;
+            }
+            catch (URISyntaxException invalidUri) {
+                throw new IllegalArgumentException("Cannot parse URI '" + arg + "'");
             }
         }
         else if (args.size() == 2) {
             try {
                 builder.uri(new URI("//" + args.get(0) + ":" + args.get(1)));
-            } catch (URISyntaxException invalidUri) {
-                System.out.println("Cannot parse URI '" + args.stream().collect(Collectors.joining(":")) + "'");
-                return;
+            }
+            catch (URISyntaxException invalidUri) {
+                throw new IllegalArgumentException("Cannot parse URI '" + args.stream().collect(Collectors.joining(":")) + "'");
             }
         }
         else if (args.size() > 2) {
-            usage();
-            return;
+            throw new IllegalArgumentException("Too many arguments");
+        }
+        return httpRequestPath;
+    }
+
+    private QuicClientConnection.Builder processCipherArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
+        List<String> cipherOpts = List.of("aes128gcm", "aes256gcm", "chacha20");
+
+        // Process cipher options in order, as order has meaning! (preference)
+        List<Option> cipherOptions = Arrays.stream(cmd.getOptions())
+                .filter(option -> option.hasLongOpt())
+                .filter(option -> cipherOpts.contains(option.getLongOpt()))
+                .distinct()
+                .collect(Collectors.toList());
+
+        for (Option cipherOption: cipherOptions) {
+            if (cipherOption.getLongOpt().equals("aes128gcm")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
+            }
+            if (cipherOption.getLongOpt().equals("aes256gcm")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+            }
+            if (cipherOption.getLongOpt().equals("chacha20")) {
+                builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+            }
         }
 
-        processCipherArgs(cmd, builder);
+        return builder;
+    }
 
-        if (cmd.hasOption("noCertificateCheck")) {
-            builder.noServerCertificateCheck();
-        }
-
-        String serverCertificatesFile = null;
-        if (cmd.hasOption("saveServerCertificates")) {
-            serverCertificatesFile = cmd.getOptionValue("saveServerCertificates");
-        }
-
-        Logger logger = null;
+    private void processLoggerArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("L")) {
             String logFilename = cmd.getOptionValue("L");
             try {
@@ -191,7 +275,6 @@ public class KwikCli {
         if (logger == null) {
             logger = new SysOutLogger();
         }
-        builder.logger(logger);
 
         String logArg = DEFAULT_LOG_ARGS;
         if (cmd.hasOption('l')) {
@@ -231,321 +314,259 @@ public class KwikCli {
             }
         }
 
-        Version quicVersion = Version.getDefault();
-        Version preferredVersion = null;
+        if (cmd.hasOption("T")) {
+            logger.useRelativeTime(true);
+        }
+
+        builder.logger(logger);
+    }
+
+    private void processVersionArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
+        QuicConnection.QuicVersion quicVersion = QuicConnection.QuicVersion.V1;
+        QuicConnection.QuicVersion preferredVersion = null;
 
         if (cmd.hasOption("v1v2")) {
-            quicVersion = Version.QUIC_version_1;
-            preferredVersion = Version.QUIC_version_2;
+            quicVersion = QuicConnection.QuicVersion.V1;
+            preferredVersion = QuicConnection.QuicVersion.V2;
         }
         else if (cmd.hasOption("v2")) {
-            quicVersion = Version.QUIC_version_2;
+            quicVersion = QuicConnection.QuicVersion.V2;
         }
         else if (cmd.hasOption("v1")) {
-            quicVersion = Version.QUIC_version_1;
-        }
-        else if (cmd.hasOption("32")) {
-            quicVersion = Version.IETF_draft_32;
-        }
-        else if (cmd.hasOption("31")) {
-            quicVersion = Version.IETF_draft_31;
-        }
-        else if (cmd.hasOption("30")) {
-            quicVersion = Version.IETF_draft_30;
-        }
-        else if (cmd.hasOption("29")) {
-            quicVersion = Version.IETF_draft_29;
+            quicVersion = QuicConnection.QuicVersion.V1;
         }
 
-        if (cmd.hasOption("reservedVersion")) {
-            quicVersion = Version.reserved_1;
-        }
         builder.version(quicVersion);
         builder.preferredVersion(preferredVersion);
+    }
 
+    private HttpVersion determineHttpVersion() {
         HttpVersion httpVersion = loadHttp3ClientClass()? HttpVersion.HTTP3: HttpVersion.HTTP09;
+        return httpVersion;
+    }
 
-        String alpn = null;
+    private String determineAlpn(CommandLine cmd) {
+        String alpn;
         if (cmd.hasOption("A")) {
             alpn = cmd.getOptionValue("A", null);
             if (alpn == null) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Missing argument for option -A");
             }
         }
         else {
-            if (quicVersion.isV1() || quicVersion.isV2()) {
-                alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
-            }
-            else {
-                alpn = (httpVersion == HttpVersion.HTTP3? "h3-": "hq-") + quicVersion.getDraftVersion();
-            }
+            alpn = httpVersion == HttpVersion.HTTP3? "h3": "hq-interop";
         }
+        return alpn;
+    }
 
-        int connectionTimeout = 5;
+    private void processConnectTimeoutArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("c")) {
             try {
-                connectionTimeout = Integer.parseInt(cmd.getOptionValue("c", "5"));
+                int connectionTimeout = Integer.parseInt(cmd.getOptionValue("c"));
+                builder.connectTimeout(Duration.ofSeconds(connectionTimeout));
             } catch (NumberFormatException e) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Invalid value for --connectionTimeout: " + cmd.getOptionValue("c"));
             }
         }
+    }
 
-        int keepAliveTime = 0;
+    private void processKeepAliveArg(CommandLine cmd) {
         if (cmd.hasOption("k")) {
             try {
                 keepAliveTime = Integer.parseInt(cmd.getOptionValue("k"));
             }
             catch (NumberFormatException e) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Invalid value for --keepAlive: " + cmd.getOptionValue("k"));
             }
         }
+    }
 
-        boolean useZeroRtt = false;
-        if (cmd.hasOption("Z")) {
-            useZeroRtt = true;
-        }
+    private String extractHttpRequestPath(CommandLine cmd, QuicClientConnection.Builder builder, String defaultValue) {
+        String httpRequestPath = defaultValue;
         if (cmd.hasOption("H")) {
-            httpRequestPath = cmd.getOptionValue("H");
-            if (httpRequestPath == null) {
-                usage();
-                System.exit(1);
+            if (cmd.getOptionValue("H") == null) {
+                throw new IllegalArgumentException("Missing argument for option -H");
             }
             else {
+                httpRequestPath = cmd.getOptionValue("H");
                 if (! httpRequestPath.startsWith("/")) {
                     httpRequestPath = "/" + httpRequestPath;
-
                 }
             }
         }
-        if (useZeroRtt && httpRequestPath == null) {
-            usage();
-            System.exit(1);
-        }
+        return httpRequestPath;
+    }
 
+    private String extractOutputFile(CommandLine cmd) {
         String outputFile = null;
         if (cmd.hasOption("O")) {
             outputFile = cmd.getOptionValue("O");
             if (outputFile == null) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Missing argument for option -O");
             }
             if (Files.exists(Paths.get(outputFile)) && !Files.isWritable(Paths.get(outputFile))) {
-                System.err.println("Output file '" + outputFile + "' is not writable.");
-                System.exit(1);
+                throw new IllegalArgumentException("Output file '" + outputFile + "' is not writable.");
             }
         }
+        return outputFile;
+    }
 
+    private void processSecretsArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("secrets")) {
             String secretsFile = cmd.getOptionValue("secrets");
             if (secretsFile == null) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Missing argument for option -secrets");
             }
             if (Files.exists(Paths.get(secretsFile)) && !Files.isWritable(Paths.get(secretsFile))) {
-                System.err.println("Secrets file '" + secretsFile + "' is not writable.");
-                System.exit(1);
+                throw new IllegalArgumentException("Secrets file '" + secretsFile + "' is not writable.");
             }
             builder.secrets(Paths.get(secretsFile));
         }
+    }
 
-        String newSessionTicketsFilename = null;
+    private void processSessionTicketSaveArg(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("S")) {
             newSessionTicketsFilename = cmd.getOptionValue("S");
             if (newSessionTicketsFilename == null) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Missing argument for option -S");
             }
         }
+    }
 
-        QuicSessionTicket sessionTicket = null;
+    private boolean processSessionTicketArg(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("R")) {
-            String sessionTicketFile = null;
-            sessionTicketFile = cmd.getOptionValue("R");
+            String sessionTicketFile = cmd.getOptionValue("R");
             if (sessionTicketFile == null) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Missing argument for option -R");
             }
             if (!Files.isReadable(Paths.get(sessionTicketFile))) {
-                System.err.println("Session ticket file '" + sessionTicketFile + "' is not readable.");
-                System.exit(1);
+                throw new IllegalArgumentException("Session ticket file '" + sessionTicketFile + "' is not readable.");
             }
-            byte[] ticketData = new byte[0];
             try {
-                ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
-                sessionTicket = QuicSessionTicketImpl.deserialize(ticketData);
+                byte[] ticketData = Files.readAllBytes(Paths.get(sessionTicketFile));
+                QuicSessionTicket sessionTicket = QuicSessionTicketImpl.deserialize(ticketData);
                 builder.sessionTicket(sessionTicket);
+                return true;
             } catch (IOException e) {
-                System.err.println("Error while reading session ticket file.");
+                throw new IllegalArgumentException("Error while reading session ticket file.");
             }
         }
-        if (useZeroRtt && sessionTicket == null) {
-            System.err.println("Using 0-RTT requires a session ticket");
-            System.exit(1);
+        else {
+            return false;
         }
+    }
 
+    private void processClientCertificateArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("clientCertificate") && cmd.hasOption("clientKey")) {
             try {
                 builder.clientCertificate(readCertificate(cmd.getOptionValue("clientCertificate")));
                 builder.clientCertificateKey(readKey(cmd.getOptionValue("clientKey")));
             }
             catch (Exception e) {
-                System.err.println("Loading client certificate/key failed: " + e);
-                System.exit(1);
+                throw new IllegalArgumentException("Error while reading client certificate or key: " + e.getMessage());
             }
         }
         else if (cmd.hasOption("clientCertificate") || cmd.hasOption("clientKey")) {
-            System.err.println("Options --clientCertificate and --clientKey should always be used together");
-            System.exit(1);
+            throw new IllegalArgumentException("Options --clientCertificate and --clientKey should always be used together");
         }
+    }
 
+    private void processQuantumReadinessTestArg(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("quantumReadinessTest")) {
             try {
                 builder.quantumReadinessTest(Integer.parseInt(cmd.getOptionValue("quantumReadinessTest")));
             } catch (NumberFormatException e) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Invalid value for --quantumReadinessTest: " + cmd.getOptionValue("quantumReadinessTest"));
             }
         }
+    }
 
-        if (cmd.hasOption("T")) {
-            logger.useRelativeTime(true);
-        }
-
-        boolean interactiveMode = cmd.hasOption("i");
+    private void processInitialRttArg(CommandLine cmd, QuicClientConnection.Builder builder) {
         if (cmd.hasOption("initialRtt")) {
             try {
                 builder.initialRtt(Integer.parseInt(cmd.getOptionValue("initialRtt")));
             } catch (NumberFormatException e) {
-                usage();
-                System.exit(1);
+                throw new IllegalArgumentException("Invalid value for --initialRtt: " + cmd.getOptionValue("initialRtt"));
             }
-        }
-
-        if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
-            System.out.println("0-RTT is not yet supported by this HTTP3 implementation.");
-            System.exit(1);
-        }
-
-        try {
-            if (interactiveMode) {
-                new InteractiveShell(builder, alpn, httpVersion).start();
-            }
-            else {
-                QuicClientConnection quicConnection = builder.build();
-
-                if (httpRequestPath != null) {
-                    try {
-                        HttpClient httpClient = createHttpClient(httpVersion, quicConnection, useZeroRtt);
-                        InetSocketAddress serverAddress = quicConnection.getServerAddress();
-                        HttpRequest request = HttpRequest.newBuilder()
-                                .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
-                                .build();
-
-                        Instant start, done;
-                        long size;
-                        String response;
-                        if (outputFile != null) {
-                            if (new File(outputFile).isDirectory()) {
-                                outputFile = new File(outputFile, new File(httpRequestPath).getName()).getAbsolutePath();
-                            }
-                            start = Instant.now();
-                            HttpResponse<Path> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
-                            response = httpResponse.toString();
-                            done = Instant.now();
-                            size = Files.size(httpResponse.body());
-                        }
-                        else {
-                            start = Instant.now();
-                            HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                            done = Instant.now();
-                            size = httpResponse.body().length();
-                            response = httpResponse.toString();
-                            // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
-                            try {
-                                Thread.sleep(500);
-                            }
-                            catch (InterruptedException e) {}
-
-                            System.out.println("Server returns: \n" + httpResponse.body());
-                        }
-                        Duration duration = Duration.between(start, done);
-                        String speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
-                        System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
-                    }
-                    catch (InterruptedException interruptedException) {
-                        System.out.println("HTTP request is interrupted");
-                    }
-                    catch (URISyntaxException e) {
-                        // Impossible
-                        throw new RuntimeException();
-                    }
-                }
-                else {
-                    quicConnection.connect(connectionTimeout * 1000, alpn, null, null);
-
-                    if (keepAliveTime > 0) {
-                        quicConnection.keepAlive(keepAliveTime);
-                        try {
-                            Thread.sleep((keepAliveTime + 30) * 1000);
-                        } catch (InterruptedException e) {}
-                    }
-                }
-
-                if (serverCertificatesFile != null) {
-                    storeServerCertificates(quicConnection, serverCertificatesFile);
-                }
-
-                if (newSessionTicketsFilename != null) {
-                    storeNewSessionTickets(quicConnection, newSessionTicketsFilename);
-                }
-                quicConnection.close();
-
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                }
-            }
-
-            System.out.println("Terminating Kwik");
-        }
-        catch (IOException e) {
-            System.out.println("Got IO error: " + e);
-        }
-        catch (VersionNegotiationFailure e) {
-            System.out.println("Client and server could not agree on a compatible QUIC version.");
-        }
-
-        if (!interactiveMode && httpRequestPath == null && keepAliveTime == 0) {
-            System.out.println("This was quick, huh? Next time, consider using --http09 or --keepAlive argument.");
         }
     }
 
-    private static QuicClientConnection.Builder processCipherArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
-        List<String> cipherOpts = List.of("aes128gcm", "aes256gcm", "chacha20");
+    private void executeRequest(String httpRequestPath, String outputFile, QuicClientConnection.Builder builder) throws IOException {
 
-        // Process cipher options in order, as order has meaning! (preference)
-        List<Option> cipherOptions = Arrays.stream(cmd.getOptions())
-                .filter(option -> option.hasLongOpt())
-                .filter(option -> cipherOpts.contains(option.getLongOpt()))
-                .distinct()
-                .collect(Collectors.toList());
+        if (httpVersion == HttpVersion.HTTP3) {
+            builder.applicationProtocol("h3");
+        }
+        else {
+            builder.applicationProtocol("hq-interop");
+        }
+        QuicClientConnection quicConnection = builder.build();
 
-        for (Option cipherOption: cipherOptions) {
-            if (cipherOption.getLongOpt().equals("aes128gcm")) {
-                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
+        if (httpRequestPath != null) {
+            try {
+                HttpClient httpClient = createHttpClient(httpVersion, quicConnection, useZeroRtt);
+                InetSocketAddress serverAddress = quicConnection.getServerAddress();
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(new URI("https", null, serverAddress.getHostName(), serverAddress.getPort(), httpRequestPath, null, null))
+                        .build();
+
+                Instant start, done;
+                long size;
+                String response;
+                if (outputFile != null) {
+                    if (new File(outputFile).isDirectory()) {
+                        outputFile = new File(outputFile, new File(httpRequestPath).getName()).getAbsolutePath();
+                    }
+                    start = Instant.now();
+                    HttpResponse<Path> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputFile)));
+                    response = httpResponse.toString();
+                    done = Instant.now();
+                    size = Files.size(httpResponse.body());
+                }
+                else {
+                    start = Instant.now();
+                    HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    done = Instant.now();
+                    size = httpResponse.body().length();
+                    response = httpResponse.toString();
+                    // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
+                    try {
+                        Thread.sleep(500);
+                    }
+                    catch (InterruptedException e) {}
+
+                    System.out.println("Server returns: \n" + httpResponse.body());
+                }
+                Duration duration = Duration.between(start, done);
+                String speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
+                System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
             }
-            if (cipherOption.getLongOpt().equals("aes256gcm")) {
-                builder.cipherSuite(TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+            catch (InterruptedException interruptedException) {
+                System.out.println("HTTP request is interrupted");
             }
-            if (cipherOption.getLongOpt().equals("chacha20")) {
-                builder.cipherSuite(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+            catch (URISyntaxException e) {
+                // Impossible
+                throw new RuntimeException();
+            }
+        }
+        else {
+            quicConnection.connect();
+
+            if (keepAliveTime > 0) {
+                quicConnection.keepAlive(keepAliveTime);
+                try {
+                    Thread.sleep((keepAliveTime + 30) * 1000);
+                } catch (InterruptedException e) {}
             }
         }
 
-        return builder;
+        if (serverCertificatesFile != null) {
+            storeServerCertificates(quicConnection, serverCertificatesFile);
+        }
+
+        if (newSessionTicketsFilename != null) {
+            storeNewSessionTickets(quicConnection, newSessionTicketsFilename);
+        }
+        quicConnection.close();
     }
 
     private static boolean loadHttp3ClientClass() {
@@ -556,7 +577,6 @@ public class KwikCli {
         catch (ClassNotFoundException e) {
             return false;
         }
-
     }
 
     static HttpClient createHttpClient(HttpVersion httpVersion, QuicClientConnection quicConnection, boolean useZeroRtt) {
@@ -697,5 +717,50 @@ public class KwikCli {
         HelpFormatter helpFormatter = new HelpFormatter();
         helpFormatter.setWidth(79);
         helpFormatter.printHelp("kwik <host>:<port> OR kwik <host> <port> \tOR kwik http[s]://host:port[/path]", cmdLineOptions);
+    }
+
+    public static void main(String[] args) throws Exception {
+        try {
+            createCommandLineOptions();
+            new KwikCli().run(args);
+        }
+        catch (IllegalArgumentException wrongArgs) {
+            System.out.println("Incorrect command: " + wrongArgs.getMessage());
+            usage();
+        }
+    }
+
+    private static void createCommandLineOptions() {
+        cmdLineOptions = new Options();
+        cmdLineOptions.addOption("l", "log", true, "logging options: [pdrcsiRSD]: " +
+                "(p)ackets received/sent, (d)ecrypted bytes, (r)ecovery, (c)ongestion control, (s)tats, (i)nfo, (w)arning, (R)aw bytes, (S)ecrets, (D)ebug; "
+                + " default is \"" + DEFAULT_LOG_ARGS + "\", use (n)one to disable");
+        cmdLineOptions.addOption("h", "help", false, "show help");
+        cmdLineOptions.addOption("v1", "use Quic version 1");
+        cmdLineOptions.addOption("v2", "use Quic version 2");
+        cmdLineOptions.addOption("v1v2", "use Quic version 1, request version 2");
+        cmdLineOptions.addOption("A", "alpn", true, "set alpn (interactive mode only)");
+        cmdLineOptions.addOption("R", "resumption key", true, "session ticket file");
+        cmdLineOptions.addOption("c", "connectionTimeout", true, "connection timeout in seconds");
+        cmdLineOptions.addOption("i", "interactive", false, "start interactive shell");
+        cmdLineOptions.addOption("k", "keepAlive", true, "connection keep alive time in seconds");
+        cmdLineOptions.addOption("L", "logFile", true, "file to write log message to");
+        cmdLineOptions.addOption("O", "output", true, "write server response to file");
+        cmdLineOptions.addOption("H", "http", true, "send HTTP GET request, arg is path, e.g. '/index.html'");
+        cmdLineOptions.addOption("S", "storeTickets", true, "basename of file to store new session tickets");
+        cmdLineOptions.addOption("T", "relativeTime", false, "log with time (in seconds) since first packet");
+        cmdLineOptions.addOption("Z", "use0RTT", false, "use 0-RTT if possible (requires -H)");
+        cmdLineOptions.addOption(null, "secrets", true, "write secrets to file (Wireshark format)");
+        cmdLineOptions.addOption("v", "version", false, "show Kwik version");
+        cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
+        cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
+        cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
+        cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
+        cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");
+        cmdLineOptions.addOption(null, "clientKey", true, "private key (file) for client certificate");
+        cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 cipher suite");
+        cmdLineOptions.addOption(null, "aes128gcm", false, "use AEAD_AES_128_GCM cipher suite");
+        cmdLineOptions.addOption(null, "aes256gcm", false, "use AEAD_AES_256_GCM cipher suite");
     }
 }

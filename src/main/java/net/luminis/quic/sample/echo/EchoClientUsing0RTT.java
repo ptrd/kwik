@@ -18,7 +18,11 @@
  */
 package net.luminis.quic.sample.echo;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.QuicSessionTicketImpl;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
@@ -78,7 +82,8 @@ public class EchoClientUsing0RTT {
         QuicClientConnection.Builder connectionBuilder = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
-                .version(Version.QUIC_version_1)
+                .version(QuicConnection.QuicVersion.V1)
+                .applicationProtocol("echo")
                 .noServerCertificateCheck();
 
         // Try to load session ticket and if it can be loaded, create early data.
@@ -94,7 +99,7 @@ public class EchoClientUsing0RTT {
 
         // Create connection with 0-RTT data
         QuicClientConnection connection = connectionBuilder.build();
-        List<QuicStream> earlyStreams = connection.connect(5000, "echo", null, earlyData);
+        List<QuicStream> earlyStreams = connection.connect(earlyData);
         // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
                 .findAny()

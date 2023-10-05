@@ -18,8 +18,11 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.*;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.ProtocolError;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
@@ -124,9 +127,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void testAckDelayTransportParameter() throws Exception {
         //                                                 id sz id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 06 0a 01 07 0b 01 29".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 06 0a 01 07 0b 01 29".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getAckDelayExponent()).isEqualTo(7);
@@ -136,9 +139,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void unknownTransportParameterShouldBeIgnored() throws Exception {
         //                                           ext size  unknown id     size dummy value       idle id sz value (0x40 | 27 10) (10000)
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0e     80 00 ff f9      05 01 02 03 04 05    01      02 67 10".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0e     80 00 ff f9      05 01 02 03 04 05    01      02 67 10".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_20);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getMaxIdleTimeout()).isEqualTo(10_000);
@@ -173,9 +176,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parseInitialSourceCconnectionId() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0a 0f 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getInitialSourceConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
@@ -196,9 +199,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parseRetrySourceConnectionId() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 10 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0a 10 08 01 02 03 04 05 06 07 08".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
 
         assertThat(transportParametersExtension.getTransportParameters().getRetrySourceConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
@@ -207,18 +210,18 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parseTransportParametersExtensionFromLargerBuffer() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01 02 03 04 05 06 07 08 01 02 03".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0a 0f 08 01 02 03 04 05 06 07 08 01 02 03".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class));
     }
 
     @Test
     void parseTooShortTransportParametersExtension() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 0a 0f 08 01".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 0a 0f 08 01".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         assertThatThrownBy(() ->
                 transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
                 .isInstanceOf(DecodeErrorException.class);
@@ -227,9 +230,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parseTransportParameterWithCorruptLength() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 03 08 41".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 03 08 41".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         assertThatThrownBy(() ->
                 transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
                 .isInstanceOf(DecodeErrorException.class);
@@ -238,9 +241,9 @@ class QuicTransportParametersExtensionTest {
     @Test
     void parseTransportParameterWithInconsistentSize() throws Exception {
         //                                                 id sz
-        byte[] rawData = ByteUtils.hexToBytes("ff a5 00 03 08 02 03 ff".replaceAll(" ", ""));
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 03 08 02 03 ff".replaceAll(" ", ""));
 
-        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.IETF_draft_18);
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
         assertThatThrownBy(() ->
                 transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
                 .isInstanceOf(DecodeErrorException.class);

@@ -19,7 +19,6 @@
 package net.luminis.quic.sample.push;
 
 import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicClientConnectionImpl;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.SysOutLogger;
 
@@ -29,7 +28,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.time.Duration;
 
-import static net.luminis.quic.QuicClientConnection.*;
+import static net.luminis.quic.QuicClientConnection.newBuilder;
 
 /**
  * Sample demo client that implements a simple server push protocol: when a client connects, the server opens a stream
@@ -70,13 +69,14 @@ public class PushClient {
 
         connection = newBuilder()
                 .uri(URI.create("push://localhost:" + serverPort))
+                .applicationProtocol("push")
                 .logger(log)
                 .noServerCertificateCheck()
                 .build();
 
         connection.setPeerInitiatedStreamCallback(quicStream -> new Thread(() -> handlePushMessages(quicStream)).start());
 
-        connection.connect(5000, "push");
+        connection.connect();
     }
 
     private void handlePushMessages(QuicStream quicStream) {

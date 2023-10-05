@@ -18,12 +18,13 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.TestUtils;
-import net.luminis.quic.Version;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.core.Version;
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 
 class ZeroRttPacketTest {

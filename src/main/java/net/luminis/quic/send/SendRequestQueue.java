@@ -19,7 +19,7 @@
 package net.luminis.quic.send;
 
 
-import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 

@@ -18,7 +18,8 @@
  */
 package net.luminis.quic.sample.echo;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
@@ -62,11 +63,12 @@ public class SimpleEchoClient {
 
         connection = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
+                .applicationProtocol("echo")
                 .logger(log)
                 .noServerCertificateCheck()
                 .build();
 
-        connection.connect(5000, "echo");
+        connection.connect();
 
         echo("hello mate!");
         echo("look, a second request on a separate stream!");

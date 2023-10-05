@@ -18,16 +18,18 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
+import net.luminis.quic.ack.AckGenerator;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
+import net.luminis.quic.core.*;
 import net.luminis.quic.packet.InitialPacket;
 
 import java.time.Instant;
 import java.util.*;
 
-import static net.luminis.quic.EncryptionLevel.*;
+import static net.luminis.quic.core.EncryptionLevel.*;
 
 /**
  * Assembles QUIC packets for sending.

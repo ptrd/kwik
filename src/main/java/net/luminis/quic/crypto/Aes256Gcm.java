@@ -20,8 +20,8 @@ package net.luminis.quic.crypto;
 
 import at.favre.lib.crypto.HKDF;
 import at.favre.lib.crypto.HkdfMacFactory;
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
 /**

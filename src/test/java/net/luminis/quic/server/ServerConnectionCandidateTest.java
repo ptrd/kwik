@@ -18,17 +18,17 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.TestUtils;
-import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.luminis.quic.test.FieldReader;
 
 import java.io.InputStream;
 import java.net.DatagramSocket;

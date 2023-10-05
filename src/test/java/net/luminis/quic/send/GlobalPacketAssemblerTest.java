@@ -18,21 +18,21 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.core.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.luminis.quic.test.FieldReader;
-import net.luminis.quic.test.FieldSetter;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class GlobalPacketAssemblerTest extends AbstractSenderTest {
