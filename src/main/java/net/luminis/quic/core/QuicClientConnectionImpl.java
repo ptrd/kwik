@@ -62,7 +62,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
-import static net.luminis.quic.core.EarlyDataStatus.*;
+import static net.luminis.quic.core.QuicClientConnectionImpl.EarlyDataStatus.*;
 import static net.luminis.quic.core.EncryptionLevel.*;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
@@ -88,6 +88,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     // "Values below 1200 are invalid."
     public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
     public static final int DEFAULT_MAX_UDP_PAYLOAD_SIZE = Receiver.MAX_DATAGRAM_SIZE;
+
+    public enum EarlyDataStatus {
+        None,
+        Requested,
+        Accepted,
+        Refused;
+    };
 
     private final String host;
     private final int serverPort;
