@@ -36,7 +36,6 @@ public interface QuicConnection {
      * If the value is 0, the peer is not allowed to open any bidirectional stream.
      * This method must be called before calling connect().
      * @param max
-     * @return
      */
     void setMaxAllowedBidirectionalStreams(int max);
 
@@ -45,7 +44,6 @@ public interface QuicConnection {
      * If the value is 0, the peer is not allowed to open any unidirectional stream.
      * This method must be called before calling connect().
      * @param max
-     * @return
      */
     void setMaxAllowedUnidirectionalStreams(int max);
 

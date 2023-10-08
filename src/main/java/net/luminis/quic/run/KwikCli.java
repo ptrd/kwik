@@ -169,7 +169,7 @@ public class KwikCli {
             cmd = parser.parse(cmdLineOptions, rawArgs);
 
             if (cmd.hasOption("v")) {
-                System.out.println("Kwik build nr: " + KwikVersion.getVersion());
+                System.out.println("Kwik version: " + KwikVersion.getVersion());
                 System.exit(0);
             }
 
