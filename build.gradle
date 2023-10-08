@@ -12,7 +12,7 @@ repositories {
 dependencies {
     def junitVersion = "5.9.2"
 
-    implementation project(':agent15')
+    implementation group: 'net.luminis.networking', name: 'agent15', version: '1.0'
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
     implementation group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'

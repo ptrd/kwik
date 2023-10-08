@@ -89,7 +89,6 @@ services trying to spy on you, using Kwik is probably not the best idea.
 To build the project:
 
 - clone the git repository and cd into the directory
-- update / get the agent15 (TLS 1.3 library) sources by executing `git submodule update --init --recursive`
 - build with gradle wrapper: `./gradlew build` (or `gradlew.bat build` on Windows).
 
 Gradle will write the output to `build/libs`.
