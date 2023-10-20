@@ -1,6 +1,6 @@
 package net.luminis.quic.crypto;
 
-import at.favre.lib.crypto.HKDF;
+import at.favre.lib.hkdf.HKDF;
 import net.luminis.quic.core.DecryptionException;
 import net.luminis.quic.core.QuicRuntimeException;
 import net.luminis.quic.core.Role;
