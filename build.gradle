@@ -12,7 +12,7 @@ repositories {
 }
 
 dependencies {
-    def junitVersion = "5.9.2"
+    def junitVersion = "5.10.0"
 
     implementation group: 'net.luminis.networking', name: 'agent15', version: '1.0.1'
 
