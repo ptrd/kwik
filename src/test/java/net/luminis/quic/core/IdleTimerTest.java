@@ -42,7 +42,7 @@ class IdleTimerTest {
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         clock = new TestClock();
-        connection = Mockito.spy(mock(QuicConnectionImpl.class));
+        connection = mock(QuicConnectionImpl.class);
         idleTimer = new IdleTimer(clock, connection, mock(Logger.class), 1);
         ScheduledExecutorService scheduler = new TestScheduledExecutor(clock);
         FieldSetter.setField(idleTimer, idleTimer.getClass().getDeclaredField("timer"), scheduler);
