@@ -131,8 +131,6 @@ publishing {
                         id = 'peterd'
                         name = 'Peter Doornbosch'
                         email = 'peter.doornbosch@luminis.eu'
-                        organization  = 'Independent Open Source project'
-                        organizationUrl = 'https://www.kwik.tech'
                     }
                 }
 
