@@ -84,6 +84,15 @@ services trying to spy on you, using Kwik is probably not the best idea.
 
 ## Usage
 
+### Maven
+
+Kwik is available in the Maven Central Repository. To use it in your project, add the following dependency to your pom.xml:
+
+    <dependency>
+        <groupId>tech.kwik</groupId>
+        <artifactId>kwik</artifactId>
+        <version>0.8.3</version>
+    </dependency>
 
 ### Building
 
