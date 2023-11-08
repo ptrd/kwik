@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.socket;
 
+import net.luminis.quic.DatagramSocketFactory;
 import net.luminis.quic.receive.MultipleAddressReceiver;
 
 import java.io.IOException;
@@ -34,21 +35,24 @@ public class ClientSocketManager implements SocketManager {
 
     private final InetSocketAddress serverAddress;
     private MultipleAddressReceiver receiver;
+    private final DatagramSocketFactory socketFactory;
     private final Clock clock;
     private volatile DatagramSocket socket;
     private volatile DatagramSocket alternateSocket;
     private InetSocketAddress clientAddress;
     private InetSocketAddress alternateClientAddress;
 
-    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver) throws SocketException {
-        this(serverAddress, receiver, Clock.systemUTC());
+    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver, DatagramSocketFactory datagramSocketFactory) throws SocketException {
+        this(serverAddress, receiver, datagramSocketFactory, Clock.systemUTC());
     }
 
-    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver, Clock clock) throws SocketException {
+    public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver,
+                               DatagramSocketFactory datagramSocketFactory, Clock clock) throws SocketException {
         this.serverAddress = serverAddress;
         this.receiver = receiver;
+        this.socketFactory = datagramSocketFactory != null? datagramSocketFactory: (address) -> new DatagramSocket();
         this.clock = clock;
-        this.socket = new DatagramSocket();
+        this.socket = this.socketFactory.createSocket(serverAddress.getAddress());
         clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
 
         receiver.addSocket(socket);
