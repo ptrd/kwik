@@ -18,14 +18,14 @@
  */
 package net.luminis.quic.path;
 
-import net.luminis.quic.EncryptionLevel;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.socket.ClientSocketManager;
-import net.luminis.quic.Version;
 
 import java.net.InetSocketAddress;
 import java.net.SocketException;

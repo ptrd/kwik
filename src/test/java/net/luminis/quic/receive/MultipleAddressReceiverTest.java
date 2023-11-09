@@ -28,6 +28,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,6 +38,8 @@ import static org.mockito.Mockito.*;
 
 class MultipleAddressReceiverTest {
 
+    static final private int GET_TIMEOUT = 1;
+
     private MultipleAddressReceiver receiver;
     private DatagramSocket receiverSocket;
     private InetSocketAddress receiverAddress;
@@ -45,7 +48,7 @@ class MultipleAddressReceiverTest {
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         logger = mock(Logger.class);
-        receiver = new MultipleAddressReceiver(logger, throwable -> {});
+        receiver = new MultipleAddressReceiver(logger, p -> true, throwable -> {});
         receiver.start();
         receiverSocket = new DatagramSocket();
         receiver.addSocket(receiverSocket);
@@ -111,5 +114,48 @@ class MultipleAddressReceiverTest {
         // Then
         verify(logger, never()).error(anyString());
         verify(logger, never()).error(anyString(), any(Throwable.class));
+    }
+
+    @Test
+    void withoutFilterAnyPacketShouldBeReceived() throws Exception {
+        // Given
+
+        // When
+        sendFromPort(new byte[] { 0x73 }, 1234);
+
+        // Then
+        RawPacket rawPacket = receiver.get(GET_TIMEOUT);
+        assertThat(rawPacket).isNotNull();
+        assertThat(rawPacket.getData().get()).isEqualTo((byte) 0x73);
+        assertThat(rawPacket.getPeerAddress().getPort()).isEqualTo(1234);
+    }
+
+    @Test
+    void packetNotPassingFilterShouldBeDropped() throws Exception {
+        // Given
+        Predicate<DatagramPacket> filter = packet -> packet.getPort() == 9999;
+        Receiver receiver = createReceiver(filter);
+
+        // When
+        sendFromPort(new byte[] { 0x73 }, 1234);
+
+        // Then
+        RawPacket rawPacket = receiver.get(GET_TIMEOUT);
+        assertThat(rawPacket).isNull();
+    }
+
+    private Receiver createReceiver(Predicate<DatagramPacket> filter) {
+        receiver = new MultipleAddressReceiver(logger, filter, throwable -> {});
+        receiver.start();
+        receiver.addSocket(receiverSocket);
+        return receiver;
+    }
+
+    private void sendFromPort(byte[] data, int port) throws Exception {
+        DatagramPacket packet = new DatagramPacket(data, data.length, InetAddress.getLoopbackAddress(), receiverSocket.getLocalPort());
+
+        DatagramSocket senderSocket = new DatagramSocket(port);
+        senderSocket.send(packet);
+        senderSocket.close();
     }
 }

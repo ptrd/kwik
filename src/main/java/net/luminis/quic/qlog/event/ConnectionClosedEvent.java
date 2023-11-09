@@ -25,7 +25,7 @@ import java.time.Instant;
 public class ConnectionClosedEvent extends QLogEvent {
 
     private final Trigger trigger;
-    private final Integer transportErrorCode;
+    private final Long errorCode;
     private final String errorReason;
 
     public enum Trigger {
@@ -46,14 +46,14 @@ public class ConnectionClosedEvent extends QLogEvent {
     public ConnectionClosedEvent(byte[] cid, Instant time, Trigger trigger) {
         super(cid, time);
         this.trigger = trigger;
-        transportErrorCode = null;
+        errorCode = null;
         errorReason = null;
     }
 
-    public ConnectionClosedEvent(byte[] cid, Instant time, Trigger trigger, int transportErrorCode, String errorReason) {
+    public ConnectionClosedEvent(byte[] cid, Instant time, Trigger trigger, long errorCode, String errorReason) {
         super(cid, time);
         this.trigger = trigger;
-        this.transportErrorCode = transportErrorCode;
+        this.errorCode = errorCode;
         this.errorReason = errorReason;
     }
 
@@ -66,8 +66,8 @@ public class ConnectionClosedEvent extends QLogEvent {
         return trigger;
     }
 
-    public Integer getTransportErrorCode() {
-        return transportErrorCode;
+    public Long getErrorCode() {
+        return errorCode;
     }
 
     public String getErrorReason() {

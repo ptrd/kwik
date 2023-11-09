@@ -21,10 +21,12 @@ package net.luminis.quic.receive;
 import net.luminis.quic.log.Logger;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Receiver that can listen on multiple UDP` ports at the same time.
@@ -37,8 +39,8 @@ public class MultipleAddressReceiver extends AbstractReceiver {
     private final List<DatagramSocket> sockets;
     private final List<Thread> threads;
 
-    public MultipleAddressReceiver(Logger log, Consumer<Throwable> abortCallback) {
-        super(log, abortCallback);
+    public MultipleAddressReceiver(Logger log, Predicate<DatagramPacket> packetFilter, Consumer<Throwable> abortCallback) {
+        super(log, packetFilter, abortCallback);
         sockets = new CopyOnWriteArrayList<>();
         threads = new CopyOnWriteArrayList<>();
     }

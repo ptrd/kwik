@@ -18,9 +18,10 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

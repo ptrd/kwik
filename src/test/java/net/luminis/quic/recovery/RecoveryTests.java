@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;

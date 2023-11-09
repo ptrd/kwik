@@ -18,7 +18,11 @@
  */
 package net.luminis.quic.sample.echo;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.QuicSessionTicketImpl;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
@@ -75,17 +79,18 @@ public class EchoClientUsing0RTT {
         log.logPackets(true);    // When 0-RTT is used, log will show a 0-RTT packet like "Packet Z|0|Z|52|1  StreamFrame[0(CIB),0,11,fin]"
 
         // Create connection builder (do not yet create connection!)
-        QuicClientConnectionImpl.Builder connectionBuilder = QuicClientConnectionImpl.newBuilder()
+        QuicClientConnection.Builder connectionBuilder = QuicClientConnection.newBuilder()
                 .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
-                .version(Version.QUIC_version_1)
+                .version(QuicConnection.QuicVersion.V1)
+                .applicationProtocol("echo")
                 .noServerCertificateCheck();
 
         // Try to load session ticket and if it can be loaded, create early data.
         List<QuicClientConnection.StreamEarlyData> earlyData = Collections.emptyList();
         try {
             byte[] ticketData = Files.readAllBytes(Path.of(SESSIONTICKET_FILE));
-            connectionBuilder.sessionTicket(QuicSessionTicket.deserialize(ticketData));   // This is why the connection should not yet have been created!
+            connectionBuilder.sessionTicket(QuicSessionTicketImpl.deserialize(ticketData));   // This is why the connection should not yet have been created!
             earlyData = List.of(new QuicClientConnection.StreamEarlyData(requestData, true));
         }
         catch (IOException e) {
@@ -93,8 +98,8 @@ public class EchoClientUsing0RTT {
         }
 
         // Create connection with 0-RTT data
-        QuicClientConnectionImpl connection = connectionBuilder.build();
-        List<QuicStream> earlyStreams = connection.connect(5000, "echo", null, earlyData);
+        QuicClientConnection connection = connectionBuilder.build();
+        List<QuicStream> earlyStreams = connection.connect(earlyData);
         // Connect does create and return streams if earlyData parameter is empty (which is the case here when no session ticket was loaded, see above)
         QuicStream quicStream = earlyStreams.stream()
                 .findAny()

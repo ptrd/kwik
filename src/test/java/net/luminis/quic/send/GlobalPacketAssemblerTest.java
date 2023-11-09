@@ -18,25 +18,32 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdProvider;
-import net.luminis.quic.frame.*;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.Version;
+import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.MaxDataFrame;
+import net.luminis.quic.frame.PathResponseFrame;
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.quic.sample.echo.EchoClientUsing0RTT;
+import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.luminis.quic.test.FieldReader;
-import net.luminis.quic.test.FieldSetter;
 
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static net.luminis.quic.TestUtils.getArbitraryLocalAddress;
+import static net.luminis.quic.core.TestUtils.getArbitraryLocalAddress;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -95,7 +102,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         List<SendItem> packets = globalPacketAssembler.assemble(6000, MAX_PACKET_SIZE, clientAddress);
 
-        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(keys).length).sum();
+        int datagramLength = packets.stream().mapToInt(p -> p.getPacket().generatePacketBytes(aead).length).sum();
         assertThat(datagramLength).isCloseTo(18 + 3 + 36, Percentage.withPercentage(5));
     }
 

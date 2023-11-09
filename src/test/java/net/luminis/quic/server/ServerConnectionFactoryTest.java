@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.handshake.ServerMessageSender;
 import net.luminis.tls.handshake.TlsServerEngine;

@@ -95,8 +95,8 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
-    public void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason) {
-        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, transportErrorCode, errorReason));
+    public void emitConnectionClosedEvent(Instant time, long errorCode, String errorReason) {
+        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, errorCode, errorReason));
     }
 
     private static class NullQueue implements Queue<QLogEvent> {

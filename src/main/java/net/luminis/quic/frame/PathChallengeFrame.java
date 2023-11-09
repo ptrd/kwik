@@ -19,7 +19,7 @@
 package net.luminis.quic.frame;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 

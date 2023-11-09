@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.VariableLengthInteger;
-import net.luminis.quic.Version;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
@@ -57,6 +57,17 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     public ConnectionCloseFrame(Version quicVersion, long error, String reason) {
         frameType = 0x1c;
+        errorCode = error;
+        if (errorCode >= 0x0100 && errorCode < 0x0200) {
+            tlsError = (int) (errorCode - 256);
+        }
+        if (reason != null && !reason.isBlank()) {
+            reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
+        }
+    }
+
+    public ConnectionCloseFrame(Version quicVersion, long error, boolean quicError, String reason) {
+        frameType = quicError? 0x1c: 0x1d;
         errorCode = error;
         if (errorCode >= 0x0100 && errorCode < 0x0200) {
             tlsError = (int) (errorCode - 256);
@@ -129,6 +140,10 @@ public class ConnectionCloseFrame extends QuicFrame {
 
     public boolean hasError() {
         return hasTransportError() || hasApplicationProtocolError();
+    }
+
+    public int getFrameType() {
+        return frameType;
     }
 
     @Override

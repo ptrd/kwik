@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.tls.util.ByteUtils;
 
 import javax.crypto.BadPaddingException;
@@ -45,28 +45,32 @@ public class RetryPacket extends QuicPacket {
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-retry-packet
     // "a Retry packet uses a long packet header with a type value of 0x03."
     private static int V1_type = 3;
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
-    // "Retry packets use a packet type field of 0b00."
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-long-header-packet-types
+    // "Retry: 0b00"
     private static int V2_type = 0;
 
 
     private static final int RETRY_INTEGRITY_TAG_LENGTH = 16;    // The Retry Integrity Tag is 128 bits.
+
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
     // "The secret key, K, is 128 bits equal to 0xccce187ed09a09d05728155a6cb96be1."
     private static final byte[] SECRET_KEY = new byte[] {
             (byte) 0xcc, (byte) 0xce, (byte) 0x18, (byte) 0x7e, (byte) 0xd0, (byte) 0x9a, (byte) 0x09, (byte) 0xd0,
             (byte) 0x57, (byte) 0x28, (byte) 0x15, (byte) 0x5a, (byte) 0x6c, (byte) 0xb9, (byte) 0x6b, (byte) 0xe1 };
 
+    // https://www.rfc-editor.org/rfc/rfc9001.html#name-retry-packet-integrity
+    // "The secret key, K, is 128 bits equal to 0xbe0c690b9f66575a1d766b54e368c84e."
     private static final byte[] SECRET_KEY_V1 = new byte[] {
             (byte) 0xbe, (byte) 0x0c, (byte) 0x69, (byte) 0x0b, (byte) 0x9f, (byte) 0x66, (byte) 0x57, (byte) 0x5a,
             (byte) 0x1d, (byte) 0x76, (byte) 0x6b, (byte) 0x54, (byte) 0xe3, (byte) 0x68, (byte) 0xc8, (byte) 0x4e };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-hkdf-labels
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-retry-integrity-tag
     // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
-    //  key = 0xba858dc7b43de5dbf87617ff4ab253db
+    //  (...)
+    //  key = 0x8fb4b01b56ac48e260fbcbcead7ccc92
     private static final byte[] SECRET_KEY_V2 = new byte[] {
-            (byte) 0xba, (byte) 0x85, (byte) 0x8d, (byte) 0xc7, (byte) 0xb4, (byte) 0x3d, (byte) 0xe5, (byte) 0xdb,
-            (byte) 0xf8, (byte) 0x76, (byte) 0x17, (byte) 0xff, (byte) 0x4a, (byte) 0xb2, (byte) 0x53, (byte) 0xdb };
+            (byte) 0x8f, (byte) 0xb4, (byte) 0xb0, (byte) 0x1b, (byte) 0x56, (byte) 0xac, (byte) 0x48, (byte) 0xe2,
+            (byte) 0x60, (byte) 0xfb, (byte) 0xcb, (byte) 0xce, (byte) 0xad, (byte) 0x7c, (byte) 0xcc, (byte) 0x92 };
 
     // https://tools.ietf.org/html/draft-ietf-quic-tls-29#section-5.8
     // "The nonce, N, is 96 bits equal to 0xe54930f97f2136f0530a8c1c."
@@ -74,16 +78,19 @@ public class RetryPacket extends QuicPacket {
             (byte) 0xe5, (byte) 0x49, (byte) 0x30, (byte) 0xf9, (byte) 0x7f, (byte) 0x21, (byte) 0x36, (byte) 0xf0,
             (byte) 0x53, (byte) 0x0a, (byte) 0x8c, (byte) 0x1c };
 
+    // https://www.rfc-editor.org/rfc/rfc9001.html#name-retry-packet-integrity
+    // "The nonce, N, is 96 bits equal to 0x461599d35d632bf2239825bb."
     private static final byte[] NONCE_V1 = new byte[] {
             (byte) 0x46, (byte) 0x15, (byte) 0x99, (byte) 0xd3, (byte) 0x5d, (byte) 0x63, (byte) 0x2b, (byte) 0xf2,
             (byte) 0x23, (byte) 0x98, (byte) 0x25, (byte) 0xbb };
 
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-hkdf-labels
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-retry-integrity-tag
     // "The key and nonce used for the Retry Integrity Tag (Section 5.8 of [QUIC-TLS]) change to:
-    //  nonce = 0x141b99c239b03e785d6a2e9f"
+    //  (...)
+    //  nonce = 0xd86969bc2d7c6d9990efb04a
     private static final byte[] NONCE_V2 = new byte[] {
-            (byte) 0x14, (byte) 0x1b, (byte) 0x99, (byte) 0xc2, (byte) 0x39, (byte) 0xb0, (byte) 0x3e, (byte) 0x78,
-            (byte) 0x5d, (byte) 0x6a, (byte) 0x2e, (byte) 0x9f };
+            (byte) 0xd8, (byte) 0x69, (byte) 0x69, (byte) 0xbc, (byte) 0x2d, (byte) 0x7c, (byte) 0x6d, (byte) 0x99,
+            (byte) 0x90, (byte) 0xef, (byte) 0xb0, (byte) 0x4a };
 
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid retry-integrety-tag
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  16;
@@ -120,7 +127,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.remaining() < MIN_PACKET_LENGTH) {
             throw new InvalidPacketException();
@@ -206,7 +213,7 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         packetSize = 1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + retryToken.length + 16;
         ByteBuffer buffer = ByteBuffer.allocate(packetSize);
         byte flags = (byte) (0b1100_0000 | (getPacketType() << 4));

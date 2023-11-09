@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2023 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -17,7 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package net.luminis.quic.receive;
-
 
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.

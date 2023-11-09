@@ -50,5 +50,5 @@ public interface QLog {
 
     void emitConnectionClosedEvent(Instant time);
 
-    void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason);
+    void emitConnectionClosedEvent(Instant time, long errorCode, String errorReason);
 }

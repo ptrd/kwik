@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.cid;
 
-import net.luminis.quic.Role;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
@@ -35,10 +35,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-import static net.luminis.quic.EncryptionLevel.App;
-import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
-import static net.luminis.quic.Role.Client;
-import static net.luminis.quic.Role.Server;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.CONNECTION_ID_LIMIT_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static net.luminis.quic.core.EncryptionLevel.App;
+import static net.luminis.quic.core.Role.Client;
+import static net.luminis.quic.core.Role.Server;
 
 /**
  * Manages the collections of connection ID's for the connection, both for this (side of the) connection and the peer's.
@@ -485,5 +487,14 @@ public class ConnectionIdManager implements ConnectionIdProvider {
 
     public void setSender(Sender sender) {
         this.sender = sender;
+    }
+
+    /**
+     * Returns whether the given connection ID is currently active (as connection ID for this endpoint).
+     * @param cid
+     * @return
+     */
+    public boolean isActiveCid(byte[] cid) {
+        return getActiveConnectionIds().stream().anyMatch(activeCid -> Arrays.equals(activeCid, cid));
     }
 }

@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.path;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.TestUtils;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.log.Logger;
@@ -38,7 +38,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class PathValidatorTest {
 

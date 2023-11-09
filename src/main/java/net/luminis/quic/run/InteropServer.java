@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -30,7 +30,6 @@ import org.apache.commons.cli.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -100,23 +99,21 @@ public class InteropServer {
             }
         }
 
-        List<Version> supportedVersions = new ArrayList<>();
-        supportedVersions.addAll(List.of(Version.IETF_draft_29, Version.IETF_draft_30, Version.IETF_draft_31, Version.IETF_draft_32));
-        supportedVersions.add(Version.QUIC_version_1);
+        List<Version> supportedVersions = List.of(Version.QUIC_version_1);
 
         boolean requireRetry = ! cmd.hasOption("noRetry");
         ServerConnector serverConnector = new ServerConnector(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, log);
 
         if (wwwDir != null) {
-            registerApplicationLayerProtocols(serverConnector, wwwDir, supportedVersions, log);
+            registerApplicationLayerProtocols(serverConnector, wwwDir, log);
         }
 
         serverConnector.start();
-        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protcols: "
+        log.info("Kwik server " + KwikVersion.getVersion() + " started; supported application protocols: "
                 + serverConnector.getRegisteredApplicationProtocols());
     }
 
-    private static void registerApplicationLayerProtocols(ServerConnector serverConnector, File wwwDir, List<Version> supportedVersions, Logger log) {
+    private static void registerApplicationLayerProtocols(ServerConnector serverConnector, File wwwDir, Logger log) {
         ApplicationProtocolConnectionFactory http3ApplicationProtocolConnectionFactory = null;
 
         try {
@@ -131,21 +128,12 @@ public class InteropServer {
         Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory(wwwDir);
 
         final ApplicationProtocolConnectionFactory http3ApplicationProtocolFactory = http3ApplicationProtocolConnectionFactory;
-        supportedVersions.forEach(version -> {
-            String protocol = "hq";
-            String versionSuffix = version.getDraftVersion();
-            if (! versionSuffix.isBlank()) {
-                protocol += "-" + versionSuffix;
-            }
-            else {
-                protocol = "hq-interop";
-            }
-            serverConnector.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
+        String protocol = "hq-interop";
+        serverConnector.registerApplicationProtocol(protocol, http09ApplicationProtocolFactory);
 
-            if (http3ApplicationProtocolFactory != null) {
-                String h3Protocol = protocol.replace("hq-interop", "h3").replace("hq", "h3");
-                serverConnector.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
-            }
-        });
+        if (http3ApplicationProtocolFactory != null) {
+            String h3Protocol = protocol.replace("hq-interop", "h3");
+            serverConnector.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
+        }
     }
 }

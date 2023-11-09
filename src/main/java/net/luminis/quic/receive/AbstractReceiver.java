@@ -30,6 +30,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Base class with implementations for common methods.
@@ -37,12 +38,14 @@ import java.util.function.Consumer;
 public abstract class AbstractReceiver implements Receiver {
 
     protected final Logger log;
+    private final Predicate<DatagramPacket> packetFilter;
     protected final Consumer<Throwable> abortCallback;
     protected final BlockingQueue<RawPacket> receivedPacketsQueue;
     protected volatile boolean isClosing;
 
-    public AbstractReceiver(Logger log, Consumer<Throwable> abortCallback) {
+    public AbstractReceiver(Logger log, Predicate<DatagramPacket> packetFilter, Consumer<Throwable> abortCallback) {
         this.log = log;
+        this.packetFilter = packetFilter;
         this.abortCallback = abortCallback;
 
         receivedPacketsQueue = new LinkedBlockingQueue<>();
@@ -80,9 +83,11 @@ public abstract class AbstractReceiver implements Receiver {
                 try {
                     socket.receive(receivedPacket);
 
-                    Instant timeReceived = Instant.now();
-                    RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, (InetSocketAddress) socket.getLocalSocketAddress());
-                    receivedPacketsQueue.add(rawPacket);
+                    if (packetFilter.test(receivedPacket)) {
+                        Instant timeReceived = Instant.now();
+                        RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, (InetSocketAddress) socket.getLocalSocketAddress());
+                        receivedPacketsQueue.add(rawPacket);
+                    }
                 }
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set

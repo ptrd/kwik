@@ -41,7 +41,7 @@ public class QuicConstants {
         initial_source_connection_id(0x0f),
         retry_source_connection_id(0x10),
         // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-05.html#name-quic-transport-parameter
-        version_information(0xff73db),
+        version_information(0x11),
         ;
         public final int value;
 

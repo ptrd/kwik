@@ -18,36 +18,42 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.*;
-import net.luminis.quic.KeyUtils;
-import net.luminis.quic.Version;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.ConnectionCloseFrame;
+import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.FrameProcessor;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.socket.ServerConnectionSocketManager;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.quic.frame.ConnectionCloseFrame;
-import net.luminis.quic.frame.CryptoFrame;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.send.SenderImpl;
-import net.luminis.tls.*;
+import net.luminis.tls.ProtectionKeysType;
+import net.luminis.tls.TlsConstants;
+import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.HandshakeFailureAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
-import net.luminis.tls.handshake.*;
+import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.handshake.ServerMessageSender;
+import net.luminis.tls.handshake.TlsServerEngine;
+import net.luminis.tls.handshake.TlsServerEngineFactory;
+import net.luminis.tls.handshake.TlsStatusEventHandler;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import net.luminis.quic.test.FieldSetter;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -68,7 +74,8 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -389,7 +396,7 @@ class ServerConnectionImplTest {
         initialPacket.setPacketNumber(0);
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
-        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientSecrets(EncryptionLevel.Initial));
+        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial));
         ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
         paddedInitial.put(initialPacketBytes);
 
@@ -535,6 +542,33 @@ class ServerConnectionImplTest {
                 .hasMessageContaining("ZeroRTT");
     }
 
+    @Test
+    void whenHandshakePacketIsProcessedInitialKeysShouldBeDiscarded() throws NoSuchFieldException {
+        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
+
+        // When
+        connection.process(mock(HandshakePacket.class), Instant.now());
+
+        // Then
+        verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Initial));
+    }
+
+    @Test
+    void whenHandshakeCompletesHandshakeShouldBeDiscarded() throws NoSuchFieldException, TlsProtocolException {
+        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
+
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        connection.extensionsReceived(clientExtensions);
+
+        // When
+        connection.handshakeFinished();
+
+        // Then
+        verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Handshake));
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
@@ -583,11 +617,14 @@ class ServerConnectionImplTest {
 
     private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
-        applicationProtocolRegistry.registerApplicationProtocol("hq-29", mock(ApplicationProtocolConnectionFactory.class));
+        ApplicationProtocolConnectionFactory applicationProtocolConnectionFactory = mock(ApplicationProtocolConnectionFactory.class);
+        when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(mock(ApplicationProtocolConnection.class));
+        applicationProtocolRegistry.registerApplicationProtocol("hq-29", applicationProtocolConnectionFactory);
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid,
-                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100, null, closeCallback, mock(Logger.class));
+                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100,
+                mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

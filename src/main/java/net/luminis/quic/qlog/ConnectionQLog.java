@@ -187,8 +187,8 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .write("name", "connectivity:connection_closed")
                 .writeStartObject("data")
                 .write("trigger", event.getTrigger().qlogFormat());
-        if (event.getTransportErrorCode() != null) {
-            jsonGenerator.write("connection_code", event.getTransportErrorCode());
+        if (event.getErrorCode() != null) {
+            jsonGenerator.write("connection_code", event.getErrorCode());
         }
         if (event.getErrorReason() != null) {
             jsonGenerator.write("reason", event.getErrorReason());

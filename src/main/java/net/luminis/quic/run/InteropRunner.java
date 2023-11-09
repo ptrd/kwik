@@ -18,19 +18,27 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.client.h09.Http09Client;
+import net.luminis.quic.core.QuicClientConnectionImpl;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.QuicStream;
 
-import java.io.*;
-import java.net.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -92,11 +100,13 @@ public class InteropRunner extends KwikCli {
             }
 
             QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-            builder.version(Version.QUIC_version_1);
+            builder.version(QuicConnection.QuicVersion.V1);
+            builder.applicationProtocol("hq-interop");
             builder.noServerCertificateCheck();
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
+            builder.connectTimeout(Duration.ofSeconds(5));
             String keylogfileEnvVar = System.getenv("SSLKEYLOGFILE");
             if (keylogfileEnvVar != null && ! keylogfileEnvVar.isBlank()) {
                 System.out.println("Writing keys to " + keylogfileEnvVar);
@@ -130,7 +140,7 @@ public class InteropRunner extends KwikCli {
         // logger.logPackets(true);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000, "hq-interop", null, null);
+        connection.connect();
 
         ForkJoinPool myPool = new ForkJoinPool(Integer.min(100, downloadUrls.size()));
         try {
@@ -158,7 +168,7 @@ public class InteropRunner extends KwikCli {
         URL url2 = downloadUrls.get(1);
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000, "hq-interop", null, null);
+        connection.connect();
 
         http09Request(connection, url1, outputDir);
         logger.info("Downloaded " + url1);
@@ -173,13 +183,14 @@ public class InteropRunner extends KwikCli {
         }
 
         builder = QuicClientConnectionImpl.newBuilder();
-        builder.version(Version.QUIC_version_1);
+        builder.version(QuicConnection.QuicVersion.V1);
+        builder.applicationProtocol("hq-interop");
         builder.uri(url2.toURI());
         builder.noServerCertificateCheck();  // Not necessary if server accepts PSK, but when not, test would fail for wrong reason.
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
         QuicClientConnection connection2 = builder.build();
-        connection2.connect(5_000, "hq-interop", null, null);
+        connection2.connect();
         http09Request(connection2, url2, outputDir);
         logger.info("Downloaded " + url2);
         connection2.close();
@@ -196,7 +207,7 @@ public class InteropRunner extends KwikCli {
                 logger.info("Start downloading " + download.getFile() + " at " + timeNow());
 
                 QuicClientConnection connection = builder.build();
-                connection.connect(275_000, "hq-interop", null, null);
+                connection.connect();
 
                 http09Request(connection, download, outputDir);
                 logger.info("Downloaded " + download + " finished at " + timeNow());
@@ -214,8 +225,9 @@ public class InteropRunner extends KwikCli {
         logger.logRecovery(true);
         logger.info("Starting first download at " + timeNow());
 
+        builder.connectTimeout(Duration.ofSeconds(15));
         QuicClientConnection connection = builder.build();
-        connection.connect(15_000, "hq-interop", null, null);
+        connection.connect();
 
         http09Request(connection, downloadUrls.get(0), outputDir);
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
@@ -231,6 +243,7 @@ public class InteropRunner extends KwikCli {
         logger.info("Connection closed; starting second connection with 0-rtt");
 
         builder.sessionTicket(newSessionTickets.get(0));
+        builder.connectTimeout(Duration.ofSeconds(15));
         QuicClientConnection connection2 = builder.build();
 
         List<QuicClientConnection.StreamEarlyData> earlyDataRequests = new ArrayList<>();
@@ -240,7 +253,7 @@ public class InteropRunner extends KwikCli {
         }
 
         String alpn = "hq-interop";
-        List<QuicStream> earlyDataStreams = connection2.connect(15_000, alpn, null, earlyDataRequests);
+        List<QuicStream> earlyDataStreams = connection2.connect(earlyDataRequests);
         for (int i = 0; i < earlyDataRequests.size(); i++) {
             if (earlyDataStreams.get(i) == null) {
                 logger.info("Attempting to create new stream after connect, because it failed on 0-rtt");
@@ -260,7 +273,7 @@ public class InteropRunner extends KwikCli {
         logger.info("Starting download at " + timeNow());
 
         QuicClientConnection connection = builder.build();
-        connection.connect(5_000, "hq-interop", null, null);
+        connection.connect();
 
         String requestPath = downloadUrls.get(0).getPath();
         String outputFile = outputDir.getAbsolutePath();

@@ -20,12 +20,8 @@ package net.luminis.quic.receive;
 
 import net.luminis.quic.log.Logger;
 
-import java.io.IOException;
-import java.net.*;
-import java.time.Instant;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.util.function.Consumer;
 
 
@@ -35,7 +31,7 @@ public class FixedAddressReceiver extends AbstractReceiver {
     private final Thread receiverThread;
 
     public FixedAddressReceiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
-        super(log, abortCallback);
+        super(log, p -> true, abortCallback);
         this.socket = socket;
 
         receiverThread = new Thread(() -> runSocketReceiveLoop(socket), "receiver");

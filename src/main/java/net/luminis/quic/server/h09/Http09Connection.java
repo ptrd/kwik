@@ -20,18 +20,17 @@ package net.luminis.quic.server.h09;
 
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConstants;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.io.LimitExceededException;
 import net.luminis.quic.io.LimitedInputStream;
-import net.luminis.quic.run.KwikCli;
 import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.QuicStream;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 
 public class Http09Connection implements ApplicationProtocolConnection {
 

@@ -18,8 +18,7 @@
  */
 package net.luminis.quic.cid;
 
-import net.luminis.quic.TestUtils;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
@@ -38,8 +37,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static net.luminis.quic.TestUtils.*;
 import static net.luminis.quic.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
+import static net.luminis.quic.core.TestUtils.getArbitraryLocalAddress;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -196,6 +195,19 @@ class ConnectionIdManagerTest {
     @Test
     void initiallyThereShouldBeExactlyOneActiveCid() {
         assertThat(serverConnectionIdManager.getActiveConnectionIds()).hasSize(1);
+    }
+
+    @Test
+    void checkActiveCid() {
+        // Given
+        byte[] originalCid = serverConnectionIdManager.getActiveConnectionIds().get(0);
+        byte[] cid = Arrays.copyOf(originalCid, originalCid.length);
+
+        // When
+        boolean isActive = serverConnectionIdManager.isActiveCid(cid);
+
+        // Then
+        assertThat(isActive).isTrue();
     }
 
     @Test

@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.packet.QuicPacket;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -175,4 +174,28 @@ class QuicPacketTest {
         assertThat(pn).isEqualTo(4494967300L);
     }
 
+    //              1690820096                        1690820352
+    //   ................|.................................|...........................
+    //                                                    e                              e = expected
+    //                                    ------------1690820351-------------
+    //                               1690820224                         1690820480       window
+    // received pn: 0
+    //              1690820096                        1690820352                        1690820608    possible values
+    @Test
+    void decodeOneByteTruncatedPacketNumberWithLargeExpected() {
+        long pn = QuicPacket.decodePacketNumber(0, 1690820350, 8);
+        assertThat(pn).isEqualTo(1690820352);
+    }
+
+    @Test
+    void byteToIntShouldWorkForVeryLargeValues() {
+        // Given
+        byte[] unprotectedPacketNumber = new byte[] { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
+
+        // When
+        long candidatePacketNumber = QuicPacket.bytesToInt(unprotectedPacketNumber);
+
+        // Then
+        assertThat(candidatePacketNumber).isEqualTo(0x00000000ffffffffL);
+    }
 }

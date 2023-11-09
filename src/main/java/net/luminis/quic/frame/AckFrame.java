@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.InvalidIntegerEncodingException;
-import net.luminis.quic.VariableLengthInteger;
-import net.luminis.quic.Version;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.ack.Range;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
@@ -130,7 +130,7 @@ public class AckFrame extends QuicFrame {
         log.debug("Parsing AckFrame");
         acknowledgedRanges = new ArrayList<>();
 
-        buffer.get();  // Eat type.
+        int frameType = buffer.get();
 
         largestAcknowledged = VariableLengthInteger.parseLong(buffer);
 
@@ -164,6 +164,12 @@ public class AckFrame extends QuicFrame {
             currentSmallest -= (gapSize + addAcknowledgeRange(currentSmallest - gapSize - 1, contiguousPacketsPreceding));
         }
 
+        if (frameType == 0x03) {
+            // Parse ECN counts (in order to read the complete frame from the buffer)
+            VariableLengthInteger.parseLong(buffer);
+            VariableLengthInteger.parseLong(buffer);
+            VariableLengthInteger.parseLong(buffer);
+        }
         return this;
     }
 

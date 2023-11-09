@@ -18,32 +18,36 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
-import net.luminis.quic.cid.ConnectionIdProvider;
+import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.core.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
+import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.socket.ClientSocketManager;
 import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
-import net.luminis.quic.test.FieldSetter;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import static net.luminis.quic.TestUtils.getArbitraryLocalAddress;
+import static net.luminis.quic.core.TestUtils.getArbitraryLocalAddress;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -54,11 +58,12 @@ class SenderImplTest extends AbstractSenderTest {
     private GlobalPacketAssembler packetAssembler;
     private ClientSocketManager socketManager;
     private InetSocketAddress clientAddress;
+    private ConnectionSecrets connectionSecrets;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         clock = new TestClock();
-        ConnectionIdProvider connectionIdProvider = mock(ConnectionIdProvider.class);
+        ConnectionIdManager connectionIdProvider = mock(ConnectionIdManager.class);
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[4]);
         when(connectionIdProvider.getPeerConnectionId(any())).thenReturn(new byte[4]);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
@@ -66,9 +71,10 @@ class SenderImplTest extends AbstractSenderTest {
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
         when(connection.getConnectionIdManager()).thenReturn(connectionIdProvider);
-        ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
-        Keys keys = createKeys();
-        when(connectionSecrets.getOwnSecrets(any(EncryptionLevel.class))).thenReturn(keys);
+        connectionSecrets = mock(ConnectionSecrets.class);
+        Aead aead = TestUtils.createKeys();
+        connectionSecrets = mock(ConnectionSecrets.class);
+        when(connectionSecrets.getOwnAead(any(EncryptionLevel.class))).thenReturn(aead);
 
         socketManager = mock(ClientSocketManager.class);
         when(socketManager.getClientAddress()).thenReturn(new InetSocketAddress(InetAddress.getLoopbackAddress(), 4433));
@@ -215,5 +221,25 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then
         verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
+    }
+
+    @Test
+    void whenInitialKeysAreDiscardedSendShouldNotThrowButJustIgnoreThePacket() throws Exception {
+        // Given
+        when(connectionSecrets.getOwnAead(EncryptionLevel.Initial)).thenThrow(new MissingKeysException(EncryptionLevel.Initial, true));
+
+        // When
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new AckFrame(0));
+        initialPacket.setPacketNumber(1);
+        sender.send(mutableListOf(new SendItem(initialPacket, getArbitraryLocalAddress())));
+
+        // Then
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
+    }
+
+    private <T> List<T> mutableListOf(T item) {
+        ArrayList<T> list = new ArrayList<>();
+        list.add(item);
+        return list;
     }
 }

@@ -18,13 +18,13 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.*;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
-import org.assertj.core.internal.AtomicReferenceArrayElementComparisonStrategy;
+import net.luminis.quic.core.*;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
@@ -749,6 +749,18 @@ class QuicStreamImplTest {
         // Then
         read = quicStream.read(buffer);
         assertThat(read).isEqualTo(-1);
+    }
+
+    @Test
+    void readReturnsZeroWhenRequestedReadLengthIsZero() throws IOException {
+        // Given
+        quicStream.add(new StreamFrame(9, new byte[10], true));
+
+        // When
+        int read = quicStream.getInputStream().read(new byte[100], 0, 0);
+
+        // Then
+        assertThat(read).isEqualTo(0);
     }
 
     @Test

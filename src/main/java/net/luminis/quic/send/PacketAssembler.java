@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.AckGenerator;
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.Version;
-import net.luminis.quic.VersionHolder;
+import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.cid.ConnectionIdProvider;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.Version;
+import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;

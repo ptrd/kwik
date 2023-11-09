@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.QuicClientConnectionImpl;
-import net.luminis.quic.Version;
-import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.log.SysOutLogger;
 
 import java.io.BufferedOutputStream;
 import java.net.URI;
@@ -40,15 +40,16 @@ public class SendUnlimited {
             log.logPackets(true);
             log.logInfo(true);
 
-            QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
-            QuicClientConnectionImpl connection =
-                    builder.version(Version.IETF_draft_32)
+            QuicClientConnection.Builder builder = QuicClientConnection.newBuilder();
+            QuicClientConnection connection =
+                    builder.version(QuicConnection.QuicVersion.V1)
+                            .applicationProtocol("hq-interop")
                             .noServerCertificateCheck()
                             .logger(log)
                             .uri(new URI("https://localhost:4433"))
                             .build();
 
-            connection.connect(10_000, "hq-32");
+            connection.connect();
 
             stream = connection.createStream(true);
 

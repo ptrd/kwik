@@ -51,5 +51,5 @@ public class NullQLog implements QLog {
     public void emitConnectionClosedEvent(Instant created) {}
 
     @Override
-    public void emitConnectionClosedEvent(Instant time, int transportErrorCode, String errorReason) {}
+    public void emitConnectionClosedEvent(Instant time, long errorCode, String errorReason) {}
 }

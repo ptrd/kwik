@@ -1,6 +1,8 @@
 apply plugin: 'java'
 apply plugin: 'idea'
 apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
 
 sourceCompatibility = 11
 targetCompatibility = 11
@@ -10,12 +12,12 @@ repositories {
 }
 
 dependencies {
-    def junitVersion = "5.9.2"
+    def junitVersion = "5.10.0"
 
-    implementation project(':agent15')
+    implementation group: 'tech.kwik', name: 'agent15', version: '1.0.4'
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: 'at.favre.lib', name: 'hkdf', version: '1.0.1'
+    implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
@@ -25,7 +27,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
-    testImplementation("org.mockito:mockito-core:4.11.0")
+    testImplementation("org.mockito:mockito-core:5.6.0")
     testImplementation("org.assertj:assertj-core:3.24.2")
 }
 
@@ -33,6 +35,7 @@ sourceSets {
     main {
         resources {
             srcDir "${buildDir}/generated"
+            exclude 'sources/**'
         }
     }
 }
@@ -78,7 +81,17 @@ task determineVersion {
             logger.quiet("Building development version.")
         } else {
             def versionTag = proc.in.readLines()[0]
-            logger.quiet("Building version ${versionTag}.")
+            // Check that tag matches format like v1.0 or v1.0.19
+            if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
+                if (versionTag.startsWith("v")) {
+                    versionTag = versionTag[1..-1]
+                }
+                logger.quiet("Building version ${versionTag}.")
+            }
+            else {
+                logger.error("Version tag '${versionTag}' does not contain a valid version.");
+            }
+            project.version = versionTag
 
             ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
             versionDir.mkdirs()
@@ -89,3 +102,63 @@ task determineVersion {
 }
 
 compileJava.dependsOn (determineVersion, processResources)
+
+group = 'tech.kwik'
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik'
+            from components.java
+            pom {
+                name = 'Kwik'
+                description = 'A QUIC implementation in Java'
+                url = 'https://github.com/ptrd/kwik'
+
+                licenses {
+                    license {
+                        name = 'GNU Lesser General Public License v3'
+                        url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'peterd'
+                        name = 'Peter Doornbosch'
+                        email = 'peter.doornbosch@luminis.eu'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git@github.com:ptrd/kwik.git'
+                    developerConnection = 'scm:git:git@github.com:ptrd/kwik.git'
+                    url = 'https://github.com/ptrd/kwik'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = project.properties.ossrhUsername
+                password = project.properties.ossrhPassword
+            }
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addBooleanOption('html5', true)
+}

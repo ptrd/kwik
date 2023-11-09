@@ -1,28 +1,23 @@
 package net.luminis.quic.qlog;
 
-import net.luminis.quic.EncryptionLevel;
-import net.luminis.quic.MockPacket;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.MockPacket;
 import net.luminis.quic.qlog.event.ConnectionCreatedEvent;
 import net.luminis.quic.qlog.event.PacketLostEvent;
 import net.luminis.quic.qlog.event.PacketSentEvent;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
-import javax.json.stream.JsonParser;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.time.Instant;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class ConnectionQLogTest {
 

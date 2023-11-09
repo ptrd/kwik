@@ -18,10 +18,17 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.cid.ConnectionIdProvider;
-import net.luminis.quic.frame.*;
+import net.luminis.quic.core.*;
+import net.luminis.quic.crypto.CryptoStream;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.HandshakeDoneFrame;
+import net.luminis.quic.frame.NewConnectionIdFrame;
+import net.luminis.quic.frame.NewTokenFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -54,9 +61,9 @@ import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static net.luminis.quic.QuicConnectionImpl.Status.Connected;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
@@ -115,7 +122,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.closeCallback = closeCallback;
 
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
-        tlsEngine.addSupportedCiphers(List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256));
+        tlsEngine.addSupportedCiphers(List.of(
+                TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256,
+                TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384,
+                TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256
+                // TlsConstants.CipherSuite.TLS_AES_128_CCM_SHA256 not yet support by Kwik
+                // TlsConstants.CipherSuite.TLS_AES_128_CCM_8_SHA256 not used in QUIC!
+        ));
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
@@ -182,6 +195,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    public ConnectionIdManager getConnectionIdManager() {
+        return connectionIdManager;
+    }
+
+    @Override
     public long getInitialMaxStreamData() {
         return initialMaxStreamData;
     }
@@ -195,13 +213,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public ConnectionIdProvider getConnectionIdManager() {
-        return connectionIdManager;
+    protected int getSourceConnectionIdLength() {
+        return connectionIdManager.getInitialConnectionId().length;
     }
 
     @Override
-    protected int getSourceConnectionIdLength() {
-        return connectionIdManager.getInitialConnectionId().length;
+    protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
     }
 
     public byte[] getInitialConnectionId() {
@@ -220,9 +237,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void earlySecretsKnown() {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-compatible-negotiation-requ
-        // "Servers can apply original version 0-RTT packets to a connection without additional considerations."
-        connectionSecrets.computeEarlySecrets(tlsEngine, originalVersion);
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+        // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
+        connectionSecrets.computeEarlySecrets(tlsEngine, tlsEngine.getSelectedCipher(), originalVersion);
     }
 
     @Override
@@ -234,12 +251,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public void handshakeFinished() {
         connectionSecrets.computeApplicationSecrets(tlsEngine);
         sender.enableAppLevel();
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-handshake-keys
         // "An endpoint MUST discard its handshake keys when the TLS handshake is confirmed"
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.1.2
-        // "the TLS handshake is considered confirmed at the server when the handshake completes"
-        getSender().discard(PnSpace.Handshake, "tls handshake confirmed");
-        // TODO: discard keys too
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-handshake-confirmed
+        // "In this document, the TLS handshake is considered confirmed at the server when the handshake completes."
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-handshake-complete
+        // "In this document, the TLS handshake is considered complete when the TLS stack has reported that the handshake
+        //  is complete. This happens when the TLS stack has both sent a Finished message and verified the peer's Finished message."
+        sender.discard(PnSpace.Handshake, "tls handshake confirmed");
+        connectionSecrets.discardKeys(EncryptionLevel.Handshake);
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.2
         // "The server MUST send a HANDSHAKE_DONE frame as soon as it completes the handshake."
         sendHandshakeDone(new HandshakeDoneFrame(quicVersion.getVersion()));
@@ -310,8 +330,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-04.html#name-version-negotiation-conside
-        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information transport parameter"
+        initConnectionFlowControl(serverTransportParams.getInitialMaxData());
+
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-version-negotiation-conside
+        // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information
+        //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."
         serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
@@ -327,8 +350,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     boolean acceptSessionResumption(ByteBuffer storedSessionData) {
-        // https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html#name-tls-resumption-and-new_toke
-        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from a different version."
+        // https://www.rfc-editor.org/rfc/rfc9369.html#name-tls-resumption-and-new_toke
+        // "Servers MUST validate the originating version of any session ticket or token and not accept one issued from
+        //  a different version."
         if (quicVersion.getVersion().equals(Version.parse(storedSessionData.getInt()))) {
             return true;
         }
@@ -404,6 +428,17 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    protected boolean checkDestinationConnectionId(QuicPacket packet) {
+        byte[] cid = packet.getDestinationConnectionId();
+        if ((packet instanceof InitialPacket || packet instanceof ZeroRttPacket) && Arrays.equals(cid, getOriginalDestinationConnectionId())) {
+            return true;
+        }
+        else {
+            return super.checkDestinationConnectionId(packet);
+        }
+    }
+
+    @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
         assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
 
@@ -475,9 +510,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
         processFrames(packet, time, null);
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-4.9.1
+        // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-initial-keys
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
-        // TODO: discard keys too
+        connectionSecrets.discardKeys(EncryptionLevel.Initial);
 
         return ProcessResult.Continue;
     }

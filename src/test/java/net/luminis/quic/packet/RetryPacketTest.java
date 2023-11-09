@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.InvalidPacketException;
-import net.luminis.quic.Version;
+import net.luminis.quic.core.InvalidPacketException;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;

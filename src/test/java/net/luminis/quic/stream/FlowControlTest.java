@@ -18,9 +18,13 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

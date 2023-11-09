@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.*;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -58,7 +58,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Keys keys, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.remaining() < 1 + sourceConnectionIdLength) {
             throw new InvalidPacketException();
@@ -81,11 +81,11 @@ public class ShortHeaderPacket extends QuicPacket {
         log.debug("Destination connection id", packetConnectionId);
 
         try {
-            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), keys, largestPacketNumber, log);
-            keys.confirmKeyUpdateIfInProgress();
+            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), aead, largestPacketNumber, log);
+            aead.confirmKeyUpdateIfInProgress();
         }
         catch (DecryptionException cantDecrypt) {
-            keys.cancelKeyUpdateIfInProgress();
+            aead.cancelKeyUpdateIfInProgress();
             throw cantDecrypt;
         }
         finally {
@@ -124,7 +124,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public byte[] generatePacketBytes(Keys keys) {
+    public byte[] generatePacketBytes(Aead aead) {
         assert(packetNumber >= 0);
 
         ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
@@ -136,7 +136,7 @@ public class ShortHeaderPacket extends QuicPacket {
         // "Reserved Bits (R):  The next two bits (those with a mask of 0x18) of
         //      byte 0 are reserved. (...) The value included prior to protection MUST be set to 0. "
         flags = 0x40;  // 0100 0000
-        keyPhaseBit = keys.getKeyPhase();
+        keyPhaseBit = aead.getKeyPhase();
         flags = (byte) (flags | (keyPhaseBit << 2));
         flags = encodePacketNumberLength(flags, packetNumber);
         buffer.put(flags);
@@ -146,7 +146,7 @@ public class ShortHeaderPacket extends QuicPacket {
         buffer.put(encodedPacketNumber);
 
         ByteBuffer frameBytes = generatePayloadBytes(encodedPacketNumber.length);
-        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, keys);
+        protectPacketNumberAndPayload(buffer, encodedPacketNumber.length, frameBytes, 0, aead);
 
         buffer.limit(buffer.position());
         packetSize = buffer.limit();

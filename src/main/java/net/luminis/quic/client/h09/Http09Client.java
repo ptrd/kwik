@@ -19,6 +19,7 @@
 package net.luminis.quic.client.h09;
 
 import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 
@@ -52,7 +53,6 @@ public class Http09Client extends HttpClient {
 
     private final QuicClientConnection quicConnection;
     private final boolean with0RTT;
-    private final int connectionTimeout = 10_000;
     private final ExecutorService executorService;
 
     public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
@@ -181,19 +181,19 @@ public class Http09Client extends HttpClient {
 
             if (!quicConnection.isConnected()) {
                 String alpn;
-                if (quicConnection.getQuicVersion().isV1V2()) {
+                if (quicConnection.getQuicVersion() == QuicConnection.QuicVersion.V1 || quicConnection.getQuicVersion() == QuicConnection.QuicVersion.V2) {
                     alpn = "hq-interop";
                 } else {
-                    String draftVersion = quicConnection.getQuicVersion().getDraftVersion();
+                    String draftVersion = "34";
                     alpn = "hq-" + draftVersion;
                 }
 
                 if (with0RTT) {
                     QuicClientConnection.StreamEarlyData earlyData = new QuicClientConnection.StreamEarlyData(httpGetCommand.getBytes(), true);
-                    httpStream = quicConnection.connect(connectionTimeout, alpn, null, List.of(earlyData)).get(0);
+                    httpStream = quicConnection.connect(List.of(earlyData)).get(0);
                 }
                 else {
-                    quicConnection.connect(connectionTimeout, alpn, null, null);
+                    quicConnection.connect();
                 }
             }
             if (httpStream == null) {

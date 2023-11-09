@@ -18,9 +18,11 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.*;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.core.*;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -34,8 +36,8 @@ public class InitialPacket extends LongHeaderPacket {
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-initial-packet
     // "An Initial packet uses long headers with a type value of 0x00."
     private static int V1_type = 0;
-    // https://www.ietf.org/archive/id/draft-ietf-quic-v2-01.html#name-long-header-packet-types
-    // Initial packets use a packet type field of 0b01.
+    // https://www.rfc-editor.org/rfc/rfc9369.html#name-long-header-packet-types
+    // "Initial: 0b01"
     private static int V2_type = 1;
 
     private byte[] token;

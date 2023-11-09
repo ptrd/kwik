@@ -20,11 +20,10 @@ package net.luminis.quic.sample.echo;
 
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.server.ApplicationProtocolConnection;
-import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnector;
 
 import java.io.File;

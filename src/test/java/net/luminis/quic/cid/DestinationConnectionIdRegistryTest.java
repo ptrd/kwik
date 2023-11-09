@@ -18,18 +18,12 @@
  */
 package net.luminis.quic.cid;
 
-import net.luminis.quic.TestUtils;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.time.LocalDateTime;
-
-import static net.luminis.quic.TestUtils.*;
+import static net.luminis.quic.core.TestUtils.getArbitraryLocalAddress;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 class DestinationConnectionIdRegistryTest {

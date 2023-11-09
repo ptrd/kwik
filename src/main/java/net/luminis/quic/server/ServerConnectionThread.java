@@ -21,6 +21,7 @@ package net.luminis.quic.server;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.tls.util.ByteUtils;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
@@ -59,7 +60,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     }
 
     @Override
-    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data) {
+    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
         queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data));
     }
 

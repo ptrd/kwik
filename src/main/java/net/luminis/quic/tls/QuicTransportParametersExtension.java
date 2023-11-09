@@ -18,21 +18,25 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicConstants;
+import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.core.*;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.alert.DecodeErrorException;
-import net.luminis.tls.util.ByteUtils;
 import net.luminis.tls.extension.Extension;
+import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
-import static net.luminis.quic.Role.Server;
+import static net.luminis.quic.core.Role.Server;
 
 /**
  * Quic transport parameter TLS extension.
@@ -165,8 +169,11 @@ public class QuicTransportParametersExtension extends Extension {
         //  by which the endpoint will delay sending acknowledgments."
         addTransportParameter(buffer, max_ack_delay, params.getMaxAckDelay());
 
-        // Intentionally omitted (kwik server supports active migration)
-        // disable_active_migration
+        // "The disable active migration transport parameter is included if the endpoint does not support active
+        //  connection migration (Section 9) on the address being used during the handshake. "
+        if (params.getDisableMigration()) {
+            addTransportParameter(buffer, disable_active_migration);
+        }
 
         // Intentionally omitted (kwik server does not support preferred address)
         // preferred_address
@@ -352,8 +359,9 @@ public class QuicTransportParametersExtension extends Extension {
             if (parameterId == 0x2ab2) extension = "grease-quic-bit";
             if (parameterId == 0x7157) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-02#section-5
             if (parameterId == 0x7158) extension = "timestamp";  // https://datatracker.ietf.org/doc/html/draft-huitema-quic-ts-05#section-5
-            if (parameterId == 0x73db) extension = "version-negotiation";
+            if (parameterId == 0x73db) extension = "version-negotiation";  // https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/02/
             if (parameterId == 0xde1a) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-01#section-3
+            if (parameterId == 0xff73db) extension = "version-information-4-13";   // https://datatracker.ietf.org/doc/draft-ietf-quic-version-negotiation/4/
             if (parameterId == 0xff02de1aL) extension = "delayed-ack";  // https://datatracker.ietf.org/doc/html/draft-iyengar-quic-delayed-ack-02#section-3
             String msg;
             if (extension.isBlank()) {
@@ -407,6 +415,12 @@ public class QuicTransportParametersExtension extends Extension {
 
     private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, long value) {
         addTransportParameter(buffer, id.value, value);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id) {
+        VariableLengthInteger.encode(id.value, buffer);
+        int valueLength = 0;
+        VariableLengthInteger.encode(valueLength, buffer);
     }
 
     private void addTransportParameter(ByteBuffer buffer, int id, long value) {

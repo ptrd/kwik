@@ -18,21 +18,27 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.log.Logger;
+import net.luminis.tls.TlsConstants;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
+import java.net.URI;
+import java.net.UnknownHostException;
+import java.nio.file.Path;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.util.List;
 
 
 public interface QuicClientConnection extends QuicConnection {
 
-    void connect(int connectionTimeout, String alpn) throws IOException;
+    void connect() throws IOException;
 
-    void connect(int connectionTimeout, String alpn, TransportParameters transportParameters) throws IOException;
-
-    List<QuicStream> connect(int connectionTimeout, String applicationProtocol, TransportParameters transportParameters, List<StreamEarlyData> earlyData) throws IOException;
+    List<QuicStream> connect(List<StreamEarlyData> earlyData) throws IOException;
 
     void keepAlive(int seconds);
 
@@ -46,6 +52,10 @@ public interface QuicClientConnection extends QuicConnection {
 
     boolean isConnected();
 
+    static Builder newBuilder() {
+        return QuicClientConnectionImpl.newBuilder();
+    }
+
     class StreamEarlyData {
         byte[] data;
         boolean closeOutput;
@@ -54,5 +64,75 @@ public interface QuicClientConnection extends QuicConnection {
             this.data = data;
             closeOutput = closeImmediately;
         }
+
+        public byte[] getData() {
+            return data;
+        }
+
+        public boolean isCloseOutput() {
+            return closeOutput;
+        }
     }
+
+    interface Builder {
+
+        QuicClientConnection build() throws SocketException, UnknownHostException;
+
+        Builder applicationProtocol(String applicationProtocol);
+
+        Builder connectTimeout(Duration duration);
+
+        Builder maxIdleTimeout(Duration duration);
+
+        Builder defaultStreamReceiveBufferSize(Long bufferSize);
+
+        /**
+         * The maximum number of peer initiated bidirectional streams that the peer is allowed to have open at any time.
+         * If the value is 0, the peer is not allowed to open any bidirectional stream.
+         * @param max
+         * @return
+         */
+        Builder maxOpenPeerInitiatedBidirectionalStreams(int max);
+
+        /**
+         * The maximum number of peer initiated unidirectional streams that the peer is allowed to have open at any time.
+         * If the value is 0, the peer is not allowed to open any unidirectional stream.
+         * @param max
+         * @return
+         */
+        Builder maxOpenPeerInitiatedUnidirectionalStreams(int max);
+
+        Builder version(QuicVersion version);
+
+        Builder initialVersion(QuicVersion version);
+
+        Builder preferredVersion(QuicVersion version);
+
+        Builder logger(Logger log);
+
+        Builder sessionTicket(QuicSessionTicket ticket);
+
+        Builder proxy(String host);
+
+        Builder secrets(Path secretsFile);
+
+        Builder uri(URI uri);
+
+        Builder connectionIdLength(int length);
+
+        Builder initialRtt(int initialRtt);
+
+        Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
+
+        Builder noServerCertificateCheck();
+
+        Builder quantumReadinessTest(int nrOfDummyBytes);
+
+        Builder clientCertificate(X509Certificate certificate);
+
+        Builder clientCertificateKey(PrivateKey privateKey);
+
+        Builder socketFactory(DatagramSocketFactory socketFactory);
+    }
+
 }

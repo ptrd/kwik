@@ -5,7 +5,7 @@
 Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in (100%) Java. 
 Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
-QUIC is a brand-new transport protocol developed by the IETF, which will be the transport layer for the also new HTTP3 protocol.
+QUIC is a brand-new transport protocol developed by the IETF, and is the transport layer for the (also new) HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
 "next generation TCP". It has similar properties as TCP, e.g. provide a reliable ordered stream, but is better in many ways:
 
@@ -24,25 +24,20 @@ Kwik is created and maintained by Peter Doornbosch. The latest greatest can alwa
 
 ## Status
 
-Kwik implements all QUIC features, except that the server does not yet support connection migration.
+Kwik implements all QUIC features, except that the server does not yet support connection migration (work in progress).
 With respect to the interface Kwik offers to applications, it provides all necessary operations to exchange data, but
 it does not support specifying stream priorities.
 For both roles, interoperability is tested with a large number of other implementations, see [automated interoperability tests](https://interop.seemann.io/). 
-Due the to fact that most implementations are still in active development, and that some test cases
+Due to the fact that most implementations are still in active development, and that some test cases
 (specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
 interoperability test vary with each run, but usually, Kwik is amongst the best w.r.t. the number of successful testcases.  
 
 Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
 
-HTTP3 on top of Kwik is supported by [Flupke, the Java HTTP3 client](https://bitbucket.org/pjtr/flupke).
+HTTP3 on top of Kwik is supported by [Flupke, the pure Java HTTP3 implementation](https://bitbucket.org/pjtr/flupke).
 
 Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html))
-and QUIC v2 ([draft-ietf-quic-v2-05](https://www.ietf.org/archive/id/draft-ietf-quic-v2-05.html))
-as well as a few older IETF drafts: 
-[draft-32](https://tools.ietf.org/html/draft-ietf-quic-transport-32),
-[draft-31](https://tools.ietf.org/html/draft-ietf-quic-transport-31),
-[draft-30](https://tools.ietf.org/html/draft-ietf-quic-transport-30), and
-[draft-29](https://tools.ietf.org/html/draft-ietf-quic-transport-29).
+and QUIC v2 ([RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)).
 
 
 ### Implemented QUIC features
@@ -51,11 +46,12 @@ as well as a few older IETF drafts:
 * handshake based on TLS 1.3
 * data exchange over bidirectional and unidirectional streams
 * stateless retry
-* cipher suites TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256
+* cipher suites TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384 and TLS_CHACHA20_POLY1305_SHA256
 * key update
 * session resumption
 * 0-RTT
 * compatible version negotiation [draft-ietf-quic-version-negotiation-09](https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-09.html)
+* QUIC V2
   
 Client only:
 
@@ -88,12 +84,21 @@ services trying to spy on you, using Kwik is probably not the best idea.
 
 ## Usage
 
+### Maven
+
+Kwik is available in the Maven Central Repository. To use it in your project, add the following dependency to your pom.xml:
+
+    <dependency>
+        <groupId>tech.kwik</groupId>
+        <artifactId>kwik</artifactId>
+        <version>0.8.3</version>
+    </dependency>
+
 ### Building
 
 To build the project:
 
 - clone the git repository and cd into the directory
-- update / get the agent15 (TLS 1.3 library) sources by executing `git submodule update --init --recursive`
 - build with gradle wrapper: `./gradlew build` (or `gradlew.bat build` on Windows).
 
 Gradle will write the output to `build/libs`.
@@ -103,8 +108,8 @@ Gradle will write the output to `build/libs`.
 If you want to use kwik as a library, there are various client & server examples in the 
 [sample package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/sample/),
 that show how you can set up a QUIC connection and use streams to run your own application protocol on top of it.
-Of course, the [sample client](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/KwikCli) and
-[sample server](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/SampleWebServer) 
+Of course, the [sample client](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/KwikCli.java) and
+[sample server](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/SampleWebServer.java) 
 also can provide inspiration! 
 
 ### Client
@@ -117,11 +122,9 @@ To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/
 Usage of the sample client:
 
     kwik <host>:<port> OR quic <host> <port> OR kwik http[s]://host:port
-     -29                            use Quic version IETF_draft_29
-     -30                            use Quic version IETF_draft_30
-     -31                            use Quic version IETF_draft_31
-     -32                            use Quic version IETF_draft_32    
      -A,--alpn <arg>                set alpn (default is hq-xx)
+        --aes128gcm                 use AEAD_AES_128_GCM cipher suite
+        --aes256gcm                 use AEAD_AES_256_GCM cipher suite
      -c,--connectionTimeout <arg>   connection timeout in seconds
         --chacha20                  use ChaCha20 as only cipher suite     
         --clientCertificate <arg>   certificate (file) for client
@@ -148,7 +151,9 @@ Usage of the sample client:
         --secrets <arg>             write secrets to file (Wireshark format)
      -T,--relativeTime              log with time (in seconds) since first packet 
      -v,--version                   show Kwik version
-     -v1                            use Quic version 1                                
+     -v1                            use Quic version 1           
+     -v1v2                          use Quic version 1, request version 2
+     -v2                            use Quic version 2
      -Z,--use0RTT                   use 0-RTT if possible (requires -H and -R)
             
 If you do not provide the `--http` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.

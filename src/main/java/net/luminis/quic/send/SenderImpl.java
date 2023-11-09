@@ -18,12 +18,18 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.*;
+import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.IdleTimer;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
@@ -41,7 +47,11 @@ import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -371,24 +381,36 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
         try {
-            itemsToSend.stream()
-                    .map(item -> item.getPacket())
-                    .forEach(packet -> {
-                        Keys keys = connectionSecrets.getOwnSecrets(packet.getEncryptionLevel());
-                        if (keys == null) {
-                            throw new IllegalStateException("Missing keys for encryption level " + packet.getEncryptionLevel());
-                        }
-                        byte[] packetData = packet.generatePacketBytes(keys);
-                        buffer.put(packetData);
-                        log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
-                    });
-            buffer.limit(buffer.position());
+            Iterator<SendItem> packetIterator = itemsToSend.iterator();
+            while (packetIterator.hasNext()) {
+                QuicPacket packet = packetIterator.next().getPacket();
+                try {
+                    Aead aead = connectionSecrets.getOwnAead(packet.getEncryptionLevel());
+                    byte[] packetData = packet.generatePacketBytes(aead);
+                    buffer.put(packetData);
+                    log.raw("packet sent, pn: " + packet.getPacketNumber(), packetData);
+                }
+                catch (MissingKeysException e) {
+                    if (e.getMissingKeysCause() == MissingKeysException.Cause.DiscardedKeys) {
+                        log.warn("Packet not sent because keys are discarded: " + packet);
+                        packetIterator.remove();
+                    }
+                    else {
+                        throw new IllegalStateException(e.getMessage());
+                    }
+                }
+            }
         }
         catch (BufferOverflowException bufferOverflow) {
             log.error("Buffer overflow while generating datagram for " + itemsToSend);
             // rethrow
             throw bufferOverflow;
         }
+        if (buffer.position() == 0) {
+            // Nothing to send
+            return;
+        }
+        buffer.limit(buffer.position());
 
         Instant timeSent = socketManager.send(buffer, itemsToSend.stream().findAny().get().getClientAddress());
         datagramsSent++;
@@ -412,6 +434,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         int currentMaxPacketSize = maxPacketSize;
         if (antiAmplificationLimit >= 0) {
             if (bytesSent < antiAmplificationLimit) {
+                if (antiAmplificationLimit - bytesSent < currentMaxPacketSize) {
+                    // Note that when anti-amplification limit is limiting the packet size, it is quite likely that no
+                    // packets will be sent at all, because initial packets have a minimum size of 1200 bytes.
+                    log.warn(String.format("Sending data may be limited by remaining anti-amplification limit of %d bytes", antiAmplificationLimit - bytesSent));
+                }
                 currentMaxPacketSize = Integer.min(currentMaxPacketSize, (int) (antiAmplificationLimit - bytesSent));
             }
             else {

@@ -24,12 +24,34 @@ import java.util.function.Consumer;
 
 public interface QuicConnection {
 
-    Version getQuicVersion();
+    enum QuicVersion {
+        V1,
+        V2,
+    }
 
+    QuicVersion getQuicVersion();
+
+    /**
+     * Sets the maximum number of peer initiated bidirectional streams that the peer is allowed to have open at any time.
+     * If the value is 0, the peer is not allowed to open any bidirectional stream.
+     * This method must be called before calling connect().
+     * @param max
+     */
     void setMaxAllowedBidirectionalStreams(int max);
 
+    /**
+     * Sets the maximum number of peer initiated unidirectional streams that the peer is allowed to have open at any time.
+     * If the value is 0, the peer is not allowed to open any unidirectional stream.
+     * This method must be called before calling connect().
+     * @param max
+     */
     void setMaxAllowedUnidirectionalStreams(int max);
 
+    /**
+     * Set the maximum size of the stream receive buffer.
+     * Must be set before calling connect().
+     * @param size
+     */
     void setDefaultStreamReceiveBufferSize(long size);
 
     QuicStream createStream(boolean bidirectional);
@@ -55,6 +77,13 @@ public interface QuicConnection {
     void closeAndWait(Duration maxWait);
 
     void close(QuicConstants.TransportErrorCode applicationError, String errorReason);
+
+    /**
+     * Close the connection with an application error code and reason.
+     * @param applicationErrorCode
+     * @param errorReason
+     */
+    void close(long applicationErrorCode, String errorReason);
 
     Statistics getStats();
 }

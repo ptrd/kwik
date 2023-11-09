@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.TestUtils;
-import net.luminis.quic.Version;
-import net.luminis.quic.crypto.Keys;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.core.Version;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,8 +34,8 @@ class ShortHeaderPacketTest {
         ShortHeaderPacket shortHeaderPacket = new ShortHeaderPacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new PingFrame());
         shortHeaderPacket.setPacketNumber(1);
 
-        Keys keys = TestUtils.createKeys();
-        shortHeaderPacket.generatePacketBytes(keys);
+        Aead aead = TestUtils.createKeys();
+        shortHeaderPacket.generatePacketBytes(aead);
 
         // If it gets here, it is already sure the encryption succeeded.
         assertThat(shortHeaderPacket.getFrames()).hasAtLeastOneElementOfType(PingFrame.class);
