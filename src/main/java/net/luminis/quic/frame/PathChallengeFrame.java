@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
 
@@ -35,7 +35,7 @@ public class PathChallengeFrame extends QuicFrame {
 
     private byte[] data;
 
-    public PathChallengeFrame(Version quicVersion, byte[] data) {
+    public PathChallengeFrame(byte[] data) {
         if (data.length != 8) {
             throw new IllegalArgumentException();
         }

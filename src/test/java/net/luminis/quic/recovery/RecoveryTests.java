@@ -22,7 +22,11 @@ import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.*;
+import net.luminis.quic.packet.HandshakePacket;
+import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.LongHeaderPacket;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;
@@ -39,6 +43,13 @@ public abstract class RecoveryTests {
 
     QuicPacket createPacket(int packetNumber, QuicFrame frame) {
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
+        setPacketNumber(packet, packetNumber);
+        return packet;
+    }
+
+    QuicPacket createPacket(int packetNumber, List<QuicFrame> frames) {
+        ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frames.get(0));
+        frames.stream().skip(1).forEach(packet::addFrame);
         setPacketNumber(packet, packetNumber);
         return packet;
     }

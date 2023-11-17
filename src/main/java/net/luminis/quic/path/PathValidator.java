@@ -101,10 +101,10 @@ public class PathValidator {
         try {
             challengePayload = new byte[8];
             randomGenerator.nextBytes(challengePayload);
-            PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(quicVersion, challengePayload);
+            PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(challengePayload);
             if (newPath) {
-                log.info("Sending path challenge from new local address");
                 InetSocketAddress newLocalAddress = socketManager.bindNewLocalAddress();
+                log.info("Sending path challenge from new local address " + newLocalAddress);
                 sender.sendAlternateAddress(pathChallengeFrame, newLocalAddress);
             }
             else {
