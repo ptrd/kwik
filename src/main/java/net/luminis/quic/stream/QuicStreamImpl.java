@@ -21,6 +21,7 @@ package net.luminis.quic.stream;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
@@ -41,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
 import static net.luminis.quic.core.EncryptionLevel.App;
 
 
@@ -114,8 +116,11 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
      * This method is intentionally package-protected, as it should only be called by the (Stream)Packet processor.
      * @param frame
      */
-    void add(StreamFrame frame) {
+    void add(StreamFrame frame) throws TransportError {
         synchronized (addMonitor) {
+            if (frame.getUpToOffset() > receiverFlowControlLimit) {
+                throw new TransportError(FLOW_CONTROL_ERROR);
+            }
             super.add(frame);
             if (frame.isFinal()) {
                 lastOffset = frame.getUpToOffset();
@@ -305,7 +310,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         }
 
         private void updateAllowedFlowControl(int bytesRead) {
-            // Slide flow control window forward (with as much bytes as are read)
+            // Slide flow control window forward (with as many bytes as are read)
             receiverFlowControlLimit += bytesRead;
             streamManager.updateConnectionFlowControl(bytesRead);
             // Avoid sending flow control updates with every single read; check diff with last send max data

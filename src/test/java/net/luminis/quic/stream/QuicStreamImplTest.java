@@ -21,6 +21,7 @@ package net.luminis.quic.stream;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
@@ -52,9 +53,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -81,7 +80,9 @@ class QuicStreamImplTest {
 
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
+        int initialMaxStreamData = 9999;
         connection = mock(QuicConnectionImpl.class);
+        when(connection.getInitialMaxStreamData()).thenReturn((long) initialMaxStreamData);
         streamManager = mock(StreamManager.class);
         logger = mock(Logger.class);
 
@@ -89,14 +90,14 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testReadSingleFinalStreamFrame() throws IOException {
+    void testReadSingleFinalStreamFrame() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().readAllBytes()).isEqualTo("data".getBytes());
     }
 
     @Test
-    void testReadStreamWithNonAsciiBytes() throws IOException {
+    void testReadStreamWithNonAsciiBytes() throws Exception {
         byte[] data = {
                 0x00, 0x01, 0x02, (byte) 0xff, (byte) 0xfe, (byte) 0xfd
         };
@@ -106,21 +107,21 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testReadStreamWithFFByte() throws IOException {
+    void testReadStreamWithFFByte() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, new byte[] { (byte) 0xff }, true)));
 
         assertThat(quicStream.getInputStream().read()).isEqualTo(0xff);
     }
 
     @Test
-    void testAvailableBytesForSingleFrame() throws IOException {
+    void testAvailableBytesForSingleFrame() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
 
         assertThat(quicStream.getInputStream().available()).isEqualTo(4);
     }
 
     @Test
-    void testAvailableBytesForSingleFrameAfterRead() throws IOException {
+    void testAvailableBytesForSingleFrameAfterRead() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
         InputStream inputStream = quicStream.getInputStream();
         inputStream.read();
@@ -129,7 +130,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAvailableAfterReadingAllAvailable() throws IOException {
+    void testAvailableAfterReadingAllAvailable() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));
         InputStream inputStream = quicStream.getInputStream();
         inputStream.read(new byte[4]);
@@ -138,7 +139,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    public void testReadMultipleStreamFrames() throws IOException {
+    public void testReadMultipleStreamFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
@@ -146,7 +147,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    public void testAvailableWithMultipleStreamFrames() throws IOException {
+    public void testAvailableWithMultipleStreamFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
@@ -154,7 +155,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    public void testAvailableAfterReadingFirstFrame() throws IOException {
+    public void testAvailableAfterReadingFirstFrame() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
 
@@ -166,7 +167,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAddDuplicateStreamFrames() throws IOException {
+    void testAddDuplicateStreamFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-final".getBytes(), true)));
@@ -175,7 +176,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAddNonContiguousStreamFrames() throws IOException {
+    void testAddNonContiguousStreamFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
@@ -184,7 +185,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAddMultipleOutOfOrderFrames() throws IOException {
+    void testAddMultipleOutOfOrderFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 19, "forth-final".getBytes(), true)));
@@ -194,7 +195,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAddInterleavedOutOfOrderFrames() throws IOException {
+    void testAddInterleavedOutOfOrderFrames() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 6, "second-".getBytes(), false)));
@@ -204,7 +205,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testReadBlocksTillContiguousFrameIsAvailalble() throws IOException {
+    void testReadBlocksTillContiguousFrameIsAvailalble() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "first-".getBytes(), false)));
         quicStream.add(resurrect(new StreamFrame(0, 13, "third-final".getBytes(), true)));
 
@@ -231,7 +232,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testReadAtEndOfStreamReturns() throws IOException {
+    void testReadAtEndOfStreamReturns() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "1".getBytes(), true)));
         InputStream inputStream = quicStream.getInputStream();
 
@@ -241,7 +242,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testAvailableAtEndOfStreamReturnsZero() throws IOException {
+    void testAvailableAtEndOfStreamReturnsZero() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "1".getBytes(), true)));
         InputStream inputStream = quicStream.getInputStream();
 
@@ -273,7 +274,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testStreamOutputWithByteArray() throws IOException {
+    void testStreamOutputWithByteArray() throws Exception {
         // Given
         quicStream.getOutputStream().write("hello world".getBytes());
 
@@ -285,7 +286,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testStreamOutputWithByteArrayFragment() throws IOException {
+    void testStreamOutputWithByteArrayFragment() throws Exception {
         // Given
         quicStream.getOutputStream().write(">> hello world <<".getBytes(), 3, 11);
 
@@ -297,7 +298,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testStreamOutputWithSingleByte() throws IOException {
+    void testStreamOutputWithSingleByte() throws Exception {
         // Given
         quicStream.getOutputStream().write(0x23);  // ASCII 23 == '#'
 
@@ -309,7 +310,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testStreamOutputMultipleFrames() throws IOException {
+    void testStreamOutputMultipleFrames() throws Exception {
         // Given
         quicStream.getOutputStream().write("hello ".getBytes());
         quicStream.getOutputStream().write("world".getBytes());
@@ -322,7 +323,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testCloseSendsFinalFrame() throws IOException {
+    void testCloseSendsFinalFrame() throws Exception {
         // Given
         quicStream.getOutputStream().write("hello world!".getBytes());
         quicStream.getOutputStream().close();
@@ -336,7 +337,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws IOException {
+    void testOutputWithByteArrayLargerThanMaxPacketSizeIsSplitOverMultiplePackets() throws Exception {
         byte[] data = generateByteArray(1700);
         quicStream.getOutputStream().write(data);
 
@@ -361,14 +362,14 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void testStreamFlowControlUpdates() throws IOException {
+    void testStreamFlowControlUpdates() throws Exception {
         float factor = QuicStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
-        quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
+        quicStream.add(resurrect(new StreamFrame(0, new byte[1000], true)));
         InputStream inputStream = quicStream.getInputStream();
 
         inputStream.read(new byte[(int) (initialWindow * factor * 0.8)]);
@@ -407,7 +408,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void lostStreamFrameShouldBeRetransmitted() throws IOException {
+    void lostStreamFrameShouldBeRetransmitted() throws Exception {
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
@@ -432,13 +433,13 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws IOException {
+    void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
         float factor = QuicStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
-        quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
+        quicStream.add(resurrect(new StreamFrame(0, new byte[1000], true)));
 
         InputStream inputStream = quicStream.getInputStream();
         inputStream.read(new byte[(int) (initialWindow * factor + 1)]);
@@ -464,7 +465,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void lostFinalFrameShouldBeRetransmitted() throws IOException {
+    void lostFinalFrameShouldBeRetransmitted() throws Exception {
         ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
 
         quicStream.getOutputStream().write("just a stream frame".getBytes());
@@ -745,7 +746,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void readReturnsMinusOneWhenEndOfStreamIsReached() {
+    void readReturnsMinusOneWhenEndOfStreamIsReached() throws Exception {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));
         ByteBuffer buffer = ByteBuffer.allocate(50);
@@ -760,7 +761,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void readReturnsZeroWhenRequestedReadLengthIsZero() throws IOException {
+    void readReturnsZeroWhenRequestedReadLengthIsZero() throws Exception {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));
 
@@ -772,7 +773,7 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void availableReturnsNegativeWhenEndOfStreamIsReached() {
+    void availableReturnsNegativeWhenEndOfStreamIsReached() throws Exception {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));
         ByteBuffer buffer = ByteBuffer.allocate(50);
@@ -800,7 +801,11 @@ class QuicStreamImplTest {
             try {
                 Thread.sleep(100);   // Wait long enough to have reader thread (the main thread) block _before_ the frame is added.
             } catch (InterruptedException e) {}
-            quicStream.add(resurrect(new StreamFrame(0, 4, new byte[0], true)));
+            try {
+                quicStream.add(resurrect(new StreamFrame(0, 4, new byte[0], true)));
+            } catch (TransportError e) {
+                throw new RuntimeException(e);
+            }
         }).start();
 
         Instant startRead = Instant.now();
@@ -815,6 +820,30 @@ class QuicStreamImplTest {
         // - starting a thread takes less than 50 ms
         // - a non-blocking read takes (far) less than 50 ms
         assertThat(readDuration).isGreaterThan(Duration.of(50, ChronoUnit.MILLIS));
+    }
+
+    @Test
+    void receivingStreamFrameWithOffsetBeyondFlowControLimitShouldThrow() throws Exception {
+        // Given
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                quicStream.add(resurrect(new StreamFrame(0, 9999, new byte[1], false))))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void testReceivingStreamFrameWithOffsetBelowFlowControLimit() throws Exception {
+        // Given
+
+        // When
+        assertThatCode(() ->
+                // When
+                quicStream.add(resurrect(new StreamFrame(0, 9998, new byte[1], false))))
+                // Then
+                .doesNotThrowAnyException();
     }
 
     @Test
