@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.*;
 import net.luminis.quic.frame.*;
@@ -183,6 +184,7 @@ public class StreamManager {
     public void process(StreamFrame frame) throws TransportError {
         int streamId = frame.getStreamId();
         QuicStreamImpl stream = streams.get(streamId);
+        checkConnectionFlowControl(stream, frame);
         if (stream != null) {
             stream.add(frame);
             // This implementation maintains a fixed maximum number of open streams, so when the peer closes a stream
@@ -243,6 +245,17 @@ public class StreamManager {
         if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
             connection.send(new MaxDataFrame(flowControlMax), f -> {}, true);
             flowControlLastAdvertised = flowControlMax;
+        }
+    }
+
+    private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
+        long receivingStreamMaxOffset = receivingStream != null? receivingStream.getCurrentReceiveOffset(): 0;
+        if (frame.getUpToOffset() > receivingStreamMaxOffset) {
+            long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
+            long cumulativeReceiveOffset = streams.values().stream().mapToLong(stream -> stream.getCurrentReceiveOffset()).sum();
+            if (cumulativeReceiveOffset + increment > flowControlMax) {
+                throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
+            }
         }
     }
 

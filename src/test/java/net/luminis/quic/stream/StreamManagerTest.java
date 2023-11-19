@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -381,6 +382,41 @@ class StreamManagerTest {
 
         streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
         verify(quicConnection, times(2)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void incomingStreamDataShouldBeAcceptedWhenConnectionLimitNotReached() throws Exception {
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(0, 9_999, new byte[1], false)))
+                // Then
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldThrowTransportErrorWhenConnectionFlowControlLimitIsExceeded() throws Exception {
+        // When
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(1, 9_999, new byte[2], false)))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void shouldThrowTransportErrorWhenConnectionFlowControlLimitIsExceeded2() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(1, 3_000, new byte[300], false));
+        streamManager.process(new StreamFrame(5, 3_000, new byte[300], false));
+        streamManager.process(new StreamFrame(9, 3_000, new byte[300], false));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(5, 3_000 + 300, new byte[101], false)))
+                // Then
+                .isInstanceOf(TransportError.class);
     }
 
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {

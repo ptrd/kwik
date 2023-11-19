@@ -66,6 +66,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private final long receiverMaxDataIncrement;
     private volatile long lastOffset = -1;
     private int sendBufferSize = 50 * 1024;
+    private long largestOffsetReceived;
 
     
     public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
@@ -122,11 +123,20 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                 throw new TransportError(FLOW_CONTROL_ERROR);
             }
             super.add(frame);
+            largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
             if (frame.isFinal()) {
                 lastOffset = frame.getUpToOffset();
             }
             addMonitor.notifyAll();
         }
+    }
+
+    /**
+     * This method is intentionally package-protected, as it should only be called by the (Stream)Packet processor.
+     * @return  largest offset received so far
+     */
+    long getCurrentReceiveOffset() {
+        return largestOffsetReceived;
     }
 
     @Override
