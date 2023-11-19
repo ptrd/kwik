@@ -18,17 +18,21 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,7 +52,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
@@ -58,6 +64,7 @@ class QuicStreamImplTest {
     private static long originalWaitForNextFrameTimeoutValue;
     private QuicConnectionImpl connection;
     private QuicStreamImpl quicStream;
+    private StreamManager streamManager;
     private Logger logger;
     private Random randomGenerator = new Random();
 
@@ -74,10 +81,11 @@ class QuicStreamImplTest {
 
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
-        connection = Mockito.mock(QuicConnectionImpl.class);
-        logger = Mockito.mock(Logger.class);
+        connection = mock(QuicConnectionImpl.class);
+        streamManager = mock(StreamManager.class);
+        logger = mock(Logger.class);
 
-        quicStream = new QuicStreamImpl(0, connection, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
+        quicStream = new QuicStreamImpl(0, connection, streamManager, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
     }
 
     @Test
@@ -246,7 +254,7 @@ class QuicStreamImplTest {
     @Test
     void closingInputStreamShouldUnblockWatingReader() throws Exception {
         QuicStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
-        quicStream = new QuicStreamImpl(0, connection, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
+        quicStream = new QuicStreamImpl(0, connection, streamManager, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
         InputStream inputStream = quicStream.getInputStream();
 
         Thread blockingReader = new Thread(() -> {
@@ -358,7 +366,7 @@ class QuicStreamImplTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStreamImpl(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStreamImpl(0, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
         InputStream inputStream = quicStream.getInputStream();
@@ -387,7 +395,7 @@ class QuicStreamImplTest {
     void noMoreFlowControlCreditsShouldBeRequestedThanByteCountInBuffer() throws Exception {
         FlowControl flowController = mock(FlowControl.class);
         when(flowController.getFlowControlLimit(any(QuicStreamImpl.class))).thenReturn(1500L);
-        quicStream = new QuicStreamImpl(0, connection, flowController, logger);  // Re-instantiate to access to flow control object
+        quicStream = new QuicStreamImpl(0, connection, streamManager, flowController, logger);  // Re-instantiate to access to flow control object
         quicStream.getOutputStream().write(new byte[] { (byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe });
 
         // When
@@ -429,7 +437,7 @@ class QuicStreamImplTest {
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
-        quicStream = new QuicStreamImpl(0, connection, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
+        quicStream = new QuicStreamImpl(0, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.add(resurrect(new StreamFrame(0, new byte[10000], true)));
 
         InputStream inputStream = quicStream.getInputStream();
@@ -573,7 +581,7 @@ class QuicStreamImplTest {
     @Test
     void testWritingMoreThanSendBufferSize() throws Exception {
         // Given
-        quicStream = new QuicStreamImpl(Version.getDefault(), 0, connection,
+        quicStream = new QuicStreamImpl(Version.getDefault(), 0, connection, mock(StreamManager.class),
                 new FlowControl(Role.Client, 9999, 9999, 9999, 9999),
                 logger, 77);
         OutputStream outputStream = quicStream.getOutputStream();
@@ -681,22 +689,22 @@ class QuicStreamImplTest {
 
     @Test
     void isUnidirectional() {
-        QuicStreamImpl clientInitiatedStream = new QuicStreamImpl(2, mock(QuicConnectionImpl.class), mock(FlowControl.class));
+        QuicStreamImpl clientInitiatedStream = new QuicStreamImpl(2, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStreamImpl serverInitiatedStream = new QuicStreamImpl(3, mock(QuicConnectionImpl.class), mock(FlowControl.class));
+        QuicStreamImpl serverInitiatedStream = new QuicStreamImpl(3, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStreamImpl stream = new QuicStreamImpl(0, mock(QuicConnectionImpl.class), mock(FlowControl.class));
+        QuicStreamImpl stream = new QuicStreamImpl(0, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStreamImpl stream = new QuicStreamImpl(1, mock(QuicConnectionImpl.class), mock(FlowControl.class));
+        QuicStreamImpl stream = new QuicStreamImpl(1, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
 
@@ -707,7 +715,7 @@ class QuicStreamImplTest {
         when(flowController.getFlowControlLimit(any(QuicStreamImpl.class))).thenReturn(100L);
         when(flowController.increaseFlowControlLimit(any(QuicStreamImpl.class), anyLong())).thenReturn(100L);
 
-        QuicStreamImpl stream = new QuicStreamImpl(1, connection, flowController);
+        QuicStreamImpl stream = new QuicStreamImpl(1, connection, streamManager, flowController);
         stream.getOutputStream().write(new byte[100]);
 
         StreamFrame frame = (StreamFrame) captureSendFunction(connection).apply(1500);
@@ -720,7 +728,7 @@ class QuicStreamImplTest {
         FlowControl flowController = new FlowControl(Role.Client, 100000, 100, 100, 100);
         ArgumentCaptor<FlowControlUpdateListener> fcUpdateListenerCaptor = ArgumentCaptor.forClass(FlowControlUpdateListener.class);
 
-        QuicStreamImpl stream = new QuicStreamImpl(1, connection, flowController);
+        QuicStreamImpl stream = new QuicStreamImpl(1, connection, streamManager, flowController);
 
         stream.getOutputStream().write(new byte[1024]);
 

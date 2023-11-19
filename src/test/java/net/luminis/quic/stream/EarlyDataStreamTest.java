@@ -52,7 +52,7 @@ class EarlyDataStreamTest {
         int maxData = 5000;
         FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
         logger = new NullLogger();
-        stream = new EarlyDataStream(Version.getDefault(), 0, connection, flowController, logger);
+        stream = new EarlyDataStream(Version.getDefault(), 0, connection, mock(StreamManager.class), flowController, logger);
     }
 
     @Test
@@ -97,7 +97,7 @@ class EarlyDataStreamTest {
         // Given
         int maxData = 1000;
         FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
-        stream = new EarlyDataStream(Version.getDefault(), 0, connection, flowController, logger);
+        stream = new EarlyDataStream(Version.getDefault(), 0, connection, mock(StreamManager.class), flowController, logger);
 
         // When
         stream.writeEarlyData(new byte[1500], false, 10_000);

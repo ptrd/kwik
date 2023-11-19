@@ -20,14 +20,17 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
-import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdManager;
+import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.crypto.MissingKeysException;
-import net.luminis.quic.frame.*;
+import net.luminis.quic.frame.HandshakeDoneFrame;
+import net.luminis.quic.frame.NewConnectionIdFrame;
+import net.luminis.quic.frame.NewTokenFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.*;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
@@ -87,6 +90,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
     private int allowedClientConnectionIds = 3;
+    private long initialMaxData;
 
 
     /**
@@ -153,9 +157,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
+        initialMaxData = 10 * initialMaxStreamData;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
-        streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi);
+        streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi, initialMaxData);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
@@ -321,8 +326,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             }
         }
 
-        TransportParameters serverTransportParams = new TransportParameters(maxIdleTimeoutInSeconds, initialMaxStreamData, maxOpenStreamsBidi, maxOpenStreamsUni);
-        initConnectionFlowControl(serverTransportParams.getInitialMaxData());
+        TransportParameters serverTransportParams = initTransportParameters();
 
         // https://www.rfc-editor.org/rfc/rfc9369.html#name-version-negotiation-conside
         // "Any QUIC endpoint that supports QUIC version 2 MUST send, process, and validate the version_information
@@ -339,6 +343,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
         tlsEngine.setSessionData(quicVersion.getVersion().getBytes());
         tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
+    }
+
+    TransportParameters initTransportParameters() {
+        TransportParameters parameters = new TransportParameters();
+        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000);
+        parameters.setInitialMaxStreamData(initialMaxStreamData);
+        parameters.setInitialMaxData(initialMaxData);
+        parameters.setInitialMaxStreamsBidi(maxOpenStreamsBidi);
+        parameters.setInitialMaxStreamsUni(maxOpenStreamsUni);
+        return parameters;
     }
 
     boolean acceptSessionResumption(ByteBuffer storedSessionData) {

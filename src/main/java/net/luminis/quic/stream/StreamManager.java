@@ -19,9 +19,9 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.*;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.*;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,7 +33,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 
 /**
- * Manages QUIC streams.
+ * Manages all QUIC streams of a given connection.
  * Note that Kwik cannot handle more than 2147483647 (<code>Integer.MAX_INT</code>) streams in one connection.
  */
 public class StreamManager {
@@ -54,18 +54,32 @@ public class StreamManager {
     private final Semaphore openUnidirectionalStreams;
     private boolean maxOpenStreamsUniUpdateQueued;
     private boolean maxOpenStreamsBidiUpdateQueued;
+    protected long flowControlMax;
+    protected long flowControlLastAdvertised;
+    protected long flowControlIncrement;
 
-
-    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi) {
+    /**
+     * Creates a stream manager for a given connection.
+     *
+     * @param quicConnection
+     * @param role
+     * @param log
+     * @param maxOpenStreamsUni            the maximum number of unidirectional streams that this peer will accept
+     * @param maxOpenStreamsBidi           the maximum number of bidirectional streams that this peer will accept
+     * @param initialConnectionFlowControl the initial value for the connection flow control limit
+     */
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi, long initialConnectionFlowControl) {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
         this.maxOpenStreamIdUni = computeMaxStreamId(maxOpenStreamsUni, role.other(), false);
         this.maxOpenStreamIdBidi = computeMaxStreamId(maxOpenStreamsBidi, role.other(), true);
+
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
         openBidirectionalStreams = new Semaphore(0);
         openUnidirectionalStreams = new Semaphore(0);
+        initConnectionFlowControl(initialConnectionFlowControl);
     }
 
     private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
@@ -89,6 +103,12 @@ public class StreamManager {
         return maxStreamId;
     }
 
+    protected void initConnectionFlowControl(long initialMaxData) {
+        flowControlMax = initialMaxData;
+        flowControlLastAdvertised = flowControlMax;
+        flowControlIncrement = flowControlMax / 10;
+    }
+
     public QuicStream createStream(boolean bidirectional) {
         try {
             return createStream(bidirectional, 10_000, TimeUnit.DAYS);
@@ -100,7 +120,7 @@ public class StreamManager {
 
     public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
         return createStream(bidirectional, timeout, timeoutUnit,
-                (quicVersion, streamId, connection, flowController, logger) -> new QuicStreamImpl(quicVersion, streamId, connection, flowController, logger));
+                (quicVersion, streamId, connection, flowController, logger) -> new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, logger));
     }
 
     private QuicStreamImpl createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
@@ -135,7 +155,7 @@ public class StreamManager {
     public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
         try {
             return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS,
-                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, flowController, logger));
+                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, this, flowController, logger));
         } catch (TimeoutException e) {
             return null;
         }
@@ -176,7 +196,7 @@ public class StreamManager {
                 synchronized (this) {
                     if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
                         log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
-                        stream = new QuicStreamImpl(quicVersion, streamId, connection, flowController, log);
+                        stream = new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, log);
                         streams.put(streamId, stream);
                         stream.add(frame);
                         if (peerInitiatedStreamCallback != null) {
@@ -215,6 +235,14 @@ public class StreamManager {
         if (stream != null) {
             // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
             stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
+        }
+    }
+
+    public void updateConnectionFlowControl(int size) {
+        flowControlMax += size;
+        if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
+            connection.send(new MaxDataFrame(flowControlMax), f -> {}, true);
+            flowControlLastAdvertised = flowControlMax;
         }
     }
 

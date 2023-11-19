@@ -26,7 +26,11 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.packet.*;
+import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.RetryPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
+import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -286,24 +290,6 @@ class QuicClientConnectionImplTest {
 
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
-    }
-
-    @Test
-    void testConnectionFlowControl() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        long flowControlIncrement = (long) new FieldReader(connection, connection.getClass().getSuperclass().getDeclaredField("flowControlIncrement")).read();
-
-        connection.updateConnectionFlowControl(10);
-        verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));  // No initial update, value is advertised in transport parameters.
-
-        connection.updateConnectionFlowControl((int) flowControlIncrement);
-        verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
-
-        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
-        verify(sender, times(1)).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
-
-        connection.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
-        verify(sender, times(2)).send(any(QuicFrame.class), any(EncryptionLevel.class) , any(Consumer.class));
     }
 
     @Test

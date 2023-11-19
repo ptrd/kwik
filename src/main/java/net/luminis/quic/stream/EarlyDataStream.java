@@ -42,8 +42,8 @@ public class EarlyDataStream extends QuicStreamImpl {
     private volatile boolean finalFrameSent;
 
 
-    public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, FlowControl flowController, Logger log) {
-        super(quicVersion, streamId, connection, flowController, log);
+    public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
+        super(quicVersion, streamId, connection, streamManager, flowController, log);
     }
 
     /**

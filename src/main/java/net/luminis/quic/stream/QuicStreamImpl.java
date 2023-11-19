@@ -19,12 +19,12 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.frame.*;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.frame.*;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,6 +53,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     protected final Version quicVersion;
     protected final int streamId;
     protected final QuicConnectionImpl connection;
+    private final StreamManager streamManager;
     protected final FlowControl flowController;
     protected final Logger log;
     private final StreamInputStream inputStream;
@@ -65,22 +66,23 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private int sendBufferSize = 50 * 1024;
 
     
-    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController) {
-        this(Version.getDefault(), streamId, connection, flowController, new NullLogger());
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
+        this(Version.getDefault(), streamId, connection, streamManager, flowController, new NullLogger());
     }
 
-    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
-        this(Version.getDefault(), streamId, connection, flowController, log);
+    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
+        this(Version.getDefault(), streamId, connection, streamManager, flowController, log);
     }
 
-    public QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log) {
-        this(quicVersion, streamId, connection, flowController, log, null);
+    public QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
+        this(quicVersion, streamId, connection, streamManager, flowController, log, null);
     }
 
-    QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log, Integer sendBufferSize) {
+    QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
         this.connection = connection;
+        this.streamManager = streamManager;
         this.flowController = flowController;
         if (sendBufferSize != null && sendBufferSize > 0) {
             this.sendBufferSize = sendBufferSize;
@@ -305,7 +307,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private void updateAllowedFlowControl(int bytesRead) {
             // Slide flow control window forward (with as much bytes as are read)
             receiverFlowControlLimit += bytesRead;
-            connection.updateConnectionFlowControl(bytesRead);
+            streamManager.updateConnectionFlowControl(bytesRead);
             // Avoid sending flow control updates with every single read; check diff with last send max data
             if (receiverFlowControlLimit - lastCommunicatedMaxData > receiverMaxDataIncrement) {
                 connection.send(new MaxStreamDataFrame(streamId, receiverFlowControlLimit), this::retransmitMaxData, true);

@@ -18,7 +18,10 @@
  */
 package net.luminis.quic.core;
 
-import net.luminis.quic.*;
+import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicConstants;
+import net.luminis.quic.QuicStream;
+import net.luminis.quic.Statistics;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
@@ -46,7 +49,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -109,9 +116,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected volatile int peerAckDelayExponent = 3;
 
     protected volatile FlowControl flowController;
-    protected long flowControlMax;
-    protected long flowControlLastAdvertised;
-    protected long flowControlIncrement;
     protected long[] largestPacketNumber = new long[PnSpace.values().length];
 
     protected volatile Status connectionState;
@@ -134,20 +138,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addHandshakeStateListener(RecoveryManager recoveryManager) {
         handshakeStateListeners.add(recoveryManager);
-    }
-
-    protected void initConnectionFlowControl(long initialMaxData) {
-        flowControlMax = initialMaxData;
-        flowControlLastAdvertised = flowControlMax;
-        flowControlIncrement = flowControlMax / 10;
-    }
-
-    public void updateConnectionFlowControl(int size) {
-        flowControlMax += size;
-        if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
-            send(new MaxDataFrame(flowControlMax), f -> {}, true);
-            flowControlLastAdvertised = flowControlMax;
-        }
     }
 
     /**

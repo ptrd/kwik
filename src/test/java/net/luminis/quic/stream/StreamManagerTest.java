@@ -19,14 +19,15 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.frame.MaxStreamsFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
 import net.luminis.quic.core.TransportError;
+import net.luminis.quic.frame.MaxStreamsFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,8 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 class StreamManagerTest {
 
@@ -54,7 +54,7 @@ class StreamManagerTest {
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
-        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10);
+        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10, 10_000);
         streamManager.setFlowController(mock(FlowControl.class));
     }
 
@@ -263,7 +263,7 @@ class StreamManagerTest {
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 10_000);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsUni(1);
 
@@ -278,7 +278,7 @@ class StreamManagerTest {
     @Test
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10);
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 1_000);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
@@ -363,6 +363,23 @@ class StreamManagerTest {
         }
 
         verifyMaxStreamsFrameIsToBeSent(20);
+    }
+
+    @Test
+    void testConnectionFlowControl() throws Exception {
+        long flowControlIncrement = (long) new FieldReader(streamManager, streamManager.getClass().getDeclaredField("flowControlIncrement")).read();
+
+        streamManager.updateConnectionFlowControl(10);
+        verify(quicConnection, never()).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());  // No initial update, value is advertised in transport parameters.
+
+        streamManager.updateConnectionFlowControl((int) flowControlIncrement);
+        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+
+        streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
+        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+
+        streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
+        verify(quicConnection, times(2)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
     }
 
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {

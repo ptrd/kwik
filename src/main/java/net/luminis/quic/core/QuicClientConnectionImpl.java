@@ -18,7 +18,10 @@
  */
 package net.luminis.quic.core;
 
-import net.luminis.quic.*;
+import net.luminis.quic.DatagramSocketFactory;
+import net.luminis.quic.QuicClientConnection;
+import net.luminis.quic.QuicSessionTicket;
+import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -61,9 +64,15 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
-import static net.luminis.quic.core.QuicClientConnectionImpl.EarlyDataStatus.*;
-import static net.luminis.quic.core.EncryptionLevel.*;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.VERSION_NEGOTIATION_ERROR;
+import static net.luminis.quic.core.EncryptionLevel.App;
+import static net.luminis.quic.core.EncryptionLevel.Handshake;
+import static net.luminis.quic.core.EncryptionLevel.Initial;
+import static net.luminis.quic.core.QuicClientConnectionImpl.EarlyDataStatus.Accepted;
+import static net.luminis.quic.core.QuicClientConnectionImpl.EarlyDataStatus.None;
+import static net.luminis.quic.core.QuicClientConnectionImpl.EarlyDataStatus.Requested;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
@@ -164,8 +173,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
 
         transportParams = initTransportParameters(connectionProperties);
-        initConnectionFlowControl(transportParams.getInitialMaxData());
-        streamManager = new StreamManager(this, Role.Client, log, (int) transportParams.getInitialMaxStreamsUni(), (int) transportParams.getInitialMaxStreamsBidi());
+        streamManager = new StreamManager(this, Role.Client, log, (int) transportParams.getInitialMaxStreamsUni(),
+                (int) transportParams.getInitialMaxStreamsBidi(), transportParams.getInitialMaxData());
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
