@@ -83,7 +83,7 @@ public class BaseStream {
      * available on the stream). If no byte is available because the end of the stream has been reached, the value -1 is returned.
      * Does not block: returns 0 when no bytes can be read.
      * @param buffer
-     * @return
+     * @return  number of bytes read
      */
     protected synchronized int read(ByteBuffer buffer) {
         if (isStreamEnd(processedToOffset)) {

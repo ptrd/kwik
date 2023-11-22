@@ -20,16 +20,19 @@ package net.luminis.quic.crypto;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.core.VersionHolder;
-import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
+import net.luminis.quic.tls.CertificateMessageBuilder;
+import net.luminis.quic.tls.ClientHelloBuilder;
 import net.luminis.tls.Message;
 import net.luminis.tls.ProtectionKeysType;
 import net.luminis.tls.TlsConstants;
+import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.handshake.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,12 +45,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static net.luminis.quic.test.FieldSetter.setField;
 import static net.luminis.tls.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -286,7 +293,173 @@ class CryptoStreamTest {
         }
 
         assertThat(dataReceived.array()).isEqualTo(dataToSend);
+    }
 
+    @Test
+    void veryLargeClientHelloIsRefused() throws Exception {
+        // Given
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+                Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+        int extensionLength = 3000;
+        String fakeExtensionType = "fa7e";
+        String veryLargeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
+        byte[] ch = new ClientHelloBuilder().withExtension(veryLargeExtension).buildBinary();
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                withSplittedMessage(ch, 1183, (offset, part) -> {
+                    try {
+                        cryptoStream.add(new CryptoFrame(QUIC_VERSION, offset, part));
+                    }
+                    catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }))
+                // Then
+                .hasCauseInstanceOf(TlsProtocolException.class);
+    }
+
+    @Test
+    void largeNumberOfOutOfOrderCryptoFramesIsRefused() throws Exception {
+        // Given
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+                Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+        int extensionLength = 4000;
+        String fakeExtensionType = "fa7e";
+        String veryLargeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
+        byte[] ch = new ClientHelloBuilder().withExtension(veryLargeExtension).buildBinary();
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                withSplittedMessage(ch, 1183, (offset, part) -> {
+                    try {
+                        if (offset != 0) {
+                            // Intentionally skipping first frame, so all frames are out of order
+                            cryptoStream.add(new CryptoFrame(QUIC_VERSION, offset, part));
+                        }
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }))
+                // Then
+                .hasCauseInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void largeStreamOffsetIsAcceptedWhenMaximumMessageSizeIsNotExceeded() throws Exception {
+        // Given
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+                Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+        int extensionLength = 2828;
+        String fakeExtensionType = "fa7e";
+        String largeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
+        byte[] ch1 = new ClientHelloBuilder().withExtension(largeExtension).buildBinary();
+        byte[] ch2 = new ClientHelloBuilder().withExtension(largeExtension).buildBinary();
+        byte[] data = new byte[ch1.length + ch2.length];
+        System.arraycopy(ch1, 0, data, 0, ch1.length);
+        System.arraycopy(ch2, 0, data, ch1.length, ch2.length);
+
+        // When
+        withSplittedMessage(data, 1183, (offset, part) -> {
+            try {
+                cryptoStream.add(new CryptoFrame(QUIC_VERSION, offset, part));
+            }
+            catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Then
+        assertThat(cryptoStream.getTlsMessages())
+                .isNotEmpty()
+                .hasSize(2)
+                .hasOnlyElementsOfType(ClientHello.class);
+    }
+
+
+    @Test
+    void clientHelloWithNormalSizeIsAccepted() throws Exception {
+        // Given
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+                Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+        int extensionLength = 1100;
+        String fakeExtensionType = "fa7e";
+        String largeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
+        byte[] ch = new ClientHelloBuilder().withExtension(largeExtension).buildBinary();
+
+        // When
+        withSplittedMessage(ch, 1183, (offset, part) -> {
+            try {
+                cryptoStream.add(new CryptoFrame(QUIC_VERSION, offset, part));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Then
+        assertThat(cryptoStream.getTlsMessages())
+                .isNotEmpty()
+                .hasOnlyElementsOfType(ClientHello.class);
+    }
+
+    @Test
+    void veryLargeCertificateMessageIsAccepted() throws Exception {
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+                Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+
+        byte[] cm = new CertificateMessageBuilder()
+                .withNumberOfCertificates(10)
+                .buildBinary();
+
+        // When
+        withSplittedMessage(cm, 1183, (offset, part) -> {
+            try {
+                cryptoStream.add(new CryptoFrame(QUIC_VERSION, offset, part));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Then
+        assertThat(cryptoStream.getTlsMessages())
+                .isNotEmpty()
+                .hasOnlyElementsOfType(CertificateMessage.class);
+    }
+
+    @Test
+    void normalFinishedMessageIsAccepted() throws Exception {
+        // Given
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+                Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
+        byte[] normalFinishedMessage = new FinishedMessage(new byte[384 / 8]).getBytes();
+
+        // When
+        assertThatCode(() ->
+                // When
+                cryptoStream.add(new CryptoFrame(QUIC_VERSION, normalFinishedMessage))
+                // Then
+        ).doesNotThrowAnyException();
+    }
+
+    private List<byte[]> splitMessage(byte[] message, int maxFrameSize) {
+        int numberOfFrames = (int) Math.ceil((double) message.length / maxFrameSize);
+        return Arrays.stream(new int[numberOfFrames]).mapToObj(i -> {
+            int offset = i * maxFrameSize;
+            int length = Math.min(maxFrameSize, message.length - offset);
+            return Arrays.copyOfRange(message, offset, offset + length);
+        }).collect(Collectors.toList());
+    }
+
+    private void withSplittedMessage(byte[] message, int maxFrameSize, BiConsumer<Integer, byte[]> consumer) {
+        int numberOfFrames = (int) Math.ceil((double) message.length / maxFrameSize);
+        for (int i = 0; i < numberOfFrames; i++) {
+            int offset = i * maxFrameSize;
+            int length = Math.min(maxFrameSize, message.length - offset);
+            byte[] data = Arrays.copyOfRange(message, offset, offset + length);
+            consumer.accept(offset, data);
+        };
     }
 
     private void setParseFunction(Function<ByteBuffer, Message> parseFunction) throws Exception {

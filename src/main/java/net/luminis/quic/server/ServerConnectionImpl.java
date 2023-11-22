@@ -215,7 +215,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
+    protected void cryptoProcessingErrorOcurred(Exception exception) {
     }
 
     public byte[] getInitialConnectionId() {

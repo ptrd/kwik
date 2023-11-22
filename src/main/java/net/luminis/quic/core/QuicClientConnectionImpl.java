@@ -41,7 +41,6 @@ import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.CertificateWithPrivateKey;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
@@ -693,7 +692,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected void cryptoProcessingErrorOcurred(TlsProtocolException exception) {
+    protected void cryptoProcessingErrorOcurred(Exception exception) {
         if (connectionState == Status.Handshaking) {
             handshakeError = exception.toString();
         }

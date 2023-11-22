@@ -20,15 +20,19 @@ package net.luminis.quic.crypto;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.VersionHolder;
-import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.stream.BaseStream;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.tls.*;
+import net.luminis.tls.Message;
+import net.luminis.tls.ProtectionKeysType;
+import net.luminis.tls.TlsConstants;
+import net.luminis.tls.TlsProtocolException;
+import net.luminis.tls.alert.InternalErrorAlert;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.HandshakeMessage;
 import net.luminis.tls.handshake.TlsEngine;
@@ -36,11 +40,19 @@ import net.luminis.tls.handshake.TlsMessageParser;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
+
+import static net.luminis.quic.QuicConstants.TransportErrorCode.CRYPTO_BUFFER_EXCEEDED;
 
 
 public class CryptoStream extends BaseStream {
+
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-cryptographic-message-buffe
+    // "Implementations MUST support buffering at least 4096 bytes of data received in out-of-order CRYPTO frames."
+    public final static int MAX_STREAM_GAP = 4096;
 
     private final VersionHolder quicVersion;
     private final EncryptionLevel encryptionLevel;
@@ -54,13 +66,14 @@ public class CryptoStream extends BaseStream {
     private final List<Message> messagesSent;
     private final TlsMessageParser tlsMessageParser;
     private final List<ByteBuffer> dataToSend;
+    private final int maxMessageSize;
     private volatile int dataToSendOffset;
     private volatile int sendStreamSize;
     // Only used by add method; thread confinement concurrency control (assuming one receiver thread)
     private boolean msgSizeRead = false;
     private int msgSize;
     private byte msgType;
-
+    private int readOffset;
 
     public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
@@ -79,12 +92,19 @@ public class CryptoStream extends BaseStream {
         messagesSent = new ArrayList<>();
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
+        maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
     }
 
-    public void add(CryptoFrame cryptoFrame) throws TlsProtocolException {
+    public void add(CryptoFrame cryptoFrame) throws TlsProtocolException, TransportError {
         try {
             if (super.add(cryptoFrame)) {
                 long availableBytes = bytesAvailable();
+                long contiguousBytes = readOffset + availableBytes;
+                // https://www.rfc-editor.org/rfc/rfc9000.html#name-cryptographic-message-buffe
+                // "Implementations MUST support buffering at least 4096 bytes of data received in out-of-order CRYPTO frames."
+                if (cryptoFrame.getUpToOffset() - contiguousBytes > MAX_STREAM_GAP) {
+                    throw new TransportError(CRYPTO_BUFFER_EXCEEDED);
+                }
                 // Because the stream may not have enough bytes available to read the whole message, but enough to
                 // read the size, the msg size read must be remembered for the next invocation of this method.
                 // So, when this method is called, either one of the following cases holds:
@@ -95,11 +115,14 @@ public class CryptoStream extends BaseStream {
                     if (!msgSizeRead && availableBytes >= 4) {
                         // Determine message length (a TLS Handshake message starts with 1 byte type and 3 bytes length)
                         ByteBuffer buffer = ByteBuffer.allocate(4);
-                        read(buffer);
+                        readOffset += read(buffer);
                         msgType = buffer.get(0);
                         buffer.put(0, (byte) 0);  // Mask 1st byte as it contains the TLS handshake msg type
                         buffer.flip();
                         msgSize = buffer.getInt();
+                        if (msgSize > maxMessageSize) {
+                            throw new InternalErrorAlert("TLS message size too large: " + msgSize);
+                        }
                         msgSizeRead = true;
                         availableBytes -= 4;
                     }
@@ -108,6 +131,7 @@ public class CryptoStream extends BaseStream {
                         msgBuffer.putInt(msgSize);
                         msgBuffer.put(0, msgType);
                         int read = read(msgBuffer);
+                        readOffset += read;
                         availableBytes -= read;
                         msgSizeRead = false;
 
@@ -139,6 +163,28 @@ public class CryptoStream extends BaseStream {
         }
         else {
             return null;
+        }
+    }
+
+    private int determineMaxMessageSize(Role role, EncryptionLevel encryptionLevel) {
+        // Of course, this is violating the layer separation between QUIC and TLS, but it serves a good purpose:
+        // avoid excessive use of memory by malicious peers.
+        switch (encryptionLevel) {
+            case Initial:
+                // Client Hello, Server Hello
+                return 3000;
+            case Handshake:
+                // Client: Certificate; Server: Finished
+                return role == Role.Client ? 16384 : 100;
+            case App:
+                // Client: New Session Ticket; Server: -
+                return role == Role.Client ? 65535 : 300;
+            case ZeroRTT:
+                // 0-RTT does not allow crypo frames.
+                return 0;
+            default:
+                // Impossible
+                return 0;
         }
     }
 
