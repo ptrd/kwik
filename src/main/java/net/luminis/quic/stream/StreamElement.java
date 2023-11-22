@@ -28,4 +28,6 @@ public interface StreamElement extends Comparable<StreamElement> {
     byte[] getStreamData();
 
     long getUpToOffset();
+
+    boolean isFinal();
 }

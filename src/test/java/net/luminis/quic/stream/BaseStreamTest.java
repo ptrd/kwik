@@ -20,7 +20,6 @@ package net.luminis.quic.stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 import java.nio.ByteBuffer;
 
@@ -125,6 +124,11 @@ class BaseStreamTest {
         @Override
         public long getUpToOffset() {
             return offset + length;
+        }
+
+        @Override
+        public boolean isFinal() {
+            return false;
         }
 
         @Override
