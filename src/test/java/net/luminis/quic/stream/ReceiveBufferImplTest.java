@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -188,10 +189,380 @@ class ReceiveBufferImplTest {
         assertThat(readResult).isEqualTo(-1);
     }
 
+    @Test
+    void outOfOrderBufferedDataShouldBeMeasured() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(100);
+    }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementIsDecreasedWhenBecomingContiguous() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(500, 300));
+        long initialDataBuffered = receiveBuffer.bufferedOutOfOrderData();
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 200));
+
+        // Then
+        assertThat(initialDataBuffered).isEqualTo(400);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(300);
+    }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementDropsToZeroWhenAllGapsFilled() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 120));
+        receiveBuffer.add(new DataFrame(800, 100));
+        receiveBuffer.add(new DataFrame(600, 50));
+        receiveBuffer.add(new DataFrame(400, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(500, 100));
+        receiveBuffer.add(new DataFrame(320, 80));
+        receiveBuffer.add(new DataFrame(0, 140));
+        receiveBuffer.add(new DataFrame(140, 60));
+        receiveBuffer.add(new DataFrame(650, 150));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+    }
+
+    @Test
+    void duplicatedFramesAreCombinedToReduceMemoryUsage() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 120));
+
+        // When
+        receiveBuffer.add(new DataFrame(200, 120));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(120);
+        checkDataCanBeReadAfterAdding(320, new DataFrame(0, 200));
+    }
+
+    @Test
+    void duplicatedFramesAreCombinedToReduceMemoryUsage2() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(200, 120));
+
+        // When
+        receiveBuffer.add(new DataFrame(200, 120));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(220);
+        checkDataCanBeReadAfterAdding(320, new DataFrame(0, 100));
+    }
+
+    @Test
+    void duplicatedFramesAreCombinedToReduceMemoryUsage3() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 120));
+        receiveBuffer.add(new DataFrame(320, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(200, 120));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(220);
+        checkDataCanBeReadAfterAdding(420, new DataFrame(0, 200));
+    }
+
+    @Test
+    void containingFramesAreCombinedToReduceMemoryUsage() {
+        // Given                        200..299
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // When                         220..259
+        receiveBuffer.add(new DataFrame(220, 60));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(100);
+        checkDataCanBeReadAfterAdding(300, new DataFrame(0, 200));
+    }
+
+    @Test
+    void containingFramesAreCombinedToReduceMemoryUsage2() {
+        // Given                        220..259
+        receiveBuffer.add(new DataFrame(220, 60));
+
+        // When                          200..299
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(100);
+        checkDataCanBeReadAfterAdding(300, new DataFrame(0, 200));
+    }
+
+    @Test
+    void overlappingFramesAreCombinedToReduceMemoryUsage1() {
+        // Given                        100..189
+        receiveBuffer.add(new DataFrame(100, 90));
+
+        // When                         150..249
+        receiveBuffer.add(new DataFrame(150, 100));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(150);
+        checkDataCanBeReadAfterAdding(250, new DataFrame(0, 100));
+    }
+
+    @Test
+    void overlappingFramesAreCombinedToReduceMemoryUsage2() {
+        // Given                        150..249
+        receiveBuffer.add(new DataFrame(150, 100));
+
+        // When                         100..189
+        receiveBuffer.add(new DataFrame(100, 90));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(150);
+        checkDataCanBeReadAfterAdding(250, new DataFrame(0, 100));
+    }
+
+    @Test
+    void overlappingFramesAreCombinedToReduceMemoryUsage3() {
+        // Given                        50..99 100..199 300..399 400..449
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(300, 100));
+        receiveBuffer.add(new DataFrame(50, 50));
+        receiveBuffer.add(new DataFrame(400, 50));
+
+        // When
+        receiveBuffer.add(new DataFrame(170, 200));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(400);
+        checkDataCanBeReadAfterAdding(450, new DataFrame(0, 50));
+    }
+
+    @Test
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage1() {
+        // Given          50..99 100..199 200..299 300..349
+        receiveBuffer.add(new DataFrame(50, 50));
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(300, 50));
+
+        // When           80..329
+        receiveBuffer.add(new DataFrame(80, 250));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(300);
+        checkDataCanBeReadAfterAdding(350, new DataFrame(0, 50));
+    }
+
+    @Test
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage2() {
+        // Given          100..199 200..299 300..349
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(300, 50));
+
+        // When           80..329
+        receiveBuffer.add(new DataFrame(80, 250));
+
+        // Then           80..349
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(270);
+        checkDataCanBeReadAfterAdding(350, new DataFrame(0, 100));
+    }
+
+    @Test
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage3() {
+        // Given          20..60 100..199 200..299 300..349
+        receiveBuffer.add(new DataFrame(20, 40));
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(300, 50));
+
+        // When           80..329
+        receiveBuffer.add(new DataFrame(80, 250));
+
+        // Then           20..60 80..349
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(310);
+        checkDataCanBeReadAfterAdding(350, new DataFrame(0, 100));
+    }
+
+    @Test
+    void multipleOverlappingFramesWithGapsAreCombinedToReduceMemoryUsage1() {
+        // Given          50..99 110..189 200..289 300..349
+        receiveBuffer.add(new DataFrame(50, 50));
+        receiveBuffer.add(new DataFrame(110, 80));
+        receiveBuffer.add(new DataFrame(200, 90));
+        receiveBuffer.add(new DataFrame(310, 40));
+
+        // When           80..329
+        receiveBuffer.add(new DataFrame(80, 250));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(300);
+        checkDataCanBeReadAfterAdding(350, new DataFrame(0, 50));
+    }
+
+    @Test
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(50, 50));
+        receiveBuffer.add(new DataFrame(300, 50));
+
+        // When
+        receiveBuffer.add(new DataFrame(80, 200));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(300);
+        checkDataCanBeReadAfterAdding(350, new DataFrame(0, 50));
+    }
+
+    @Test
+    void testProperContainingFrame() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(130, 50);
+
+        // Then
+        assertThat(ReceiveBufferImpl.contains(frame1, frame2)).isTrue();
+        assertThat(ReceiveBufferImpl.contains(frame2, frame1)).isFalse();
+    }
+
+    @Test
+    void testEqualFramesContainOneAnother() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(100, 100);
+
+        // Then
+        assertThat(ReceiveBufferImpl.contains(frame1, frame2)).isTrue();
+        assertThat(ReceiveBufferImpl.contains(frame2, frame1)).isTrue();
+    }
+
+    @Test
+    void testContainedFramesSameStart() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(100, 50);
+
+        // Then
+        assertThat(ReceiveBufferImpl.contains(frame1, frame2)).isTrue();
+        assertThat(ReceiveBufferImpl.contains(frame2, frame1)).isFalse();
+    }
+
+    @Test
+    void testContainedFramesSameEnd() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(150, 50);
+
+        // Then
+        assertThat(ReceiveBufferImpl.contains(frame1, frame2)).isTrue();
+        assertThat(ReceiveBufferImpl.contains(frame2, frame1)).isFalse();
+    }
+
+    @Test
+    void combineEqualFrames() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(100, 100);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        // Then
+        assertThat(combined.equals(frame1) || combined.equals(frame2)).isTrue();
+    }
+
+    @Test
+    void combineContainingFrames1() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(110, 30);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(100);
+        checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
+    @Test
+    void combineContainingFrames2() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(100, 130);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(130);
+        checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
+    @Test
+    void combineContainingFrames3() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(110, 90);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(100);
+        checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
+    @Test
+    void combineOverlappingFrames() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);
+        DataFrame frame2 = new DataFrame(190, 30);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(120);
+        checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
     private void checkData(ByteBuffer buffer) {
         for (int i = 0; i < buffer.position(); i++) {
             assertThat(buffer.get(i)).isEqualTo((byte) i);
         }
+    }
+
+    private void checkDataCanBeReadAfterAdding(int length, DataFrame... dataFrames) {
+        System.out.println("test result: " + receiveBuffer.toDebugString());
+        Arrays.stream(dataFrames).forEach(f -> receiveBuffer.add(f));
+        ByteBuffer readBytes = ByteBuffer.allocate(length);
+        int bytesRead = receiveBuffer.read(readBytes);
+        assertThat(bytesRead).isEqualTo(length);
+        checkData(readBytes);
     }
 
     private static class DataFrame implements StreamElement {
@@ -248,6 +619,11 @@ class ReceiveBufferImplTest {
             else {
                 return Integer.compare(this.length, other.getLength());
             }
+        }
+
+        @Override
+        public String toString() {
+            return "" + offset + ".." + (offset + data.length - 1);
         }
     }
 }
