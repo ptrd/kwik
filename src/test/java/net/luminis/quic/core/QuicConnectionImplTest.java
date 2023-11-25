@@ -65,7 +65,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.process(packet, Instant.now());
+        connection.processPacket(Instant.now(), packet);
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -123,7 +123,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.process(packet, Instant.now());
+        connection.processPacket(Instant.now(), packet);
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
