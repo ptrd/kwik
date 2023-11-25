@@ -37,6 +37,7 @@ import java.time.Instant;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.core.EncryptionLevel.App;
+import static net.luminis.quic.core.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -65,6 +66,20 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
+        connection.processPacket(Instant.now(), packet);
+
+        // Then
+        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+    }
+
+    @Test
+    void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
+        // Given
+        connection.immediateClose(Initial);
+        connection.runPostProcessingActions();
+
+        // When
+        InitialPacket packet = spy(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new CryptoFrame()));
         connection.processPacket(Instant.now(), packet);
 
         // Then
