@@ -625,6 +625,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             return;
         }
 
+        if (error == NO_ERROR.value) {
+            log.error("Closing " + this);
+        }
+        else {
+            log.error("Closing " + this + " with error " + error + (errorReason != null? ": " + errorReason:""));
+        }
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
@@ -680,7 +687,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 peerClosedWithError(closing);
             }
             else {
-                log.info("Peer is closing");
+                log.info("Peer is closing " + this);
             }
             getSender().stop();
 
@@ -697,7 +704,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void peerClosedWithError(ConnectionCloseFrame closeFrame) {
-        log.error("Connection closed by peer with " + determineClosingErrorMessage(closeFrame));
+        log.info("Peer is closing " + this + " with " + determineClosingErrorMessage(closeFrame));
     }
 
     private void drain() {

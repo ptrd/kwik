@@ -698,6 +698,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public String toString() {
-        return "ServerConnection[" + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId()) + "]";
+        return "ServerConnection["
+                + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
+                + "/" + ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId())
+                + "(" + getQuicVersion() + ")"
+                + " " + initialClientAddress
+                + "]";
     }
 }
