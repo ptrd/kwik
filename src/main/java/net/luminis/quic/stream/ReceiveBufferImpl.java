@@ -113,42 +113,23 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private void addWithoutOverlap(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
-        StreamElement after = outOfOrderFrames.higher(frame);
-        if (before != null) {
-            if (overlapping(before, frame)) {
-                StreamElement combined = combine(before, frame);
-                outOfOrderFrames.remove(before);
-                bufferedOutOfOrderData -= before.getLength();
-                StreamElement toAdd = fixAfter(combined);
-                outOfOrderFrames.add(toAdd);
-                bufferedOutOfOrderData += toAdd.getLength();
-            }
-            else if (after != null && overlapping(frame, after)) {
-                StreamElement combined = fixAfter(frame);
-                outOfOrderFrames.add(combined);
-                bufferedOutOfOrderData += combined.getLength();
-            }
-            else {
-                // No overlap, just add (but may be an exact duplicate, so check result of add method)
-                if (outOfOrderFrames.add(frame)) {
-                    bufferedOutOfOrderData += frame.getLength();
-                }
-            }
-        }
-        else if (after != null && overlapping(frame, after)) {
-            StreamElement combined = fixAfter(frame);
-            outOfOrderFrames.add(combined);
-            bufferedOutOfOrderData += combined.getLength();
+        StreamElement combinedWithBefore;
+        if (before != null && overlapping(before, frame)) {
+            combinedWithBefore = combine(before, frame);
+            outOfOrderFrames.remove(before);
+            bufferedOutOfOrderData -= before.getLength();
         }
         else {
-            // No overlap, just add (but may be an exact duplicate, so check result of add method)
-            if (outOfOrderFrames.add(frame)) {
-                bufferedOutOfOrderData += frame.getLength();
-            }
+            combinedWithBefore = frame;
+        }
+        StreamElement combinedWithAfter = combineWithElementsAfter(combinedWithBefore);
+        // In certain cases, the combined could exactly match an existing, so only count when really added.
+        if (outOfOrderFrames.add(combinedWithAfter)) {
+            bufferedOutOfOrderData += combinedWithAfter.getLength();
         }
     }
 
-    StreamElement fixAfter(StreamElement frameToAdd) {
+    StreamElement combineWithElementsAfter(StreamElement frameToAdd) {
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
         while (after != null && overlapping(frameToAdd, after)) {
             StreamElement newCombined = combine(frameToAdd, after);
