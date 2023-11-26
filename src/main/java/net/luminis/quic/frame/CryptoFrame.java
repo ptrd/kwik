@@ -19,9 +19,9 @@
 package net.luminis.quic.frame;
 
 
+import net.luminis.quic.core.Version;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.stream.StreamElement;
@@ -114,6 +114,11 @@ public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<
     @Override
     public long getUpToOffset() {
         return offset + length;
+    }
+
+    @Override
+    public boolean isFinal() {
+        return false;
     }
 
     @Override
