@@ -26,7 +26,8 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
-import net.luminis.quic.stream.BaseStream;
+import net.luminis.quic.stream.ReceiveBuffer;
+import net.luminis.quic.stream.ReceiveBufferImpl;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.tls.Message;
 import net.luminis.tls.ProtectionKeysType;
@@ -48,7 +49,7 @@ import java.util.stream.Collectors;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.CRYPTO_BUFFER_EXCEEDED;
 
 
-public class CryptoStream extends BaseStream {
+public class CryptoStream {
 
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-cryptographic-message-buffe
     // "Implementations MUST support buffering at least 4096 bytes of data received in out-of-order CRYPTO frames."
@@ -62,6 +63,7 @@ public class CryptoStream extends BaseStream {
     private final TlsEngine tlsEngine;
     private final Logger log;
     private final Sender sender;
+    private final ReceiveBuffer receiveBuffer;
     private final List<Message> messagesReceived;
     private final List<Message> messagesSent;
     private final TlsMessageParser tlsMessageParser;
@@ -93,18 +95,20 @@ public class CryptoStream extends BaseStream {
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
         maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
+        receiveBuffer = new ReceiveBufferImpl();
     }
 
     public void add(CryptoFrame cryptoFrame) throws TlsProtocolException, TransportError {
         try {
-            if (super.add(cryptoFrame)) {
-                long availableBytes = bytesAvailable();
-                long contiguousBytes = readOffset + availableBytes;
-                // https://www.rfc-editor.org/rfc/rfc9000.html#name-cryptographic-message-buffe
-                // "Implementations MUST support buffering at least 4096 bytes of data received in out-of-order CRYPTO frames."
-                if (cryptoFrame.getUpToOffset() - contiguousBytes > MAX_STREAM_GAP) {
-                    throw new TransportError(CRYPTO_BUFFER_EXCEEDED);
-                }
+            boolean newContent = receiveBuffer.add(cryptoFrame);
+            long availableBytes = receiveBuffer.bytesAvailable();
+            long contiguousBytes = readOffset + availableBytes;
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-cryptographic-message-buffe
+            // "Implementations MUST support buffering at least 4096 bytes of data received in out-of-order CRYPTO frames."
+            if (cryptoFrame.getUpToOffset() - contiguousBytes > MAX_STREAM_GAP) {
+                throw new TransportError(CRYPTO_BUFFER_EXCEEDED);
+            }
+            if (newContent) {
                 // Because the stream may not have enough bytes available to read the whole message, but enough to
                 // read the size, the msg size read must be remembered for the next invocation of this method.
                 // So, when this method is called, either one of the following cases holds:
@@ -115,7 +119,7 @@ public class CryptoStream extends BaseStream {
                     if (!msgSizeRead && availableBytes >= 4) {
                         // Determine message length (a TLS Handshake message starts with 1 byte type and 3 bytes length)
                         ByteBuffer buffer = ByteBuffer.allocate(4);
-                        readOffset += read(buffer);
+                        readOffset += receiveBuffer.read(buffer);
                         msgType = buffer.get(0);
                         buffer.put(0, (byte) 0);  // Mask 1st byte as it contains the TLS handshake msg type
                         buffer.flip();
@@ -130,7 +134,7 @@ public class CryptoStream extends BaseStream {
                         ByteBuffer msgBuffer = ByteBuffer.allocate(4 + msgSize);
                         msgBuffer.putInt(msgSize);
                         msgBuffer.put(0, msgType);
-                        int read = read(msgBuffer);
+                        int read = receiveBuffer.read(msgBuffer);
                         readOffset += read;
                         availableBytes -= read;
                         msgSizeRead = false;
@@ -144,8 +148,9 @@ public class CryptoStream extends BaseStream {
                         messagesReceived.add(tlsMessage);
                     }
                 }
-            } else {
-                log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + readOffset());
+            }
+            else {
+                log.debug("Discarding " + cryptoFrame + ", because stream already parsed to " + receiveBuffer.readOffset());
             }
         }
         catch (IOException e) {
