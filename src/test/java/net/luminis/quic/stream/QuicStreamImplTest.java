@@ -749,14 +749,14 @@ class QuicStreamImplTest {
     void readReturnsMinusOneWhenEndOfStreamIsReached() throws Exception {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));
-        ByteBuffer buffer = ByteBuffer.allocate(50);
+        InputStream inputStream = quicStream.getInputStream();
 
         // When
-        int read = quicStream.read(buffer);
+        int read = inputStream.read(new byte[50]);
         assertThat(read).isEqualTo(10);
 
         // Then
-        read = quicStream.read(buffer);
+        read = inputStream.read(new byte[50]);
         assertThat(read).isEqualTo(-1);
     }
 
@@ -773,18 +773,18 @@ class QuicStreamImplTest {
     }
 
     @Test
-    void availableReturnsNegativeWhenEndOfStreamIsReached() throws Exception {
+    void availableReturnsZeroWhenEndOfStreamIsReached() throws Exception {
         // Given
         quicStream.add(new StreamFrame(9, new byte[10], true));
-        ByteBuffer buffer = ByteBuffer.allocate(50);
+        InputStream inputStream = quicStream.getInputStream();
 
         // When
-        int read = quicStream.read(buffer);
+        int read = inputStream.read(new byte[50]);
         assertThat(read).isEqualTo(10);
 
         // Then
-        int available = quicStream.bytesAvailable();
-        assertThat(available).isEqualTo(-1);
+        int available = inputStream.available();
+        assertThat(available).isEqualTo(0);
     }
 
     @Test
