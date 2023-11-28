@@ -46,7 +46,7 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERR
 import static net.luminis.quic.core.EncryptionLevel.App;
 
 
-public class QuicStreamImpl extends BaseStream implements QuicStream {
+public class QuicStreamImpl implements QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
@@ -64,10 +64,9 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
     private long receiverFlowControlLimit;
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
-    private volatile long lastOffset = -1;
     private int sendBufferSize = 50 * 1024;
     private long largestOffsetReceived;
-
+    private final ReceiveBufferImpl receiveBuffer;
     
     public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, streamManager, flowController, new NullLogger());
@@ -94,6 +93,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         inputStream = new StreamInputStream();
         outputStream = createStreamOutputStream();
+        receiveBuffer = new ReceiveBufferImpl();
 
         flowController.streamOpened(this);
         receiverFlowControlLimit = connection.getInitialMaxStreamData();
@@ -122,11 +122,8 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
             if (frame.getUpToOffset() > receiverFlowControlLimit) {
                 throw new TransportError(FLOW_CONTROL_ERROR);
             }
-            super.add(frame);
+            receiveBuffer.add(frame);
             largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
-            if (frame.isFinal()) {
-                lastOffset = frame.getUpToOffset();
-            }
             addMonitor.notifyAll();
         }
     }
@@ -137,11 +134,6 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
      */
     long getCurrentReceiveOffset() {
         return largestOffsetReceived;
-    }
-
-    @Override
-    protected boolean isStreamEnd(long offset) {
-        return lastOffset >= 0 && offset >= lastOffset;
     }
 
     @Override
@@ -214,7 +206,13 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
 
         @Override
         public int available() throws IOException {
-            return Integer.max(0, QuicStreamImpl.this.bytesAvailable());
+            long bytesAvailable = receiveBuffer.bytesAvailable();
+            if (bytesAvailable > Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+            else {
+                return (int) bytesAvailable;
+            }
         }
 
         // InputStream.read() contract:
@@ -260,7 +258,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                     try {
                         blockingReaderThread = Thread.currentThread();
 
-                        int bytesRead = QuicStreamImpl.this.read(ByteBuffer.wrap(buffer, offset, len));
+                        int bytesRead = receiveBuffer.read(ByteBuffer.wrap(buffer, offset, len));
                         if (bytesRead > 0) {
                             updateAllowedFlowControl(bytesRead);
                             return bytesRead;
@@ -282,10 +280,10 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
                     }
                 }
 
-                if (bytesAvailable() <= 0) {
+                if (receiveBuffer.bytesAvailable() == 0) {
                     long waited = Duration.between(readAttemptStarted, Instant.now()).toMillis();
                     if (waited > waitForNextFrameTimeout) {
-                        throw new SocketTimeoutException("Read timeout on stream " + streamId + "; read up to " + readOffset());
+                        throw new SocketTimeoutException("Read timeout on stream " + streamId + "; read up to " + receiveBuffer.readOffset());
                     } else {
                         waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
                     }
@@ -301,7 +299,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         }
 
         private void stopInput(long errorCode) {
-            if (! allDataReceived()) {
+            if (! receiveBuffer.allDataReceived()) {
                 connection.send(new StopSendingFrame(quicVersion, streamId, errorCode), this::retransmitStopInput, true);
             }
             closed = true;
@@ -314,7 +312,7 @@ public class QuicStreamImpl extends BaseStream implements QuicStream {
         private void retransmitStopInput(QuicFrame lostFrame) {
             assert(lostFrame instanceof StopSendingFrame);
 
-            if (! allDataReceived()) {
+            if (! receiveBuffer.allDataReceived()) {
                 connection.send(lostFrame, this::retransmitStopInput);
             }
         }
