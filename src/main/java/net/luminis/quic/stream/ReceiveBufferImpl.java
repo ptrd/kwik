@@ -44,6 +44,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long readUpToOffset = 0;
     private volatile long streamEndOffset = -1;
     private volatile long bufferedOutOfOrderData;
+    private final int maxCombinedFrameSize;
+
+    public ReceiveBufferImpl(int maxCombinedFrameSize) {
+        this.maxCombinedFrameSize = maxCombinedFrameSize;
+    }
 
     @Override
     public long bytesAvailable() {
@@ -115,9 +120,24 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
         if (before != null && overlapping(before, frame)) {
-            combinedWithBefore = combine(before, frame);
-            outOfOrderFrames.remove(before);
-            bufferedOutOfOrderData -= before.getLength();
+            if (combinedLength(before, frame) <= maxCombinedFrameSize) {
+                combinedWithBefore = combine(before, frame);
+                outOfOrderFrames.remove(before);
+                bufferedOutOfOrderData -= before.getLength();
+            }
+            else {
+                combinedWithBefore = shrinkFrame(frame, before.getUpToOffset(), frame.getUpToOffset());
+                // Special case: because the shrunk frame got a new (start) offset, it could now overlap with a different
+                // "before", that was after the original "before".
+                // For example: when adding 2502..3501 to 1000..3499, 3500..3500 (with max 2500),
+                // after shrinking you get  3500..3501 and 3500..3500 becomes a new "before".
+                if (outOfOrderFrames.lower(combinedWithBefore) != before) {
+                    StreamElement newBefore = outOfOrderFrames.lower(combinedWithBefore);
+                    combinedWithBefore = combine(newBefore, combinedWithBefore);
+                    outOfOrderFrames.remove(newBefore);
+                    bufferedOutOfOrderData -= newBefore.getLength();
+                }
+            }
         }
         else {
             combinedWithBefore = frame;
@@ -132,9 +152,15 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     StreamElement combineWithElementsAfter(StreamElement frameToAdd) {
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
         while (after != null && overlapping(frameToAdd, after)) {
-            StreamElement newCombined = combine(frameToAdd, after);
-            outOfOrderFrames.remove(after);
-            bufferedOutOfOrderData -= after.getLength();
+            StreamElement newCombined;
+            if (combinedLength(frameToAdd, after) <= maxCombinedFrameSize) {
+                newCombined = combine(frameToAdd, after);
+                outOfOrderFrames.remove(after);
+                bufferedOutOfOrderData -= after.getLength();
+            }
+            else {
+                newCombined = shrinkFrame(frameToAdd, frameToAdd.getOffset(), after.getOffset());
+            }
             after = outOfOrderFrames.higher(newCombined);
             frameToAdd = newCombined;
         }
@@ -144,6 +170,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     static boolean overlapping(StreamElement frame1, StreamElement frame2) {
         assert frame1.getOffset() <= frame2.getOffset();
         return frame1.getUpToOffset() > frame2.getOffset();
+    }
+
+    static long combinedLength(StreamElement frame1, StreamElement frame2) {
+        return Long.max(frame1.getUpToOffset(), frame2.getUpToOffset()) - Long.min(frame1.getOffset(), frame2.getOffset());
     }
 
     static StreamElement combine(StreamElement frame1, StreamElement frame2) {
@@ -171,6 +201,22 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return new SimpleStreamElement(frame1.getOffset(), combinedData, frame1.isFinal() || frame2.isFinal());
     }
 
+    private static StreamElement shrinkFrame(StreamElement frame, long newStartOffset, long newUpToOffset) {
+        assert newStartOffset >= frame.getOffset();
+        assert newStartOffset <= frame.getUpToOffset();
+        assert newUpToOffset <= frame.getUpToOffset();
+        assert newUpToOffset >= frame.getOffset();
+
+        int newLength = (int) (newUpToOffset - newStartOffset);
+        if (newLength == frame.getLength()) {
+            return frame;
+        }
+        byte[] limitedData = new byte[newLength];
+        System.arraycopy(frame.getStreamData(), (int) (newStartOffset - frame.getOffset()), limitedData, 0, newLength);
+        return new SimpleStreamElement(newStartOffset, limitedData, frame.isFinal());
+    }
+
+
     static boolean contains(StreamElement containing, StreamElement contained) {
         return containing.getOffset() <= contained.getOffset()
                 && containing.getUpToOffset() >= contained.getUpToOffset();
@@ -188,6 +234,14 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     // For testing only
     int checkOverlap() {
         return countOverlap(contiguousFrames.iterator()) + countOverlap(outOfOrderFrames.iterator());
+    }
+
+    int maxOutOfOrderFrameSize() {
+        return outOfOrderFrames.stream().mapToInt(StreamElement::getLength).max().orElse(0);
+    }
+
+    int countOutOfOrderFrames() {
+        return outOfOrderFrames.size();
     }
 
     private int countOverlap(Iterator<StreamElement> iterator) {
