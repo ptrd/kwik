@@ -516,6 +516,24 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void addZeroSizeFrame() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(234, 0));
+        receiveBuffer.add(new DataFrame(235, 0));
+        receiveBuffer.add(new DataFrame(236, 0));
+        receiveBuffer.add(new DataFrame(235, 1));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(101);
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(2);
+        checkDataCanBeReadAfterAdding(100, new DataFrame(0, 100));
+    }
+
+    @Test
     void testRandomStreamElementAdditions() {
         Random random = new Random();
         int streamEnd = 100_000;

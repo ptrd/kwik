@@ -93,7 +93,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public boolean add(StreamElement frame) {
-        addWithoutOverlap(frame);
+        if (frame.getLength() > 0) {
+            addWithoutOverlap(frame);
+        }
         if (frame.isFinal()) {
             streamEndOffset = frame.getUpToOffset();
         }
