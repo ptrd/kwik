@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.send;
 
+import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -26,7 +27,6 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.core.*;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.test.FieldReader;
@@ -70,7 +70,7 @@ class SenderImplTest extends AbstractSenderTest {
         Aead aead = TestUtils.createKeys();
         when(connectionSecrets.getOwnAead(any(EncryptionLevel.class))).thenReturn(aead);
 
-        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, 100, new NullLogger());
+        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, "", 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
     }
 

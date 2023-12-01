@@ -164,7 +164,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         idleTimer = new IdleTimer(this, log);
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
-                        this, initialRtt, log);
+                        this, "", initialRtt, log);
         sender.enableAllLevels();
         idleTimer.setPtoSupplier(sender::getPto);
         ackGenerator = sender.getGlobalAckGenerator();

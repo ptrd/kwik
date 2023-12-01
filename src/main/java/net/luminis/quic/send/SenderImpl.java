@@ -110,12 +110,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
 
     public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
-                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
-        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, initialRtt, log);
+                      QuicConnectionImpl connection, String id, Integer initialRtt, Logger log) {
+        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, id, initialRtt, log);
     }
 
     public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
-                      QuicConnectionImpl connection, Integer initialRtt, Logger log) {
+                      QuicConnectionImpl connection, String id, Integer initialRtt, Logger log) {
         this.clock = clock;
         this.maxPacketSize = maxPacketSize;
         this.socket = socket;
@@ -140,7 +140,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         idleTimer = connection.getIdleTimer();
 
-        senderThread = new Thread(() -> sendLoop(), "sender-loop");
+        senderThread = new Thread(() -> sendLoop(), "sender" + (!id.isBlank()? "-" + id: ""));
         senderThread.setDaemon(true);
     }
 

@@ -130,7 +130,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         ));
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, initialRtt, this.log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, ByteUtils.bytesToHex(originalDcid), initialRtt, this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
