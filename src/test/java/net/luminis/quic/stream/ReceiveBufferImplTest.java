@@ -534,6 +534,20 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenFramesAreAddedToContiguousStreamOverlapIsRemoved() {
+        // Given                        0..249  500..749
+        receiveBuffer.add(new DataFrame(0, 250));
+        receiveBuffer.add(new DataFrame(500, 250));
+
+        // When                          200..599
+        receiveBuffer.add(new DataFrame(200, 400));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(750);
+    }
+
+    @Test
     void testRandomStreamElementAdditions() {
         Random random = new Random();
         int streamEnd = 100_000;

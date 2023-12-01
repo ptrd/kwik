@@ -104,6 +104,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
             StreamElement nextFrame = outOfOrderFrames.pollFirst();
             if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
+                if (nextFrame.getOffset() < contiguousUpToOffset) {
+                    nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
+                }
                 // First add frame and ...
                 contiguousFrames.add(nextFrame);
                 // ... then update the offset (otherwise: race condition)
