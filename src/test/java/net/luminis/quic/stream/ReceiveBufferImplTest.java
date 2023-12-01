@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -487,6 +488,31 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(2502);
         checkDataCanBeReadAfterAdding(3502, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void testRandomStreamElementAdditions() {
+        Random random = new Random();
+        int streamEnd = 100_000;
+        int added = 0;
+        String bufferContentBefore = "";
+        DataFrame frame = null;
+        try {
+            while (receiveBuffer.bytesAvailable() < streamEnd) {
+                bufferContentBefore = receiveBuffer.toDebugString(5000);
+                int offset = random.nextInt(streamEnd);
+                int length = random.nextInt(1000);
+                frame = new DataFrame(offset, length);
+                added++;
+                receiveBuffer.add(frame);
+                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+            }
+            System.out.println("Tested random stream element additions with " + added + " frames");
+        }
+        catch (AssertionError e) {
+            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
+            throw e;
+        }
     }
 
     @Test

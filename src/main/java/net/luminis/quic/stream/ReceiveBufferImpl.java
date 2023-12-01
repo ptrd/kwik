@@ -223,11 +223,15 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     public String toDebugString() {
+        return toDebugString(100);
+    }
+
+    public String toDebugString(int maxElements) {
         if (outOfOrderFrames.isEmpty()) {
             return "(none)";
         }
         else {
-            return outOfOrderFrames.stream().limit(100).map(Object::toString).collect(Collectors.joining(" "));
+            return outOfOrderFrames.stream().limit(maxElements).map(Object::toString).collect(Collectors.joining(" "));
         }
     }
 
@@ -251,6 +255,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             while (iterator.hasNext()) {
                 StreamElement next = iterator.next();
                 if (current.getUpToOffset() > next.getOffset()) {
+                    System.out.println("Overlap: " + current + " and " + next);
                     overlap += current.getUpToOffset() - next.getOffset();
                 }
                 current = next;
