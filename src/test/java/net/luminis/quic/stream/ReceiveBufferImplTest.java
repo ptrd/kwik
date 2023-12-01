@@ -153,6 +153,18 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void emtpyFinalFrameEndsStream() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000, false));
+
+        // When
+        receiveBuffer.add(new DataFrame(1000, 0, true));
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
     void whenAllDataIsReceivedDoesNotMeansAllDataIsRead() {
         // Given
         receiveBuffer.add(new DataFrame(0, 100, true));
@@ -276,6 +288,19 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(220);
         checkDataCanBeReadAfterAdding(420, new DataFrame(0, 200));
+    }
+
+    @Test
+    void whenDuplicatedFramesWithDifferentFinalFlagAreCombinedFinalIsStillSet() {
+        // Given
+        receiveBuffer.add(new DataFrame(20, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(20, 100, true));
+        receiveBuffer.add(new DataFrame(0, 120));
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
     }
 
     @Test
