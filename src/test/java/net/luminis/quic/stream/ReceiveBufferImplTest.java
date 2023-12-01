@@ -5,16 +5,18 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReceiveBufferImplTest {
 
     private ReceiveBufferImpl receiveBuffer;
+    private static final int MAX_COMBINED_FRAME_SIZE = 2500;
 
     @BeforeEach
     void setUpObjectUnderTest() {
-        receiveBuffer = new ReceiveBufferImpl();
+        receiveBuffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
     }
 
     @Test
@@ -151,6 +153,18 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void emtpyFinalFrameEndsStream() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000, false));
+
+        // When
+        receiveBuffer.add(new DataFrame(1000, 0, true));
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
     void whenAllDataIsReceivedDoesNotMeansAllDataIsRead() {
         // Given
         receiveBuffer.add(new DataFrame(0, 100, true));
@@ -274,6 +288,19 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(220);
         checkDataCanBeReadAfterAdding(420, new DataFrame(0, 200));
+    }
+
+    @Test
+    void whenDuplicatedFramesWithDifferentFinalFlagAreCombinedFinalIsStillSet() {
+        // Given
+        receiveBuffer.add(new DataFrame(20, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(20, 100, true));
+        receiveBuffer.add(new DataFrame(0, 120));
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
     }
 
     @Test
@@ -434,6 +461,118 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void frameShouldNotBeCombinedWithBeforeWhenLargerThanMax() {
+        // Given                        1000..1999 2200..3199 3500..4499
+        receiveBuffer.add(new DataFrame(1000, 1000));
+        receiveBuffer.add(new DataFrame(2200, 1000));
+        receiveBuffer.add(new DataFrame(3500, 1000));
+
+        // When                         1900..2299
+        receiveBuffer.add(new DataFrame(1900, 400));
+        //                              3100..3599
+        receiveBuffer.add(new DataFrame(3100, 600));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(3500);
+        checkDataCanBeReadAfterAdding(4500, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void frameShouldNotBeCombinedWithAfterWhenLargerThanMax() {
+        // Given                        1000..1999 2200..3199 3500..4499
+        receiveBuffer.add(new DataFrame(1000, 1000));
+        receiveBuffer.add(new DataFrame(2200, 1000));
+        receiveBuffer.add(new DataFrame(3500, 1000));
+
+        //                              3100..3599
+        receiveBuffer.add(new DataFrame(3100, 600));
+        // When                         1900..2299
+        receiveBuffer.add(new DataFrame(1900, 400));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(3500);
+        checkDataCanBeReadAfterAdding(4500, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void whenShrunkFrameOverlapsWithFormerNextThatHoweverBecomesBefore() {
+        // Given                        1000..3499
+        receiveBuffer.add(new DataFrame(1000, 2500));
+        //                              2501..3500
+        receiveBuffer.add(new DataFrame(2501, 1000));
+
+        // When                          2502..3501
+        receiveBuffer.add(new DataFrame(2502, 1000));
+
+        // Then                          1000..3501
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(2502);
+        checkDataCanBeReadAfterAdding(3502, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void addZeroSizeFrame() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(234, 0));
+        receiveBuffer.add(new DataFrame(235, 0));
+        receiveBuffer.add(new DataFrame(236, 0));
+        receiveBuffer.add(new DataFrame(235, 1));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(101);
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(2);
+        checkDataCanBeReadAfterAdding(100, new DataFrame(0, 100));
+    }
+
+    @Test
+    void whenFramesAreAddedToContiguousStreamOverlapIsRemoved() {
+        // Given                        0..249  500..749
+        receiveBuffer.add(new DataFrame(0, 250));
+        receiveBuffer.add(new DataFrame(500, 250));
+
+        // When                          200..599
+        receiveBuffer.add(new DataFrame(200, 400));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(750);
+    }
+
+    @Test
+    void testRandomStreamElementAdditions() {
+        Random random = new Random();
+        int streamEnd = 100_000;
+        int added = 0;
+        String bufferContentBefore = "";
+        DataFrame frame = null;
+        try {
+            while (receiveBuffer.bytesAvailable() < streamEnd) {
+                bufferContentBefore = receiveBuffer.toDebugString(5000);
+                int offset = random.nextInt(streamEnd);
+                int length = random.nextInt(1000);
+                frame = new DataFrame(offset, length);
+                added++;
+                receiveBuffer.add(frame);
+                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+            }
+            System.out.println("Tested random stream element additions with " + added + " frames");
+        }
+        catch (AssertionError e) {
+            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
+            throw e;
+        }
+    }
+
+    @Test
     void testProperContainingFrame() {
         // Given
         DataFrame frame1 = new DataFrame(100, 100);
@@ -488,6 +627,7 @@ class ReceiveBufferImplTest {
 
         // Then
         assertThat(combined.equals(frame1) || combined.equals(frame2)).isTrue();
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
     }
 
     @Test
@@ -502,6 +642,7 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
         assertThat(combined.getLength()).isEqualTo(100);
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
 
@@ -517,6 +658,7 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
         assertThat(combined.getLength()).isEqualTo(130);
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
 
@@ -532,6 +674,7 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
         assertThat(combined.getLength()).isEqualTo(100);
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
 
@@ -547,6 +690,7 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
         assertThat(combined.getLength()).isEqualTo(120);
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
 
