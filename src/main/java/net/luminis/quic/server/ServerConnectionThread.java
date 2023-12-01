@@ -70,7 +70,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     }
 
     @Override
-    public void terminate() {
+    public void dispose() {
         connectionReceiverThread.interrupt();
     }
 
