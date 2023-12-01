@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
  */
 public class ReceiveBufferImpl implements ReceiveBuffer {
 
+    private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
+
     private NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
     private Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
     private volatile long contiguousUpToOffset = 0;
@@ -46,6 +48,21 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long bufferedOutOfOrderData;
     private final int maxCombinedFrameSize;
 
+    public ReceiveBufferImpl() {
+        this(DEFAULT_MAX_COMBINED_FRAME_SIZE);
+    }
+
+    /**
+     * Creates a receive buffer with the given maximum combined frame size.
+     * The maximum combined frame size must balance between the following two goals:
+     * - the larger, the more bytes are copied when combining frames
+     * - the smaller, the more memory overhead there will be for buffering out-of-order frames
+     * Note that in normal circumstances, frames will usually not overlap (as this is inefficient use of network and
+     * other resources). However, attackers could send overlapping frames in order to try to make the endpoint use more
+     * memory than anticipated.
+     * @param maxCombinedFrameSize  the maximum size of a combined frame (i.e. when frames are combined to remove
+     *                              overlap, the resulting frame will not be larger than this size).
+     */
     public ReceiveBufferImpl(int maxCombinedFrameSize) {
         this.maxCombinedFrameSize = maxCombinedFrameSize;
     }
