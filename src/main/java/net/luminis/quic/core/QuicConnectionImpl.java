@@ -581,7 +581,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
         getStreamManager().abortAll();
         getSender().stop();
-        log.info("Idle timeout: silently closing connection after " + idleTime + " ms of inactivity (" + bytesToHex(getSourceConnectionId()) + ")");
+        log.info("Closing " + this + " after " + idleTime + " ms of inactivity (idle timeout)");
         log.getQLog().emitConnectionClosedEvent(Instant.now());
         terminate();
     }
