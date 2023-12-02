@@ -22,6 +22,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,7 @@ public class TestClock extends Clock {
 
     public TestClock() {
         instant = Instant.now();
-        zone = ZoneId.of("Z");
+        zone = ZoneOffset.UTC;
         listeners = new ArrayList<>();
     }
 
