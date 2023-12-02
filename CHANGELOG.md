@@ -1,5 +1,13 @@
 # Releases
 
+## 0.8.4 (2023-12-02)
+
+- Enforce flow control limits
+- Better server side logging of connections being closed
+- New receive buffer implementation, both for crypto and plain data, that is more memory efficient in relation to badly
+  behaving clients
+- Fix: cleanup server connection when closed
+
 ## 0.8.3 (2023-11-06)
 
 Relocated maven artifact to `tech.kwik` group id.
