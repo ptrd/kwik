@@ -26,25 +26,25 @@ import java.time.Instant;
 
 public class ClientAddressFilter implements ServerConnectionProxy {
 
-    private final ServerConnectionProxy connectionCandidate;
+    private final ServerConnectionProxy connection;
     private final InetSocketAddress clientAddress;
     private final Logger log;
 
-    public ClientAddressFilter(ServerConnectionProxy connectionCandidate, InetSocketAddress clientAddress, Logger log) {
-        this.connectionCandidate = connectionCandidate;
+    public ClientAddressFilter(ServerConnectionProxy connection, InetSocketAddress clientAddress, Logger log) {
+        this.connection = connection;
         this.clientAddress = clientAddress;
         this.log = log;
     }
 
     @Override
     public byte[] getOriginalDestinationConnectionId() {
-        return connectionCandidate.getOriginalDestinationConnectionId();
+        return connection.getOriginalDestinationConnectionId();
     }
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
         if (sourceAddress.equals(clientAddress)) {
-            connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
+            connection.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
         }
         else {
             log.warn(String.format("Dropping packet with unmatched source address %s (expected %s).", sourceAddress, clientAddress));
@@ -53,11 +53,11 @@ public class ClientAddressFilter implements ServerConnectionProxy {
 
     @Override
     public boolean isClosed() {
-        return connectionCandidate.isClosed();
+        return connection.isClosed();
     }
 
     @Override
     public void dispose() {
-        connectionCandidate.dispose();
+        connection.dispose();
     }
 }

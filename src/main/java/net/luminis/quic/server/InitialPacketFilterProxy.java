@@ -35,19 +35,19 @@ import java.time.Instant;
  */
 public class InitialPacketFilterProxy implements ServerConnectionProxy {
 
-    private final ServerConnectionProxy connectionCandidate;
+    private final ServerConnectionProxy connection;
     private final Version version;
     private final Logger log;
 
-    public InitialPacketFilterProxy(ServerConnectionProxy connectionCandidate, Version version, Logger log) {
-        this.connectionCandidate = connectionCandidate;
+    public InitialPacketFilterProxy(ServerConnectionProxy connection, Version version, Logger log) {
+        this.connection = connection;
         this.version = version;
         this.log = log;
     }
 
     @Override
     public byte[] getOriginalDestinationConnectionId() {
-        return connectionCandidate.getOriginalDestinationConnectionId();
+        return connection.getOriginalDestinationConnectionId();
     }
 
     @Override
@@ -57,7 +57,7 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
         data.reset();
         if (LongHeaderPacket.isLongHeaderPacket(flags, version)) {
             if (InitialPacket.isInitial((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
-                connectionCandidate.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
+                connection.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
             }
             else {
                 String type = LongHeaderPacket.determineType(flags, version).getSimpleName();
@@ -71,11 +71,11 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
 
     @Override
     public boolean isClosed() {
-        return connectionCandidate.isClosed();
+        return connection.isClosed();
     }
 
     @Override
     public void dispose() {
-        connectionCandidate.dispose();
+        connection.dispose();
     }
 }
