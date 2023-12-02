@@ -300,13 +300,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             // "When using ALPN, endpoints MUST immediately close a connection (...) if an application protocol is not negotiated."
             List<String> requestedProtocols = ((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols();
             Optional<String> applicationProtocol = applicationProtocolRegistry.selectSupportedApplicationProtocol(requestedProtocols);
-            applicationProtocol
-                    .map(protocol -> {
-                        // Add negotiated protocol to TLS response (Encrypted Extensions message)
-                        tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
-                        return protocol; })
-                    .map(selectedProtocol -> negotiatedApplicationProtocol = selectedProtocol)
-                    .orElseThrow(() -> new NoApplicationProtocolAlert(requestedProtocols));
+            if (applicationProtocol.isPresent()) {
+                negotiatedApplicationProtocol = applicationProtocol.get();
+                // Add negotiated protocol to TLS response (Encrypted Extensions message)
+                tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol.get()));
+            }
+            else {
+                throw new NoApplicationProtocolAlert(requestedProtocols);
+            }
         }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
