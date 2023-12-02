@@ -25,6 +25,7 @@ import java.net.InetSocketAddress;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -69,14 +70,15 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
         return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
     }
 
-    void removeConnection(ServerConnectionImpl connection) {
+    ServerConnectionProxy removeConnection(ServerConnectionImpl connection) {
         // Remove the entry this is registered with the original dcid
-        currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
+        ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
 
         // Remove all entries that are registered with the active cids
         List<ServerConnectionProxy> removedConnections = connection.getActiveConnectionIds().stream()
                 .map(cid -> new ConnectionSource(cid))
                 .map(cs -> currentConnections.remove(cs))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         // For the active connection IDs, all entries must have pointed to the same connection.
         if (removedConnections.stream().distinct().count() != 1) {
@@ -86,6 +88,9 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
         if (! connection.isClosed()) {
             log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed.");
         }
+
+        // Preferably, return the object registered with one of the active cid's, otherwise the one registered with the original dcid.
+        return removedConnections.stream().findAny().orElse(removed);
     }
 
     boolean isEmpty() {

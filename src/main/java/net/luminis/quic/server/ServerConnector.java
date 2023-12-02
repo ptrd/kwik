@@ -18,13 +18,13 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.receive.RawPacket;
-import net.luminis.quic.receive.Receiver;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.receive.RawPacket;
+import net.luminis.quic.receive.Receiver;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
 
@@ -36,7 +36,10 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -79,7 +82,7 @@ public class ServerConnector {
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
         serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                this.requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, connectionRegistry::removeConnection, log);
+                this.requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, this::closed, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
@@ -259,6 +262,11 @@ public class ServerConnector {
                 log.error("Sending version negotiation packet failed", e);
             }
         }
+    }
+
+    private void closed(ServerConnectionImpl connection) {
+        ServerConnectionProxy removedConnection = connectionRegistry.removeConnection(connection);
+        removedConnection.dispose();
     }
 
     private class ServerConnectorContext implements Context {
