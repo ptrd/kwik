@@ -87,7 +87,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         catch (InterruptedException e) {
             // Terminate process and thread, see terminate() method
         }
-        catch (Exception error) {
+        catch (Throwable error) {
             // Of course, this should never happen. But if it does, there is no point in going on with this connection.
             serverConnection.abortConnection(error);
         }

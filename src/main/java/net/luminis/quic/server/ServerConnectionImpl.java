@@ -167,7 +167,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void abortConnection(Throwable error) {
-        log.error(this.toString() + " aborted due to internal error", error);
+        log.error(this + " aborted due to internal error", error);
         closeCallback.accept(this);
     }
 
