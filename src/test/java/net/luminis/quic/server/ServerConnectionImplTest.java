@@ -19,7 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.ConnectionCloseFrame;
@@ -27,7 +27,6 @@ import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.FrameProcessor;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.*;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -43,7 +42,11 @@ import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.HandshakeFailureAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
-import net.luminis.tls.handshake.*;
+import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.handshake.ServerMessageSender;
+import net.luminis.tls.handshake.TlsServerEngine;
+import net.luminis.tls.handshake.TlsServerEngineFactory;
+import net.luminis.tls.handshake.TlsStatusEventHandler;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -223,7 +226,7 @@ class ServerConnectionImplTest {
         connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
         // Then
-        assertThat(connection.getQuicVersion().equals(Version.QUIC_version_2));
+        assertThat(connection.getQuicVersion()).isEqualTo(QuicConnection.QuicVersion.V2);
         verify(connectionSecrets).recomputeInitialKeys();
     }
 
@@ -241,7 +244,7 @@ class ServerConnectionImplTest {
         connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
 
         // Then
-        assertThat(connection.getQuicVersion().equals(Version.QUIC_version_1));
+        assertThat(connection.getQuicVersion()).isEqualTo(QuicConnection.QuicVersion.V1);
         verify(connectionSecrets, never()).recomputeInitialKeys();
     }
 
