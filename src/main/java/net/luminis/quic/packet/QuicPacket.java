@@ -452,11 +452,11 @@ abstract public class QuicPacket {
         byte flags = packetBuffer.get(0);
         if ((flags & 0x80) == 0x80) {
             // Long header: 4 bits masked
-            flags ^= mask[0] & 0x0f;
+            flags ^= (byte) (mask[0] & 0x0f);
         }
         else {
             // Short header: 5 bits masked
-            flags ^= mask[0] & 0x1f;
+            flags ^= (byte) (mask[0] & 0x1f);
         }
         packetBuffer.put(0, flags);
 

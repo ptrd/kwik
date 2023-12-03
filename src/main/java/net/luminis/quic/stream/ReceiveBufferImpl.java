@@ -277,8 +277,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             while (iterator.hasNext()) {
                 StreamElement next = iterator.next();
                 if (current.getUpToOffset() > next.getOffset()) {
-                    System.out.println("Overlap: " + current + " and " + next);
-                    overlap += current.getUpToOffset() - next.getOffset();
+                    overlap = overlap + (int) (current.getUpToOffset() - next.getOffset());
                 }
                 current = next;
             }
