@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -217,4 +217,12 @@ class RttEstimatorTest {
         assertThat(rttEstimator.getSmoothedRtt()).isEqualTo(3);
     }
 
+    @Test
+    void registerSamplesWithDurationLargerThenOneSecondCorrectly() {
+        Instant start = Instant.now();
+        Instant end = start.plusMillis(1016);
+        rttEstimator.addSample(end, start,0);
+
+        assertThat(rttEstimator.getSmoothedRtt()).isGreaterThan(1000);
+    }
 }

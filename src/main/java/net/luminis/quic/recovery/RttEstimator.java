@@ -20,7 +20,6 @@ package net.luminis.quic.recovery;
 
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.recovery.PacketStatus;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -73,7 +72,7 @@ public class RttEstimator {
 
         int previousSmoothed = smoothedRtt;
 
-        int rttSample = Duration.between(timeSent, timeReceived).getNano() / 1_000_000;
+        int rttSample = (int) Duration.between(timeSent, timeReceived).toMillis();
         if (rttSample < minRtt)
             minRtt = rttSample;
         // Adjust for ack delay if it's plausible. Because times are truncated at millisecond precision,
