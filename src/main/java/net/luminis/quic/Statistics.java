@@ -28,6 +28,11 @@ public class Statistics {
         senderStatistics = statistics;
     }
 
+    @SuppressWarnings("NarrowCalculation")
+    public float efficiency() {
+        return senderStatistics.bytesSent() > 0? (float) ((senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent()) / 10.0) : 0;
+    }
+
     @Override
     public String toString() {
         return String.format(
@@ -35,7 +40,7 @@ public class Statistics {
                 "\nsmoothed RTT: %d\nRTT var: %d\nlatest RTT: %d",
                 senderStatistics.datagramsSent(), senderStatistics.packetsSent(), senderStatistics.bytesSent(),
                 senderStatistics.dataBytesSent(),
-                senderStatistics.bytesSent() > 0? (senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent())/10.0: 0,
+                efficiency(),
                 senderStatistics.lostPackets(),
                 senderStatistics.smoothedRtt(), senderStatistics.rttVar(), senderStatistics.latestRtt());
     }
