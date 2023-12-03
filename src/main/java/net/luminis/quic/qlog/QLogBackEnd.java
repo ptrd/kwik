@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -21,6 +21,7 @@ package net.luminis.quic.qlog;
 import net.luminis.quic.qlog.event.*;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
@@ -32,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 public class QLogBackEnd {
 
     private final BlockingQueue<QLogEvent> queue;
-    private Map<byte[], ConnectionQLog> connections;
+    private Map<Cid, ConnectionQLog> connections;
 
     public QLogBackEnd() {
         this.queue = new LinkedBlockingQueue<>();
@@ -54,11 +55,12 @@ public class QLogBackEnd {
             try {
                 QLogEvent event = queue.poll(63_000, TimeUnit.MILLISECONDS);   // Should be greater than max idle-timeout
                 if (event != null) {
+                    Cid key = new Cid(event.getCid());
                     if (event instanceof ConnectionCreatedEvent) {
-                        connections.put(event.getCid(), new ConnectionQLog(event));
+                        connections.put(key, new ConnectionQLog(event));
                     }
 
-                    ConnectionQLog connectionQLog = connections.get(event.getCid());
+                    ConnectionQLog connectionQLog = connections.get(key);
                     if (connectionQLog != null) {
                         event.accept(connectionQLog);
                     }
@@ -67,7 +69,7 @@ public class QLogBackEnd {
                     }
 
                     if (event instanceof ConnectionTerminatedEvent) {
-                        connections.remove(event.getCid());
+                        connections.remove(key);
                     }
                 }
                 else {
@@ -76,6 +78,31 @@ public class QLogBackEnd {
                 }
             }
             catch (IOException | InterruptedException e) {
+            }
+        }
+    }
+
+    private static final class Cid {
+        private final byte[] cid;
+        private final int hash;
+
+        public Cid(byte[] cid) {
+            this.cid = cid;
+            hash = Arrays.hashCode(cid);
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof Cid) {
+                return Arrays.equals(cid, ((Cid) obj).cid);
+            }
+            else {
+                return false;
             }
         }
     }

@@ -94,7 +94,7 @@ public class IdleTimer {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
                 // To avoid excessively small idle timeout periods, endpoints MUST increase the idle timeout period
                 // to be at least three times the current Probe Timeout (PTO)
-                if (lastAction.plusMillis(3 * currentPto).isBefore(now)) {
+                if (lastAction.plusMillis(3L * currentPto).isBefore(now)) {
                     timer.shutdown();
                     connection.silentlyCloseConnection(timeout + currentPto);
                 }

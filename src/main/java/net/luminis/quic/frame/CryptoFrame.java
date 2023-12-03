@@ -33,7 +33,7 @@ import java.time.Instant;
  * Represents a crypto frame.
  * https://www.rfc-editor.org/rfc/rfc9000.html#name-crypto-frames
  */
-public class CryptoFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
+public class CryptoFrame extends QuicFrame implements StreamElement {
 
     private long offset;
     private int length;

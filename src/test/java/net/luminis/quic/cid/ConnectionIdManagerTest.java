@@ -366,7 +366,7 @@ class ConnectionIdManagerTest {
 
         ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
         verify(sender, atLeastOnce()).send(captor.capture(), any(), any(Consumer.class));
-        assertThat(captor.getValue() instanceof NewConnectionIdFrame);
+        assertThat(captor.getValue()).isInstanceOf(NewConnectionIdFrame.class);
         assertThat(((NewConnectionIdFrame) captor.getValue()).getRetirePriorTo()).isEqualTo(1);
     }
 

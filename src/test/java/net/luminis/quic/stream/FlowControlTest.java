@@ -160,6 +160,28 @@ class FlowControlTest {
     }
 
     @Test
+    void streamNotBlockedNotCalledWhenNotBlockedOnlyByMaxData() throws InterruptedException {
+        int initialMaxData = 200;
+        int initialServerMaxStreamData = 200;
+        int streamId = 1;  // arbitrary stream id, all initial limits are identical in this test
+
+        FlowControl fc = new FlowControl(Role.Client, initialMaxData, initialServerMaxStreamData, initialServerMaxStreamData, initialServerMaxStreamData);
+        QuicStream stream = new QuicStreamImpl(streamId, conn, sm, fc);
+        FlowControlUpdateListener listener = mock(FlowControlUpdateListener.class);
+        fc.register(stream, listener);
+
+        assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(200);
+
+        // When
+        fc.process(new MaxDataFrame(400));
+
+        // Then
+        verify(listener, never()).streamNotBlocked(anyInt());
+
+        assertThat(fc.increaseFlowControlLimit(stream, 900)).isEqualTo(200);
+    }
+
+    @Test
     void streamUnblocksWhenMaxDataIsIncreased() throws InterruptedException {
         int initialMaxData = 100;
         int initialServerMaxStreamData = 500;

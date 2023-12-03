@@ -157,7 +157,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
-        initialMaxData = 10 * initialMaxStreamData;
+        initialMaxData = 10L * initialMaxStreamData;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
         streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi, initialMaxData);
@@ -300,13 +300,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             // "When using ALPN, endpoints MUST immediately close a connection (...) if an application protocol is not negotiated."
             List<String> requestedProtocols = ((ApplicationLayerProtocolNegotiationExtension) alpnExtension.get()).getProtocols();
             Optional<String> applicationProtocol = applicationProtocolRegistry.selectSupportedApplicationProtocol(requestedProtocols);
-            applicationProtocol
-                    .map(protocol -> {
-                        // Add negotiated protocol to TLS response (Encrypted Extensions message)
-                        tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(protocol));
-                        return protocol; })
-                    .map(selectedProtocol -> negotiatedApplicationProtocol = selectedProtocol)
-                    .orElseThrow(() -> new NoApplicationProtocolAlert(requestedProtocols));
+            if (applicationProtocol.isPresent()) {
+                negotiatedApplicationProtocol = applicationProtocol.get();
+                // Add negotiated protocol to TLS response (Encrypted Extensions message)
+                tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol.get()));
+            }
+            else {
+                throw new NoApplicationProtocolAlert(requestedProtocols);
+            }
         }
 
         // https://tools.ietf.org/html/draft-ietf-quic-tls-32#section-8.2
@@ -347,7 +348,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
-        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000);
+        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000L);
         parameters.setInitialMaxStreamData(initialMaxStreamData);
         parameters.setInitialMaxData(initialMaxData);
         parameters.setInitialMaxStreamsBidi(maxOpenStreamsBidi);
@@ -606,7 +607,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
 
-        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
+        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000L, transportParameters.getMaxIdleTimeout());
 
         connectionIdManager.registerPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 

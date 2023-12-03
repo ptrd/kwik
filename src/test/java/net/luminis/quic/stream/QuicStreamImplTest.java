@@ -648,7 +648,7 @@ class QuicStreamImplTest {
         int dataLength = 49 * 1024;
         quicStream.getOutputStream().write(new byte[dataLength]);
         Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
-        sendFunction.apply(1000);
+        QuicFrame unused = sendFunction.apply(1000);
         captureSendFunction(connection);
 
         // When

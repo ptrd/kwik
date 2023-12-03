@@ -557,7 +557,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
-        if (! packet.getVersion().equals(quicVersion)) {
+        if (! packet.getVersion().equals(quicVersion.getVersion())) {
             handleVersionNegotiation(packet.getVersion());
         }
         connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
@@ -567,7 +567,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void handleVersionNegotiation(Version packetVersion) {
-        if (! packetVersion.equals(quicVersion)) {
+        if (! packetVersion.equals(quicVersion.getVersion())) {
             if (packetVersion.equals(preferredVersion) && versionNegotiationStatus == VersionNegotiationStatus.NotStarted) {
                 versionNegotiationStatus = VersionNegotiationStatus.VersionChangeUnconfirmed;
                 quicVersion.setVersion(packetVersion);

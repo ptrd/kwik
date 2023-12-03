@@ -496,7 +496,7 @@ class QuicClientConnectionImplTest {
         ArgumentCaptor<QuicFrame> secondFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
         verify(sender, times(1)).send(secondFrameCaptor.capture(), any(EncryptionLevel.class), any(Consumer.class));
         QuicFrame retransmitPacket = secondFrameCaptor.getValue();
-        assertThat(retransmitPacket.equals(new RetireConnectionIdFrame(Version.getDefault(), 0)));
+        assertThat(retransmitPacket).isEqualTo(new RetireConnectionIdFrame(Version.getDefault(), 0));
     }
 
     @Test

@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.generic.InvalidIntegerEncodingException;
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
@@ -68,6 +68,11 @@ public class RetireConnectionIdFrame extends QuicFrame {
     public boolean equals(Object obj) {
         return (obj instanceof RetireConnectionIdFrame) &&
                 ((RetireConnectionIdFrame) obj).sequenceNr == this.sequenceNr;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(sequenceNr);
     }
 
     public int getSequenceNr() {

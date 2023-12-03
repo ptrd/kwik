@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.frame;
 
+import net.luminis.quic.core.Version;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.stream.StreamElement;
@@ -32,7 +32,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 
-public class StreamFrame extends QuicFrame implements StreamElement, Comparable<StreamElement> {
+public class StreamFrame extends QuicFrame implements StreamElement {
 
     private StreamType streamType;
     private int streamId;

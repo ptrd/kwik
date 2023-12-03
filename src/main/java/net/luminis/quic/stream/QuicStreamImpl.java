@@ -51,7 +51,7 @@ public class QuicStreamImpl implements QuicStream {
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
-    private Object addMonitor = new Object();
+    private final Object addMonitor = new Object();
     protected final Version quicVersion;
     protected final int streamId;
     protected final QuicConnectionImpl connection;

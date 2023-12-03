@@ -19,14 +19,14 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
+import net.luminis.quic.core.ImplementationError;
+import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.core.ImplementationError;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -301,7 +301,7 @@ public class FlowControl {
                 maxDataAllowed = frame.getMaxData();
                 if (maxDataWasReached) {
                     streamListeners.forEach((streamId, listener) -> {
-                        boolean streamWasBlockedByMaxDataOnly = maxStreamDataAssigned.get(streamId) != maxStreamDataAllowed.get(streamId);
+                        boolean streamWasBlockedByMaxDataOnly = !maxStreamDataAssigned.get(streamId).equals(maxStreamDataAllowed.get(streamId));
                         if (streamWasBlockedByMaxDataOnly) {
                             listener.streamNotBlocked(streamId);
                         }
