@@ -113,7 +113,7 @@ public class VariableLengthInteger {
                 if (nextByte == -1) {
                     throw new EOFException();
                 }
-                value = ((firstLengthByte & 0x3f) << 8) | (nextByte & 0xff);
+                value = ((long) (firstLengthByte & 0x3f) << 8) | (nextByte & 0xff);
                 break;
             case 2:
                 int byte2 = inputStream.read();
@@ -122,7 +122,7 @@ public class VariableLengthInteger {
                 if (byte2 == -1 || byte3 == -1 || byte4 == -1) {
                     throw new EOFException();
                 }
-                value = ((firstLengthByte & 0x3f) << 24) | ((byte2 & 0xff) << 16) | ((byte3 & 0xff) << 8) | (byte4 & 0xff);
+                value = ((long) (firstLengthByte & 0x3f) << 24) | ((byte2 & 0xff) << 16) | ((byte3 & 0xff) << 8) | (byte4 & 0xff);
                 break;
             case 3:
                 byte[] rawBytes = new byte[8];
