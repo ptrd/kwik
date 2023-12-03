@@ -157,7 +157,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
-        initialMaxData = 10 * initialMaxStreamData;
+        initialMaxData = 10L * initialMaxStreamData;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
         streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi, initialMaxData);
@@ -348,7 +348,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
-        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000);
+        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000L);
         parameters.setInitialMaxStreamData(initialMaxStreamData);
         parameters.setInitialMaxData(initialMaxData);
         parameters.setInitialMaxStreamsBidi(maxOpenStreamsBidi);
@@ -607,7 +607,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
 
-        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000, transportParameters.getMaxIdleTimeout());
+        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000L, transportParameters.getMaxIdleTimeout());
 
         connectionIdManager.registerPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 

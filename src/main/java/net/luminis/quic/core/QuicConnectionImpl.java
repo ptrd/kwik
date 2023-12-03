@@ -807,18 +807,18 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     @Override
     public void closeAndWait() {
         // After 3 PTO, connection should have been terminated anyway, so no use in waiting longer.
-        closeAndWait(Duration.ofMillis(4 * getSender().getPto()));
+        closeAndWait(Duration.ofMillis(4L * getSender().getPto()));
     }
 
     @Override
     public void closeAndWait(Duration maxWait) {
         close();
 
-        long maxWaitMillis = Long.min(maxWait.toMillis(), 4 * getSender().getPto());
+        long maxWaitMillis = Long.min(maxWait.toMillis(), 4L * getSender().getPto());
         long waitedMillis = 0;
 
         try {
-            // Busy wait is not ideal, but this method will only use by a client that is waiting to shutdown JVM, so don't bother.
+            // Busy wait is not ideal, but this method will only be used by a client that is waiting to shutdown JVM, so don't bother.
             while (connectionState != Status.Closed && waitedMillis < maxWaitMillis) {
                 Thread.sleep(1);
                 waitedMillis++;

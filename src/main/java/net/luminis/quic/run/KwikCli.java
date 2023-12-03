@@ -554,7 +554,7 @@ public class KwikCli {
             if (keepAliveTime > 0) {
                 quicConnection.keepAlive(keepAliveTime);
                 try {
-                    Thread.sleep((keepAliveTime + 30) * 1000);
+                    Thread.sleep((keepAliveTime + 30) * 1000L);
                 } catch (InterruptedException e) {}
             }
         }
