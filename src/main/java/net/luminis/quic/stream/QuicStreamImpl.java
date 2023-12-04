@@ -49,24 +49,15 @@ import static net.luminis.quic.core.EncryptionLevel.App;
 public class QuicStreamImpl implements QuicStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
-    protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
-    private final Object addMonitor = new Object();
     protected final Version quicVersion;
     protected final int streamId;
     protected final QuicConnectionImpl connection;
     private final StreamManager streamManager;
-    protected final FlowControl flowController;
     protected final Logger log;
     private final StreamInputStream inputStream;
     private final StreamOutputStream outputStream;
-    private volatile boolean aborted;
-    private long receiverFlowControlLimit;
-    private long lastCommunicatedMaxData;
-    private final long receiverMaxDataIncrement;
-    private int sendBufferSize = 50 * 1024;
-    private long largestOffsetReceived;
-    private final ReceiveBufferImpl receiveBuffer;
+
     
     public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
         this(Version.getDefault(), streamId, connection, streamManager, flowController, new NullLogger());
@@ -85,20 +76,11 @@ public class QuicStreamImpl implements QuicStream {
         this.streamId = streamId;
         this.connection = connection;
         this.streamManager = streamManager;
-        this.flowController = flowController;
-        if (sendBufferSize != null && sendBufferSize > 0) {
-            this.sendBufferSize = sendBufferSize;
-        }
         this.log = log;
 
         inputStream = new StreamInputStream();
-        outputStream = createStreamOutputStream();
-        receiveBuffer = new ReceiveBufferImpl();
+        outputStream = createStreamOutputStream(sendBufferSize, flowController);
 
-        flowController.streamOpened(this);
-        receiverFlowControlLimit = connection.getInitialMaxStreamData();
-        lastCommunicatedMaxData = receiverFlowControlLimit;
-        receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
     @Override
@@ -118,14 +100,7 @@ public class QuicStreamImpl implements QuicStream {
      * @param frame
      */
     void add(StreamFrame frame) throws TransportError {
-        synchronized (addMonitor) {
-            if (frame.getUpToOffset() > receiverFlowControlLimit) {
-                throw new TransportError(FLOW_CONTROL_ERROR);
-            }
-            receiveBuffer.add(frame);
-            largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
-            addMonitor.notifyAll();
-        }
+        inputStream.add(frame);
     }
 
     /**
@@ -133,7 +108,7 @@ public class QuicStreamImpl implements QuicStream {
      * @return  largest offset received so far
      */
     long getCurrentReceiveOffset() {
-        return largestOffsetReceived;
+        return inputStream.getCurrentReceiveOffset();
     }
 
     @Override
@@ -177,8 +152,8 @@ public class QuicStreamImpl implements QuicStream {
         return "Stream " + streamId;
     }
 
-    protected StreamOutputStream createStreamOutputStream() {
-        return new StreamOutputStream();
+    protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
+        return new StreamOutputStream(sendBufferSize, flowControl);
     }
 
     /**
@@ -199,10 +174,41 @@ public class QuicStreamImpl implements QuicStream {
      * Input stream for reading data received by the QUIC stream.
      */
     protected class StreamInputStream extends InputStream {
+        protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
         private volatile boolean closed;
         private volatile boolean reset;
         private volatile Thread blockingReaderThread;
+        private final ReceiveBufferImpl receiveBuffer;
+        private final Object addMonitor = new Object();
+        private long lastCommunicatedMaxData;
+        private final long receiverMaxDataIncrement;
+        private long largestOffsetReceived;
+        private long receiverFlowControlLimit;
+        private volatile boolean aborted;
+
+        public StreamInputStream() {
+            receiveBuffer = new ReceiveBufferImpl();
+
+            receiverFlowControlLimit = connection.getInitialMaxStreamData();
+            lastCommunicatedMaxData = receiverFlowControlLimit;
+            receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
+        }
+
+        void add(StreamFrame frame) throws TransportError {
+            synchronized (addMonitor) {
+                if (frame.getUpToOffset() > receiverFlowControlLimit) {
+                    throw new TransportError(FLOW_CONTROL_ERROR);
+                }
+                receiveBuffer.add(frame);
+                largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
+                addMonitor.notifyAll();
+            }
+        }
+
+        long getCurrentReceiveOffset() {
+            return largestOffsetReceived;
+        }
 
         @Override
         public int available() throws IOException {
@@ -343,6 +349,11 @@ public class QuicStreamImpl implements QuicStream {
             }
         }
 
+        void abort() {
+            aborted = true;
+            interruptBlockingThread();
+        }
+
         void interruptBlockingThread() {
             Thread readerBlocking = blockingReaderThread;
             if (readerBlocking != null) {
@@ -381,12 +392,23 @@ public class QuicStreamImpl implements QuicStream {
         // Stream offset at which the stream was last blocked, for detecting the first time stream is blocked at a certain offset.
         private long blockedOffset;
         private volatile Thread blockingWriterThread;
+        protected final FlowControl flowController;
+        private volatile boolean aborted;
 
-        StreamOutputStream() {
-            maxBufferSize = sendBufferSize;
+
+        StreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
+            flowController = flowControl;
             bufferedBytes = new AtomicInteger();
             bufferLock = new ReentrantLock();
             notFull = bufferLock.newCondition();
+            if (sendBufferSize != null && sendBufferSize > 0) {
+                maxBufferSize = sendBufferSize;
+            }
+            else {
+                maxBufferSize = 50 * 1024;
+            }
+
+            flowController.streamOpened(QuicStreamImpl.this);
 
             flowController.register(QuicStreamImpl.this, this);
         }
@@ -630,6 +652,12 @@ public class QuicStreamImpl implements QuicStream {
             return App;
         }
 
+        protected void resetOutputStream() {
+            closed = false;
+            // TODO: this is currently not thread safe, see comment in EarlyDataStream how to fix.
+            restart();
+        }
+
         private void restart() {
             currentOffset = 0;
             sendQueue.clear();
@@ -668,6 +696,17 @@ public class QuicStreamImpl implements QuicStream {
             assert(frame instanceof ResetStreamFrame);
             connection.send(frame, this::retransmitResetFrame);
         }
+
+        protected void stopFlowControl() {
+            // Done! Retransmissions may follow, but don't need flow control.
+            flowController.unregister(QuicStreamImpl.this);
+            flowController.streamClosed(QuicStreamImpl.this);
+        }
+
+        void abort() {
+            aborted = true;
+            interruptBlockingThread();
+        }
     }
 
     /**
@@ -675,20 +714,15 @@ public class QuicStreamImpl implements QuicStream {
      * cases the caller must (again) provide the data to be sent.
      */
     protected void resetOutputStream() {
-        outputStream.closed = false;
-        // TODO: this is currently not thread safe, see comment in EarlyDataStream how to fix.
-        outputStream.restart();
+        outputStream.resetOutputStream();
     }
 
     protected void stopFlowControl() {
-        // Done! Retransmissions may follow, but don't need flow control.
-        flowController.unregister(QuicStreamImpl.this);
-        flowController.streamClosed(QuicStreamImpl.this);
+        outputStream.stopFlowControl();
     }
 
     void abort() {
-        aborted = true;
-        inputStream.interruptBlockingThread();
-        outputStream.interruptBlockingThread();
+        outputStream.abort();
+        inputStream.abort();
     }
 }

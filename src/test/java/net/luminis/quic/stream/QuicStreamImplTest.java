@@ -363,7 +363,7 @@ class QuicStreamImplTest {
 
     @Test
     void testStreamFlowControlUpdates() throws Exception {
-        float factor = QuicStreamImpl.receiverMaxDataIncrementFactor;
+        float factor = QuicStreamImpl.StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
@@ -434,7 +434,7 @@ class QuicStreamImplTest {
 
     @Test
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
-        float factor = QuicStreamImpl.receiverMaxDataIncrementFactor;
+        float factor = QuicStreamImpl.StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
