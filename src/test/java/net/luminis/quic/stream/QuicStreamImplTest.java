@@ -69,13 +69,13 @@ class QuicStreamImplTest {
 
     @BeforeEach
     void setFiniteWaitForNextFrameTimeout() {
-        originalWaitForNextFrameTimeoutValue = QuicStreamImpl.waitForNextFrameTimeout;
-        QuicStreamImpl.waitForNextFrameTimeout = 5;
+        originalWaitForNextFrameTimeoutValue = StreamInputStream.waitForNextFrameTimeout;
+        StreamInputStream.waitForNextFrameTimeout = 5;
     }
 
     @AfterEach
     void resetWaitForNextFrameTimeout() {
-        QuicStreamImpl.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
+        StreamInputStream.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
     }
 
     @BeforeEach
@@ -254,7 +254,7 @@ class QuicStreamImplTest {
 
     @Test
     void closingInputStreamShouldUnblockWatingReader() throws Exception {
-        QuicStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
+        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
         quicStream = new QuicStreamImpl(0, connection, streamManager, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
         InputStream inputStream = quicStream.getInputStream();
 
@@ -363,7 +363,7 @@ class QuicStreamImplTest {
 
     @Test
     void testStreamFlowControlUpdates() throws Exception {
-        float factor = QuicStreamImpl.StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
@@ -434,7 +434,7 @@ class QuicStreamImplTest {
 
     @Test
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
-        float factor = QuicStreamImpl.StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
 
@@ -789,7 +789,7 @@ class QuicStreamImplTest {
 
     @Test
     void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
-        QuicStreamImpl.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
+        StreamInputStream.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
         // Given
         InputStream inputStream = quicStream.getInputStream();
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), false)));

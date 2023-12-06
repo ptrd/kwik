@@ -101,13 +101,13 @@ public class EarlyDataStream extends QuicStreamImpl {
     }
 
     @Override
-    protected QuicStreamImpl.StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
+    protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
         return new EarlyDataStreamOutputStream(sendBufferSize, flowControl);
     }
 
-    protected class EarlyDataStreamOutputStream extends QuicStreamImpl.StreamOutputStream {
+    protected class EarlyDataStreamOutputStream extends StreamOutputStream {
         protected EarlyDataStreamOutputStream(Integer sendBufferSize, FlowControl flowController) {
-            super(sendBufferSize, flowController);
+            super(EarlyDataStream.this, sendBufferSize, flowController);
         }
 
         @Override
