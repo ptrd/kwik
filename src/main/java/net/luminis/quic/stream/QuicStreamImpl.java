@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.Role;
 import net.luminis.quic.core.TransportError;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.StreamFrame;
@@ -34,6 +35,7 @@ public class QuicStreamImpl implements QuicStream {
 
     protected final Version quicVersion;
     protected final int streamId;
+    private final Role role;
     protected final QuicConnectionImpl connection;
     private final StreamManager streamManager;
     protected final Logger log;
@@ -41,21 +43,22 @@ public class QuicStreamImpl implements QuicStream {
     private final StreamOutputStream outputStream;
 
 
-    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
-        this(Version.getDefault(), streamId, connection, streamManager, flowController, new NullLogger());
+    public QuicStreamImpl(int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
+        this(Version.getDefault(), streamId, role, connection, streamManager, flowController, new NullLogger());
     }
 
-    public QuicStreamImpl(int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
-        this(Version.getDefault(), streamId, connection, streamManager, flowController, log);
+    public QuicStreamImpl(int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
+        this(Version.getDefault(), streamId, role, connection, streamManager, flowController, log);
     }
 
-    public QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
-        this(quicVersion, streamId, connection, streamManager, flowController, log, null);
+    public QuicStreamImpl(Version quicVersion, int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
+        this(quicVersion, streamId, role, connection, streamManager, flowController, log, null);
     }
 
-    QuicStreamImpl(Version quicVersion, int streamId, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log, Integer sendBufferSize) {
+    QuicStreamImpl(Version quicVersion, int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log, Integer sendBufferSize) {
         this.quicVersion = quicVersion;
         this.streamId = streamId;
+        this.role = role;
         this.connection = connection;
         this.streamManager = streamManager;
         this.log = log;

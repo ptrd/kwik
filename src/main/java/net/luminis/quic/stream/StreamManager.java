@@ -120,7 +120,7 @@ public class StreamManager {
     }
 
     public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
-        QuicStreamSupplier streamCreator = (streamId) -> new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, log);
+        QuicStreamSupplier streamCreator = (streamId) -> new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
         return createStream(bidirectional, timeout, timeoutUnit, streamCreator);
     }
 
@@ -154,6 +154,7 @@ public class StreamManager {
      * @return
      */
     public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
+        assert role == Role.Client;
         try {
             QuicStreamSupplier streamCreator = (streamId) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, this, flowController, log);
             return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS, streamCreator);
@@ -198,7 +199,7 @@ public class StreamManager {
                 synchronized (this) {
                     if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
                         log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
-                        stream = new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, log);
+                        stream = new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
                         streams.put(streamId, stream);
                         stream.add(frame);
                         if (peerInitiatedStreamCallback != null) {

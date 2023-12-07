@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.Role;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
@@ -44,7 +45,7 @@ public class EarlyDataStream extends QuicStreamImpl {
 
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
-        super(quicVersion, streamId, connection, streamManager, flowController, log);
+        super(quicVersion, streamId, Role.Client, connection, streamManager, flowController, log);
         this.flowController = flowController;
     }
 
