@@ -42,7 +42,7 @@ public class StreamManager {
     private final Map<Integer, QuicStreamImpl> streams;
     private final Version quicVersion;
     private final QuicConnectionImpl connection;
-    private FlowControl flowController;
+    private volatile FlowControl flowController;
     private final Role role;
     private final Logger log;
     private int maxOpenStreamIdUni;
@@ -120,8 +120,8 @@ public class StreamManager {
     }
 
     public QuicStream createStream(boolean bidirectional, long timeout, TimeUnit timeoutUnit) throws TimeoutException {
-        return createStream(bidirectional, timeout, timeoutUnit,
-                (quicVersion, streamId, connection, flowController, logger) -> new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, logger));
+        QuicStreamSupplier streamCreator = (streamId) -> new QuicStreamImpl(quicVersion, streamId, connection, this, flowController, log);
+        return createStream(bidirectional, timeout, timeoutUnit, streamCreator);
     }
 
     private QuicStreamImpl createStream(boolean bidirectional, long timeout, TimeUnit unit, QuicStreamSupplier streamFactory) throws TimeoutException {
@@ -142,7 +142,7 @@ public class StreamManager {
         }
 
         int streamId = generateStreamId(bidirectional);
-        QuicStreamImpl stream = streamFactory.apply(quicVersion, streamId, connection, flowController, log);
+        QuicStreamImpl stream = streamFactory.apply(streamId);
         streams.put(streamId, stream);
         return stream;
     }
@@ -155,9 +155,10 @@ public class StreamManager {
      */
     public EarlyDataStream createEarlyDataStream(boolean bidirectional) {
         try {
-            return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS,
-                    (quicVersion, streamId, connection, flowController, logger) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, this, flowController, logger));
-        } catch (TimeoutException e) {
+            QuicStreamSupplier streamCreator = (streamId) -> new EarlyDataStream(quicVersion, streamId, (QuicClientConnectionImpl) connection, this, flowController, log);
+            return (EarlyDataStream) createStream(bidirectional, 0, TimeUnit.MILLISECONDS, streamCreator);
+        }
+        catch (TimeoutException e) {
             return null;
         }
     }
@@ -176,7 +177,6 @@ public class StreamManager {
         return id;
     }
 
-    // TODO: inject FlowController in constructor (requires change in FlowController itself)
     public void setFlowController(FlowControl flowController) {
         this.flowController = flowController;
     }
@@ -397,7 +397,7 @@ public class StreamManager {
     }
 
     interface QuicStreamSupplier {
-        QuicStreamImpl apply(Version quicVersion, int streamId, QuicConnectionImpl connection, FlowControl flowController, Logger log);
+        QuicStreamImpl apply(int streamId);
     }
 }
 
