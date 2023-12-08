@@ -92,6 +92,58 @@ class QuicStreamImplTest {
     }
 
     @Test
+    void whenRoleIsClientThenClientInitiatedStreamShouldBeSelfInitiated() {
+        // Given
+        role = Role.Client;
+        int streamId = 0;  // bidirectional client initiated
+
+        // When
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        assertThat(quicStream.isSelfInitiated()).isTrue();
+        assertThat(quicStream.isPeerInitiated()).isFalse();
+    }
+
+    @Test
+    void whenRoleIsClientThenServerInitiatedStreamShouldBePeerInitiated() {
+        // Given
+        role = Role.Client;
+        int streamId = 1;  // bidirectional server initiated
+
+        // When
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        assertThat(quicStream.isPeerInitiated()).isTrue();
+        assertThat(quicStream.isSelfInitiated()).isFalse();
+    }
+
+    @Test
+    void whenRoleIsServerThenClientInitiatedStreamShouldBePeerInitiated() {
+        // Given
+        role = Role.Server;
+        int streamId = 0;  // bidirectional client initiated
+
+        // When
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        assertThat(quicStream.isPeerInitiated()).isTrue();
+        assertThat(quicStream.isSelfInitiated()).isFalse();
+    }
+
+    @Test
+    void whenRoleIsServerThenServerInitiatedStreamShouldBeSelfInitiated() {
+        // Given
+        role = Role.Server;
+        int streamId = 1;  // bidirectional server initiated
+
+        // When
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        assertThat(quicStream.isSelfInitiated()).isTrue();
+        assertThat(quicStream.isPeerInitiated()).isFalse();
+    }
+
+    @Test
     void testReadSingleFinalStreamFrame() throws Exception {
         quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
 

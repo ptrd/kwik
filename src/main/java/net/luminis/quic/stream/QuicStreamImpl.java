@@ -122,6 +122,15 @@ public class QuicStreamImpl implements QuicStream {
         return (streamId & 0x0003) == 0x0001;
     }
 
+    public boolean isSelfInitiated() {
+        return role == Role.Client && (streamId & 0x0001) == 0x0000
+                || role == Role.Server && (streamId & 0x0001) == 0x0001;
+    }
+
+    public boolean isPeerInitiated() {
+        return !isSelfInitiated();
+    }
+
     @Override
     public void closeInput(long applicationProtocolErrorCode) {
         inputStream.stopInput(applicationProtocolErrorCode);
