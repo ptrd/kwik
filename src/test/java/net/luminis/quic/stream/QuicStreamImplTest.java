@@ -1113,6 +1113,20 @@ class QuicStreamImplTest {
         verify(streamManager).streamClosed(eq(quicStream.streamId));
     }
 
+    @Test
+    void whenSendingResetFrameClosedShouldBeCalled() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 3;  // server initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        quicStream.resetStream(9);
+
+        // Then
+        verify(streamManager).streamClosed(eq(quicStream.streamId));
+    }
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {

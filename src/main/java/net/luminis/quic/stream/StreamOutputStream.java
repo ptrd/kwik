@@ -351,6 +351,7 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
         if (!closed && !reset) {
             reset = true;
             resetErrorCode = errorCode;
+            discardAllData();
             // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
             quicStream.connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(quicStream.streamId, errorCode), App, this::retransmitResetFrame, true);
             // Ensure write is not blocked because of full write buffer
@@ -360,7 +361,13 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
             } finally {
                 bufferLock.unlock();
             }
+            quicStream.outputClosed();
         }
+    }
+
+    private void discardAllData() {
+        sendQueue.clear();
+        bufferedBytes.set(0);
     }
 
     private QuicFrame createResetFrame(int maxFrameSize) {
