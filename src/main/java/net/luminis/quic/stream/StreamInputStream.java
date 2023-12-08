@@ -46,7 +46,7 @@ class StreamInputStream extends InputStream {
     private volatile boolean closed;
     private volatile boolean reset;
     private volatile Thread blockingReaderThread;
-    private final ReceiveBufferImpl receiveBuffer;
+    private final ReceiveBuffer receiveBuffer;
     private final Object addMonitor = new Object();
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
@@ -210,10 +210,12 @@ class StreamInputStream extends InputStream {
     void terminate(long errorCode, long finalSize) {
         if (!aborted && !closed && !reset) {
             reset = true;
+            receiveBuffer.discardAllData();
             Thread blockingReader = blockingReaderThread;
             if (blockingReader != null) {
                 blockingReader.interrupt();
             }
+            quicStream.inputClosed();
         }
     }
 

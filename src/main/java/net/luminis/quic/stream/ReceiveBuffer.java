@@ -75,4 +75,9 @@ public interface ReceiveBuffer {
      * @return
      */
     long readOffset();
+
+    /**
+     * Discard all data that is currently buffered.
+     */
+    void discardAllData();
 }

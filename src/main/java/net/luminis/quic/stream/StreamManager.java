@@ -228,7 +228,8 @@ public class StreamManager {
     public void process(ResetStreamFrame resetStreamFrame) {
         QuicStreamImpl stream = streams.get(resetStreamFrame.getStreamId());
         if (stream != null) {
-            // "An endpoint SHOULD copy the error code from the STOP_SENDING frame to the RESET_STREAM frame it sends, ..."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
+            // "A receiver of RESET_STREAM can discard any data that it already received on that stream."
             stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
