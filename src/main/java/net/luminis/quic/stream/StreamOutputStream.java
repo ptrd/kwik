@@ -274,6 +274,7 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
 
     protected void finalFrameSent() {
         stopFlowControl();
+        quicStream.outputClosed();
     }
 
     @Override

@@ -987,6 +987,118 @@ class QuicStreamImplTest {
         assertThat(writerHasBeenUnblocked).isTrue();
     }
 
+    @Test
+    void whenEndOfStreamIsWrittenToUnidirectionalStreamItShouldBeClosed() throws IOException {
+        // Given
+        int streamId = 2;  // client initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, Role.Client, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        quicStream.getOutputStream().close();
+        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+
+        // Then
+        verify(streamManager).streamClosed(eq(streamId));
+    }
+
+    @Test
+    void whenAllIsReadFromUnidirectionalStreamItShouldBeClosed() throws Exception {
+        // Given
+        int streamId = 3;  // server initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, Role.Client, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().readAllBytes();
+
+        // Then
+        verify(streamManager).streamClosed(eq(streamId));
+    }
+
+    @Test
+    void whenServerHasReadAllFromClientInitiatedUnidirectionalStreamItShouldBeClosed() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 2;  // client initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().readAllBytes();
+
+        // Then
+        verify(streamManager).streamClosed(eq(streamId));
+    }
+
+    @Test
+    void whenServerHasReadAllFromAndWrittenAllToClientInitiatedBidirectionalStreamItShouldBeClosed() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 0;  // client initiated bidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().readAllBytes();
+        // And
+        quicStream.getOutputStream().close();
+        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+
+        // Then
+        verify(streamManager).streamClosed(eq(streamId));
+    }
+
+    @Test
+    void whenServerHasReadAllFromButNotWrittenAllToClientInitiatedBidirectionalStreamItShouldNotBeClosed() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 0;  // client initiated bidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().readAllBytes();
+        quicStream.getOutputStream().write(new byte[10]);
+        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+
+        // Then
+        verify(streamManager, never()).streamClosed(anyInt());
+    }
+
+    @Test
+    void whenServerHasReadNotAllFromButWrittenAllToClientInitiatedBidirectionalStreamItShouldNotBeClosed() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 0;  // client initiated bidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().read(new byte[3]);
+        quicStream.getOutputStream().close();
+        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+
+        // Then
+        verify(streamManager, never()).streamClosed(anyInt());
+    }
+
+    @Test
+    void whenServerHasNeitherReadOrWrittenAllFromOrToClientInitiatedBidirectionalStreamItShouldNotBeClosed() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 0;  // client initiated bidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().read(new byte[3]);
+        quicStream.getOutputStream().write(new byte[10]);
+        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+
+        // Then
+        verify(streamManager, never()).streamClosed(anyInt());
+    }
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {

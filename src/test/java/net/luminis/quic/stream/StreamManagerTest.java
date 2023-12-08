@@ -330,24 +330,7 @@ class StreamManagerTest {
         streamManager.process(new StreamFrame(streamId, new byte[0], false));
 
         // When
-        StreamFrame closeFrame = new StreamFrame(streamId, new byte[0], true);
-        streamManager.process(closeFrame);
-
-        // Then
-        int nextStreamId = 10 * 4 + 1;
-        // Assert that the next line does not throw
-        streamManager.process(new StreamFrame(nextStreamId, new byte[0], false));
-        // And
-        verifyMaxStreamsFrameIsToBeSent(11);
-    }
-
-    @Test
-    void whenStreamIsClosedInSameFrameOneMoreCanBeOpened() throws Exception {
-        // Given
-        int streamId = 9 * 4 + 1;
-
-        // When
-        streamManager.process(new StreamFrame(streamId, new byte[0], true));
+        streamManager.streamClosed(streamId);
 
         // Then
         int nextStreamId = 10 * 4 + 1;
@@ -359,12 +342,56 @@ class StreamManagerTest {
 
     @Test
     void whenMultipleStreamsAreClosedOnlyOneMaxStreamsFrameIsSent() throws Exception {
-        // When
+        // Given
         for (int i = 0; i < 10; i++) {
             streamManager.process(new StreamFrame(i * 4 + 1, new byte[0], true));
         }
 
+        // When
+        for (int i = 0; i < 10; i++) {
+            streamManager.streamClosed(i * 4 + 1);
+        }
+
+        // Then
         verifyMaxStreamsFrameIsToBeSent(20);
+    }
+
+    @Test
+    void whenSelfInitiatedUnidirectionalStreamIsClosedItShouldNotBePossibleToOpenMorePeerInitiated() throws Exception {
+        // Given
+        int streamId = 9 * 4 + 2;  // client initiated unidirectional stream
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+
+        // When
+        streamManager.streamClosed(streamId);
+
+        // Then   (not a next server initiated stream can be opened)
+        int nextStreamId = 10 * 4 + 3;
+        assertThatThrownBy(() ->
+                streamManager.process(new StreamFrame(nextStreamId, new byte[0], false))
+                // Then
+        ).isInstanceOf(TransportError.class);
+        // And
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenSelfInitiatedBidirectionalStreamIsClosedItShouldNotBePossibleToOpenMorePeerInitiated() throws Exception {
+        // Given
+        int streamId = 9 * 4 + 0;  // client initiated bidirectional stream
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+
+        // When
+        streamManager.streamClosed(streamId);
+
+        // Then   (not a next server initiated stream can be opened)
+        int nextStreamId = 10 * 4 + 1;
+        assertThatThrownBy(() ->
+                        streamManager.process(new StreamFrame(nextStreamId, new byte[0], false))
+                // Then
+        ).isInstanceOf(TransportError.class);
+        // And
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
     }
 
     @Test

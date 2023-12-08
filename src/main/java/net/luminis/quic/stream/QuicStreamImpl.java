@@ -29,18 +29,22 @@ import net.luminis.quic.log.NullLogger;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 public class QuicStreamImpl implements QuicStream {
 
     protected final Version quicVersion;
     protected final int streamId;
-    private final Role role;
+    protected final Role role;
     protected final QuicConnectionImpl connection;
     private final StreamManager streamManager;
     protected final Logger log;
     private final StreamInputStream inputStream;
     private final StreamOutputStream outputStream;
+    private volatile boolean outputClosed;
+    private volatile boolean inputClosed;
+    private final ReentrantLock stateLock;
 
 
     public QuicStreamImpl(int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
@@ -66,6 +70,7 @@ public class QuicStreamImpl implements QuicStream {
         inputStream = new StreamInputStream(this);
         outputStream = createStreamOutputStream(sendBufferSize, flowController);
 
+        stateLock = new ReentrantLock();
     }
 
     @Override
@@ -183,5 +188,31 @@ public class QuicStreamImpl implements QuicStream {
 
     void updateConnectionFlowControl(int bytesRead) {
         streamManager.updateConnectionFlowControl(bytesRead);
+    }
+
+    void outputClosed() {
+        try {
+            stateLock.lock();
+            outputClosed = true;
+            if (isBidirectional() && inputClosed || isUnidirectional()) {
+                streamManager.streamClosed(streamId);
+            }
+        }
+        finally {
+            stateLock.unlock();
+        }
+    }
+
+    void inputClosed() {
+        try {
+            stateLock.lock();
+            inputClosed = true;
+            if (isBidirectional() && outputClosed || isUnidirectional()) {
+                streamManager.streamClosed(streamId);
+            }
+        }
+        finally {
+            stateLock.unlock();
+        }
     }
 }

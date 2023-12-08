@@ -135,6 +135,7 @@ class StreamInputStream extends InputStream {
                         return bytesRead;
                     } else if (bytesRead < 0) {
                         // End of stream
+                        allDataRead();
                         return -1;
                     }
 
@@ -158,6 +159,10 @@ class StreamInputStream extends InputStream {
                 }
             }
         }
+    }
+
+    private void allDataRead() {
+        quicStream.inputClosed();
     }
 
     @Override

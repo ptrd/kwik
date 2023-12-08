@@ -188,11 +188,6 @@ public class StreamManager {
         checkConnectionFlowControl(stream, frame);
         if (stream != null) {
             stream.add(frame);
-            // This implementation maintains a fixed maximum number of open streams, so when the peer closes a stream
-            // it is allowed to open another.
-            if (frame.isFinal() && isPeerInitiated(streamId)) {
-                increaseMaxOpenStreams(streamId);
-            }
         }
         else {
             if (isPeerInitiated(streamId)) {
@@ -204,9 +199,6 @@ public class StreamManager {
                         stream.add(frame);
                         if (peerInitiatedStreamCallback != null) {
                             peerInitiatedStreamCallback.accept(stream);
-                        }
-                        if (frame.isFinal()) {
-                            increaseMaxOpenStreams(streamId);
                         }
                     }
                     else {
@@ -257,6 +249,14 @@ public class StreamManager {
             if (cumulativeReceiveOffset + increment > flowControlMax) {
                 throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
             }
+        }
+    }
+
+    void streamClosed(int streamId) {
+        // This implementation maintains a fixed maximum number of open streams, so when a stream initiated by the peer
+        // is closed, it is allowed to open another.
+        if (isPeerInitiated(streamId)) {
+            increaseMaxOpenStreams(streamId);
         }
     }
 
