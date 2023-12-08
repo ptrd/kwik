@@ -87,17 +87,25 @@ public interface QuicStream {
     boolean isServerInitiatedBidirectional();
 
     /**
-     * Closes the input stream; indicating the client is not interested in reading more data from the stream.
-     * Depending on whether all stream data is already received or not, the implementation might send a request
-     * to the peer to stop sending data for this stream.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-operations-on-streams
+     * "On the receiving part of a stream, an application protocol can:
+     * - abort reading of the stream and request closure, possibly resulting in a STOP_SENDING frame (Section 19.5)."
      *
-     * @param  applicationProtocolErrorCode
+     * @param applicationProtocolErrorCode
      */
-    void closeInput(long applicationProtocolErrorCode);
+    void abortReading(long applicationProtocolErrorCode);
 
     /**
-     * Reset the (sending part of the) stream.
-     * @param errorCode
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-operations-on-streams
+     * "On the sending part of a stream, an application protocol can:
+     *  - reset the stream (abrupt termination), resulting in a RESET_STREAM frame (Section 19.4) if the stream was not
+     *    already in a terminal state."
+     *
+     * @param applicationProtocolErrorCode
      */
-    void resetStream(long errorCode);
+    void resetStream(long applicationProtocolErrorCode);
+
+    default void closeInput(long applicationProtocolErrorCode) {
+        abortReading(applicationProtocolErrorCode);
+    }
 }

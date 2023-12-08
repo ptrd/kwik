@@ -137,7 +137,7 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     @Override
-    public void closeInput(long applicationProtocolErrorCode) {
+    public void abortReading(long applicationProtocolErrorCode) {
         inputStream.stopInput(applicationProtocolErrorCode);
     }
 
