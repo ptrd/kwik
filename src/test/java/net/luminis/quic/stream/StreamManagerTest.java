@@ -42,6 +42,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +56,7 @@ class StreamManagerTest {
     private StreamManager streamManager;
     private QuicConnectionImpl quicConnection;
 
+    //region setup
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
@@ -61,7 +64,43 @@ class StreamManagerTest {
         streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10, 10_000);
         streamManager.setFlowController(mock(FlowControl.class));
     }
+    //endregion
 
+    //region stream creation
+    @Test
+    void serverInitiatedStreamShouldHaveOddId() {
+        // Given
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager.setFlowController(mock(FlowControl.class));
+        streamManager.setInitialMaxStreamsUni(1);
+
+        // When
+        QuicStream stream = streamManager.createStream(false);
+
+        // Then
+        assertThat(stream.getStreamId() % 4).isEqualTo(3);   // 0x3  | Server-Initiated, Unidirectional
+        assertThat(stream.getStreamId() % 2).isEqualTo(1);
+    }
+
+    @Test
+    void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
+        // Given
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 1_000);
+        streamManager.setFlowController(mock(FlowControl.class));
+        streamManager.setInitialMaxStreamsBidi(1);
+        List<QuicStream> openedStreams = new ArrayList<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> openedStreams.add(stream));
+
+        // When
+        streamManager.process(new StreamFrame(0, new byte[100], true));
+
+        // Then
+        assertThat(openedStreams).hasSize(1);
+        assertThat(openedStreams.get(0).getStreamId()).isEqualTo(0);
+    }
+    //endregion
+
+    //region self creation in relation to streams limit
     @Test
     void canCreateBidirectionalStreamWhenMaxStreamsNotReached() {
         // Given
@@ -153,55 +192,9 @@ class StreamManagerTest {
         assertThat(stream1).isNotNull();
         assertThat(stream2).isNotNull();
     }
+    //endregion
 
-    @Test
-    void maxBidiStreamsCanNeverDecrease() {
-        // Given
-        streamManager.setInitialMaxStreamsBidi(1);
-        streamManager.process(new MaxStreamsFrame(8, true));
-
-        // When
-        streamManager.process(new MaxStreamsFrame(5, true));
-
-        // Then
-        assertThat(streamManager.getMaxBidirectionalStreams()).isGreaterThanOrEqualTo(8);
-    }
-
-    @Test
-    void maxUniStreamsCanNeverDecrease() {
-        // Given
-        streamManager.setInitialMaxStreamsUni(1);
-        streamManager.process(new MaxStreamsFrame(8, false));
-
-        // When
-        streamManager.process(new MaxStreamsFrame(5, false));
-
-        // Then
-        assertThat(streamManager.getMaxUnirectionalStreams()).isGreaterThanOrEqualTo(8);
-    }
-
-    @Test
-    void settingInitialMaxBidiStreamsCanOnlyIncreaseValue() {
-        // Given
-        streamManager.setInitialMaxStreamsBidi(4);
-
-        // When
-        streamManager.setInitialMaxStreamsBidi(3);
-
-        assertThat(streamManager.getMaxBidirectionalStreams()).isEqualTo(4);
-    }
-
-    @Test
-    void settingInitialMaxUniStreamsCanOnlyIncreaseValue() {
-        // Given
-        streamManager.setInitialMaxStreamsUni(10);
-
-        // When
-        streamManager.setInitialMaxStreamsUni(3);
-
-        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(10);
-    }
-
+    //region self creation with dynamically changing limits
     @Test
     void blockingCreateBidirectionalStreamContinuesWhenMaxStreamsIsIncreased() throws Exception {
         // Given
@@ -263,39 +256,9 @@ class StreamManagerTest {
         // Then
         assertThat(earlyDataStream).isNull();
     }
+    //endregion
 
-    @Test
-    void serverInitiatedStreamShouldHaveOddId() {
-        // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 10_000);
-        streamManager.setFlowController(mock(FlowControl.class));
-        streamManager.setInitialMaxStreamsUni(1);
-
-        // When
-        QuicStream stream = streamManager.createStream(false);
-
-        // Then
-        assertThat(stream.getStreamId() % 4).isEqualTo(3);   // 0x3  | Server-Initiated, Unidirectional
-        assertThat(stream.getStreamId() % 2).isEqualTo(1);
-    }
-
-    @Test
-    void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
-        // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 1_000);
-        streamManager.setFlowController(mock(FlowControl.class));
-        streamManager.setInitialMaxStreamsBidi(1);
-        List<QuicStream> openedStreams = new ArrayList<>();
-        streamManager.setPeerInitiatedStreamCallback(stream -> openedStreams.add(stream));
-
-        // When
-        streamManager.process(new StreamFrame(0, new byte[100], true));
-
-        // Then
-        assertThat(openedStreams).hasSize(1);
-        assertThat(openedStreams.get(0).getStreamId()).isEqualTo(0);
-    }
-
+    //region peer creation in relation to streams limit
     @Test
     void whenStreamLimitIsReachedCreateStreamLeadsToTransportErrorException() throws Exception {
         // Given
@@ -309,7 +272,8 @@ class StreamManagerTest {
                 // When
                 streamManager.process(new StreamFrame(next * 4 + 1, new byte[0], false)))
                 // Then
-                .isInstanceOf(TransportError.class);
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(STREAM_LIMIT_ERROR);
     }
 
     @Test
@@ -322,7 +286,8 @@ class StreamManagerTest {
                 // When
                 streamManager.process(new StreamFrame(next * 4 + 1, new byte[0], false)))
                 // Then
-                .isInstanceOf(TransportError.class);
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(STREAM_LIMIT_ERROR);
     }
 
     @Test
@@ -370,7 +335,7 @@ class StreamManagerTest {
         // Then   (not a next server initiated stream can be opened)
         int nextStreamId = 10 * 4 + 3;
         assertThatThrownBy(() ->
-                streamManager.process(new StreamFrame(nextStreamId, new byte[0], false))
+                        streamManager.process(new StreamFrame(nextStreamId, new byte[0], false))
                 // Then
         ).isInstanceOf(TransportError.class);
         // And
@@ -395,7 +360,59 @@ class StreamManagerTest {
         // And
         verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
     }
+    //endregion
 
+    //region max streams
+    @Test
+    void maxBidiStreamsCanNeverDecrease() {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        streamManager.process(new MaxStreamsFrame(8, true));
+
+        // When
+        streamManager.process(new MaxStreamsFrame(5, true));
+
+        // Then
+        assertThat(streamManager.getMaxBidirectionalStreams()).isGreaterThanOrEqualTo(8);
+    }
+
+    @Test
+    void maxUniStreamsCanNeverDecrease() {
+        // Given
+        streamManager.setInitialMaxStreamsUni(1);
+        streamManager.process(new MaxStreamsFrame(8, false));
+
+        // When
+        streamManager.process(new MaxStreamsFrame(5, false));
+
+        // Then
+        assertThat(streamManager.getMaxUnirectionalStreams()).isGreaterThanOrEqualTo(8);
+    }
+
+    @Test
+    void settingInitialMaxBidiStreamsCanOnlyIncreaseValue() {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(4);
+
+        // When
+        streamManager.setInitialMaxStreamsBidi(3);
+
+        assertThat(streamManager.getMaxBidirectionalStreams()).isEqualTo(4);
+    }
+
+    @Test
+    void settingInitialMaxUniStreamsCanOnlyIncreaseValue() {
+        // Given
+        streamManager.setInitialMaxStreamsUni(10);
+
+        // When
+        streamManager.setInitialMaxStreamsUni(3);
+
+        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(10);
+    }
+    //endregion
+    
+    //region flow control
     @Test
     void testConnectionFlowControl() throws Exception {
         long flowControlIncrement = (long) new FieldReader(streamManager, streamManager.getClass().getDeclaredField("flowControlIncrement")).read();
@@ -430,7 +447,8 @@ class StreamManagerTest {
                 // When
                 streamManager.process(new StreamFrame(1, 9_999, new byte[2], false)))
                 // Then
-                .isInstanceOf(TransportError.class);
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
 
     @Test
@@ -445,8 +463,10 @@ class StreamManagerTest {
                 // When
                 streamManager.process(new StreamFrame(5, 3_000 + 300, new byte[101], false)))
                 // Then
-                .isInstanceOf(TransportError.class);
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
+    //endregion
 
     //region final size
     @Test
@@ -503,7 +523,6 @@ class StreamManagerTest {
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FINAL_SIZE_ERROR);
     }
-
     //endregion
 
     //region test helper methods
