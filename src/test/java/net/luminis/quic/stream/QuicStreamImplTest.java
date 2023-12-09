@@ -1127,6 +1127,45 @@ class QuicStreamImplTest {
         verify(streamManager).streamClosed(eq(quicStream.streamId));
     }
 
+    @Test
+    void whenResetWriteShouldThrowException() throws Exception {
+        // When
+        quicStream.resetStream(9);
+
+        // Then
+        assertThatThrownBy(() ->
+                quicStream.getOutputStream().write(new byte[10])
+        ).isInstanceOf(IOException.class)
+                .hasMessageContaining("stream is reset");
+    }
+
+    @Test
+    void whenResetBlockedWriteShouldThrowException() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[50 * 1024]);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        new Thread(() -> {
+            try {
+                quicStream.getOutputStream().write(new byte[10]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        }).start();
+        Thread.sleep(10);
+
+        // When
+        quicStream.resetStream(9);
+        Thread.sleep(10);
+
+        // Then
+        assertThat(thrownException.get())
+                .isInstanceOf(InterruptedIOException.class)  // Require InterruptedIOException, as that proofs the write was blocked before being interrupted.
+                .hasMessageContaining("reset");
+    }
+
+
     private byte[] generateByteArray(int size) {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {

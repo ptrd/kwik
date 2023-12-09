@@ -127,8 +127,10 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
                     checkState();
                     try {
                         notFull.await();
-                    } catch (InterruptedException e) {
-                        throw new InterruptedIOException(aborted ? "output aborted because connection is closed" : "");
+                    }
+                    catch (InterruptedException e) {
+                        String msg = "write failed because stream was " + (closed? "closed" : (reset? "reset" : "aborted"));
+                        throw new InterruptedIOException(msg);
                     }
                 }
             } finally {
@@ -354,13 +356,7 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
             discardAllData();
             // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
             quicStream.connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(quicStream.streamId, errorCode), App, this::retransmitResetFrame, true);
-            // Ensure write is not blocked because of full write buffer
-            bufferLock.lock();
-            try {
-                notFull.signal();
-            } finally {
-                bufferLock.unlock();
-            }
+            interruptBlockingThread();
             quicStream.outputClosed();
         }
     }
