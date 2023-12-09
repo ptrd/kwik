@@ -516,7 +516,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
-        getStreamManager().process(resetStreamFrame);
+        try {
+            getStreamManager().process(resetStreamFrame);
+        }
+        catch (TransportError transportError) {
+            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+        }
     }
 
     @Override
@@ -528,7 +533,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
         try {
             getStreamManager().process(streamFrame);
-        } catch (TransportError transportError) {
+        }
+        catch (TransportError transportError) {
             immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
         }
     }

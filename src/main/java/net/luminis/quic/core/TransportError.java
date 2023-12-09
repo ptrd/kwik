@@ -20,7 +20,7 @@ package net.luminis.quic.core;
 
 import net.luminis.quic.QuicConstants;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
+// https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-error-codes
 public class TransportError extends QuicError {
 
     private final QuicConstants.TransportErrorCode transportErrorCode;
@@ -29,7 +29,19 @@ public class TransportError extends QuicError {
         this.transportErrorCode = transportErrorCode;
     }
 
+    /**
+     * deprecated, use getErrorCode()
+     * @return  the code of the transport error that caused this error
+     */
     public QuicConstants.TransportErrorCode getTransportErrorCode() {
         return transportErrorCode;
     }
+
+    /**
+     * @return  the code of the transport error that caused this error
+     */
+    public QuicConstants.TransportErrorCode getErrorCode() {
+        return transportErrorCode;
+    }
+
 }

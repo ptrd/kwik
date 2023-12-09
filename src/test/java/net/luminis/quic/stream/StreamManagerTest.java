@@ -25,6 +25,7 @@ import net.luminis.quic.core.Role;
 import net.luminis.quic.core.TransportError;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.test.FieldReader;
@@ -40,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -446,6 +448,65 @@ class StreamManagerTest {
                 .isInstanceOf(TransportError.class);
     }
 
+    //region final size
+    @Test
+    void receivingStreamFrameThatGoesBeyondFinalSizeShouldThrow() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(1, new byte[300], true));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(1, 300, new byte[3], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FINAL_SIZE_ERROR);
+    }
+
+    @Test
+    void receivingStreamFrameThatRedefinesFinalSizeShouldThrow() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(1, new byte[300], true));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(1, 200, new byte[3], true)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FINAL_SIZE_ERROR);
+    }
+
+    @Test
+    void receivingAnotherFinalStreamFrameWithSameFinalSizeShouldNotThrow() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(1, new byte[300], true));
+
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(1, 200, new byte[100], true)))
+                // Then
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void receivingResetFrameThatRedefinesFinalSizeShouldThrow() throws Exception {
+        // Given
+        streamManager.process(new StreamFrame(1, new byte[300], true));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new ResetStreamFrame(1, 9, 200)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FINAL_SIZE_ERROR);
+    }
+
+    //endregion
+
+    //region test helper methods
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
         verify(quicConnection).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
@@ -453,4 +514,5 @@ class StreamManagerTest {
         assertThat(frame).isInstanceOf(MaxStreamsFrame.class);
         assertThat(((MaxStreamsFrame) frame).getMaxStreams()).isEqualTo(expectedMaxStreams);
     }
+    //endregion
 }

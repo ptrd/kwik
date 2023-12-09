@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
 
 /**
@@ -53,6 +54,7 @@ class StreamInputStream extends InputStream {
     private long largestOffsetReceived;
     private long receiverFlowControlLimit;
     private volatile boolean aborted;
+    private volatile long finalSize = -1;
 
     public StreamInputStream(QuicStreamImpl quicStream) {
         this.quicStream = quicStream;
@@ -64,6 +66,16 @@ class StreamInputStream extends InputStream {
     }
 
     void add(StreamFrame frame) throws TransportError {
+        if (finalSize >= 0 && frame.getUpToOffset() > finalSize) {
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        if (finalSize >=0 && frame.isFinal() && frame.getUpToOffset() != finalSize) {
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        if (frame.isFinal()) {
+            finalSize = frame.getUpToOffset();
+        }
+
         synchronized (addMonitor) {
             if (frame.getUpToOffset() > receiverFlowControlLimit) {
                 throw new TransportError(FLOW_CONTROL_ERROR);
@@ -207,9 +219,13 @@ class StreamInputStream extends InputStream {
         quicStream.log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
     }
 
-    void terminate(long errorCode, long finalSize) {
+    void terminate(long errorCode, long finalSizeOfReset) throws TransportError {
+        if (this.finalSize >=0 && finalSizeOfReset != this.finalSize) {
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
         if (!aborted && !closed && !reset) {
             reset = true;
+            finalSize = finalSizeOfReset;
             receiveBuffer.discardAllData();
             Thread blockingReader = blockingReaderThread;
             if (blockingReader != null) {

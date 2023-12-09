@@ -163,7 +163,7 @@ public class QuicStreamImpl implements QuicStream {
      * @param errorCode
      * @param finalSize
      */
-    void terminateStream(long errorCode, long finalSize) {
+    void terminateStream(long errorCode, long finalSize) throws TransportError {
         inputStream.terminate(errorCode, finalSize);
     }
 

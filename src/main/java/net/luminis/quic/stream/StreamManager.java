@@ -225,7 +225,7 @@ public class StreamManager {
         }
     }
 
-    public void process(ResetStreamFrame resetStreamFrame) {
+    public void process(ResetStreamFrame resetStreamFrame) throws TransportError {
         QuicStreamImpl stream = streams.get(resetStreamFrame.getStreamId());
         if (stream != null) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
