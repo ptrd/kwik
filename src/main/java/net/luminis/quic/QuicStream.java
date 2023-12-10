@@ -105,6 +105,11 @@ public interface QuicStream {
      */
     void resetStream(long applicationProtocolErrorCode);
 
+    /**
+     * @deprecated use {@link #abortReading(long)} instead
+     * @param applicationProtocolErrorCode
+     */
+    @Deprecated
     default void closeInput(long applicationProtocolErrorCode) {
         abortReading(applicationProtocolErrorCode);
     }

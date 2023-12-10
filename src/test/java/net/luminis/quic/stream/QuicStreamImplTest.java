@@ -26,6 +26,7 @@ import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
+import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
@@ -487,6 +488,76 @@ class QuicStreamImplTest {
                 quicStream.add(resurrect(new StreamFrame(0, 9998, new byte[1], false))))
                 // Then
                 .doesNotThrowAnyException();
+    }
+    //endregion
+
+    //region inputstream abort reading
+    @Test
+    void afterAbortReadingNextReadShouldThrow() throws Exception {
+        // When
+        quicStream.abortReading(9);
+
+        // Then
+        assertThatThrownBy(() ->
+                quicStream.getInputStream().read(new byte[10])
+        ).isInstanceOf(IOException.class)
+                .hasMessageContaining("closed");
+    }
+
+    @Test
+    void whenAbortReadingBlockingReadShouldBeInterupted() throws Exception {
+        // Given
+        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        new Thread(() -> {
+            try {
+                quicStream.getInputStream().read(new byte[10]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        }).start();
+
+        // Then
+        quicStream.abortReading(9);
+        Thread.sleep(10);
+        assertThat(thrownException.get())
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("closed");
+    }
+
+    @Test
+    void whenAbortReadingStopSendingShouldBeSent() throws Exception {
+        // When
+        quicStream.abortReading(9);
+
+        // Then
+        verify(connection).send(argThat(f -> f instanceof StopSendingFrame), any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void whenAllDataIsReceivedAbortReadingShouldNotTriggerStopSending() throws Exception {
+        // Given
+        quicStream.add(resurrect(new StreamFrame(0, "data".getBytes(), true)));
+
+        // When
+        quicStream.abortReading(9);
+
+        // Then
+        verify(connection, never()).send(argThat(f -> f instanceof StopSendingFrame), any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void afterAbortReadingInputForUnidirectionStreamStreamShouldBeClosed() throws Exception {
+        // Given
+        quicStream = new QuicStreamImpl(0x02, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        quicStream.abortReading(9);
+
+        // Then
+        verify(streamManager).streamClosed(eq(quicStream.streamId));
     }
     //endregion
 
@@ -971,6 +1042,19 @@ class QuicStreamImplTest {
 
         // When
         quicStream.getInputStream().readAllBytes();
+
+        // Then
+        verify(streamManager).streamClosed(eq(streamId));
+    }
+
+    @Test
+    void whenInputFromUnidirectionalIsClosedTheStreamShouldBeClosed() throws Exception {
+        int streamId = 3;  // server initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, Role.Client, connection, streamManager, mock(FlowControl.class));
+        quicStream.add(new StreamFrame(streamId, new byte[10], true));
+
+        // When
+        quicStream.getInputStream().close();
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));

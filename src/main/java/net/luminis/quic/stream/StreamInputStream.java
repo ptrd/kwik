@@ -181,18 +181,26 @@ class StreamInputStream extends InputStream {
     public void close() throws IOException {
         // Note that QUIC specification does not define application protocol error codes.
         // By absence of an application specified error code, the arbitrary code 0 is used.
-        stopInput(0);
+        abortReading(0);
     }
 
-    void stopInput(long errorCode) {
+    void abortReading(long errorCode) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-operations-on-streams
+        // "abort reading of the stream and request closure, possibly resulting in a STOP_SENDING frame (Section 19.5)."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-solicited-state-transitions
+        // "If an application is no longer interested in the data it is receiving on a stream, it can abort reading the
+        //  stream and specify an application error code.
+        //  If the stream is in the "Recv" or "Size Known" state, the transport SHOULD signal this by sending a
+        //  STOP_SENDING frame to prompt closure of the stream in the opposite direction. This typically indicates that
+        //  the receiving application is no longer reading data it receives from the stream, but it is not a guarantee
+        //  that incoming data will be ignored."
         if (!receiveBuffer.allDataReceived()) {
             quicStream.connection.send(new StopSendingFrame(quicStream.quicVersion, quicStream.streamId, errorCode), this::retransmitStopInput, true);
         }
         closed = true;
-        Thread blockingReader = blockingReaderThread;
-        if (blockingReader != null) {
-            blockingReader.interrupt();
-        }
+        receiveBuffer.discardAllData();
+        interruptBlockingReader();
+        quicStream.inputClosed();
     }
 
     private void retransmitStopInput(QuicFrame lostFrame) {
@@ -223,27 +231,26 @@ class StreamInputStream extends InputStream {
         if (this.finalSize >=0 && finalSizeOfReset != this.finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
+        if (finalSize < 0) {
+            finalSize = finalSizeOfReset;
+        }
         if (!aborted && !closed && !reset) {
             reset = true;
-            finalSize = finalSizeOfReset;
             receiveBuffer.discardAllData();
-            Thread blockingReader = blockingReaderThread;
-            if (blockingReader != null) {
-                blockingReader.interrupt();
-            }
+            interruptBlockingReader();
             quicStream.inputClosed();
         }
     }
 
     void abort() {
         aborted = true;
-        interruptBlockingThread();
+        interruptBlockingReader();
     }
 
-    void interruptBlockingThread() {
-        Thread readerBlocking = blockingReaderThread;
-        if (readerBlocking != null) {
-            readerBlocking.interrupt();
+    private void interruptBlockingReader() {
+        Thread blockingReader = blockingReaderThread;
+        if (blockingReader != null) {
+            blockingReader.interrupt();
         }
     }
 }
