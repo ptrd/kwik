@@ -83,6 +83,39 @@ class StreamManagerTest {
     }
 
     @Test
+    void unidirectionalAndBidirectionalHaveSeparateIdSpaces() {
+        // Given
+        streamManager.setInitialMaxStreamsUni(10);
+        streamManager.setInitialMaxStreamsBidi(10);
+        streamManager.createStream(false);
+        streamManager.createStream(false);
+        QuicStream unidirectionalStream = streamManager.createStream(false);
+
+        // When
+        QuicStream bidirectional = streamManager.createStream(true);
+
+        // Then
+        assertThat(bidirectional.getStreamId()).isEqualTo(0x0);   // 0x0  | Client-Initiated, Bidirectional
+        assertThat(unidirectionalStream.getStreamId()).isEqualTo(10);
+    }
+
+    @Test
+    void bidirectionalAndUnidirectionalHaveSeparateIdSpaces() {
+        // Given
+        streamManager.setInitialMaxStreamsUni(10);
+        streamManager.setInitialMaxStreamsBidi(10);
+        streamManager.createStream(true);
+        QuicStream bidirectional = streamManager.createStream(true);
+
+        // When
+        QuicStream unidirectionalStream = streamManager.createStream(false);
+
+        // Then
+        assertThat(unidirectionalStream.getStreamId()).isEqualTo(0x02);  // 0x2  | Client-Initiated, Unidirectional
+        assertThat(bidirectional.getStreamId()).isEqualTo(4);
+    }
+
+    @Test
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
         streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 1_000);

@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
@@ -47,7 +48,6 @@ public class StreamManager {
     private final Logger log;
     private int maxOpenStreamIdUni;
     private int maxOpenStreamIdBidi;
-    private int nextStreamId;
     private Consumer<QuicStream> peerInitiatedStreamCallback;
     private Long maxStreamsAcceptedByPeerBidi;
     private Long maxStreamsAcceptedByPeerUni;
@@ -58,6 +58,8 @@ public class StreamManager {
     protected long flowControlMax;
     protected long flowControlLastAdvertised;
     protected long flowControlIncrement;
+    private final AtomicInteger nextStreamIdBidirectional;
+    private final AtomicInteger nextStreamIdUnidirectional;
 
     /**
      * Creates a stream manager for a given connection.
@@ -80,6 +82,9 @@ public class StreamManager {
         streams = new ConcurrentHashMap<>();
         openBidirectionalStreams = new Semaphore(0);
         openUnidirectionalStreams = new Semaphore(0);
+        nextStreamIdBidirectional = new AtomicInteger();
+        nextStreamIdUnidirectional = new AtomicInteger();
+        initStreamIds();
         initConnectionFlowControl(initialConnectionFlowControl);
     }
 
@@ -102,6 +107,16 @@ public class StreamManager {
             maxStreamId += 3;
         }
         return maxStreamId;
+    }
+
+    private void initStreamIds() {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-stream-types-and-identifier
+        // "0x00	Client-Initiated, Bidirectional
+        //  0x01	Server-Initiated, Bidirectional
+        //  0x02	Client-Initiated, Unidirectional
+        //  0x03	Server-Initiated, Unidirectional"
+        nextStreamIdBidirectional.set(role == Role.Client? 0x00 : 0x01);
+        nextStreamIdUnidirectional.set(role == Role.Client? 0x02 : 0x03);
     }
 
     protected void initConnectionFlowControl(long initialMaxData) {
@@ -164,18 +179,13 @@ public class StreamManager {
         }
     }
 
-    private synchronized int generateStreamId(boolean bidirectional) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-2.1:
-        // "0x0  | Client-Initiated, Bidirectional"
-        // "0x1  | Server-Initiated, Bidirectional"
-        int id = (nextStreamId << 2) + (role == Role.Client? 0x00: 0x01);
-        if (!bidirectional) {
-            // "0x2  | Client-Initiated, Unidirectional |"
-            // "0x3  | Server-Initiated, Unidirectional |"
-            id += 0x02;
+    private int generateStreamId(boolean bidirectional) {
+        if (bidirectional) {
+            return nextStreamIdBidirectional.getAndAdd(4);
         }
-        nextStreamId++;
-        return id;
+        else {
+            return nextStreamIdUnidirectional.getAndAdd(4);
+        }
     }
 
     public void setFlowController(FlowControl flowController) {
