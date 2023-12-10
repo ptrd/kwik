@@ -55,7 +55,9 @@ public class Http09Connection implements ApplicationProtocolConnection {
 
     void handleRequest(QuicStream quicStream) {
         try {
-            String fileName = extractPathFromRequest(quicStream.getInputStream());
+            InputStream inputStream = quicStream.getInputStream();
+            String fileName = extractPathFromRequest(inputStream);
+            inputStream.close();
             if (fileName != null) {
                 File file = getFileInWwwDir(fileName);
                 OutputStream outputStream = quicStream.getOutputStream();
