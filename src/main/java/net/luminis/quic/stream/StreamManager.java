@@ -65,6 +65,9 @@ public class StreamManager {
     private final ReentrantLock updateFlowControlLock;
     private final AtomicInteger nextStreamIdBidirectional;
     private final AtomicInteger nextStreamIdUnidirectional;
+    private volatile int nextPeerInitiatedUnidirectionalStreamId;
+    private volatile int nextPeerInitiatedBidirectionalStreamId;
+
 
     /**
      * Creates a stream manager for a given connection.
@@ -125,6 +128,9 @@ public class StreamManager {
         //  0x03	Server-Initiated, Unidirectional"
         nextStreamIdBidirectional.set(role == Role.Client? 0x00 : 0x01);
         nextStreamIdUnidirectional.set(role == Role.Client? 0x02 : 0x03);
+
+        nextPeerInitiatedUnidirectionalStreamId = role == Role.Client? 0x03 : 0x02;
+        nextPeerInitiatedBidirectionalStreamId = role == Role.Client? 0x01 : 0x00;
     }
 
     protected void initConnectionFlowControl(long initialMaxData) {
@@ -209,23 +215,49 @@ public class StreamManager {
         }
         else {
             if (isPeerInitiated(streamId)) {
-                if (isUni(streamId) && streamId < maxOpenStreamIdUni || isBidi(streamId) && streamId < maxOpenStreamIdBidi) {
-                    log.debug("Receiving data for peer-initiated stream " + streamId + " (#" + ((streamId / 4) + 1) + " of this type)");
-                    stream = new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
-                    streams.put(streamId, stream);
-                    stream.add(frame);
-                    peerInitiatedStreamCallback.accept(stream);
-                }
-                else {
-                    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-19.11
-                    // "An endpoint MUST terminate a connection with a STREAM_LIMIT_ERROR error if a peer opens more
-                    //  streams than was permitted."
-                    throw new TransportError(STREAM_LIMIT_ERROR);
+                QuicStreamImpl peerInitiatedStream = createPeerInitiatedStream(streamId);
+                if (peerInitiatedStream != null) {
+                        peerInitiatedStream.add(frame);
                 }
             }
             else {
-                log.error("Receiving frame for non-existent stream " + streamId);
+                log.warn("Receiving frame for non-existent stream " + streamId);
             }
+        }
+    }
+
+    private QuicStreamImpl createPeerInitiatedStream(int requestedStreamId) throws TransportError {
+        if (isUni(requestedStreamId) && requestedStreamId < maxOpenStreamIdUni || isBidi(requestedStreamId) && requestedStreamId < maxOpenStreamIdBidi) {
+            if (isUni(requestedStreamId)) {
+                createPeerInitiatedStreams(requestedStreamId, nextPeerInitiatedUnidirectionalStreamId, () -> nextPeerInitiatedUnidirectionalStreamId = requestedStreamId + 4);
+            }
+            else {
+                assert isBidi(requestedStreamId);
+                createPeerInitiatedStreams(requestedStreamId, nextPeerInitiatedBidirectionalStreamId, () -> nextPeerInitiatedBidirectionalStreamId = requestedStreamId + 4);
+            }
+        }
+        else {
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-19.11
+            // "An endpoint MUST terminate a connection with a STREAM_LIMIT_ERROR error if a peer opens more
+            //  streams than was permitted."
+            throw new TransportError(STREAM_LIMIT_ERROR);
+        }
+        return streams.get(requestedStreamId);
+    }
+
+    private void createPeerInitiatedStreams(int requestedStreamId, int nextStreamId, Runnable nextStreamIdUpdate) throws TransportError {
+        if (requestedStreamId >= nextStreamId) {
+            assert (requestedStreamId - nextStreamId) % 4 == 0;
+            for (int streamId = nextStreamId; streamId <= requestedStreamId; streamId += 4) {
+                QuicStreamImpl stream = new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
+                streams.put(streamId, stream);
+                peerInitiatedStreamCallback.accept(stream);
+            }
+            nextStreamIdUpdate.run();
+        }
+        else {
+            // Attempt to re-open a closed stream, could be due to re-ordering, so ignore
+            log.warn("Receiving data for already closed peer-initiated stream " + requestedStreamId + " (ignoring)");
         }
     }
 
@@ -278,6 +310,7 @@ public class StreamManager {
     void streamClosed(int streamId) {
         // This implementation maintains a fixed maximum number of open streams, so when a stream initiated by the peer
         // is closed, it is allowed to open another.
+        streams.remove(streamId);
         if (isPeerInitiated(streamId)) {
             increaseMaxOpenStreams(streamId);
         }
@@ -433,6 +466,10 @@ public class StreamManager {
         }
     }
 
+    int openStreamCount() {
+        return streams.size();
+    }
+
     public long getMaxBidirectionalStreams() {
         return maxStreamsAcceptedByPeerBidi;
     }
@@ -445,4 +482,3 @@ public class StreamManager {
         QuicStreamImpl apply(int streamId);
     }
 }
-

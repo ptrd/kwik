@@ -558,6 +558,62 @@ class StreamManagerTest {
     }
     //endregion
 
+    //region closing streams
+    @Test
+    void closingSelfInitiatedStreamShouldRemoveItFromStreamManager() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        QuicStream stream = streamManager.createStream(true);
+
+        // When
+        streamManager.streamClosed(stream.getStreamId());
+
+        // Then
+        assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void closingSelfInitiatedStreamTwiceStillRemovesItOnceFromStreamManager() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        QuicStream stream = streamManager.createStream(true);
+        streamManager.streamClosed(stream.getStreamId());
+
+        // When
+        streamManager.streamClosed(stream.getStreamId());
+
+        // Then
+        assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void closingPeerInitiatedStreamShouldRemoveItFromStreamManager() throws Exception {
+        // Given
+        int streamId = 1;
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+
+        // When
+        streamManager.streamClosed(streamId);
+
+        // Then
+        assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void closedPeerInitiatedStreamWillNotBeReopened() throws Exception {
+        // Given
+        int streamId = 1;
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+        streamManager.streamClosed(streamId);
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+
+        // Then
+        assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+    //endregion
+
     //region test helper methods
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
