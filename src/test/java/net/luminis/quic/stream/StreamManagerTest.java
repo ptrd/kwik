@@ -131,6 +131,30 @@ class StreamManagerTest {
         assertThat(openedStreams).hasSize(1);
         assertThat(openedStreams.get(0).getStreamId()).isEqualTo(0);
     }
+
+    @Test
+    void numberOfBidirectionalStreamsThatCanBeCreatedShouldBeIdenticalToInitialMaxValue() throws Exception {
+        // Given
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager.setFlowController(mock(FlowControl.class));
+        // streamManager.setInitialMaxStreamsBidi(10);
+
+        // When
+        List<Integer> openStreams = new ArrayList<>();
+        int currentStreamId = 0x00;  // Client initiated, bidirectional
+        try {
+            while (true) {
+                streamManager.process(new StreamFrame(currentStreamId, new byte[100], true));
+                openStreams.add(currentStreamId);
+                currentStreamId += 4;
+            }
+        }
+        catch (TransportError e) {}
+
+        // Then
+        assertThat(openStreams).hasSize(10);
+        assertThat(openStreams).containsExactly(0, 4, 8, 12, 16, 20, 24, 28, 32, 36);
+    }
     //endregion
 
     //region self creation in relation to streams limit
