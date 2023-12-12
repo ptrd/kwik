@@ -626,7 +626,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         if (error == NO_ERROR.value) {
-            log.error("Closing " + this);
+            log.info("Closing " + this);
         }
         else {
             log.error("Closing " + this + " with error " + error + (errorReason != null? ": " + errorReason:""));
