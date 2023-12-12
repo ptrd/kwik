@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -90,7 +91,12 @@ public class QuicStreamImpl implements QuicStream {
      * @param frame
      */
     void add(StreamFrame frame) throws TransportError {
-        inputStream.add(frame);
+        if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
+            inputStream.add(frame);
+        }
+        else {
+            throw new TransportError(QuicConstants.TransportErrorCode.STREAM_STATE_ERROR);
+        }
     }
 
     /**

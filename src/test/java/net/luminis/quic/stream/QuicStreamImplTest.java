@@ -586,6 +586,38 @@ class QuicStreamImplTest {
     }
     //endregion
 
+    //region receive stream frame
+    @Test
+    void receivingStreamFrameForSelfInitiatedUnidirectionalShouldThrow() throws Exception {
+        // Given
+        role = Role.Client;
+        int streamId = 0x02;  // client initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                quicStream.add(resurrect(new StreamFrame(streamId, new byte[1], false))))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void receivingStreamFrameForPeerInitiatedUnidirectionalShouldBePossible() throws Exception {
+        // Given
+        role = Role.Client;
+        int streamId = 0x03;  // server initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        assertThatCode(() ->
+                // When
+                quicStream.add(resurrect(new StreamFrame(streamId, new byte[1], false))))
+                // Then
+                .doesNotThrowAnyException();
+    }
+    //endregion
+
     //region outputstream write
     @Test
     void testStreamOutputWithByteArray() throws Exception {
