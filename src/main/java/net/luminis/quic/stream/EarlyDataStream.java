@@ -20,6 +20,7 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.Role;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 
@@ -33,6 +34,7 @@ import java.util.Arrays;
  */
 public class EarlyDataStream extends QuicStreamImpl {
 
+    private final FlowControl flowController;
     private volatile boolean sendingEarlyData = true;
     private boolean earlyDataIsFinalInStream;
     private byte[] earlyData = new byte[0];
@@ -43,7 +45,8 @@ public class EarlyDataStream extends QuicStreamImpl {
 
 
     public EarlyDataStream(Version quicVersion, int streamId, QuicClientConnectionImpl connection, StreamManager streamManager, FlowControl flowController, Logger log) {
-        super(quicVersion, streamId, connection, streamManager, flowController, log);
+        super(quicVersion, streamId, Role.Client, connection, streamManager, flowController, log);
+        this.flowController = flowController;
     }
 
     /**
@@ -99,11 +102,15 @@ public class EarlyDataStream extends QuicStreamImpl {
     }
 
     @Override
-    protected QuicStreamImpl.StreamOutputStream createStreamOutputStream() {
-        return new EarlyDataStreamOutputStream();
+    protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
+        return new EarlyDataStreamOutputStream(sendBufferSize, flowControl);
     }
 
-    protected class EarlyDataStreamOutputStream extends QuicStreamImpl.StreamOutputStream {
+    protected class EarlyDataStreamOutputStream extends StreamOutputStream {
+        protected EarlyDataStreamOutputStream(Integer sendBufferSize, FlowControl flowController) {
+            super(EarlyDataStream.this, sendBufferSize, flowController);
+        }
+
         @Override
         protected EncryptionLevel getEncryptionLevel() {
             return writingEarlyData? EncryptionLevel.ZeroRTT: EncryptionLevel.App;

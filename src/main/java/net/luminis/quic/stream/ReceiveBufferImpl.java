@@ -40,8 +40,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
 
-    private NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
-    private Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
+    private final NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
+    private final Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
     private volatile long contiguousUpToOffset = 0;
     private volatile long readUpToOffset = 0;
     private volatile long streamEndOffset = -1;
@@ -283,6 +283,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             }
         }
         return overlap;
+    }
+
+    public void discardAllData() {
+        outOfOrderFrames.clear();
+        bufferedOutOfOrderData = 0;
+        contiguousFrames.clear();
     }
 
     private static class SimpleStreamElement implements StreamElement {
