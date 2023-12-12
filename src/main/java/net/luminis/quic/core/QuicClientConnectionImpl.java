@@ -45,6 +45,7 @@ import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
+import net.luminis.tls.util.ByteUtils;
 
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
@@ -1115,6 +1116,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     private void enableQuantumReadinessTest(int nrDummyBytes) {
         clientHelloEnlargement = nrDummyBytes;
+    }
+
+    @Override
+    public String toString() {
+        return "ClientConnection["
+                + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
+                + "/" + ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId())
+                + "(" + getQuicVersion() + ")"
+                + " with " + new InetSocketAddress(serverAddress, serverPort)
+                + "]";
     }
 
     public static Builder newBuilder() {
