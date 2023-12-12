@@ -91,6 +91,7 @@ public class QuicStreamImpl implements QuicStream {
      * @param frame
      */
     void add(StreamFrame frame) throws TransportError {
+        assert frame.getStreamId() == streamId;
         if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
             inputStream.add(frame);
         }

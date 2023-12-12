@@ -359,7 +359,7 @@ class QuicStreamImplTest {
     @Test
     void readReturnsMinusOneWhenEndOfStreamIsReached() throws Exception {
         // Given
-        quicStream.add(new StreamFrame(9, new byte[10], true));
+        quicStream.add(new StreamFrame(0, new byte[10], true));
         InputStream inputStream = quicStream.getInputStream();
 
         // When
@@ -374,7 +374,7 @@ class QuicStreamImplTest {
     @Test
     void readReturnsZeroWhenRequestedReadLengthIsZero() throws Exception {
         // Given
-        quicStream.add(new StreamFrame(9, new byte[10], true));
+        quicStream.add(new StreamFrame(0, new byte[10], true));
 
         // When
         int read = quicStream.getInputStream().read(new byte[100], 0, 0);
@@ -386,7 +386,7 @@ class QuicStreamImplTest {
     @Test
     void availableReturnsZeroWhenEndOfStreamIsReached() throws Exception {
         // Given
-        quicStream.add(new StreamFrame(9, new byte[10], true));
+        quicStream.add(new StreamFrame(0, new byte[10], true));
         InputStream inputStream = quicStream.getInputStream();
 
         // When
