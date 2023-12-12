@@ -1203,6 +1203,21 @@ class QuicStreamImplTest {
         // Then
         verify(streamManager).streamClosed(eq(quicStream.streamId));
     }
+
+    @Test
+    void closeAfterAbortShouldNotLeadToFrameBeingSent() throws Exception {
+        // Given
+        role = Role.Server;
+        int streamId = 3;  // server initiated unidirectional stream
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.abort();
+
+        // When
+        quicStream.getOutputStream().close();
+
+        // Then
+        verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
+    }
     //endregion
 
     //region retransmissions

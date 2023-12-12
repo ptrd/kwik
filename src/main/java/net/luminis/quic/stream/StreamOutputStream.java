@@ -164,7 +164,7 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
 
     @Override
     public void close() throws IOException {
-        if (!closed && !reset) {
+        if (!closed && !aborted && !reset) {
             sendQueue.add(END_OF_STREAM_MARKER);
             closed = true;
             synchronized (lock) {
