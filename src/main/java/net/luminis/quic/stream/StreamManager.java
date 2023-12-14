@@ -211,13 +211,13 @@ public class StreamManager {
         QuicStreamImpl stream = streams.get(streamId);
         checkConnectionFlowControl(stream, frame);
         if (stream != null) {
-            stream.add(frame);
+            stream.addStreamData(frame);
         }
         else {
             if (isPeerInitiated(streamId)) {
                 QuicStreamImpl peerInitiatedStream = createPeerInitiatedStream(streamId);
                 if (peerInitiatedStream != null) {
-                        peerInitiatedStream.add(frame);
+                        peerInitiatedStream.addStreamData(frame);
                 }
             }
             else {

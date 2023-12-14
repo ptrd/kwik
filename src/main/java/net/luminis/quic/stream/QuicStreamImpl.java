@@ -90,10 +90,10 @@ public class QuicStreamImpl implements QuicStream {
      * This method is intentionally package-protected, as it should only be called by the (Stream)Packet processor.
      * @param frame
      */
-    void add(StreamFrame frame) throws TransportError {
+    void addStreamData(StreamFrame frame) throws TransportError {
         assert frame.getStreamId() == streamId;
         if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
-            inputStream.add(frame);
+            inputStream.addDataFrom(frame);
         }
         else {
             throw new TransportError(QuicConstants.TransportErrorCode.STREAM_STATE_ERROR);

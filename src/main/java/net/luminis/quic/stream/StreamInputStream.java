@@ -65,7 +65,7 @@ class StreamInputStream extends InputStream {
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
-    void add(StreamFrame frame) throws TransportError {
+    void addDataFrom(StreamFrame frame) throws TransportError {
         if (finalSize >= 0 && frame.getUpToOffset() > finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
