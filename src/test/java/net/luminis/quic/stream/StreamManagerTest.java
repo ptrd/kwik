@@ -35,7 +35,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -541,6 +543,38 @@ class StreamManagerTest {
         verify(quicConnection)
                 .send(argThat(f -> f instanceof MaxDataFrame && ((MaxDataFrame) f).getMaxData() == 20_000),
                         any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void connectionFlowControlCreditsOfClosedStreamsShouldCount() throws Exception {
+        // Given
+        Map<Integer, QuicStream> openStreams = new HashMap<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> {
+            openStreams.put(stream.getStreamId(), stream);
+        });
+        streamManager.process(new StreamFrame(3, new byte[5000], false));
+        streamManager.process(new StreamFrame(7, new byte[5000], false));
+        for (QuicStream stream : openStreams.values()) {
+            stream.getInputStream().read(new byte[5000]);  // Will increase connection flow control limit to 20.000
+        }
+
+        // When
+        for (QuicStream stream : openStreams.values()) {
+            stream.getInputStream().close();  // Should have no affect on connection flow control limit!
+        }
+
+        // Then
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(11, new byte[10000], false)))
+                // Then
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(15, new byte[1], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
     //endregion
 
