@@ -67,6 +67,7 @@ public class StreamManager {
     private final AtomicInteger nextStreamIdUnidirectional;
     private volatile int nextPeerInitiatedUnidirectionalStreamId;
     private volatile int nextPeerInitiatedBidirectionalStreamId;
+    private long cumulativeReceiveOffset;
 
 
     /**
@@ -211,13 +212,13 @@ public class StreamManager {
         QuicStreamImpl stream = streams.get(streamId);
         checkConnectionFlowControl(stream, frame);
         if (stream != null) {
-            stream.addStreamData(frame);
+            cumulativeReceiveOffset += stream.addStreamData(frame);
         }
         else {
             if (isPeerInitiated(streamId)) {
                 QuicStreamImpl peerInitiatedStream = createPeerInitiatedStream(streamId);
                 if (peerInitiatedStream != null) {
-                        peerInitiatedStream.addStreamData(frame);
+                    cumulativeReceiveOffset += peerInitiatedStream.addStreamData(frame);
                 }
             }
             else {
@@ -297,10 +298,9 @@ public class StreamManager {
     }
 
     private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
-        long receivingStreamMaxOffset = receivingStream != null? receivingStream.getCurrentReceiveOffset(): 0;
+        long receivingStreamMaxOffset = receivingStream != null? receivingStream.getReceivedMaxOffset(): 0;
         if (frame.getUpToOffset() > receivingStreamMaxOffset) {
             long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
-            long cumulativeReceiveOffset = streams.values().stream().mapToLong(stream -> stream.getCurrentReceiveOffset()).sum();
             if (cumulativeReceiveOffset + increment > flowControlMax) {
                 throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
             }

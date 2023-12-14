@@ -65,7 +65,15 @@ class StreamInputStream extends InputStream {
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
-    void addDataFrom(StreamFrame frame) throws TransportError {
+    /**
+     * Adds data from a newly received frame to the stream.
+     *
+     * @param frame
+     * @return the increase in largest offset received; note that this is not (bound by) the length of the frame data,
+     *        as there can be gaps in the received data
+     * @throws TransportError
+     */
+    long addDataFrom(StreamFrame frame) throws TransportError {
         if (finalSize >= 0 && frame.getUpToOffset() > finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
@@ -81,8 +89,10 @@ class StreamInputStream extends InputStream {
                 throw new TransportError(FLOW_CONTROL_ERROR);
             }
             receiveBuffer.add(frame);
+            long largestOffsetIncrease = Long.max(0, frame.getUpToOffset() - largestOffsetReceived);
             largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
             addMonitor.notifyAll();
+            return largestOffsetIncrease;
         }
     }
 
