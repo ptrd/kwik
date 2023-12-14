@@ -23,6 +23,7 @@ import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
 import net.luminis.quic.core.TransportError;
+import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
@@ -471,20 +472,22 @@ class StreamManagerTest {
     
     //region flow control
     @Test
-    void testConnectionFlowControl() throws Exception {
+    void updatingConnectionFlowControlShouldSendMaxData() throws Exception {
         long flowControlIncrement = (long) new FieldReader(streamManager, streamManager.getClass().getDeclaredField("flowControlIncrement")).read();
 
         streamManager.updateConnectionFlowControl(10);
         verify(quicConnection, never()).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());  // No initial update, value is advertised in transport parameters.
 
         streamManager.updateConnectionFlowControl((int) flowControlIncrement);
-        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
 
+        clearInvocations(quicConnection);
         streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
-        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection, never()).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
 
+        clearInvocations(quicConnection);
         streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
-        verify(quicConnection, times(2)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -522,6 +525,22 @@ class StreamManagerTest {
                 // Then
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
+
+    @Test
+    void connectionFlowControlLimitIncreasesWhenDataIsRead() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        QuicStream stream = streamManager.createStream(true);
+        streamManager.process(new StreamFrame(stream.getStreamId(), new byte[10_000], false));
+
+        // When
+        stream.getInputStream().read(new byte[10_000]);
+
+        // Then
+        verify(quicConnection)
+                .send(argThat(f -> f instanceof MaxDataFrame && ((MaxDataFrame) f).getMaxData() == 20_000),
+                        any(Consumer.class), anyBoolean());
     }
     //endregion
 
