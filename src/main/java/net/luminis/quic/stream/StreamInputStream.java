@@ -74,9 +74,15 @@ class StreamInputStream extends InputStream {
      * @throws TransportError
      */
     long addDataFrom(StreamFrame frame) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "A receiver SHOULD treat receipt of data at or beyond the final size as an error of type FINAL_SIZE_ERROR,
+        //  even after a stream is closed."
         if (finalSize >= 0 && frame.getUpToOffset() > finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "If a RESET_STREAM or STREAM frame is received indicating a change in the final size for the stream, an
+        //  endpoint SHOULD respond with an error of type FINAL_SIZE_ERROR"
         if (finalSize >=0 && frame.isFinal() && frame.getUpToOffset() != finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
@@ -237,10 +243,28 @@ class StreamInputStream extends InputStream {
         quicStream.log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
     }
 
-    void terminate(long errorCode, long finalSizeOfReset) throws TransportError {
+    /**
+     *
+     * @param errorCode
+     * @param finalSizeOfReset
+     * @return the increase of the largest offset given the final size of the reset frame.
+     * @throws TransportError
+     */
+    long terminate(long errorCode, long finalSizeOfReset) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "If a RESET_STREAM or STREAM frame is received indicating a change in the final size for the stream, an
+        //  endpoint SHOULD respond with an error of type FINAL_SIZE_ERROR"
         if (this.finalSize >=0 && finalSizeOfReset != this.finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
+        if (finalSizeOfReset < largestOffsetReceived) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+            // "A receiver SHOULD treat receipt of data at or beyond the final size as an error of type FINAL_SIZE_ERROR,
+            //  even after a stream is closed."
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        long increment = finalSizeOfReset - largestOffsetReceived;
+
         if (finalSize < 0) {
             finalSize = finalSizeOfReset;
         }
@@ -250,6 +274,7 @@ class StreamInputStream extends InputStream {
             interruptBlockingReader();
             quicStream.inputClosed();
         }
+        return increment;
     }
 
     void abort() {

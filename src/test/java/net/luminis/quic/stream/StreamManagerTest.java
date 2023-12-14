@@ -576,6 +576,26 @@ class StreamManagerTest {
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
+
+    @Test
+    void finalSizeOfResetFrameShouldBeUsedForConnectionFlowControl() throws Exception {
+        // Given
+        int streamId = 1;
+        streamManager.setInitialMaxStreamsBidi(1);
+        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));
+
+        // When
+        streamManager.process(new ResetStreamFrame(streamId, 0, 9_000));
+
+        // Then
+        int nextStreamId = 5;
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(nextStreamId, 0, new byte[1001], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
     //endregion
 
     //region final size

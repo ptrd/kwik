@@ -171,9 +171,10 @@ public class QuicStreamImpl implements QuicStream {
      *
      * @param errorCode
      * @param finalSize
+     * @return the increase of the largest offset given the final size of the reset frame.
      */
-    void terminateStream(long errorCode, long finalSize) throws TransportError {
-        inputStream.terminate(errorCode, finalSize);
+    long terminateStream(long errorCode, long finalSize) throws TransportError {
+        return inputStream.terminate(errorCode, finalSize);
     }
 
     // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.

@@ -277,7 +277,7 @@ public class StreamManager {
         if (stream != null) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
             // "A receiver of RESET_STREAM can discard any data that it already received on that stream."
-            stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
+            cumulativeReceiveOffset += stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
 
@@ -287,8 +287,7 @@ public class StreamManager {
 
             flowControlMax += size;
             if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
-                connection.send(new MaxDataFrame(flowControlMax), f -> {
-                }, true);
+                connection.send(new MaxDataFrame(flowControlMax), f -> {}, true);
                 flowControlLastAdvertised = flowControlMax;
             }
         }
