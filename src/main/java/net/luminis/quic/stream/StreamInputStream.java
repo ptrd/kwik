@@ -275,6 +275,8 @@ class StreamInputStream extends InputStream {
         }
         if (!aborted && !closed && !reset) {
             reset = true;
+            int unusedFlowControlCredits = (int) (finalSize - receiveBuffer.readOffset());
+            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
             receiveBuffer.discardAllData();
             interruptBlockingReader();
             quicStream.inputClosed();

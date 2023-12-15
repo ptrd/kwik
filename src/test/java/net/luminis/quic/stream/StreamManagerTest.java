@@ -577,21 +577,45 @@ class StreamManagerTest {
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
 
+
+    @Test
+    void whenResetReceivedUnusedCreditsShouldBeReturnedToConnectionFlowControl() throws Exception {
+        // Given
+        int streamId = 3;
+        streamManager.setInitialMaxStreamsBidi(1);
+        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));
+
+        // When
+        streamManager.process(new ResetStreamFrame(streamId, 0, 7_000));
+
+        // Then
+        verify(quicConnection)
+                .send(argThat(f -> f instanceof MaxDataFrame && ((MaxDataFrame) f).getMaxData() == 17_000),
+                        any(Consumer.class), anyBoolean());
+    }
+
     @Test
     void finalSizeOfResetFrameShouldBeUsedForConnectionFlowControl() throws Exception {
         // Given
         int streamId = 1;
         streamManager.setInitialMaxStreamsBidi(1);
-        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));
+        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));  // Leaves 9.000 credits for connection flow control
 
         // When
-        streamManager.process(new ResetStreamFrame(streamId, 0, 9_000));
+        streamManager.process(new ResetStreamFrame(streamId, 0, 3_000));  // Leaves 7.000 credits for connection flow control
+        // However, new credits with the amount of the final size well be added to the connection flow control limit => 10.000 credits
 
         // Then
         int nextStreamId = 5;
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(nextStreamId, new byte[10000], false)))
+                // Then
+                .doesNotThrowAnyException();
+
         assertThatThrownBy(() ->
                 // When
-                streamManager.process(new StreamFrame(nextStreamId, 0, new byte[1001], false)))
+                streamManager.process(new StreamFrame(nextStreamId, 10000, new byte[1], false)))
                 // Then
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
