@@ -90,15 +90,20 @@ class StreamInputStream extends InputStream {
             finalSize = frame.getUpToOffset();
         }
 
-        synchronized (addMonitor) {
-            if (frame.getUpToOffset() > receiverFlowControlLimit) {
-                throw new TransportError(FLOW_CONTROL_ERROR);
+        if (!aborted && !closed && !reset) {
+            synchronized (addMonitor) {
+                if (frame.getUpToOffset() > receiverFlowControlLimit) {
+                    throw new TransportError(FLOW_CONTROL_ERROR);
+                }
+                receiveBuffer.add(frame);
+                long largestOffsetIncrease = Long.max(0, frame.getUpToOffset() - largestOffsetReceived);
+                largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
+                addMonitor.notifyAll();
+                return largestOffsetIncrease;
             }
-            receiveBuffer.add(frame);
-            long largestOffsetIncrease = Long.max(0, frame.getUpToOffset() - largestOffsetReceived);
-            largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
-            addMonitor.notifyAll();
-            return largestOffsetIncrease;
+        }
+        else {
+            return 0;
         }
     }
 

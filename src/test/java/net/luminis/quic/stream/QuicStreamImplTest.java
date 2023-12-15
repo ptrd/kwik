@@ -30,6 +30,7 @@ import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -558,6 +559,23 @@ class QuicStreamImplTest {
 
         // Then
         verify(streamManager).streamClosed(eq(quicStream.streamId));
+    }
+
+    @Test
+    void afterAbortReadingIncomingDataShouldBeDiscarded() throws Exception {
+        // Given
+        int streamId = 0x01;
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+        quicStream.addStreamData(resurrect(new StreamFrame(streamId, 0, new byte[1000], false)));
+        quicStream.abortReading(9);
+
+        // When
+        quicStream.addStreamData(new StreamFrame(streamId, 2000, new byte[1000], false));
+
+        // Then
+        StreamInputStream streamInputStream = (StreamInputStream) quicStream.getInputStream();
+        ReceiveBufferImpl receiveBuffer = (ReceiveBufferImpl) new FieldReader(streamInputStream, "receiveBuffer").read();
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
     //endregion
 
