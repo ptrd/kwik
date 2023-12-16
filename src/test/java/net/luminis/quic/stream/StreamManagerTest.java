@@ -577,7 +577,6 @@ class StreamManagerTest {
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
 
-
     @Test
     void whenResetReceivedUnusedCreditsShouldBeReturnedToConnectionFlowControl() throws Exception {
         // Given
@@ -732,6 +731,54 @@ class StreamManagerTest {
 
         // Then
         assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void receivingDuplicateFinalStreamFrameAfterCloseBidiShouldNotLeadToException() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+
+        QuicStream stream = streamManager.createStream(true);
+        int streamId = stream.getStreamId();
+
+        streamManager.process(new StreamFrame(streamId, new byte[10_000], false));
+        stream.getInputStream().read(new byte[10_000]);
+
+        StreamFrame finalFrame = new StreamFrame(streamId, 10_000, new byte[10_000], true);
+        streamManager.process(finalFrame);
+        streamManager.streamClosed(streamId);
+
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(finalFrame))
+                // Then
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void receivingDuplicateFinalStreamFrameAfterCloseUniShouldNotLeadToException() throws Exception {
+        // Given
+        Map<Integer, QuicStream> openStreams = new HashMap<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> {
+            openStreams.put(stream.getStreamId(), stream);
+        });
+
+        int streamId = 0x03;
+        streamManager.process(new StreamFrame(streamId, new byte[10_000], false));
+        QuicStream stream = openStreams.get(streamId);
+        stream.getInputStream().read(new byte[10_000]);
+
+        StreamFrame finalFrame = new StreamFrame(streamId, 10_000, new byte[10_000], true);
+        streamManager.process(finalFrame);
+        streamManager.streamClosed(streamId);
+
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(finalFrame))
+                // Then
+                .doesNotThrowAnyException();
     }
     //endregion
 

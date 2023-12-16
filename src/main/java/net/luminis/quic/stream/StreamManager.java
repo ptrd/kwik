@@ -297,13 +297,21 @@ public class StreamManager {
     }
 
     private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
-        long receivingStreamMaxOffset = receivingStream != null? receivingStream.getReceivedMaxOffset(): 0;
-        if (frame.getUpToOffset() > receivingStreamMaxOffset) {
-            long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
-            if (cumulativeReceiveOffset + increment > flowControlMax) {
-                throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
+        if (receivingStream != null || isNew(frame.getStreamId())) {
+            long receivingStreamMaxOffset = receivingStream != null ? receivingStream.getReceivedMaxOffset() : 0;
+            if (frame.getUpToOffset() > receivingStreamMaxOffset) {
+                long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
+                if (cumulativeReceiveOffset + increment > flowControlMax) {
+                    throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
+                }
             }
         }
+        // else: (receivingStream is null because) stream already closed, so ignore!
+    }
+
+    private boolean isNew(int streamId) {
+        return isUni(streamId) && streamId >= nextPeerInitiatedUnidirectionalStreamId
+                || isBidi(streamId) && streamId >= nextPeerInitiatedBidirectionalStreamId;
     }
 
     void streamClosed(int streamId) {
