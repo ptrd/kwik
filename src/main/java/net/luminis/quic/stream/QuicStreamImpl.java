@@ -85,15 +85,17 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     /**
-     * Adds a newly received frame to the stream.
+     * Adds data from a newly received frame to the stream.
      *
      * This method is intentionally package-protected, as it should only be called by the (Stream)Packet processor.
      * @param frame
+     * @return the increase in largest offset received; note that this is not (bound by) the length of the frame data,
+     *        as there can be gaps in the received data
      */
-    void add(StreamFrame frame) throws TransportError {
+    long addStreamData(StreamFrame frame) throws TransportError {
         assert frame.getStreamId() == streamId;
         if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
-            inputStream.add(frame);
+            return inputStream.addDataFrom(frame);
         }
         else {
             throw new TransportError(QuicConstants.TransportErrorCode.STREAM_STATE_ERROR);
@@ -104,7 +106,7 @@ public class QuicStreamImpl implements QuicStream {
      * This method is intentionally package-protected, as it should only be called by the (Stream)Packet processor.
      * @return  largest offset received so far
      */
-    long getCurrentReceiveOffset() {
+    long getReceivedMaxOffset() {
         return inputStream.getCurrentReceiveOffset();
     }
 
@@ -169,9 +171,10 @@ public class QuicStreamImpl implements QuicStream {
      *
      * @param errorCode
      * @param finalSize
+     * @return the increase of the largest offset given the final size of the reset frame.
      */
-    void terminateStream(long errorCode, long finalSize) throws TransportError {
-        inputStream.terminate(errorCode, finalSize);
+    long terminateStream(long errorCode, long finalSize) throws TransportError {
+        return inputStream.terminate(errorCode, finalSize);
     }
 
     // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.

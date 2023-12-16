@@ -65,10 +65,24 @@ class StreamInputStream extends InputStream {
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }
 
-    void add(StreamFrame frame) throws TransportError {
+    /**
+     * Adds data from a newly received frame to the stream.
+     *
+     * @param frame
+     * @return the increase in largest offset received; note that this is not (bound by) the length of the frame data,
+     *        as there can be gaps in the received data
+     * @throws TransportError
+     */
+    long addDataFrom(StreamFrame frame) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "A receiver SHOULD treat receipt of data at or beyond the final size as an error of type FINAL_SIZE_ERROR,
+        //  even after a stream is closed."
         if (finalSize >= 0 && frame.getUpToOffset() > finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "If a RESET_STREAM or STREAM frame is received indicating a change in the final size for the stream, an
+        //  endpoint SHOULD respond with an error of type FINAL_SIZE_ERROR"
         if (finalSize >=0 && frame.isFinal() && frame.getUpToOffset() != finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
@@ -76,13 +90,20 @@ class StreamInputStream extends InputStream {
             finalSize = frame.getUpToOffset();
         }
 
-        synchronized (addMonitor) {
-            if (frame.getUpToOffset() > receiverFlowControlLimit) {
-                throw new TransportError(FLOW_CONTROL_ERROR);
+        if (!aborted && !closed && !reset) {
+            synchronized (addMonitor) {
+                if (frame.getUpToOffset() > receiverFlowControlLimit) {
+                    throw new TransportError(FLOW_CONTROL_ERROR);
+                }
+                receiveBuffer.add(frame);
+                long largestOffsetIncrease = Long.max(0, frame.getUpToOffset() - largestOffsetReceived);
+                largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
+                addMonitor.notifyAll();
+                return largestOffsetIncrease;
             }
-            receiveBuffer.add(frame);
-            largestOffsetReceived = Long.max(largestOffsetReceived, frame.getUpToOffset());
-            addMonitor.notifyAll();
+        }
+        else {
+            return 0;
         }
     }
 
@@ -227,19 +248,40 @@ class StreamInputStream extends InputStream {
         quicStream.log.recovery("Retransmitted max stream data, because lost frame " + lostFrame);
     }
 
-    void terminate(long errorCode, long finalSizeOfReset) throws TransportError {
+    /**
+     *
+     * @param errorCode
+     * @param finalSizeOfReset
+     * @return the increase of the largest offset given the final size of the reset frame.
+     * @throws TransportError
+     */
+    long terminate(long errorCode, long finalSizeOfReset) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+        // "If a RESET_STREAM or STREAM frame is received indicating a change in the final size for the stream, an
+        //  endpoint SHOULD respond with an error of type FINAL_SIZE_ERROR"
         if (this.finalSize >=0 && finalSizeOfReset != this.finalSize) {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
+        if (finalSizeOfReset < largestOffsetReceived) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#final-size
+            // "A receiver SHOULD treat receipt of data at or beyond the final size as an error of type FINAL_SIZE_ERROR,
+            //  even after a stream is closed."
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        long increment = finalSizeOfReset - largestOffsetReceived;
+
         if (finalSize < 0) {
             finalSize = finalSizeOfReset;
         }
         if (!aborted && !closed && !reset) {
             reset = true;
+            int unusedFlowControlCredits = (int) (finalSize - receiveBuffer.readOffset());
+            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
             receiveBuffer.discardAllData();
             interruptBlockingReader();
             quicStream.inputClosed();
         }
+        return increment;
     }
 
     void abort() {

@@ -25,6 +25,11 @@ public class FieldReader {
     private final Object target;
     private final Field field;
 
+    public FieldReader(Object target, String field) throws NoSuchFieldException {
+        this.target = target;
+        this.field = target.getClass().getDeclaredField(field);
+        this.field.setAccessible(true);
+    }
     public FieldReader(Object target, Field field) {
         this.target = target;
         this.field = field;

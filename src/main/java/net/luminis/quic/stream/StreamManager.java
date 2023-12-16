@@ -67,6 +67,7 @@ public class StreamManager {
     private final AtomicInteger nextStreamIdUnidirectional;
     private volatile int nextPeerInitiatedUnidirectionalStreamId;
     private volatile int nextPeerInitiatedBidirectionalStreamId;
+    private long cumulativeReceiveOffset;
 
 
     /**
@@ -211,13 +212,13 @@ public class StreamManager {
         QuicStreamImpl stream = streams.get(streamId);
         checkConnectionFlowControl(stream, frame);
         if (stream != null) {
-            stream.add(frame);
+            cumulativeReceiveOffset += stream.addStreamData(frame);
         }
         else {
             if (isPeerInitiated(streamId)) {
                 QuicStreamImpl peerInitiatedStream = createPeerInitiatedStream(streamId);
                 if (peerInitiatedStream != null) {
-                        peerInitiatedStream.add(frame);
+                    cumulativeReceiveOffset += peerInitiatedStream.addStreamData(frame);
                 }
             }
             else {
@@ -276,7 +277,7 @@ public class StreamManager {
         if (stream != null) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
             // "A receiver of RESET_STREAM can discard any data that it already received on that stream."
-            stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
+            cumulativeReceiveOffset += stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
 
@@ -286,8 +287,7 @@ public class StreamManager {
 
             flowControlMax += size;
             if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
-                connection.send(new MaxDataFrame(flowControlMax), f -> {
-                }, true);
+                connection.send(new MaxDataFrame(flowControlMax), f -> {}, true);
                 flowControlLastAdvertised = flowControlMax;
             }
         }
@@ -297,14 +297,21 @@ public class StreamManager {
     }
 
     private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
-        long receivingStreamMaxOffset = receivingStream != null? receivingStream.getCurrentReceiveOffset(): 0;
-        if (frame.getUpToOffset() > receivingStreamMaxOffset) {
-            long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
-            long cumulativeReceiveOffset = streams.values().stream().mapToLong(stream -> stream.getCurrentReceiveOffset()).sum();
-            if (cumulativeReceiveOffset + increment > flowControlMax) {
-                throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
+        if (receivingStream != null || isNew(frame.getStreamId())) {
+            long receivingStreamMaxOffset = receivingStream != null ? receivingStream.getReceivedMaxOffset() : 0;
+            if (frame.getUpToOffset() > receivingStreamMaxOffset) {
+                long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
+                if (cumulativeReceiveOffset + increment > flowControlMax) {
+                    throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
+                }
             }
         }
+        // else: (receivingStream is null because) stream already closed, so ignore!
+    }
+
+    private boolean isNew(int streamId) {
+        return isUni(streamId) && streamId >= nextPeerInitiatedUnidirectionalStreamId
+                || isBidi(streamId) && streamId >= nextPeerInitiatedBidirectionalStreamId;
     }
 
     void streamClosed(int streamId) {

@@ -23,6 +23,7 @@ import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
 import net.luminis.quic.core.TransportError;
+import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
@@ -34,7 +35,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -471,20 +474,22 @@ class StreamManagerTest {
     
     //region flow control
     @Test
-    void testConnectionFlowControl() throws Exception {
+    void updatingConnectionFlowControlShouldSendMaxData() throws Exception {
         long flowControlIncrement = (long) new FieldReader(streamManager, streamManager.getClass().getDeclaredField("flowControlIncrement")).read();
 
         streamManager.updateConnectionFlowControl(10);
         verify(quicConnection, never()).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());  // No initial update, value is advertised in transport parameters.
 
         streamManager.updateConnectionFlowControl((int) flowControlIncrement);
-        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
 
+        clearInvocations(quicConnection);
         streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.8));
-        verify(quicConnection, times(1)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection, never()).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
 
+        clearInvocations(quicConnection);
         streamManager.updateConnectionFlowControl((int) (flowControlIncrement * 0.21));
-        verify(quicConnection, times(2)).send(any(QuicFrame.class), any(Consumer.class), anyBoolean());
+        verify(quicConnection).send(argThat(f -> f instanceof MaxDataFrame), any(Consumer.class), anyBoolean());
     }
 
     @Test
@@ -519,6 +524,97 @@ class StreamManagerTest {
         assertThatThrownBy(() ->
                 // When
                 streamManager.process(new StreamFrame(5, 3_000 + 300, new byte[101], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
+
+    @Test
+    void connectionFlowControlLimitIncreasesWhenDataIsRead() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+        QuicStream stream = streamManager.createStream(true);
+        streamManager.process(new StreamFrame(stream.getStreamId(), new byte[10_000], false));
+
+        // When
+        stream.getInputStream().read(new byte[10_000]);
+
+        // Then
+        verify(quicConnection)
+                .send(argThat(f -> f instanceof MaxDataFrame && ((MaxDataFrame) f).getMaxData() == 20_000),
+                        any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void connectionFlowControlCreditsOfClosedStreamsShouldCount() throws Exception {
+        // Given
+        Map<Integer, QuicStream> openStreams = new HashMap<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> {
+            openStreams.put(stream.getStreamId(), stream);
+        });
+        streamManager.process(new StreamFrame(3, new byte[5000], false));
+        streamManager.process(new StreamFrame(7, new byte[5000], false));
+        for (QuicStream stream : openStreams.values()) {
+            stream.getInputStream().read(new byte[5000]);  // Will increase connection flow control limit to 20.000
+        }
+
+        // When
+        for (QuicStream stream : openStreams.values()) {
+            stream.getInputStream().close();  // Should have no affect on connection flow control limit!
+        }
+
+        // Then
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(11, new byte[10000], false)))
+                // Then
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(15, new byte[1], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
+
+    @Test
+    void whenResetReceivedUnusedCreditsShouldBeReturnedToConnectionFlowControl() throws Exception {
+        // Given
+        int streamId = 3;
+        streamManager.setInitialMaxStreamsBidi(1);
+        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));
+
+        // When
+        streamManager.process(new ResetStreamFrame(streamId, 0, 7_000));
+
+        // Then
+        verify(quicConnection)
+                .send(argThat(f -> f instanceof MaxDataFrame && ((MaxDataFrame) f).getMaxData() == 17_000),
+                        any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void finalSizeOfResetFrameShouldBeUsedForConnectionFlowControl() throws Exception {
+        // Given
+        int streamId = 1;
+        streamManager.setInitialMaxStreamsBidi(1);
+        streamManager.process(new StreamFrame(streamId, new byte[1_000], false));  // Leaves 9.000 credits for connection flow control
+
+        // When
+        streamManager.process(new ResetStreamFrame(streamId, 0, 3_000));  // Leaves 7.000 credits for connection flow control
+        // However, new credits with the amount of the final size well be added to the connection flow control limit => 10.000 credits
+
+        // Then
+        int nextStreamId = 5;
+        assertThatCode(() ->
+                // When
+                streamManager.process(new StreamFrame(nextStreamId, new byte[10000], false)))
+                // Then
+                .doesNotThrowAnyException();
+
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(nextStreamId, 10000, new byte[1], false)))
                 // Then
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
@@ -635,6 +731,54 @@ class StreamManagerTest {
 
         // Then
         assertThat(streamManager.openStreamCount()).isEqualTo(0);
+    }
+
+    @Test
+    void receivingDuplicateFinalStreamFrameAfterCloseBidiShouldNotLeadToException() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(1);
+
+        QuicStream stream = streamManager.createStream(true);
+        int streamId = stream.getStreamId();
+
+        streamManager.process(new StreamFrame(streamId, new byte[10_000], false));
+        stream.getInputStream().read(new byte[10_000]);
+
+        StreamFrame finalFrame = new StreamFrame(streamId, 10_000, new byte[10_000], true);
+        streamManager.process(finalFrame);
+        streamManager.streamClosed(streamId);
+
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(finalFrame))
+                // Then
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void receivingDuplicateFinalStreamFrameAfterCloseUniShouldNotLeadToException() throws Exception {
+        // Given
+        Map<Integer, QuicStream> openStreams = new HashMap<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> {
+            openStreams.put(stream.getStreamId(), stream);
+        });
+
+        int streamId = 0x03;
+        streamManager.process(new StreamFrame(streamId, new byte[10_000], false));
+        QuicStream stream = openStreams.get(streamId);
+        stream.getInputStream().read(new byte[10_000]);
+
+        StreamFrame finalFrame = new StreamFrame(streamId, 10_000, new byte[10_000], true);
+        streamManager.process(finalFrame);
+        streamManager.streamClosed(streamId);
+
+        // When
+        assertThatCode(() ->
+                // When
+                streamManager.process(finalFrame))
+                // Then
+                .doesNotThrowAnyException();
     }
     //endregion
 
