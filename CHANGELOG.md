@@ -1,5 +1,11 @@
 # Releases
 
+## 0.8.6 (2023-12-16)
+
+- discard all incoming data for a stream that has been reset 
+- handle flow control credits correctly when stream is reset 
+- fixed that final size of closed streams was not included in flow control credits computation (which allowed malicious peers to use more credits than allowed)
+
 ## 0.8.5 (2023-12-12)
 
 Lots of fixes w.r.t. stream handling:
