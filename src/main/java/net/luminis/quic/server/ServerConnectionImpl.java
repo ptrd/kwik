@@ -162,6 +162,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         maxOpenStreamsBidi = 100;
         ConnectionConfig config = ServerConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
+                .maxUnidirectionalStreamBufferSize(initialMaxStreamData)
                 .maxBidirectionalStreamBufferSize(initialMaxStreamData)
                 .maxConnectionBufferSize(initialMaxData)
                 .maxOpenUnidirectionalStreams(maxOpenStreamsUni)
@@ -204,6 +205,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    @Deprecated
     public long getInitialMaxStreamData() {
         return initialMaxStreamData;
     }

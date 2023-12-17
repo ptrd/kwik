@@ -66,11 +66,12 @@ class StreamManagerTest {
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
-        when(quicConnection.getInitialMaxStreamData()).thenReturn(10_000L);
         defaultConfig = ServerConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .maxOpenBidirectionalStreams(10)
                 .maxConnectionBufferSize(10_000)
+                .maxUnidirectionalStreamBufferSize(10_000)
+                .maxBidirectionalStreamBufferSize(10_000)
                 .build();
         streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
@@ -133,6 +134,7 @@ class StreamManagerTest {
                 .maxOpenUnidirectionalStreams(10)
                 .maxOpenBidirectionalStreams(10)
                 .maxConnectionBufferSize(1_000)
+                .maxBidirectionalStreamBufferSize(10_000)
                 .build();
         streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config);
         streamManager.setFlowController(mock(FlowControl.class));

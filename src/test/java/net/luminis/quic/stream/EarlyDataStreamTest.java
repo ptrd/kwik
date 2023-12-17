@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicClientConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -44,15 +45,18 @@ class EarlyDataStreamTest {
     private EarlyDataStream stream;
     private QuicClientConnectionImpl connection;
     private Logger logger;
+    private StreamManager streamManager;
 
     @BeforeEach
     void initObjectUnderTest() {
+        streamManager = mock(StreamManager.class);
+        when(streamManager.getConnectionConfig()).thenReturn(mock(ConnectionConfig.class));
+
         connection = mock(QuicClientConnectionImpl.class);
-        when(connection.getMaxShortHeaderPacketOverhead()).thenReturn(29);
         int maxData = 5000;
         FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
         logger = new NullLogger();
-        stream = new EarlyDataStream(Version.getDefault(), 0, connection, mock(StreamManager.class), flowController, logger);
+        stream = new EarlyDataStream(Version.getDefault(), 0, connection, streamManager, flowController, logger);
     }
 
     @Test
@@ -97,7 +101,7 @@ class EarlyDataStreamTest {
         // Given
         int maxData = 1000;
         FlowControl flowController = new FlowControl(Role.Client, maxData, maxData, maxData, maxData);
-        stream = new EarlyDataStream(Version.getDefault(), 0, connection, mock(StreamManager.class), flowController, logger);
+        stream = new EarlyDataStream(Version.getDefault(), 0, connection, streamManager, flowController, logger);
 
         // When
         stream.writeEarlyData(new byte[1500], false, 10_000);

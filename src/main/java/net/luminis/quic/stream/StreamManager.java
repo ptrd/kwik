@@ -50,6 +50,7 @@ public class StreamManager {
     private volatile FlowControl flowController;
     private final Role role;
     private final Logger log;
+    private final ConnectionConfig config;
     private volatile int maxOpenStreamIdUni;
     private volatile int maxOpenStreamIdBidi;
     private volatile Consumer<QuicStream> peerInitiatedStreamCallback;
@@ -83,6 +84,7 @@ public class StreamManager {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
+        this.config = config;
         this.maxOpenStreamIdUni = computeMaxStreamId(config.maxOpenUnidirectionalStreams(), role.other(), false);
         this.maxOpenStreamIdBidi = computeMaxStreamId(config.maxOpenBidirectionalStreams(), role.other(), true);
 
@@ -482,6 +484,10 @@ public class StreamManager {
 
     public long getMaxUnirectionalStreams() {
         return maxStreamsAcceptedByPeerUni;
+    }
+
+    public ConnectionConfig getConnectionConfig() {
+        return config;
     }
 
     interface QuicStreamSupplier {

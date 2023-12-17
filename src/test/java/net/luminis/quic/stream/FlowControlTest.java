@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -46,6 +47,7 @@ class FlowControlTest {
     void initMockConnection() {
         conn = mock(QuicConnectionImpl.class);
         sm = mock(StreamManager.class);
+        when(sm.getConnectionConfig()).thenReturn(mock(ConnectionConfig.class));
         role = Role.Client;
     }
 

@@ -1008,6 +1008,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     // For internal use only.
     @Override
+    @Deprecated
     public long getInitialMaxStreamData() {
         return transportParams.getInitialMaxStreamDataBidiLocal();
     }
