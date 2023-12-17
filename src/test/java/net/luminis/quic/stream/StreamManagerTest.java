@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
@@ -29,6 +30,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.server.ServerConfig;
 import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,13 +60,19 @@ class StreamManagerTest {
 
     private StreamManager streamManager;
     private QuicConnectionImpl quicConnection;
+    private ConnectionConfig defaultConfig;
 
     //region setup
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
         when(quicConnection.getInitialMaxStreamData()).thenReturn(10_000L);
-        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10, 10_000);
+        defaultConfig = ServerConfig.builder()
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(10)
+                .maxConnectionBufferSize(10_000)
+                .build();
+        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
     }
     //endregion
@@ -73,7 +81,7 @@ class StreamManagerTest {
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsUni(1);
 
@@ -121,7 +129,12 @@ class StreamManagerTest {
     @Test
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 1_000);
+        ServerConfig config = ServerConfig.builder()
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(10)
+                .maxConnectionBufferSize(1_000)
+                .build();
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
@@ -138,7 +151,7 @@ class StreamManagerTest {
     @Test
     void numberOfBidirectionalStreamsThatCanBeCreatedShouldBeIdenticalToInitialMaxValue() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
         // streamManager.setInitialMaxStreamsBidi(10);
 

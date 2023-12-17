@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -155,12 +156,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
-        maxIdleTimeoutInSeconds = 30;
         initialMaxStreamData = 1_000_000;
-        initialMaxData = 10L * initialMaxStreamData;
+        initialMaxData = 10 * initialMaxStreamData;
         maxOpenStreamsUni = 10;
         maxOpenStreamsBidi = 100;
-        streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi, initialMaxData);
+        ConnectionConfig config = ServerConfig.builder()
+                .maxIdleTimeoutInSeconds(30)
+                .maxBidirectionalStreamBufferSize(initialMaxStreamData)
+                .maxConnectionBufferSize(initialMaxData)
+                .maxOpenUnidirectionalStreams(maxOpenStreamsUni)
+                .maxOpenBidirectionalStreams(maxOpenStreamsBidi)
+                .build();
+        streamManager = new StreamManager(this, Role.Server, log, config);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }

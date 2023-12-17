@@ -233,7 +233,7 @@ public class TransportParameters {
                 "\n- initial max data\t\t\t" + initialMaxData +
                 "\n- initial max stream data bidi local\t" + initialMaxStreamDataBidiLocal +
                 "\n- initial max stream data bidi remote\t" + initialMaxStreamDataBidiRemote +
-                "\n- initial max stream data unit\t\t" + initialMaxStreamDataUni +
+                "\n- initial max stream data uni\t\t" + initialMaxStreamDataUni +
                 "\n- initial max streams bidi\t\t" + initialMaxStreamsBidi +
                 "\n- initial max streams uni\t\t" + initialMaxStreamsUni +
                 "\n- ack delay exponent\t\t\t" + ackDelayExponent +

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.*;
@@ -76,16 +77,14 @@ public class StreamManager {
      * @param quicConnection
      * @param role
      * @param log
-     * @param maxOpenStreamsUni            the maximum number of unidirectional streams that this peer will accept
-     * @param maxOpenStreamsBidi           the maximum number of bidirectional streams that this peer will accept
-     * @param initialConnectionFlowControl the initial value for the connection flow control limit
+     * @param config
      */
-    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi, long initialConnectionFlowControl) {
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, ConnectionConfig config) {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
-        this.maxOpenStreamIdUni = computeMaxStreamId(maxOpenStreamsUni, role.other(), false);
-        this.maxOpenStreamIdBidi = computeMaxStreamId(maxOpenStreamsBidi, role.other(), true);
+        this.maxOpenStreamIdUni = computeMaxStreamId(config.maxOpenUnidirectionalStreams(), role.other(), false);
+        this.maxOpenStreamIdBidi = computeMaxStreamId(config.maxOpenBidirectionalStreams(), role.other(), true);
 
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
@@ -97,7 +96,7 @@ public class StreamManager {
         nextStreamIdBidirectional = new AtomicInteger();
         nextStreamIdUnidirectional = new AtomicInteger();
         initStreamIds();
-        initConnectionFlowControl(initialConnectionFlowControl);
+        initConnectionFlowControl(config.maxConnectionBufferSize());
     }
 
     private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
