@@ -184,10 +184,9 @@ give a better developer experience.
 A plain Kwik client or server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
 have been using for early testing. 
 
-To add HTTP/3 to Kwik you should use the flupke-plugin:
-- Clone the repo [Flupke](https://bitbucket.org/pjtr/flupke) and cd into its directory.
-- Build with `gradle flupkePlugin`
-- Add the generated flupke-plugin.jar (in build/libs) to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-plugin.jar net.luminis.quic.run.SampleWebServer`. 
+To add HTTP/3 to Kwik you should use the flupke plugin:
+- Download the flupke jar from [Maven](https://search.maven.org/artifact/tech.kwik/flupke)
+- Add the flupke jar to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-<version>.jar net.luminis.quic.run.SampleWebServer`. 
                                 
 ## Contact
 
