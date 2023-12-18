@@ -51,7 +51,7 @@ public class SendRequestQueue {
     }
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
-        requestQueue.addLast(new FrameSupplierSendRequest(fixedFrame.getFrameLength(), actualMaxSize -> fixedFrame, lostCallback));
+        requestQueue.addLast(new FixedFrameSendRequest(fixedFrame, lostCallback));
     }
 
     public void addAckRequest() {
