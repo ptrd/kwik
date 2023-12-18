@@ -70,7 +70,7 @@ public interface Sender {
      * frame can take the maximum size that is available in the QUIC packet being constructed (which is especially
      * useful for stream frames).
      *
-     * The mininum size is the minimal maximum frame size the frame supplier callback is able to produce; it must
+     * The minimum size is the minimal maximum frame size the frame supplier callback is able to produce; it must
      * guarantee that it can produce a frame that is not larger than this value. For fixed frames, this is simply the
      * max frame size, but for frames with varying size (e.g. stream frames), it is the max size when creating the
      * smallest frame possible (or useful) in the given circumstances. E.g. if frame size is uncertain due

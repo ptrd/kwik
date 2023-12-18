@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -21,13 +21,30 @@ package net.luminis.quic.send;
 import net.luminis.quic.frame.QuicFrame;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 
+class FrameSupplierSendRequest implements SendRequest {
 
-public interface SendRequest {
+    private int estimatedSize;
+    private Function<Integer, QuicFrame> frameSupplier;
+    private Consumer<QuicFrame> lostCallback;
 
-    int getEstimatedSize();
+    public FrameSupplierSendRequest(int estimatedSize, Function<Integer, QuicFrame> frameSupplier, Consumer<QuicFrame> lostCallback) {
+        this.estimatedSize = estimatedSize;
+        this.frameSupplier = frameSupplier;
+        this.lostCallback = lostCallback;
+    }
 
-    QuicFrame getFrame(int maxSize);
+    public int getEstimatedSize() {
+        return estimatedSize;
+    }
 
-    Consumer<QuicFrame> getLostCallback();
+    public QuicFrame getFrame(int maxSize) {
+        return frameSupplier.apply(maxSize);
+    }
+
+    public Consumer<QuicFrame> getLostCallback() {
+        return lostCallback;
+    }
 }
+
