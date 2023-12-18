@@ -20,6 +20,7 @@ package net.luminis.quic.send;
 
 
 import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
 
@@ -33,6 +34,7 @@ import java.util.function.Function;
 
 public class SendRequestQueue {
 
+    public static final int MAX_QUEUED_PATH_RESPONSE_FRAMES = 256;
     private final Clock clock;
     private final EncryptionLevel encryptionLevel;
     private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
@@ -51,6 +53,17 @@ public class SendRequestQueue {
     }
 
     public void addRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
+        if (fixedFrame instanceof PathResponseFrame) {
+            // Defense against Path Challenge DOS attack: prevent number of path response frames that can be queued is unbound.
+            long pathResponseFrameCount = requestQueue.stream()
+                    .filter(request -> request instanceof FixedFrameSendRequest)
+                    .filter(request -> ((FixedFrameSendRequest) request).getFrameType().equals(PathResponseFrame.class))
+                    .count();
+            if (pathResponseFrameCount >= MAX_QUEUED_PATH_RESPONSE_FRAMES) {
+                return;
+            }
+        }
+
         requestQueue.addLast(new FixedFrameSendRequest(fixedFrame, lostCallback));
     }
 

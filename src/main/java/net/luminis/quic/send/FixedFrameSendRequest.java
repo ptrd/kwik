@@ -32,6 +32,10 @@ public class FixedFrameSendRequest implements SendRequest {
         this.lostCallback = lostCallback;
     }
 
+    public Class<QuicFrame> getFrameType() {
+        return (Class<QuicFrame>) fixedFrame.getClass();
+    }
+
     @Override
     public int getEstimatedSize() {
         return fixedFrame.getFrameLength();

@@ -20,7 +20,9 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.frame.QuicFrame;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -32,10 +34,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SendRequestQueueTest {
 
+    private SendRequestQueue sendRequestQueue;
+
+    @BeforeEach
+    void setUp() {
+        sendRequestQueue = new SendRequestQueue(null);
+    }
+
+    //region next
     @Test
     void nextReturnsFirstItemSmallerThanGivenFrameLength() throws Exception {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[67]), f -> {});
@@ -51,7 +60,6 @@ class SendRequestQueueTest {
     @Test
     void whenNoFrameIsSmallerThanGivenFrameLengthNextShouldReturnNothing() {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[1000]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[572]), f -> {});
         sendRequestQueue.addRequest(new CryptoFrame(Version.getDefault(), 0, new byte[167]), f -> {});
@@ -62,11 +70,11 @@ class SendRequestQueueTest {
         // Then
         assertThat(sendRequest).isNotPresent();
     }
+    //endregion
 
+    //region ack delay
     @Test
     void whenSecondAckHasMoreDelayFirstDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-
         sendRequestQueue.addAckRequest(100);
         Instant start = Instant.now();
         sendRequestQueue.addAckRequest(200);
@@ -78,8 +86,6 @@ class SendRequestQueueTest {
 
     @Test
     void whenSecondAckHasShorterDelaySecondDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-
         sendRequestQueue.addAckRequest(200);
         sendRequestQueue.addAckRequest(100);
         Instant start = Instant.now();
@@ -91,8 +97,6 @@ class SendRequestQueueTest {
 
     @Test
     void whenSecondAckHasNoDelaySecondDelayWillBeUsed() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-
         sendRequestQueue.addAckRequest(200);
         sendRequestQueue.addAckRequest(0);
         Instant start = Instant.now();
@@ -101,11 +105,12 @@ class SendRequestQueueTest {
 
         assertThat(Duration.between(start, next).toMillis()).isLessThanOrEqualTo(0);
     }
+    //endregion
 
+    //region probe
     @Test
     void whenProbeIsVanishedDueToClearDoReturnProbe() throws Exception {
         // Given
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), new byte[100])));
 
         boolean hasProbe = sendRequestQueue.hasProbeWithData();   // client is checking for probe
@@ -123,10 +128,37 @@ class SendRequestQueueTest {
 
     @Test
     void testProbeWithData() throws Exception {
-        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
         sendRequestQueue.addProbeRequest();
 
         assertThat(sendRequestQueue.hasProbeWithData()).isFalse();
         assertThat(sendRequestQueue.hasProbe()).isTrue();
     }
+    //endprobe
+
+    //region frame type limit
+    @Test
+    void pathChallenge() throws Exception {
+        // Given
+        int maxNrOfPathResponseFrames = 256;
+        for (int i = 0; i < maxNrOfPathResponseFrames; i++) {
+            sendRequestQueue.addRequest(new PathResponseFrame(Version.getDefault(), new byte[8]), f -> {});
+        }
+
+        // When
+        byte[] markerPattern = new byte[] { 0x0c, 0x0a, 0x0f, 0x0e, 0x0b, 0x0a, 0x0b, 0x0e };
+        sendRequestQueue.addRequest(new PathResponseFrame(Version.getDefault(), markerPattern), f -> {});
+
+        // Then
+        Optional<SendRequest> queuedItem;
+        SendRequest lastItem = null;
+        int pollCount = 0;
+        while ((queuedItem = sendRequestQueue.next(1024)).isPresent()) {
+            pollCount++;
+            lastItem = queuedItem.get();
+        }
+
+        assertThat(((PathResponseFrame) lastItem.getFrame(1024)).getData()).isNotEqualTo(markerPattern);
+        assertThat(pollCount).isEqualTo(maxNrOfPathResponseFrames);
+    }
+    //endregion
 }
