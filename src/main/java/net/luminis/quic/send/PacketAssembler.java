@@ -147,7 +147,7 @@ public class PacketAssembler {
                     // Nothing fits within available space
                     break;
                 }
-                QuicFrame nextFrame = next.get().getFrameSupplier().apply(proposedSize);
+                QuicFrame nextFrame = next.get().getFrame(proposedSize);
                 if (nextFrame != null) {
                     if (nextFrame.getFrameLength() > proposedSize) {
                         throw new RuntimeException("supplier does not produce frame of right (max) size: " + nextFrame.getFrameLength() + " > " + (proposedSize) + " frame: " + nextFrame);

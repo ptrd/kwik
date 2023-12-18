@@ -39,8 +39,8 @@ class SendRequest {
         return estimatedSize;
     }
 
-    public Function<Integer, QuicFrame> getFrameSupplier() {
-        return frameSupplier;
+    public QuicFrame getFrame(int maxSize) {
+        return frameSupplier.apply(maxSize);
     }
 
     public Consumer<QuicFrame> getLostCallback() {
