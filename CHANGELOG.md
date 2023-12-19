@@ -1,5 +1,9 @@
 # Releases
 
+## 0.8.7 (2023-12-19)
+
+Fixed path challenge denial of service vulnerability
+
 ## 0.8.6 (2023-12-16)
 
 - discard all incoming data for a stream that has been reset 
