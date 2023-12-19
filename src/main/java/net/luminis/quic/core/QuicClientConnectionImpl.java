@@ -767,16 +767,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return peerTransportParams;
     }
 
-    void setPeerTransportParameters(TransportParameters transportParameters) {
-        if (!verifyConnectionIds(transportParameters)) {
+    void setPeerTransportParameters(TransportParameters receivedTransportParameters) {
+        if (!verifyConnectionIds(receivedTransportParameters)) {
             return;
         }
 
         if (versionNegotiationStatus == VersionNegotiationStatus.VersionChangeUnconfirmed) {
-            verifyVersionNegotiation(transportParameters);
+            verifyVersionNegotiation(receivedTransportParameters);
         }
 
-        peerTransportParams = transportParameters;
+        peerTransportParams = receivedTransportParameters;
         if (flowController == null) {
             flowController = new FlowControl(Role.Client, peerTransportParams.getInitialMaxData(),
                     peerTransportParams.getInitialMaxStreamDataBidiLocal(),
@@ -814,9 +814,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
         }
 
-        peerAckDelayExponent = transportParameters.getAckDelayExponent();
+        peerAckDelayExponent = peerTransportParams.getAckDelayExponent();
 
-        sender.registerMaxUdpPayloadSize(transportParameters.getMaxUdpPayloadSize());
+        sender.registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
     }
 
     private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {
