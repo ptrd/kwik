@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.run;
 
-import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.receive.Receiver;
 import net.luminis.tls.util.ByteUtils;
 
@@ -38,7 +38,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -186,7 +190,7 @@ public class InteractiveShell {
 
             final Instant start = Instant.now();
             CompletableFuture<HttpResponse<Path>> sendResult = httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(createNewFile(arg).toPath()));
-            sendResult.thenAccept(response -> {
+            CompletableFuture<Void> processResult = sendResult.thenAccept(response -> {
                 Instant done = Instant.now();
                 Duration duration = Duration.between(start, done);
                 String speed;
@@ -198,6 +202,10 @@ public class InteractiveShell {
                     speed = "?";
                 }
                 System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
+            });
+            processResult.exceptionally(error -> {
+                System.out.println("Error: " + error);
+                return null;
             });
             currentHttpGetResult = sendResult;
         }
