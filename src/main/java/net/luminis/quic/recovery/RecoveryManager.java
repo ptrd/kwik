@@ -46,11 +46,12 @@ import java.util.stream.Stream;
  * "QUIC senders use acknowledgments to detect lost packets and a PTO to ensure acknowledgments are received"
  * It uses a single timer, because either there are lost packets to detect, or a probe must be scheduled, never both.
  *
- * <b>Ack based loss detection</b>
+ * <p><h4>Ack based loss detection</h4>
  * When an Ack is received, packets that are sent "long enough" before the largest acked, are deemed lost; for the
  * packets not send "long enough", a timer is set to mark them as lost when "long enough" time has been passed.
  *
  * An example:
+ * <pre>{@code
  *         -----------------------time------------------->>
  * sent:   1           2      3        4
  * acked:                                    4
@@ -59,13 +60,15 @@ import java.util.stream.Stream;
  *                                                   |
  *                                                   Set timer at this point in time, as that will be "long enough".
  *                                                   At that time, a new timer will be set for 3, unless acked meanwhile.
+ * }</pre></p>
  *
- * <b>Detecting tail loss with probe timeout</b>
+ * <p><h4>Detecting tail loss with probe timeout</h4>
  * When no Acks arrive, no packets will be marked as lost. To trigger the peer to send an ack (so loss detection can do
  * its job again), a probe (ack-eliciting packet) will be sent after the probe timeout. If the situation does not change
  * (i.e. no Acks received), additional probes will be sent, but with an exponentially growing delay.
  *
  * An example:
+ * <pre>{@code
  *         -----------------------time------------------->>
  * sent:   1           2      3        4
  * acked:                                    4
@@ -77,12 +80,14 @@ import java.util.stream.Stream;
  *                            \-- timer set at "probe timeout" time after 3 was sent --\
  *                                                                                     |
  *                                                                                     Send probe!
- *
+ * }</pre>
  * Note that packet 3 will not be marked as lost as long no ack is received!
+ * </p>
  *
- * <b>Exceptions</b>
+ * <p><b>Exceptions</b>
  * Because a server might be blocked by the anti-amplification limit, a client must also send probes when it has no
  * ack eliciting packets in flight, but is not sure whether the peer has validated the client address.
+ * </p>
  */
 public class RecoveryManager implements FrameReceivedListener<AckFrame>, HandshakeStateListener {
 
