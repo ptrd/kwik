@@ -54,7 +54,9 @@ public class TransportParameters {
     public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
         setDefaults();
         this.maxIdleTimeout = maxIdleTimeoutInSeconds * 1000L;
-        setInitialMaxStreamData(initialMaxStreamData);
+        setInitialMaxStreamDataBidiLocal(initialMaxStreamData);
+        setInitialMaxStreamDataBidiRemote(initialMaxStreamData);
+        setInitialMaxStreamDataUni(initialMaxStreamData);
         initialMaxData = 10L * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
@@ -135,18 +137,6 @@ public class TransportParameters {
 
     public void setInitialMaxStreamDataUni(long initialMaxStreamDataUni) {
         this.initialMaxStreamDataUni = initialMaxStreamDataUni;
-    }
-
-    public long getInitialMaxStreamData() {
-        // All max stream data values are equal in this implementation.
-        return initialMaxStreamDataBidiLocal;
-    }
-
-    public void setInitialMaxStreamData(long maxStreamData) {
-        // All max stream data values are equal in this implementation. When changing this, also change the getter in QuicConnection, used by the streams.
-        initialMaxStreamDataBidiLocal = maxStreamData;
-        initialMaxStreamDataBidiRemote = maxStreamData;
-        initialMaxStreamDataUni = maxStreamData;
     }
 
     public long getInitialMaxStreamsBidi() {

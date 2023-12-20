@@ -358,7 +358,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
         parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000L);
-        parameters.setInitialMaxStreamData(initialMaxStreamData);
+        parameters.setInitialMaxStreamDataBidiLocal(initialMaxStreamData);
+        parameters.setInitialMaxStreamDataBidiRemote(initialMaxStreamData);
+        parameters.setInitialMaxStreamDataUni(initialMaxStreamData);
         parameters.setInitialMaxData(initialMaxData);
         parameters.setInitialMaxStreamsBidi(maxOpenStreamsBidi);
         parameters.setInitialMaxStreamsUni(maxOpenStreamsUni);
