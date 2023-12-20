@@ -243,6 +243,7 @@ class QuicClientConnectionImplTest {
     //region stream
     @Test
     void testCreateStream() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 10, 10, 10);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -269,7 +270,8 @@ class QuicClientConnectionImplTest {
 
     //region flow control
     @Test
-    void receivingTransportParametersInitializesFlowController() {
+    void receivingTransportParametersInitializesFlowController() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(30, 9000, 1, 1);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -279,7 +281,8 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void receivingMaxStreamDataFrameIncreasesFlowControlLimit() {
+    void receivingMaxStreamDataFrameIncreasesFlowControlLimit() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -297,7 +300,8 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void receivingMaxDataFrameIncreasesFlowControlLimit() {
+    void receivingMaxDataFrameIncreasesFlowControlLimit() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -359,6 +363,7 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
+        simulateSuccessfulConnect();
         setTransportParametersWithActiveConnectionIdLimit(3);
         connection.newConnectionIds(1, 0);
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
@@ -375,6 +380,7 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
+        simulateSuccessfulConnect();
         setTransportParametersWithActiveConnectionIdLimit(7);
 
         // When
@@ -621,6 +627,9 @@ class QuicClientConnectionImplTest {
         tlsClientEngine = mock(TlsClientEngine.class);
         FieldSetter.setField(connection, "tlsEngine", tlsClientEngine);
         FieldSetter.setField(connection, "originalClientHello", createClientHello());
+
+        TransportParameters transportParams = connection.initTransportParameters();
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("transportParams"), transportParams);
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {

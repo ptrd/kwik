@@ -114,7 +114,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final SenderImpl sender;
     private final Receiver receiver;
     private final StreamManager streamManager;
-    private final TransportParameters transportParams;
+    private volatile TransportParameters transportParams;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
     private final ConnectionIdManager connectionIdManager;
@@ -122,6 +122,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final Version preferredVersion;
     private final DatagramSocketFactory socketFactory;
     private final long connectTimeout;
+    private final ClientConnectionConfig connectionProperties;
     private volatile byte[] token;
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
@@ -149,6 +150,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         super(originalVersion, Role.Client, secretsFile, log);
         this.applicationProtocol = applicationProtocol;
         this.connectTimeout = connectTimeout;
+        this.connectionProperties = connectionProperties;
         log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
         this.originalVersion = originalVersion;
         this.preferredVersion = preferredVersion;
@@ -172,7 +174,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
 
-        transportParams = initTransportParameters(connectionProperties);
         streamManager = new StreamManager(this, Role.Client, log, connectionProperties);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
@@ -219,47 +220,61 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
     }
 
-    private TransportParameters initTransportParameters(ClientConnectionConfig customizedConnectionProperties) {
+    protected TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
 
-        if (customizedConnectionProperties.maxIdleTimeout() > 0) {
-            parameters.setMaxIdleTimeout(customizedConnectionProperties.maxIdleTimeout());
+        if (connectionProperties.maxIdleTimeout() > 0) {
+            parameters.setMaxIdleTimeout(connectionProperties.maxIdleTimeout());
         }
         else {
             throw new IllegalArgumentException("maxIdleTimeout must be set");
         }
 
-        if (customizedConnectionProperties.maxBidirectionalStreamBufferSize() > 0) {
-            parameters.setInitialMaxStreamData(customizedConnectionProperties.maxBidirectionalStreamBufferSize());
-            parameters.setInitialMaxData(MAX_DATA_FACTOR * parameters.getInitialMaxStreamData());
+        if (connectionProperties.maxConnectionBufferSize() > 0) {
+            parameters.setInitialMaxData(connectionProperties.maxConnectionBufferSize());
+        }
+        else {
+            throw new IllegalArgumentException("maxConnectionBufferSize must be set");
+        }
+
+        if (connectionProperties.maxUnidirectionalStreamBufferSize() > 0) {
+            parameters.setInitialMaxStreamDataUni(connectionProperties.maxUnidirectionalStreamBufferSize());
         }
         else {
             throw new IllegalArgumentException("maxBidirectionalStreamBufferSize must be set");
         }
 
-        if (customizedConnectionProperties.maxOpenBidirectionalStreams() > 0) {
-            parameters.setInitialMaxStreamsBidi(customizedConnectionProperties.maxOpenBidirectionalStreams());
+        if (connectionProperties.maxBidirectionalStreamBufferSize() > 0) {
+            parameters.setInitialMaxStreamDataBidiLocal(connectionProperties.maxBidirectionalStreamBufferSize());
+            parameters.setInitialMaxStreamDataBidiRemote(connectionProperties.maxBidirectionalStreamBufferSize());
+        }
+        else {
+            throw new IllegalArgumentException("maxBidirectionalStreamBufferSize must be set");
+        }
+
+        if (connectionProperties.maxOpenBidirectionalStreams() >= 0) {
+            parameters.setInitialMaxStreamsBidi(connectionProperties.maxOpenBidirectionalStreams());
         }
         else {
             throw new IllegalArgumentException("maxOpenBidirectionalStreams must be set");
         }
 
-        if (customizedConnectionProperties.maxOpenUnidirectionalStreams() > 0) {
-            parameters.setInitialMaxStreamsUni(customizedConnectionProperties.maxOpenUnidirectionalStreams());
+        if (connectionProperties.maxOpenUnidirectionalStreams() >= 0) {
+            parameters.setInitialMaxStreamsUni(connectionProperties.maxOpenUnidirectionalStreams());
         }
         else {
             throw new IllegalArgumentException("maxOpenUnidirectionalStreams must be set");
         }
 
-        if (customizedConnectionProperties.getActiveConnectionIdLimit() >= MIN_ACTIVE_CONNECTION_ID_LIMIT) {
-            parameters.setActiveConnectionIdLimit(customizedConnectionProperties.getActiveConnectionIdLimit());
+        if (connectionProperties.getActiveConnectionIdLimit() >= MIN_ACTIVE_CONNECTION_ID_LIMIT) {
+            parameters.setActiveConnectionIdLimit(connectionProperties.getActiveConnectionIdLimit());
         }
         else {
             throw new IllegalArgumentException("activeConnectionIdLimit must be set");
         }
 
-        if (customizedConnectionProperties.getMaxUdpPayloadSize() > MIN_MAX_UDP_PAYLOAD_SIZE) {
-            parameters.setMaxUdpPayloadSize(customizedConnectionProperties.getMaxUdpPayloadSize());
+        if (connectionProperties.getMaxUdpPayloadSize() >= MIN_MAX_UDP_PAYLOAD_SIZE) {
+            parameters.setMaxUdpPayloadSize(connectionProperties.getMaxUdpPayloadSize());
         }
         else {
             throw new IllegalArgumentException("maxUdpPayloadSize must be set");
@@ -297,6 +312,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (earlyData != null && !earlyData.isEmpty() && sessionTicket == null) {
             throw new IllegalStateException("Cannot send early data without session ticket");
         }
+        streamManager.initialize(connectionProperties);
+        transportParams = initTransportParameters();
         transportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         if (earlyData == null) {
             earlyData = Collections.emptyList();
@@ -1015,21 +1032,33 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
-        transportParams.setInitialMaxStreamsBidi(max);
+        if (connectionState != Status.Created) {
+            throw new IllegalStateException("Cannot change setting after or while connection is being established");
+        }
+        connectionProperties.setMaxOpenBidirectionalStreams(max);
     }
 
     @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
-        transportParams.setInitialMaxStreamsUni(max);
+        if (connectionState != Status.Created) {
+            throw new IllegalStateException("Cannot change setting after or while connection is being established");
+        }
+        connectionProperties.setMaxOpenUnidirectionalStreams(max);
     }
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
+        if (connectionState != Status.Created) {
+            throw new IllegalStateException("Cannot change setting after or while connection is being established");
+        }
         if (size < MIN_RECEIVER_BUFFER_SIZE) {
             throw new IllegalArgumentException("Receiver buffer size must be at least " + MIN_RECEIVER_BUFFER_SIZE);
         }
-        transportParams.setInitialMaxStreamData(size);
-        transportParams.setInitialMaxData(MAX_DATA_FACTOR * transportParams.getInitialMaxStreamData());
+        connectionProperties.setMaxBidirectionalStreamBufferSize(size);
+        connectionProperties.setMaxUnidirectionalStreamBufferSize(size);
+        if (connectionProperties.maxConnectionBufferSize() < size) {
+            connectionProperties.setMaxConnectionBufferSize(size);
+        }
     }
 
     public FlowControl getFlowController() {

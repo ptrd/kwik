@@ -50,7 +50,7 @@ public class StreamManager {
     private volatile FlowControl flowController;
     private final Role role;
     private final Logger log;
-    private final ConnectionConfig config;
+    private volatile ConnectionConfig config;
     private volatile int maxOpenStreamIdUni;
     private volatile int maxOpenStreamIdBidi;
     private volatile Consumer<QuicStream> peerInitiatedStreamCallback;
@@ -81,12 +81,14 @@ public class StreamManager {
      * @param config
      */
     public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, ConnectionConfig config) {
+        this(quicConnection, role, log);
+        initialize(config);
+    }
+
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log) {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
-        this.config = config;
-        this.maxOpenStreamIdUni = computeMaxStreamId(config.maxOpenUnidirectionalStreams(), role.other(), false);
-        this.maxOpenStreamIdBidi = computeMaxStreamId(config.maxOpenBidirectionalStreams(), role.other(), true);
 
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
@@ -97,10 +99,17 @@ public class StreamManager {
         updateFlowControlLock = new ReentrantLock();
         nextStreamIdBidirectional = new AtomicInteger();
         nextStreamIdUnidirectional = new AtomicInteger();
+
         initStreamIds();
-        initConnectionFlowControl(config.maxConnectionBufferSize());
     }
 
+    public void initialize(ConnectionConfig config) {
+        this.config = config;
+        this.maxOpenStreamIdUni = computeMaxStreamId(config.maxOpenUnidirectionalStreams(), role.other(), false);
+        this.maxOpenStreamIdBidi = computeMaxStreamId(config.maxOpenBidirectionalStreams(), role.other(), true);
+        initConnectionFlowControl(config.maxConnectionBufferSize());
+
+    }
     private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
         // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
