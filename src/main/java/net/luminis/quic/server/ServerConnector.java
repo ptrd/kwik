@@ -36,6 +36,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,10 +67,32 @@ public class ServerConnector {
     private ServerConnectionRegistryImpl connectionRegistry;
     private int connectionIdLength;
 
+    /**
+     * @deprecated use {@link ServerConnector.Builder} instead
+     * @param port
+     * @param certificateFile
+     * @param certificateKeyFile
+     * @param supportedVersions
+     * @param requireRetry
+     * @param log
+     * @throws Exception
+     */
+    @Deprecated
     public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
     }
 
+    /**
+     * @deprecated use {@link ServerConnector.Builder} instead
+     * @param socket
+     * @param certificateFile
+     * @param certificateKeyFile
+     * @param supportedVersions
+     * @param requireRetry
+     * @param log
+     * @throws Exception
+     */
+    @Deprecated
     public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(socket, certificateFile, certificateKeyFile, supportedVersions, getDefaultConfiguration(requireRetry), log);
     }
@@ -294,6 +317,63 @@ public class ServerConnector {
         @Override
         public ScheduledExecutorService getSharedScheduledExecutor() {
             return sharedScheduledExecutor;
+        }
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private int port;
+        private DatagramSocket socket;
+        private InputStream certificateFile;
+        private InputStream certificateKeyFile;
+        private List<Version> supportedVersions = new ArrayList<>(List.of(Version.QUIC_version_1));
+        private ServerConfig configuration = getDefaultConfiguration(true);
+        private Logger log;
+
+        public Builder withPort(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public Builder withSocket(DatagramSocket socket) {
+            this.socket = socket;
+            return this;
+        }
+
+        public Builder withCertificate(InputStream certificateFile, InputStream certificateKeyFile) {
+            this.certificateFile = certificateFile;
+            this.certificateKeyFile = certificateKeyFile;
+            return this;
+        }
+
+        public Builder withSupportedVersions(List<Version> supportedVersions) {
+            this.supportedVersions.addAll(supportedVersions);
+            return this;
+        }
+
+        public Builder withSupportedVersion(Version supportedVersion) {
+            this.supportedVersions.add(supportedVersion);
+            return this;
+        }
+
+        public Builder withConfiguration(ServerConfig configuration) {
+            this.configuration = configuration;
+            return this;
+        }
+
+        public Builder withLogger(Logger log) {
+            this.log = log;
+            return this;
+        }
+
+        public ServerConnector build() throws Exception {
+            if (socket == null) {
+                socket = new DatagramSocket(port);
+            }
+            return new ServerConnector(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);
         }
     }
 }

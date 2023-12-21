@@ -23,9 +23,14 @@ import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+import net.luminis.quic.server.ServerConfig;
 import net.luminis.quic.server.ServerConnector;
 import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
-import org.apache.commons.cli.*;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -101,8 +106,24 @@ public class InteropServer {
 
         List<Version> supportedVersions = List.of(Version.QUIC_version_1);
 
-        boolean requireRetry = ! cmd.hasOption("noRetry");
-        ServerConnector serverConnector = new ServerConnector(port, new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile), supportedVersions, requireRetry, log);
+        ServerConfig serverConfig = ServerConfig.builder()
+                .maxIdleTimeoutInSeconds(30)
+                .maxUnidirectionalStreamBufferSize(1_000_000)
+                .maxBidirectionalStreamBufferSize(1_000_000)
+                .maxConnectionBufferSize(10_000_000)
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(100)
+                .retryRequired(! cmd.hasOption("noRetry"))
+                .connectionIdLength(8)
+                .build();
+
+        ServerConnector serverConnector = ServerConnector.builder()
+                .withPort(port)
+                .withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile))
+                .withSupportedVersions(supportedVersions)
+                .withConfiguration(serverConfig)
+                .withLogger(log)
+                .build();
 
         if (wwwDir != null) {
             registerApplicationLayerProtocols(serverConnector, wwwDir, log);

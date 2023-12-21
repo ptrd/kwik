@@ -22,15 +22,14 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.server.ApplicationProtocolConnection;
+import net.luminis.quic.server.ServerConfig;
 import net.luminis.quic.server.ServerConnector;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
 
 /**
@@ -69,7 +68,20 @@ public class EchoServer {
         log.logWarning(true);
         log.logInfo(true);
 
-        ServerConnector serverConnector = new ServerConnector(port, new FileInputStream(args[0]), new FileInputStream(args[1]), List.of(Version.QUIC_version_1), false, log);
+        ServerConfig serverConfig = ServerConfig.builder()
+                .maxUnidirectionalStreamBufferSize(5 * 1024)
+                .maxBidirectionalStreamBufferSize(5 * 1024)
+                .maxConnectionBufferSize(5 * 1024)
+                .maxOpenUnidirectionalStreams(0)
+                .maxOpenBidirectionalStreams(100)
+                .build();
+
+        ServerConnector serverConnector = ServerConnector.builder()
+                .withPort(port)
+                .withCertificate(new FileInputStream(args[0]), new FileInputStream(args[1]))
+                .withConfiguration(serverConfig)
+                .withLogger(log)
+                .build();
 
         registerProtocolHandler(serverConnector, log);
 
