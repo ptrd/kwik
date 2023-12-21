@@ -51,15 +51,12 @@ import java.util.stream.Collectors;
 public class ServerConnector {
 
     private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
-    private static final int CONNECTION_ID_LENGTH = 4;
 
     private final Receiver receiver;
     private final Logger log;
     private final List<Version> supportedVersions;
     private final List<Integer> supportedVersionIds;
     private final DatagramSocket serverSocket;
-    private final boolean requireRetry;
-    private Integer initalRtt = 100;
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
@@ -67,26 +64,44 @@ public class ServerConnector {
     private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private Context context;
     private ServerConnectionRegistryImpl connectionRegistry;
+    private int connectionIdLength;
 
     public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
     }
 
     public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
+        this(socket, certificateFile, certificateKeyFile, supportedVersions, getDefaultConfiguration(requireRetry), log);
+    }
+
+    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConfig configuration, Logger log) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
-        this.requireRetry = requireRetry;
         this.log = Objects.requireNonNull(log);
+        connectionIdLength = configuration.connectionIdLength();
 
         tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
-        serverConnectionFactory = new ServerConnectionFactory(CONNECTION_ID_LENGTH, serverSocket, tlsEngineFactory,
-                this.requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, this::closed, log);
+        serverConnectionFactory = new ServerConnectionFactory(serverSocket, tlsEngineFactory,
+                configuration, applicationProtocolRegistry, connectionRegistry, this::closed, log);
 
         supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
+    }
+
+    private static ServerConfig getDefaultConfiguration(boolean requireRetry) {
+        return ServerConfig.builder()
+                .maxIdleTimeoutInSeconds(30)
+                .maxUnidirectionalStreamBufferSize(1_000_000)
+                .maxBidirectionalStreamBufferSize(1_000_000)
+                .maxConnectionBufferSize(10_000_000)
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(100)
+                .retryRequired(requireRetry)
+                .connectionIdLength(8)
+                .build();
     }
 
     public void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory) {
@@ -190,7 +205,7 @@ public class ServerConnector {
     }
 
     private void processShortHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
-        byte[] dcid = new byte[CONNECTION_ID_LENGTH];
+        byte[] dcid = new byte[connectionIdLength];
         data.position(1);
         data.get(dcid);
         data.rewind();

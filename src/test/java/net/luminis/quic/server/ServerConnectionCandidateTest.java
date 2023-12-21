@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.TestUtils;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.FieldReader;
@@ -124,9 +124,21 @@ class ServerConnectionCandidateTest {
         assertThat(createdServerConnection).isNotNull();
     }
 
+    static ServerConfig getDefaultConfiguration(int connectionIdLength) {
+        return ServerConfig.builder()
+                .maxIdleTimeoutInSeconds(30)
+                .maxUnidirectionalStreamBufferSize(1_000_000)
+                .maxBidirectionalStreamBufferSize(1_000_000)
+                .maxConnectionBufferSize(10_000_000)
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(100)
+                .connectionIdLength(connectionIdLength)
+                .build();
+    }
+
     class TestServerConnectionFactory extends ServerConnectionFactory {
         public TestServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory, boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
-            super(connectionIdLength, serverSocket, tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, null, closeCallback, log);
+            super(serverSocket, tlsServerEngineFactory, getDefaultConfiguration(connectionIdLength), applicationProtocolRegistry, null, closeCallback, log);
         }
 
         @Override

@@ -20,23 +20,27 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.ConnectionConfig;
 
+import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
+import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
+
+
 public class ServerConfig implements ConnectionConfig {
 
-    private int maxIdleTimeout;
+    private static final int DEFAULT_MAX_IDLE_TIMEOUT = 30_000;
+    private static final int DEFAULT_CONNECTION_ID_LENGTH = 8;
+
+    public enum RetryRequired { Always, Never }
+
+    private int maxIdleTimeout = DEFAULT_MAX_IDLE_TIMEOUT;
     private int maxOpenUnidirectionalStreams;
     private int maxOpenBidirectionalStreams;
     private long maxConnectionBufferSize;
     private long maxUnidirectionalStreamBufferSize;
     private long maxBidirectionalStreamBufferSize;
+    private RetryRequired retryRequired;
+    private int connectionIdLength = DEFAULT_CONNECTION_ID_LENGTH;
 
-    private ServerConfig(int maxIdleTimeout, int maxOpenUnidirectionalStreams, int maxOpenBidirectionalStreams,
-                         long maxConnectionBufferSize, long maxUnidirectionalStreamBufferSize, long maxBidirectionalStreamBufferSize) {
-        this.maxIdleTimeout = maxIdleTimeout;
-        this.maxOpenUnidirectionalStreams = maxOpenUnidirectionalStreams;
-        this.maxOpenBidirectionalStreams = maxOpenBidirectionalStreams;
-        this.maxConnectionBufferSize = maxConnectionBufferSize;
-        this.maxUnidirectionalStreamBufferSize = maxUnidirectionalStreamBufferSize;
-        this.maxBidirectionalStreamBufferSize = maxBidirectionalStreamBufferSize;
+    private ServerConfig() {
     }
 
     @Override
@@ -69,56 +73,93 @@ public class ServerConfig implements ConnectionConfig {
         return maxBidirectionalStreamBufferSize;
     }
 
+    public int connectionIdLength() {
+        return connectionIdLength;
+    }
+
+    public RetryRequired retryRequired() {
+        return retryRequired;
+    }
+
+    public int initialRtt() {
+        return 100;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
 
     public static class Builder {
 
-        private int maxIdleTimeout = 30 * 1000;
-        private int maxOpenUnidirectionalStreams = 0;
-        private int maxOpenBidirectionalStreams = 0;
-        private long maxConnectionBufferSize;
-        private long maxUnidirectionalStreamBufferSize;
-        private long maxBidirectionalStreamBufferSize;
+        private ServerConfig config = new ServerConfig();
 
         public ServerConfig build() {
-            return new ServerConfig(
-                    maxIdleTimeout,
-                    maxOpenUnidirectionalStreams,
-                    maxOpenBidirectionalStreams,
-                    maxConnectionBufferSize,
-                    maxUnidirectionalStreamBufferSize,
-                    maxBidirectionalStreamBufferSize);
+            return config;
         }
 
         public Builder maxIdleTimeoutInSeconds(int timeoutInSeconds) {
-            this.maxIdleTimeout = timeoutInSeconds * 1000;
+            if (timeoutInSeconds <= 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxIdleTimeout = timeoutInSeconds * 1000;
             return this;
         }
 
         public Builder maxConnectionBufferSize(long size) {
-            this.maxConnectionBufferSize = size;
+            if (size < 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxConnectionBufferSize = size;
             return this;
         }
 
         public Builder maxUnidirectionalStreamBufferSize(int size) {
-            this.maxUnidirectionalStreamBufferSize = size;
+            if (size < 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxUnidirectionalStreamBufferSize = size;
             return this;
         }
 
         public Builder maxBidirectionalStreamBufferSize(int size) {
-            this.maxBidirectionalStreamBufferSize = size;
+            if (size < 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxBidirectionalStreamBufferSize = size;
             return this;
         }
 
         public Builder maxOpenUnidirectionalStreams(int max) {
-            this.maxOpenUnidirectionalStreams = max;
+            if (max < 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxOpenUnidirectionalStreams = max;
             return this;
         }
 
         public Builder maxOpenBidirectionalStreams(int max) {
-            this.maxOpenBidirectionalStreams = max;
+            if (max < 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxOpenBidirectionalStreams = max;
+            return this;
+        }
+
+        public Builder retryRequired(boolean retryRequired) {
+            config.retryRequired = retryRequired? RetryRequired.Always : RetryRequired.Never;
+            return this;
+        }
+
+        public Builder retryRequired(RetryRequired retryRequired) {
+            config.retryRequired = retryRequired;
+            return this;
+        }
+
+        public Builder connectionIdLength(int connectionIdLength) {
+            if (connectionIdLength < MINIMUM_CONNECTION_ID_LENGTH || connectionIdLength > MAXIMUM_CONNECTION_ID_LENGTH) {
+                throw new IllegalArgumentException("Connection ID length must be between " + MINIMUM_CONNECTION_ID_LENGTH + " and " + MAXIMUM_CONNECTION_ID_LENGTH);
+            }
+            config.connectionIdLength = connectionIdLength;
             return this;
         }
     }

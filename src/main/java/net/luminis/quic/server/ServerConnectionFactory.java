@@ -29,37 +29,34 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
+import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
+
 
 public class ServerConnectionFactory {
 
-    private final int connectionIdLength;
     private final Logger log;
     private final TlsServerEngineFactory tlsServerEngineFactory;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final DatagramSocket serverSocket;
-    private final int initalRtt;
     private final Consumer<ServerConnectionImpl> closeCallback;
-    private final boolean requireRetry;
     private final ServerConnectionRegistry connectionRegistry;
+    private final ServerConfig configuration;
 
-    public ServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
-                                   boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt,
+    public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
+                                   ServerConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
     {
-        if (connectionIdLength > 20 || connectionIdLength < 0) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
-            // "In QUIC version 1, this value MUST NOT exceed 20 bytes"
+        if (configuration.connectionIdLength() > MAXIMUM_CONNECTION_ID_LENGTH || configuration.connectionIdLength() < MINIMUM_CONNECTION_ID_LENGTH) {
             throw new IllegalArgumentException();
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
-        this.requireRetry = requireRetry;
+        this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
-        this.connectionIdLength = connectionIdLength;
         this.connectionRegistry = connectionRegistry;
         this.closeCallback = closeCallback;
         this.log = log;
         this.serverSocket = serverSocket;
-        this.initalRtt = initalRtt;
     }
 
     /**
@@ -71,8 +68,8 @@ public class ServerConnectionFactory {
      * @return
      */
     public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
-        return new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, connectionIdLength,
-                tlsServerEngineFactory, requireRetry, applicationProtocolRegistry, initalRtt, connectionRegistry, closeCallback, log);
+        return new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid,
+                tlsServerEngineFactory, configuration, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
     }
 
     public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
