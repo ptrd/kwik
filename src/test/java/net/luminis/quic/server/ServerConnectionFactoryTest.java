@@ -76,8 +76,8 @@ class ServerConnectionFactoryTest {
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
-    ServerConfig getConfig(int connectionIdLength) {
-        ServerConfig config = mock(ServerConfig.class);
+    ServerConnectionConfig getConfig(int connectionIdLength) {
+        ServerConnectionConfig config = mock(ServerConnectionConfig.class);
         when(config.connectionIdLength()).thenReturn(connectionIdLength);
         return config;
     }

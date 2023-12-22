@@ -41,10 +41,10 @@ public class ServerConnectionFactory {
     private final DatagramSocket serverSocket;
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final ServerConnectionRegistry connectionRegistry;
-    private final ServerConfig configuration;
+    private final ServerConnectionConfig configuration;
 
     public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
-                                   ServerConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                   ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
     {
         if (configuration.connectionIdLength() > MAXIMUM_CONNECTION_ID_LENGTH || configuration.connectionIdLength() < MINIMUM_CONNECTION_ID_LENGTH) {

@@ -97,7 +97,7 @@ public class ServerConnector {
         this(socket, certificateFile, certificateKeyFile, supportedVersions, getDefaultConfiguration(requireRetry), log);
     }
 
-    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConfig configuration, Logger log) throws Exception {
+    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         serverSocket = socket;
         this.supportedVersions = supportedVersions;
         this.log = Objects.requireNonNull(log);
@@ -115,8 +115,8 @@ public class ServerConnector {
     }
 
     // Intentionally private: for use with deprecated constructors only.
-    private static ServerConfig getDefaultConfiguration(boolean requireRetry) {
-        return ServerConfig.builder()
+    private static ServerConnectionConfig getDefaultConfiguration(boolean requireRetry) {
+        return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
@@ -331,7 +331,7 @@ public class ServerConnector {
         private InputStream certificateFile;
         private InputStream certificateKeyFile;
         private List<Version> supportedVersions = new ArrayList<>(List.of(Version.QUIC_version_1));
-        private ServerConfig configuration = getDefaultConfiguration(true);
+        private ServerConnectionConfig configuration = getDefaultConfiguration(true);
         private Logger log;
 
         public Builder withPort(int port) {
@@ -360,7 +360,7 @@ public class ServerConnector {
             return this;
         }
 
-        public Builder withConfiguration(ServerConfig configuration) {
+        public Builder withConfiguration(ServerConnectionConfig configuration) {
             this.configuration = configuration;
             return this;
         }

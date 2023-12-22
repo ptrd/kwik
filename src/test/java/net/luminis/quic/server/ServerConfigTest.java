@@ -10,12 +10,12 @@ class ServerConfigTest {
     @Test
     void whenMaxConcurrentUnidirectionalStreamsNotSetInProtocolSettingsServerConfigValueShouldBeUsed() {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .build();
 
         // When
-        ServerConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {});
+        ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {});
 
         // Then
         assertThat(mergedConfig.maxOpenUnidirectionalStreams()).isEqualTo(10);
@@ -24,12 +24,12 @@ class ServerConfigTest {
     @Test
     void whenMaxConcurrentUnidirectionalStreamsIsSetInProtocolSettingsItShouldBeUsed() {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .build();
 
         // When
-        ServerConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
+        ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
             @Override
             public int maxConcurrentUnidirectionalStreams() {
                 return 3;
@@ -43,13 +43,13 @@ class ServerConfigTest {
     @Test
     void protocolMinBufferSizeIsRespected() {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxConnectionBufferSize(100)
                 .maxBidirectionalStreamBufferSize(100)
                 .build();
 
         // When
-        ServerConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
+        ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
             @Override
             public int minBidirectionalStreamReceiverBufferSize() {
                 return 1024;
@@ -63,13 +63,13 @@ class ServerConfigTest {
     @Test
     void protocolMaxBufferSizeIsRespected() {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxConnectionBufferSize(100_000)
                 .maxBidirectionalStreamBufferSize(100_000)
                 .build();
 
         // When
-        ServerConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
+        ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
             @Override
             public long maxBidirectionalStreamReceiverBufferSize() {
                 return 5 * 1024;
@@ -83,13 +83,13 @@ class ServerConfigTest {
     @Test
     void whenConfigValueBetweenProtocolMinAndMaxItIsUsed() {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxConnectionBufferSize(10_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
                 .build();
 
         // When
-        ServerConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
+        ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
             @Override
             public int minBidirectionalStreamReceiverBufferSize() {
                 return 0;
@@ -108,7 +108,7 @@ class ServerConfigTest {
     @Test
     void connectionBufferCantBeLessThenUnidirectionalStreamBufferSize() {
         // Given
-        ServerConfig.Builder builder = ServerConfig.builder()
+        ServerConnectionConfig.Builder builder = ServerConnectionConfig.builder()
                 .maxConnectionBufferSize(100)
                 .maxUnidirectionalStreamBufferSize(1000);
 
@@ -119,7 +119,7 @@ class ServerConfigTest {
     @Test
     void connectionBufferCantBeLessThenBidirectionalStreamBufferSize() {
         // Given
-        ServerConfig.Builder builder = ServerConfig.builder()
+        ServerConnectionConfig.Builder builder = ServerConnectionConfig.builder()
                 .maxConnectionBufferSize(100)
                 .maxBidirectionalStreamBufferSize(1000);
 

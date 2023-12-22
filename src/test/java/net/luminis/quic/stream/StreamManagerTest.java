@@ -30,7 +30,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.server.ServerConfig;
+import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ class StreamManagerTest {
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
-        defaultConfig = ServerConfig.builder()
+        defaultConfig = ServerConnectionConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .maxOpenBidirectionalStreams(10)
                 .maxConnectionBufferSize(10_000)
@@ -130,7 +130,7 @@ class StreamManagerTest {
     @Test
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .maxOpenBidirectionalStreams(10)
                 .maxConnectionBufferSize(10_000)
@@ -439,7 +439,7 @@ class StreamManagerTest {
     @Test
     void whenAbsoluteMaxUnidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxOpenUnidirectionalStreams(3)
                 .maxTotalUnidirectionalStreams(3)
                 .maxUnidirectionalStreamBufferSize(1_000)
@@ -467,7 +467,7 @@ class StreamManagerTest {
     @Test
     void whenAbsoluteMaxBidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
         // Given
-        ServerConfig config = ServerConfig.builder()
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
                 .maxOpenBidirectionalStreams(3)
                 .maxTotalBidirectionalStreams(3)
                 .maxBidirectionalStreamBufferSize(1_000)

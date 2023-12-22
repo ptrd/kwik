@@ -640,8 +640,8 @@ class ServerConnectionImplTest {
         return connection;
     }
 
-    private static ServerConfig getDefaultConfiguration(boolean retryRequired) {
-        return ServerConfig.builder()
+    private static ServerConnectionConfig getDefaultConfiguration(boolean retryRequired) {
+        return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)

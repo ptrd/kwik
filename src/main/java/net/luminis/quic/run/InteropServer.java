@@ -23,7 +23,7 @@ import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
-import net.luminis.quic.server.ServerConfig;
+import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
 import net.luminis.quic.server.h09.Http09ApplicationProtocolFactory;
 import org.apache.commons.cli.CommandLine;
@@ -106,7 +106,7 @@ public class InteropServer {
 
         List<Version> supportedVersions = List.of(Version.QUIC_version_1);
 
-        ServerConfig serverConfig = ServerConfig.builder()
+        ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
@@ -121,7 +121,7 @@ public class InteropServer {
                 .withPort(port)
                 .withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile))
                 .withSupportedVersions(supportedVersions)
-                .withConfiguration(serverConfig)
+                .withConfiguration(serverConnectionConfig)
                 .withLogger(log)
                 .build();
 

@@ -75,7 +75,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
-    private volatile ServerConfig configuration;
+    private volatile ServerConnectionConfig configuration;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
@@ -106,12 +106,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      */
     protected ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                    byte[] peerCid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
-                                   ServerConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                   ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
                                    ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
-        this.retryRequired = configuration.retryRequired() == ServerConfig.RetryRequired.Always;
+        this.retryRequired = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always;
         this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;

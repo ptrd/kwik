@@ -23,7 +23,7 @@ import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
-import net.luminis.quic.server.ServerConfig;
+import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -103,7 +103,7 @@ public class SampleWebServer {
         supportedVersions.add(Version.QUIC_version_1);
         supportedVersions.add(Version.QUIC_version_2);
 
-        ServerConfig serverConfig = ServerConfig.builder()
+        ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
@@ -118,7 +118,7 @@ public class SampleWebServer {
                 .withPort(port)
                 .withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile))
                 .withSupportedVersions(supportedVersions)
-                .withConfiguration(serverConfig)
+                .withConfiguration(serverConnectionConfig)
                 .withLogger(log)
                 .build();
 

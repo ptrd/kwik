@@ -24,7 +24,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
-import net.luminis.quic.server.ServerConfig;
+import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
 
 import java.io.File;
@@ -69,14 +69,14 @@ public class EchoServer {
         log.logWarning(true);
         log.logInfo(true);
 
-        ServerConfig serverConfig = ServerConfig.builder()
+        ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxOpenBidirectionalStreams(12)  // Mandatory setting to maximize concurrent streams on a connection.
                 .build();
 
         ServerConnector serverConnector = ServerConnector.builder()
                 .withPort(port)
                 .withCertificate(new FileInputStream(args[0]), new FileInputStream(args[1]))
-                .withConfiguration(serverConfig)
+                .withConfiguration(serverConnectionConfig)
                 .withLogger(log)
                 .build();
 

@@ -27,7 +27,7 @@ import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
 import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
 
 
-public class ServerConfig implements ConnectionConfig {
+public class ServerConnectionConfig implements ConnectionConfig {
 
     private static final int DEFAULT_MAX_IDLE_TIMEOUT = 30_000;
     private static final int DEFAULT_CONNECTION_ID_LENGTH = 8;
@@ -45,7 +45,7 @@ public class ServerConfig implements ConnectionConfig {
     private RetryRequired retryRequired;
     private int connectionIdLength = DEFAULT_CONNECTION_ID_LENGTH;
 
-    private ServerConfig() {
+    private ServerConnectionConfig() {
     }
 
     @Override
@@ -100,8 +100,8 @@ public class ServerConfig implements ConnectionConfig {
         return 100;
     }
 
-    ServerConfig merge(ApplicationProtocolSettings protocol) {
-        ServerConfig.Builder configBuilder = ServerConfig.builder();
+    ServerConnectionConfig merge(ApplicationProtocolSettings protocol) {
+        ServerConnectionConfig.Builder configBuilder = ServerConnectionConfig.builder();
 
         configBuilder.maxIdleTimeout(this.maxIdleTimeout());
 
@@ -189,9 +189,9 @@ public class ServerConfig implements ConnectionConfig {
 
     public static class Builder {
 
-        private ServerConfig config = new ServerConfig();
+        private ServerConnectionConfig config = new ServerConnectionConfig();
 
-        public ServerConfig build() {
+        public ServerConnectionConfig build() {
             if (config.maxConnectionBufferSize < config.maxUnidirectionalStreamBufferSize) {
                 throw new IllegalArgumentException("Connection buffer size can't be less then unidirectional stream buffer size");
             }

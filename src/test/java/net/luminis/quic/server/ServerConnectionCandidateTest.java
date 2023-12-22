@@ -124,8 +124,8 @@ class ServerConnectionCandidateTest {
         assertThat(createdServerConnection).isNotNull();
     }
 
-    static ServerConfig getDefaultConfiguration(int connectionIdLength) {
-        return ServerConfig.builder()
+    static ServerConnectionConfig getDefaultConfiguration(int connectionIdLength) {
+        return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
