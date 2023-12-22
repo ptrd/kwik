@@ -45,6 +45,11 @@ public class ClientConnectionConfig implements ConnectionConfig {
         return maxOpenUnidirectionalStreams;
     }
 
+    @Override
+    public long maxTotalUnidirectionalStreams() {
+        return Long.MAX_VALUE;
+    }
+
     void setMaxOpenUnidirectionalStreams(int maxOpenUnidirectionalStreams) {
         this.maxOpenUnidirectionalStreams = maxOpenUnidirectionalStreams;
     }
@@ -56,6 +61,11 @@ public class ClientConnectionConfig implements ConnectionConfig {
 
     void setMaxOpenBidirectionalStreams(int maxOpenBidirectionalStreams) {
         this.maxOpenBidirectionalStreams = maxOpenBidirectionalStreams;
+    }
+
+    @Override
+    public long maxTotalBidirectionalStreams() {
+        return Long.MAX_VALUE;
     }
 
     @Override

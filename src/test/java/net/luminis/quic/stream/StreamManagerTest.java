@@ -435,6 +435,60 @@ class StreamManagerTest {
         // And
         verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
     }
+
+    @Test
+    void whenAbsoluteMaxUnidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
+        // Given
+        ServerConfig config = ServerConfig.builder()
+                .maxOpenUnidirectionalStreams(3)
+                .maxTotalUnidirectionalStreams(3)
+                .maxUnidirectionalStreamBufferSize(1_000)
+                .build();
+        streamManager.initialize(config);
+        int streamId = 0x03;  // server initiated unidirectional stream
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 4, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 8, new byte[0], false));
+        streamManager.streamClosed(streamId);
+        streamManager.streamClosed(streamId + 4);
+        streamManager.streamClosed(streamId + 8);
+
+        // Then
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // And
+        assertThatThrownBy(() ->
+                        streamManager.process(new StreamFrame(streamId + 12, new byte[0], false))
+        ).isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void whenAbsoluteMaxBidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
+        // Given
+        ServerConfig config = ServerConfig.builder()
+                .maxOpenBidirectionalStreams(3)
+                .maxTotalBidirectionalStreams(3)
+                .maxBidirectionalStreamBufferSize(1_000)
+                .build();
+        streamManager.initialize(config);
+        int streamId = 0x01;  // server initiated bidirectional stream
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 4, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 8, new byte[0], false));
+        streamManager.streamClosed(streamId);
+        streamManager.streamClosed(streamId + 4);
+        streamManager.streamClosed(streamId + 8);
+
+        // Then
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // And
+        assertThatThrownBy(() ->
+                streamManager.process(new StreamFrame(streamId + 12, new byte[0], false))
+        ).isInstanceOf(TransportError.class);
+    }
     //endregion
 
     //region max streams

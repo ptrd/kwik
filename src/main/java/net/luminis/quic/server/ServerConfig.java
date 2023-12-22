@@ -34,7 +34,9 @@ public class ServerConfig implements ConnectionConfig {
 
     private int maxIdleTimeout = DEFAULT_MAX_IDLE_TIMEOUT;
     private int maxOpenUnidirectionalStreams;
+    private long maxTotalUnidirectionalStreams = Long.MAX_VALUE;
     private int maxOpenBidirectionalStreams;
+    private long maxTotalBidirectionalStreams = Long.MAX_VALUE;
     private long maxConnectionBufferSize;
     private long maxUnidirectionalStreamBufferSize;
     private long maxBidirectionalStreamBufferSize;
@@ -55,8 +57,18 @@ public class ServerConfig implements ConnectionConfig {
     }
 
     @Override
+    public long maxTotalUnidirectionalStreams() {
+        return maxTotalUnidirectionalStreams;
+    }
+
+    @Override
     public int maxOpenBidirectionalStreams() {
         return maxOpenBidirectionalStreams;
+    }
+
+    @Override
+    public long maxTotalBidirectionalStreams() {
+        return maxTotalBidirectionalStreams;
     }
 
     @Override
@@ -104,6 +116,8 @@ public class ServerConfig implements ConnectionConfig {
         configBuilder.maxOpenBidirectionalStreams(limitValue(0,
                 protocol.maxConcurrentBidirectionalStreams(), this.maxOpenBidirectionalStreams()));
 
+        configBuilder.maxTotalUnidirectionalStreams(protocol.maxTotalUnidirectionalStreams());
+        configBuilder.maxTotalBidirectionalStreams(protocol.maxTotalBidirectionalStreams());
         configBuilder.retryRequired(this.retryRequired());
         configBuilder.connectionIdLength(this.connectionIdLength());
 
@@ -245,6 +259,16 @@ public class ServerConfig implements ConnectionConfig {
                 throw new IllegalArgumentException("Connection ID length must be between " + MINIMUM_CONNECTION_ID_LENGTH + " and " + MAXIMUM_CONNECTION_ID_LENGTH);
             }
             config.connectionIdLength = connectionIdLength;
+            return this;
+        }
+
+        public Builder maxTotalUnidirectionalStreams(long max) {
+            config.maxTotalUnidirectionalStreams = max;
+            return this;
+        }
+
+        public Builder maxTotalBidirectionalStreams(long max) {
+            config.maxTotalBidirectionalStreams = max;
             return this;
         }
     }

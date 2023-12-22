@@ -70,6 +70,8 @@ public class StreamManager {
     private volatile int nextPeerInitiatedUnidirectionalStreamId;
     private volatile int nextPeerInitiatedBidirectionalStreamId;
     private long cumulativeReceiveOffset;
+    private long absoluteUnidirectionalStreamIdLimit;
+    private long absoluteBidirectionalStreamIdLimit;
 
 
     /**
@@ -107,10 +109,26 @@ public class StreamManager {
         this.config = config;
         this.currentUnidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenUnidirectionalStreams(), role.other(), false);
         this.currentBidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenBidirectionalStreams(), role.other(), true);
+        absoluteUnidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalUnidirectionalStreams()), role.other(), false);
+        absoluteBidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalBidirectionalStreams()), role.other(), true);
+
         initConnectionFlowControl(config.maxConnectionBufferSize());
 
     }
+
+    /**
+     * Computes the limit for a stream id, based on the given maximum number of stream, peer role and stream type.
+     * Only streams with an id less than this limit can be opened.
+     * @param maxStreams
+     * @param peerRole
+     * @param bidirectional
+     * @return
+     */
     private int computeMaxStreamIdLimit(int maxStreams, Role peerRole, boolean bidirectional) {
+        if (maxStreams < 0) {
+            return 0;
+        }
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
         // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-2.1
@@ -128,7 +146,7 @@ public class StreamManager {
         if (peerRole == Role.Client && !bidirectional) {
             maxStreamId += 3;
         }
-        return maxStreamId;
+        return (maxStreamId > 0)? maxStreamId: Integer.MAX_VALUE;  // < 0 means integer overflow, to "limit" to max int.
     }
 
     private void initStreamIds() {
@@ -337,14 +355,14 @@ public class StreamManager {
         // Can be called concurrently, so lock
         try {
             maxOpenStreamsUpdateLock.lock();
-            if (isUni(streamId)) {
+            if (isUni(streamId) && currentUnidirectionalStreamIdLimit + 4 < absoluteUnidirectionalStreamIdLimit) {
                 currentUnidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsUniUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsUniUpdateQueued = true;
                 }
             }
-            else {
+            else if (isBidi(streamId) && currentBidirectionalStreamIdLimit + 4 < absoluteBidirectionalStreamIdLimit) {
                 currentBidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsBidiUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.

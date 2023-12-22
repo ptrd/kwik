@@ -26,14 +26,24 @@ public interface ConnectionConfig {
     int maxIdleTimeout();
 
     /**
-     * @return  the maximum number of unidirectional streams that can be opened by the peer.
+     * @return  the maximum number of concurrent unidirectional streams that can be opened by the peer.
      */
     int maxOpenUnidirectionalStreams();
 
     /**
-     * @return  the maximum number of bidirectional streams that can be opened by the peer.
+     * @return the total number of unidirectional streams that the peer can open during the lifetime of the connection.
+     */
+    long maxTotalUnidirectionalStreams();
+
+    /**
+     * @return  the maximum number of concurrent bidirectional streams that can be opened by the peer.
      */
     int maxOpenBidirectionalStreams();
+
+    /**
+     * @return  the total number of bidirectional streams that the peer can open during the lifetime of the connection.
+     */
+    long maxTotalBidirectionalStreams();
 
     /**
      * @return  the maximum buffer size on connection level (shared by all streams).
