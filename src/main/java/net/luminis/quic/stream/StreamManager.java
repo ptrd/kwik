@@ -51,8 +51,8 @@ public class StreamManager {
     private final Role role;
     private final Logger log;
     private volatile ConnectionConfig config;
-    private volatile int maxOpenStreamIdUni;
-    private volatile int maxOpenStreamIdBidi;
+    private volatile int currentUnidirectionalStreamIdLimit;
+    private volatile int currentBidirectionalStreamIdLimit;
     private volatile Consumer<QuicStream> peerInitiatedStreamCallback;
     private volatile Long maxStreamsAcceptedByPeerBidi;
     private volatile Long maxStreamsAcceptedByPeerUni;
@@ -105,12 +105,12 @@ public class StreamManager {
 
     public void initialize(ConnectionConfig config) {
         this.config = config;
-        this.maxOpenStreamIdUni = computeMaxStreamId(config.maxOpenUnidirectionalStreams(), role.other(), false);
-        this.maxOpenStreamIdBidi = computeMaxStreamId(config.maxOpenBidirectionalStreams(), role.other(), true);
+        this.currentUnidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenUnidirectionalStreams(), role.other(), false);
+        this.currentBidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenBidirectionalStreams(), role.other(), true);
         initConnectionFlowControl(config.maxConnectionBufferSize());
 
     }
-    private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
+    private int computeMaxStreamIdLimit(int maxStreams, Role peerRole, boolean bidirectional) {
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
         // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-2.1
@@ -238,7 +238,7 @@ public class StreamManager {
     }
 
     private QuicStreamImpl createPeerInitiatedStream(int requestedStreamId) throws TransportError {
-        if (isUni(requestedStreamId) && requestedStreamId < maxOpenStreamIdUni || isBidi(requestedStreamId) && requestedStreamId < maxOpenStreamIdBidi) {
+        if (isUni(requestedStreamId) && requestedStreamId < currentUnidirectionalStreamIdLimit || isBidi(requestedStreamId) && requestedStreamId < currentBidirectionalStreamIdLimit) {
             if (isUni(requestedStreamId)) {
                 createPeerInitiatedStreams(requestedStreamId, nextPeerInitiatedUnidirectionalStreamId, () -> nextPeerInitiatedUnidirectionalStreamId = requestedStreamId + 4);
             }
@@ -338,14 +338,14 @@ public class StreamManager {
         try {
             maxOpenStreamsUpdateLock.lock();
             if (isUni(streamId)) {
-                maxOpenStreamIdUni += 4;
+                currentUnidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsUniUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsUniUpdateQueued = true;
                 }
             }
             else {
-                maxOpenStreamIdBidi += 4;
+                currentBidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsBidiUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsBidiUpdateQueued = true;
@@ -370,7 +370,7 @@ public class StreamManager {
         }
 
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
-        return new MaxStreamsFrame(maxOpenStreamIdUni / 4, false);
+        return new MaxStreamsFrame(currentUnidirectionalStreamIdLimit / 4, false);
     }
 
     private QuicFrame createMaxStreamsUpdateBidi(int maxFrameSize) {
@@ -386,7 +386,7 @@ public class StreamManager {
         }
 
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
-        return new MaxStreamsFrame(maxOpenStreamIdBidi / 4, true);
+        return new MaxStreamsFrame(currentBidirectionalStreamIdLimit / 4, true);
     }
 
     void retransmitMaxStreams(QuicFrame frame) {
