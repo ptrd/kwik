@@ -133,7 +133,7 @@ class StreamManagerTest {
         ServerConfig config = ServerConfig.builder()
                 .maxOpenUnidirectionalStreams(10)
                 .maxOpenBidirectionalStreams(10)
-                .maxConnectionBufferSize(1_000)
+                .maxConnectionBufferSize(10_000)
                 .maxBidirectionalStreamBufferSize(10_000)
                 .build();
         streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config);
@@ -443,6 +443,7 @@ class StreamManagerTest {
                 .maxOpenUnidirectionalStreams(3)
                 .maxTotalUnidirectionalStreams(3)
                 .maxUnidirectionalStreamBufferSize(1_000)
+                .maxConnectionBufferSize(1_000)
                 .build();
         streamManager.initialize(config);
         int streamId = 0x03;  // server initiated unidirectional stream
@@ -470,6 +471,7 @@ class StreamManagerTest {
                 .maxOpenBidirectionalStreams(3)
                 .maxTotalBidirectionalStreams(3)
                 .maxBidirectionalStreamBufferSize(1_000)
+                .maxConnectionBufferSize(1_000)
                 .build();
         streamManager.initialize(config);
         int streamId = 0x01;  // server initiated bidirectional stream

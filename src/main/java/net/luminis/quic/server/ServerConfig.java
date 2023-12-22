@@ -20,6 +20,8 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.ConnectionConfig;
 
+import static java.lang.Long.max;
+import static java.lang.Long.min;
 import static net.luminis.quic.server.ApplicationProtocolSettings.NOT_SPECIFIED;
 import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
 import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
@@ -102,13 +104,18 @@ public class ServerConfig implements ConnectionConfig {
         ServerConfig.Builder configBuilder = ServerConfig.builder();
 
         configBuilder.maxIdleTimeout(this.maxIdleTimeout());
-        configBuilder.maxConnectionBufferSize(this.maxConnectionBufferSize());
 
-        configBuilder.maxUnidirectionalStreamBufferSize(limitValue(protocol.minUnidirectionalStreamReceiverBufferSize(),
-                protocol.maxUnidirectionalStreamReceiverBufferSize(), this.maxUnidirectionalStreamBufferSize()));
+        long maxUnidirectionalStreamBufferSize = limitValue(protocol.minUnidirectionalStreamReceiverBufferSize(),
+                protocol.maxUnidirectionalStreamReceiverBufferSize(), this.maxUnidirectionalStreamBufferSize());
+        configBuilder.maxUnidirectionalStreamBufferSize(maxUnidirectionalStreamBufferSize);
 
-        configBuilder.maxBidirectionalStreamBufferSize(limitValue(protocol.minBidirectionalStreamReceiverBufferSize(),
-                protocol.maxBidirectionalStreamReceiverBufferSize(), this.maxBidirectionalStreamBufferSize()));
+        long maxBidirectionalStreamBufferSize = limitValue(protocol.minBidirectionalStreamReceiverBufferSize(),
+                protocol.maxBidirectionalStreamReceiverBufferSize(), this.maxBidirectionalStreamBufferSize());
+        configBuilder.maxBidirectionalStreamBufferSize(maxBidirectionalStreamBufferSize);
+
+        // Connection buffer size must be at least as large as the largest stream buffer size.
+        long maxConnectionBufferSize = max(max(maxUnidirectionalStreamBufferSize, maxBidirectionalStreamBufferSize), this.maxConnectionBufferSize());
+        configBuilder.maxConnectionBufferSize(maxConnectionBufferSize);
 
         configBuilder.maxOpenUnidirectionalStreams(limitValue(0,
                 protocol.maxConcurrentUnidirectionalStreams(), this.maxOpenUnidirectionalStreams()));
@@ -140,12 +147,12 @@ public class ServerConfig implements ConnectionConfig {
         if (minimumValue < 0) {
             throw new IllegalArgumentException();
         }
-        newValue = Long.max(minimumValue, currentValue);
+        newValue = max(minimumValue, currentValue);
 
         if (maximumValue < 0) {
             throw new IllegalArgumentException();
         }
-        newValue = Long.min(newValue, maximumValue);
+        newValue = min(newValue, maximumValue);
 
         return newValue;
     }
@@ -185,6 +192,12 @@ public class ServerConfig implements ConnectionConfig {
         private ServerConfig config = new ServerConfig();
 
         public ServerConfig build() {
+            if (config.maxConnectionBufferSize < config.maxUnidirectionalStreamBufferSize) {
+                throw new IllegalArgumentException("Connection buffer size can't be less then unidirectional stream buffer size");
+            }
+            if (config.maxConnectionBufferSize < config.maxBidirectionalStreamBufferSize) {
+                throw new IllegalArgumentException("Connection buffer size can't be less then bidirectional stream buffer size");
+            }
             return config;
         }
 

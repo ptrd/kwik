@@ -3,6 +3,7 @@ package net.luminis.quic.server;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ServerConfigTest {
 
@@ -43,6 +44,7 @@ class ServerConfigTest {
     void protocolMinBufferSizeIsRespected() {
         // Given
         ServerConfig config = ServerConfig.builder()
+                .maxConnectionBufferSize(100)
                 .maxBidirectionalStreamBufferSize(100)
                 .build();
 
@@ -62,6 +64,7 @@ class ServerConfigTest {
     void protocolMaxBufferSizeIsRespected() {
         // Given
         ServerConfig config = ServerConfig.builder()
+                .maxConnectionBufferSize(100_000)
                 .maxBidirectionalStreamBufferSize(100_000)
                 .build();
 
@@ -81,6 +84,7 @@ class ServerConfigTest {
     void whenConfigValueBetweenProtocolMinAndMaxItIsUsed() {
         // Given
         ServerConfig config = ServerConfig.builder()
+                .maxConnectionBufferSize(10_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
                 .build();
 
@@ -99,6 +103,27 @@ class ServerConfigTest {
 
         // Then
         assertThat(mergedConfig.maxBidirectionalStreamBufferSize()).isEqualTo(1_000_000);
+    }
 
+    @Test
+    void connectionBufferCantBeLessThenUnidirectionalStreamBufferSize() {
+        // Given
+        ServerConfig.Builder builder = ServerConfig.builder()
+                .maxConnectionBufferSize(100)
+                .maxUnidirectionalStreamBufferSize(1000);
+
+        // When
+        assertThatThrownBy(builder::build).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void connectionBufferCantBeLessThenBidirectionalStreamBufferSize() {
+        // Given
+        ServerConfig.Builder builder = ServerConfig.builder()
+                .maxConnectionBufferSize(100)
+                .maxBidirectionalStreamBufferSize(1000);
+
+        // When
+        assertThatThrownBy(builder::build).isInstanceOf(IllegalArgumentException.class);
     }
 }

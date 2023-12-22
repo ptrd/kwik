@@ -114,6 +114,7 @@ public class ServerConnector {
         context = new ServerConnectorContext();
     }
 
+    // Intentionally private: for use with deprecated constructors only.
     private static ServerConfig getDefaultConfiguration(boolean requireRetry) {
         return ServerConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
