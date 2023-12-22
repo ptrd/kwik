@@ -23,6 +23,7 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnection;
+import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConfig;
 import net.luminis.quic.server.ServerConnector;
 
@@ -69,11 +70,7 @@ public class EchoServer {
         log.logInfo(true);
 
         ServerConfig serverConfig = ServerConfig.builder()
-                .maxUnidirectionalStreamBufferSize(5 * 1024)
-                .maxBidirectionalStreamBufferSize(5 * 1024)
-                .maxConnectionBufferSize(5 * 1024)
-                .maxOpenUnidirectionalStreams(0)
-                .maxOpenBidirectionalStreams(100)
+                .maxOpenBidirectionalStreams(12)  // Mandatory setting to maximize concurrent streams on a connection.
                 .build();
 
         ServerConnector serverConnector = ServerConnector.builder()
@@ -91,9 +88,38 @@ public class EchoServer {
     }
 
     private static void registerProtocolHandler(ServerConnector serverConnector, Logger log) {
-           serverConnector.registerApplicationProtocol("echo", (protocol, quicConnection) -> new EchoProtocolConnection(quicConnection, log));
+           serverConnector.registerApplicationProtocol("echo", new EchoProtocolConnectionFactory(log));
     }
 
+    /**
+     * The factory that creates the (echo) application protocol connection.
+     */
+    static class EchoProtocolConnectionFactory implements ApplicationProtocolConnectionFactory {
+        private final Logger log;
+
+        public EchoProtocolConnectionFactory(Logger log) {
+            this.log = log;
+        }
+
+        @Override
+        public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
+            return new EchoProtocolConnection(quicConnection, log);
+        }
+
+        @Override
+        public int maxConcurrentUnidirectionalStreams() {
+            return 0;  // Because unidirectional streams are not used
+        }
+
+        @Override
+        public int maxConcurrentBidirectionalStreams() {
+            return Integer.MAX_VALUE;   // Because from protocol perspective, there is no limit
+        }
+    }
+
+    /**
+     * The echo protocol connection.
+     */
     static class EchoProtocolConnection implements ApplicationProtocolConnection {
 
         private Logger log;
@@ -104,6 +130,7 @@ public class EchoServer {
 
         @Override
         public void acceptPeerInitiatedStream(QuicStream quicStream) {
+            // Need to handle incoming stream on separate thread; using a thread pool is recommended.
             new Thread(() -> handleEchoRequest(quicStream)).start();
         }
 

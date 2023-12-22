@@ -71,11 +71,7 @@ public class PushServer {
         log.logInfo(true);
 
         ServerConfig serverConfig = ServerConfig.builder()
-                .maxUnidirectionalStreamBufferSize(5 * 1024)
-                .maxBidirectionalStreamBufferSize(5 * 1024)
-                .maxConnectionBufferSize(5 * 1024)
-                .maxOpenUnidirectionalStreams(0)
-                .maxOpenBidirectionalStreams(0)
+                // No connection configuration necessary, as client will not initiate any stream, nor send data.
                 .build();
 
         ServerConnector serverConnector = ServerConnector.builder()
@@ -93,15 +89,29 @@ public class PushServer {
     }
 
     private static void registerProtocolHandler(ServerConnector serverConnector, Logger log) {
-           serverConnector.registerApplicationProtocol("push", new ApplicationProtocolConnectionFactory() {
-
-               @Override
-               public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
-                   return new PushProtocolConnection(quicConnection, log);
-               }
-           });
+        serverConnector.registerApplicationProtocol("push", new PushProtocolConnectionFactory(log));
     }
 
+    /**
+     * The factory that creates the (push) application protocol connection.
+     */
+    static class PushProtocolConnectionFactory implements ApplicationProtocolConnectionFactory {
+
+        private Logger log;
+
+        public PushProtocolConnectionFactory(Logger log) {
+            this.log = log;
+        }
+
+        @Override
+        public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
+            return new PushProtocolConnection(quicConnection, log);
+        }
+    }
+
+    /**
+     * The connection that implements the (push) application protocol.
+     */
     static class PushProtocolConnection implements ApplicationProtocolConnection {
 
         private Logger log;
