@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.ConnectionConfig;
 
+import static net.luminis.quic.server.ApplicationProtocolSettings.NOT_SPECIFIED;
 import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
 import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
 
@@ -85,6 +86,82 @@ public class ServerConfig implements ConnectionConfig {
         return 100;
     }
 
+    ServerConfig merge(ApplicationProtocolSettings protocol) {
+        ServerConfig.Builder configBuilder = ServerConfig.builder();
+
+        configBuilder.maxIdleTimeout(this.maxIdleTimeout());
+        configBuilder.maxConnectionBufferSize(this.maxConnectionBufferSize());
+
+        configBuilder.maxUnidirectionalStreamBufferSize(limitValue(protocol.minUnidirectionalStreamReceiverBufferSize(),
+                protocol.maxUnidirectionalStreamReceiverBufferSize(), this.maxUnidirectionalStreamBufferSize()));
+
+        configBuilder.maxBidirectionalStreamBufferSize(limitValue(protocol.minBidirectionalStreamReceiverBufferSize(),
+                protocol.maxBidirectionalStreamReceiverBufferSize(), this.maxBidirectionalStreamBufferSize()));
+
+        configBuilder.maxOpenUnidirectionalStreams(limitValue(0,
+                protocol.maxConcurrentUnidirectionalStreams(), this.maxOpenUnidirectionalStreams()));
+
+        configBuilder.maxOpenBidirectionalStreams(limitValue(0,
+                protocol.maxConcurrentBidirectionalStreams(), this.maxOpenBidirectionalStreams()));
+
+        configBuilder.retryRequired(this.retryRequired());
+        configBuilder.connectionIdLength(this.connectionIdLength());
+
+        return configBuilder.build();
+    }
+
+    private long limitValue(int minimumValue, long maximumValue, long currentValue) {
+        if (minimumValue == NOT_SPECIFIED) {
+            minimumValue = 0;
+        }
+        if (maximumValue == NOT_SPECIFIED) {
+            maximumValue = Long.MAX_VALUE;
+        }
+        if (minimumValue > maximumValue) {
+            throw new IllegalArgumentException();
+        }
+
+        long newValue;
+
+        if (minimumValue < 0) {
+            throw new IllegalArgumentException();
+        }
+        newValue = Long.max(minimumValue, currentValue);
+
+        if (maximumValue < 0) {
+            throw new IllegalArgumentException();
+        }
+        newValue = Long.min(newValue, maximumValue);
+
+        return newValue;
+    }
+
+    private int limitValue(int minimumValue, int maximumValue, int currentValue) {
+        if (minimumValue == NOT_SPECIFIED) {
+            minimumValue = 0;
+        }
+        if (maximumValue == NOT_SPECIFIED) {
+            maximumValue = Integer.MAX_VALUE;
+        }
+        if (minimumValue > maximumValue) {
+            throw new IllegalArgumentException();
+        }
+
+        int newValue;
+
+        if (minimumValue < 0) {
+            throw new IllegalArgumentException();
+        }
+        newValue = Integer.max(minimumValue, currentValue);
+
+        if (maximumValue < 0) {
+            throw new IllegalArgumentException();
+        }
+        newValue = Integer.min(newValue, maximumValue);
+
+        return newValue;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -105,6 +182,14 @@ public class ServerConfig implements ConnectionConfig {
             return this;
         }
 
+        public Builder maxIdleTimeout(int milliSeconds) {
+            if (milliSeconds <= 0) {
+                throw new IllegalArgumentException();
+            }
+            config.maxIdleTimeout = milliSeconds;
+            return this;
+        }
+
         public Builder maxConnectionBufferSize(long size) {
             if (size < 0) {
                 throw new IllegalArgumentException();
@@ -113,7 +198,7 @@ public class ServerConfig implements ConnectionConfig {
             return this;
         }
 
-        public Builder maxUnidirectionalStreamBufferSize(int size) {
+        public Builder maxUnidirectionalStreamBufferSize(long size) {
             if (size < 0) {
                 throw new IllegalArgumentException();
             }
@@ -121,7 +206,7 @@ public class ServerConfig implements ConnectionConfig {
             return this;
         }
 
-        public Builder maxBidirectionalStreamBufferSize(int size) {
+        public Builder maxBidirectionalStreamBufferSize(long size) {
             if (size < 0) {
                 throw new IllegalArgumentException();
             }

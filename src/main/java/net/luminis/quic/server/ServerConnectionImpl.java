@@ -75,7 +75,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
-    private final ServerConfig configuration;
+    private volatile ServerConfig configuration;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
@@ -296,6 +296,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 negotiatedApplicationProtocol = applicationProtocol.get();
                 // Add negotiated protocol to TLS response (Encrypted Extensions message)
                 tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol.get()));
+                // Determine configuration values based on server preferences and protocol requirements
+                ApplicationProtocolConnectionFactory apFactory = applicationProtocolRegistry.getApplicationProtocolConnectionFactory(applicationProtocol.get());
+                configure(apFactory, applicationProtocol.get());
             }
             else {
                 throw new NoApplicationProtocolAlert(requestedProtocols);
@@ -336,6 +339,19 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
         tlsEngine.setSessionData(quicVersion.getVersion().getBytes());
         tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
+    }
+
+    private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
+        if (alpSettings.maxConcurrentUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+            log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
+                    " does not define (override) maxConcurrentUnidirectionalStreams; this will be required in future versions of Kwik");
+        }
+        if (alpSettings.maxConcurrentBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+            log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
+                    " does not define (override) maxConcurrentBidirectionalStreams; this will be required in future versions of Kwik");
+        }
+        configuration = configuration.merge(alpSettings);
+        streamManager.initialize(configuration);
     }
 
     TransportParameters initTransportParameters() {

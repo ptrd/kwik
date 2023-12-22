@@ -23,7 +23,7 @@ import net.luminis.quic.QuicConnection;
 /**
  * Factory for ApplicationProtocolConnection objects.
  */
-public interface ApplicationProtocolConnectionFactory {
+public interface ApplicationProtocolConnectionFactory extends ApplicationProtocolSettings {
 
     ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection);
 }
