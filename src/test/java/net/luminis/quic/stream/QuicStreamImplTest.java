@@ -438,6 +438,18 @@ class QuicStreamImplTest {
         // - a non-blocking read takes (far) less than 50 ms
         assertThat(readDuration).isGreaterThan(Duration.of(50, ChronoUnit.MILLIS));
     }
+
+    @Test
+    void cantReadFromSelfInitiatedUnidirectionalStream() throws Exception {
+        // Given
+        int streamId = 0x02;  // client initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        int read = quicStream.getInputStream().read(new byte[1]);
+
+        assertThat(read).isEqualTo(-1);
+    }
     //endregion
 
     //region inputstream flow control updates
@@ -558,7 +570,8 @@ class QuicStreamImplTest {
     @Test
     void afterAbortReadingInputForUnidirectionStreamStreamShouldBeClosed() throws Exception {
         // Given
-        quicStream = new QuicStreamImpl(0x02, role, connection, streamManager, mock(FlowControl.class));
+        int streamId = 0x03;  // server initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
 
         // When
         quicStream.abortReading(9);
@@ -845,6 +858,21 @@ class QuicStreamImplTest {
         while (!lastFrame.isFinal());
 
         assertThat(dataSent.array()).isEqualTo(data);
+    }
+
+    @Test
+    void cantWriteToPeerInitiatedUnidirectionalStream() throws Exception {
+        // Given
+        int streamId = 0x03;  // server initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                quicStream.getOutputStream().write(new byte[1]))
+                // Then
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("not writable");
     }
     //endregion
 

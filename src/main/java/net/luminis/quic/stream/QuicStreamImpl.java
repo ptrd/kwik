@@ -68,8 +68,19 @@ public class QuicStreamImpl implements QuicStream {
         this.streamManager = streamManager;
         this.log = log;
 
-        inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize());
-        outputStream = createStreamOutputStream(sendBufferSize, flowController);
+        if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
+            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize());
+        }
+        else {
+            inputStream = new NullStreamInputStream();
+        }
+
+        if (isBidirectional() || isUnidirectional() && isSelfInitiated()) {
+            outputStream = createStreamOutputStream(sendBufferSize, flowController);
+        }
+        else {
+            outputStream = new NullStreamOutputStream();
+        }
 
         stateLock = new ReentrantLock();
     }
