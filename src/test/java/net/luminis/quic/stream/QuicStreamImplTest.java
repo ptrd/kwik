@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -69,6 +70,7 @@ class QuicStreamImplTest {
     private Logger logger;
     private Random randomGenerator = new Random();
     private Role role;
+    private ConnectionConfig config;
 
     //region setup
     @BeforeEach
@@ -84,10 +86,13 @@ class QuicStreamImplTest {
 
     @BeforeEach
     void createDefaultMocksAndObjectUnderTest() {
-        int initialMaxStreamData = 9999;
+        long initialMaxStreamData = 9999;
         connection = mock(QuicConnectionImpl.class);
-        when(connection.getInitialMaxStreamData()).thenReturn((long) initialMaxStreamData);
         streamManager = mock(StreamManager.class);
+        config = mock(ConnectionConfig.class);
+        when(config.maxBidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
+        when(config.maxUnidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
+        when(streamManager.getConnectionConfig()).thenReturn(config);
         logger = mock(Logger.class);
         role = Role.Client;
 
@@ -150,22 +155,22 @@ class QuicStreamImplTest {
 
     @Test
     void isUnidirectional() {
-        QuicStreamImpl clientInitiatedStream = new QuicStreamImpl(2, role, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
+        QuicStreamImpl clientInitiatedStream = new QuicStreamImpl(2, role, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
         assertThat(clientInitiatedStream.isUnidirectional()).isTrue();
 
-        QuicStreamImpl serverInitiatedStream = new QuicStreamImpl(3, role, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
+        QuicStreamImpl serverInitiatedStream = new QuicStreamImpl(3, role, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
         assertThat(serverInitiatedStream.isUnidirectional()).isTrue();
     }
 
     @Test
     void isClientInitiatedBidirectional() {
-        QuicStreamImpl stream = new QuicStreamImpl(0, role, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
+        QuicStreamImpl stream = new QuicStreamImpl(0, role, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
         assertThat(stream.isClientInitiatedBidirectional()).isTrue();
     }
 
     @Test
     void isServerInitiatedBidirectional() {
-        QuicStreamImpl stream = new QuicStreamImpl(1, role, mock(QuicConnectionImpl.class), mock(StreamManager.class), mock(FlowControl.class));
+        QuicStreamImpl stream = new QuicStreamImpl(1, role, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
         assertThat(stream.isServerInitiatedBidirectional()).isTrue();
     }
     //endregion
@@ -440,7 +445,8 @@ class QuicStreamImplTest {
     void testStreamFlowControlUpdates() throws Exception {
         float factor = StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
+        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
@@ -802,9 +808,10 @@ class QuicStreamImplTest {
     @Test
     void testWritingMoreThanSendBufferSize() throws Exception {
         // Given
-        quicStream = new QuicStreamImpl(Version.getDefault(), 0, role, connection, mock(StreamManager.class),
+        int sendBufferSize = 77;
+        quicStream = new QuicStreamImpl(Version.getDefault(), 0, role, connection, streamManager,
                 new FlowControl(Role.Client, 9999, 9999, 9999, 9999),
-                logger, 77);
+                logger, sendBufferSize);
         OutputStream outputStream = quicStream.getOutputStream();
 
         // When
@@ -1268,7 +1275,8 @@ class QuicStreamImplTest {
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
         float factor = StreamInputStream.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(connection.getInitialMaxStreamData()).thenReturn((long) initialWindow);
+        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.addStreamData(resurrect(new StreamFrame(0, new byte[1000], true)));

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2023 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.QuicConnection;
 
-/**
- * Factory for ApplicationProtocolConnection objects.
- */
-public interface ApplicationProtocolConnectionFactory extends ApplicationProtocolSettings {
+class Constants {
 
-    ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection);
+    static final int MINIMUM_CONNECTION_ID_LENGTH = 4;
+    // https://www.rfc-editor.org/rfc/rfc9000.html#name-long-header-packets
+    // "In QUIC version 1, this value MUST NOT exceed 20 bytes."
+    static final int MAXIMUM_CONNECTION_ID_LENGTH = 20;
+
 }

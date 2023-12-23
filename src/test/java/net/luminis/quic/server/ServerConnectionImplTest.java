@@ -632,12 +632,25 @@ class ServerConnectionImplTest {
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid,
-                8, tlsServerEngineFactory, retryRequired, applicationProtocolRegistry, 100,
+                tlsServerEngineFactory, getDefaultConfiguration(retryRequired), applicationProtocolRegistry,
                 mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         return connection;
+    }
+
+    private static ServerConnectionConfig getDefaultConfiguration(boolean retryRequired) {
+        return ServerConnectionConfig.builder()
+                .maxIdleTimeoutInSeconds(30)
+                .maxUnidirectionalStreamBufferSize(1_000_000)
+                .maxBidirectionalStreamBufferSize(1_000_000)
+                .maxConnectionBufferSize(10_000_000)
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(100)
+                .retryRequired(retryRequired)
+                .connectionIdLength(8)
+                .build();
     }
 
     private TlsServerEngineFactory createTlsServerEngine() {

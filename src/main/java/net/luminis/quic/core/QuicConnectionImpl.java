@@ -877,6 +877,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     protected abstract ConnectionIdManager getConnectionIdManager();
 
+    @Deprecated
     public abstract long getInitialMaxStreamData();
 
     public abstract int getMaxShortHeaderPacketOverhead();

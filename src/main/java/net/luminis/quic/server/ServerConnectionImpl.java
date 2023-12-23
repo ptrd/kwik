@@ -75,48 +75,44 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
+    private volatile ServerConnectionConfig configuration;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
-    private final int initialMaxStreamData;
-    private final int maxOpenStreamsUni;
-    private final int maxOpenStreamsBidi;
     private final byte[] token;
     private final ConnectionIdManager connectionIdManager;
     private volatile String negotiatedApplicationProtocol;
-    private int maxIdleTimeoutInSeconds;
     private volatile long bytesReceived;
     private volatile boolean addressValidated;
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
     private int allowedClientConnectionIds = 3;
-    private long initialMaxData;
 
 
     /**
      * Creates a server connection implementation.
-     * @param originalVersion  quic version used for this connection
-     * @param serverSocket  the socket that is used for sending packets
-     * @param initialClientAddress  the initial client address (after handshake, clients can move to different address)
-     * @param peerCid  the connection id of the client
-     * @param originalDcid  the original destination connection id used by the client
-     * @param connectionIdLength  length of the connection id's generated and used by this connection (used as its source)
-     * @param tlsServerEngineFactory  factory for creating tls engine
-     * @param retryRequired  whether or not a retry is required for address validation
-     * @param applicationProtocolRegistry  the registry for application protocols this server supports
-     * @param initialRtt  the initial rtt
-     * @param connectionRegistry
-     * @param closeCallback  callback for notifying interested parties this connection is closed
-     * @param log  logger
+     *
+     * @param originalVersion             quic version used for this connection
+     * @param serverSocket                the socket that is used for sending packets
+     * @param initialClientAddress        the initial client address (after handshake, clients can move to different address)
+     * @param peerCid                     the connection id of the client
+     * @param originalDcid                the original destination connection id used by the client
+     * @param tlsServerEngineFactory      factory for creating tls engine
+     * @param configuration               connection configuration settings
+     * @param applicationProtocolRegistry the registry for application protocols this server supports
+     * @param connectionRegistry          the registry for server connections
+     * @param closeCallback               callback for notifying interested parties this connection is closed
+     * @param log                         logger
      */
     protected ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                   byte[] peerCid, byte[] originalDcid, int connectionIdLength, TlsServerEngineFactory tlsServerEngineFactory,
-                                   boolean retryRequired, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                   Integer initialRtt, ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
+                                   byte[] peerCid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                                   ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                   ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
-        this.retryRequired = retryRequired;
+        this.retryRequired = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always;
+        this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
 
@@ -130,7 +126,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         ));
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, ByteUtils.bytesToHex(originalDcid), initialRtt, this.log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, ByteUtils.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
@@ -139,7 +135,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, connectionIdLength, allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -155,12 +151,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
-        maxIdleTimeoutInSeconds = 30;
-        initialMaxStreamData = 1_000_000;
-        initialMaxData = 10L * initialMaxStreamData;
-        maxOpenStreamsUni = 10;
-        maxOpenStreamsBidi = 100;
-        streamManager = new StreamManager(this, Role.Server, log, maxOpenStreamsUni, maxOpenStreamsBidi, initialMaxData);
+        streamManager = new StreamManager(this, Role.Server, log, configuration);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
@@ -197,8 +188,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
+    @Deprecated
     public long getInitialMaxStreamData() {
-        return initialMaxStreamData;
+        return configuration.maxBidirectionalStreamBufferSize();
     }
 
     @Override
@@ -304,6 +296,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 negotiatedApplicationProtocol = applicationProtocol.get();
                 // Add negotiated protocol to TLS response (Encrypted Extensions message)
                 tlsEngine.addServerExtensions(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol.get()));
+                // Determine configuration values based on server preferences and protocol requirements
+                ApplicationProtocolConnectionFactory apFactory = applicationProtocolRegistry.getApplicationProtocolConnectionFactory(applicationProtocol.get());
+                configure(apFactory, applicationProtocol.get());
             }
             else {
                 throw new NoApplicationProtocolAlert(requestedProtocols);
@@ -346,13 +341,28 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
     }
 
+    private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
+        if (alpSettings.maxConcurrentUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+            log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
+                    " does not define (override) maxConcurrentUnidirectionalStreams; this will be required in future versions of Kwik");
+        }
+        if (alpSettings.maxConcurrentBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+            log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
+                    " does not define (override) maxConcurrentBidirectionalStreams; this will be required in future versions of Kwik");
+        }
+        configuration = configuration.merge(alpSettings);
+        streamManager.initialize(configuration);
+    }
+
     TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
-        parameters.setMaxIdleTimeout(maxIdleTimeoutInSeconds * 1000L);
-        parameters.setInitialMaxStreamData(initialMaxStreamData);
-        parameters.setInitialMaxData(initialMaxData);
-        parameters.setInitialMaxStreamsBidi(maxOpenStreamsBidi);
-        parameters.setInitialMaxStreamsUni(maxOpenStreamsUni);
+        parameters.setMaxIdleTimeout(configuration.maxIdleTimeout());
+        parameters.setInitialMaxStreamDataBidiLocal(configuration.maxBidirectionalStreamBufferSize());
+        parameters.setInitialMaxStreamDataBidiRemote(configuration.maxBidirectionalStreamBufferSize());
+        parameters.setInitialMaxStreamDataUni(configuration.maxUnidirectionalStreamBufferSize());
+        parameters.setInitialMaxData(configuration.maxConnectionBufferSize());
+        parameters.setInitialMaxStreamsBidi(configuration.maxOpenBidirectionalStreams());
+        parameters.setInitialMaxStreamsUni(configuration.maxOpenUnidirectionalStreams());
         return parameters;
     }
 
@@ -607,7 +617,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
 
-        determineIdleTimeout(maxIdleTimeoutInSeconds * 1000L, transportParameters.getMaxIdleTimeout());
+        determineIdleTimeout(configuration.maxIdleTimeout(), transportParameters.getMaxIdleTimeout());
 
         connectionIdManager.registerPeerCidLimit(transportParameters.getActiveConnectionIdLimit());
 

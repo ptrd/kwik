@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.*;
@@ -49,8 +50,9 @@ public class StreamManager {
     private volatile FlowControl flowController;
     private final Role role;
     private final Logger log;
-    private volatile int maxOpenStreamIdUni;
-    private volatile int maxOpenStreamIdBidi;
+    private volatile ConnectionConfig config;
+    private volatile int currentUnidirectionalStreamIdLimit;
+    private volatile int currentBidirectionalStreamIdLimit;
     private volatile Consumer<QuicStream> peerInitiatedStreamCallback;
     private volatile Long maxStreamsAcceptedByPeerBidi;
     private volatile Long maxStreamsAcceptedByPeerUni;
@@ -68,6 +70,8 @@ public class StreamManager {
     private volatile int nextPeerInitiatedUnidirectionalStreamId;
     private volatile int nextPeerInitiatedBidirectionalStreamId;
     private long cumulativeReceiveOffset;
+    private long absoluteUnidirectionalStreamIdLimit;
+    private long absoluteBidirectionalStreamIdLimit;
 
 
     /**
@@ -76,16 +80,17 @@ public class StreamManager {
      * @param quicConnection
      * @param role
      * @param log
-     * @param maxOpenStreamsUni            the maximum number of unidirectional streams that this peer will accept
-     * @param maxOpenStreamsBidi           the maximum number of bidirectional streams that this peer will accept
-     * @param initialConnectionFlowControl the initial value for the connection flow control limit
+     * @param config
      */
-    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, int maxOpenStreamsUni, int maxOpenStreamsBidi, long initialConnectionFlowControl) {
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, ConnectionConfig config) {
+        this(quicConnection, role, log);
+        initialize(config);
+    }
+
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log) {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
-        this.maxOpenStreamIdUni = computeMaxStreamId(maxOpenStreamsUni, role.other(), false);
-        this.maxOpenStreamIdBidi = computeMaxStreamId(maxOpenStreamsBidi, role.other(), true);
 
         quicVersion = Version.getDefault();
         streams = new ConcurrentHashMap<>();
@@ -96,11 +101,34 @@ public class StreamManager {
         updateFlowControlLock = new ReentrantLock();
         nextStreamIdBidirectional = new AtomicInteger();
         nextStreamIdUnidirectional = new AtomicInteger();
+
         initStreamIds();
-        initConnectionFlowControl(initialConnectionFlowControl);
     }
 
-    private int computeMaxStreamId(int maxStreams, Role peerRole, boolean bidirectional) {
+    public void initialize(ConnectionConfig config) {
+        this.config = config;
+        this.currentUnidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenUnidirectionalStreams(), role.other(), false);
+        this.currentBidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenBidirectionalStreams(), role.other(), true);
+        absoluteUnidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalUnidirectionalStreams()), role.other(), false);
+        absoluteBidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalBidirectionalStreams()), role.other(), true);
+
+        initConnectionFlowControl(config.maxConnectionBufferSize());
+
+    }
+
+    /**
+     * Computes the limit for a stream id, based on the given maximum number of stream, peer role and stream type.
+     * Only streams with an id less than this limit can be opened.
+     * @param maxStreams
+     * @param peerRole
+     * @param bidirectional
+     * @return
+     */
+    private int computeMaxStreamIdLimit(int maxStreams, Role peerRole, boolean bidirectional) {
+        if (maxStreams < 0) {
+            return 0;
+        }
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
         // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-2.1
@@ -118,7 +146,7 @@ public class StreamManager {
         if (peerRole == Role.Client && !bidirectional) {
             maxStreamId += 3;
         }
-        return maxStreamId;
+        return (maxStreamId > 0)? maxStreamId: Integer.MAX_VALUE;  // < 0 means integer overflow, to "limit" to max int.
     }
 
     private void initStreamIds() {
@@ -228,7 +256,7 @@ public class StreamManager {
     }
 
     private QuicStreamImpl createPeerInitiatedStream(int requestedStreamId) throws TransportError {
-        if (isUni(requestedStreamId) && requestedStreamId < maxOpenStreamIdUni || isBidi(requestedStreamId) && requestedStreamId < maxOpenStreamIdBidi) {
+        if (isUni(requestedStreamId) && requestedStreamId < currentUnidirectionalStreamIdLimit || isBidi(requestedStreamId) && requestedStreamId < currentBidirectionalStreamIdLimit) {
             if (isUni(requestedStreamId)) {
                 createPeerInitiatedStreams(requestedStreamId, nextPeerInitiatedUnidirectionalStreamId, () -> nextPeerInitiatedUnidirectionalStreamId = requestedStreamId + 4);
             }
@@ -327,15 +355,15 @@ public class StreamManager {
         // Can be called concurrently, so lock
         try {
             maxOpenStreamsUpdateLock.lock();
-            if (isUni(streamId)) {
-                maxOpenStreamIdUni += 4;
+            if (isUni(streamId) && currentUnidirectionalStreamIdLimit + 4 < absoluteUnidirectionalStreamIdLimit) {
+                currentUnidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsUniUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateUni, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsUniUpdateQueued = true;
                 }
             }
-            else {
-                maxOpenStreamIdBidi += 4;
+            else if (isBidi(streamId) && currentBidirectionalStreamIdLimit + 4 < absoluteBidirectionalStreamIdLimit) {
+                currentBidirectionalStreamIdLimit += 4;
                 if (! maxOpenStreamsBidiUpdateQueued) {
                     connection.send(this::createMaxStreamsUpdateBidi, 9, EncryptionLevel.App, this::retransmitMaxStreams);  // Flush not necessary, as this method is called while processing received message.
                     maxOpenStreamsBidiUpdateQueued = true;
@@ -360,7 +388,7 @@ public class StreamManager {
         }
 
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 6, server initiated: max-id = 7 => max streams = 1,
-        return new MaxStreamsFrame(maxOpenStreamIdUni / 4, false);
+        return new MaxStreamsFrame(currentUnidirectionalStreamIdLimit / 4, false);
     }
 
     private QuicFrame createMaxStreamsUpdateBidi(int maxFrameSize) {
@@ -376,7 +404,7 @@ public class StreamManager {
         }
 
         // largest streamId < maxStreamId; e.g. client initiated: max-id = 4, server initiated: max-id = 5 => max streams = 1,
-        return new MaxStreamsFrame(maxOpenStreamIdBidi / 4, true);
+        return new MaxStreamsFrame(currentBidirectionalStreamIdLimit / 4, true);
     }
 
     void retransmitMaxStreams(QuicFrame frame) {
@@ -483,6 +511,10 @@ public class StreamManager {
 
     public long getMaxUnirectionalStreams() {
         return maxStreamsAcceptedByPeerUni;
+    }
+
+    public ConnectionConfig getConnectionConfig() {
+        return config;
     }
 
     interface QuicStreamSupplier {

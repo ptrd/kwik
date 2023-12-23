@@ -36,6 +36,16 @@ public class Http09ApplicationProtocolFactory implements ApplicationProtocolConn
     }
 
     @Override
+    public int maxConcurrentUnidirectionalStreams() {
+        return 0;
+    }
+
+    @Override
+    public int maxConcurrentBidirectionalStreams() {
+        return 100;
+    }
+
+    @Override
     public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
         return new Http09Connection(quicConnection, wwwDir);
     }

@@ -56,11 +56,11 @@ class StreamInputStream extends InputStream {
     private volatile boolean aborted;
     private volatile long finalSize = -1;
 
-    public StreamInputStream(QuicStreamImpl quicStream) {
+    public StreamInputStream(QuicStreamImpl quicStream, long receiveBufferSize) {
         this.quicStream = quicStream;
         receiveBuffer = new ReceiveBufferImpl();
 
-        receiverFlowControlLimit = quicStream.connection.getInitialMaxStreamData();
+        receiverFlowControlLimit = receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
     }

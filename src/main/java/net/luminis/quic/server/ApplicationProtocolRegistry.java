@@ -52,6 +52,10 @@ public class ApplicationProtocolRegistry {
         return applicationProtocolConnection;
     }
 
+    ApplicationProtocolConnectionFactory getApplicationProtocolConnectionFactory(String protocol) {
+        return registeredFactories.get(protocol);
+    }
+
     /**
      * Add a protocol with lower preference than the protocols already added.
      * So, to set protocols in order of preference, start with adding the most preferred, etc.

@@ -68,10 +68,19 @@ public class QuicStreamImpl implements QuicStream {
         this.streamManager = streamManager;
         this.log = log;
 
-        inputStream = new StreamInputStream(this);
+        inputStream = new StreamInputStream(this, determineInitialReceiveBufferSize());
         outputStream = createStreamOutputStream(sendBufferSize, flowController);
 
         stateLock = new ReentrantLock();
+    }
+
+    private long determineInitialReceiveBufferSize() {
+        if (isBidirectional()) {
+            return streamManager.getConnectionConfig().maxBidirectionalStreamBufferSize();
+        }
+        else {
+            return streamManager.getConnectionConfig().maxUnidirectionalStreamBufferSize();
+        }
     }
 
     @Override

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
@@ -29,6 +30,7 @@ import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,13 +60,20 @@ class StreamManagerTest {
 
     private StreamManager streamManager;
     private QuicConnectionImpl quicConnection;
+    private ConnectionConfig defaultConfig;
 
     //region setup
     @BeforeEach
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
-        when(quicConnection.getInitialMaxStreamData()).thenReturn(10_000L);
-        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), 10, 10, 10_000);
+        defaultConfig = ServerConnectionConfig.builder()
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(10)
+                .maxConnectionBufferSize(10_000)
+                .maxUnidirectionalStreamBufferSize(10_000)
+                .maxBidirectionalStreamBufferSize(10_000)
+                .build();
+        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
     }
     //endregion
@@ -73,7 +82,7 @@ class StreamManagerTest {
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsUni(1);
 
@@ -121,7 +130,13 @@ class StreamManagerTest {
     @Test
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 1_000);
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
+                .maxOpenUnidirectionalStreams(10)
+                .maxOpenBidirectionalStreams(10)
+                .maxConnectionBufferSize(10_000)
+                .maxBidirectionalStreamBufferSize(10_000)
+                .build();
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
@@ -138,7 +153,7 @@ class StreamManagerTest {
     @Test
     void numberOfBidirectionalStreamsThatCanBeCreatedShouldBeIdenticalToInitialMaxValue() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), 10, 10, 10_000);
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig);
         streamManager.setFlowController(mock(FlowControl.class));
         // streamManager.setInitialMaxStreamsBidi(10);
 
@@ -419,6 +434,62 @@ class StreamManagerTest {
         ).isInstanceOf(TransportError.class);
         // And
         verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenAbsoluteMaxUnidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
+        // Given
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
+                .maxOpenUnidirectionalStreams(3)
+                .maxTotalUnidirectionalStreams(3)
+                .maxUnidirectionalStreamBufferSize(1_000)
+                .maxConnectionBufferSize(1_000)
+                .build();
+        streamManager.initialize(config);
+        int streamId = 0x03;  // server initiated unidirectional stream
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 4, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 8, new byte[0], false));
+        streamManager.streamClosed(streamId);
+        streamManager.streamClosed(streamId + 4);
+        streamManager.streamClosed(streamId + 8);
+
+        // Then
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // And
+        assertThatThrownBy(() ->
+                        streamManager.process(new StreamFrame(streamId + 12, new byte[0], false))
+        ).isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void whenAbsoluteMaxBidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
+        // Given
+        ServerConnectionConfig config = ServerConnectionConfig.builder()
+                .maxOpenBidirectionalStreams(3)
+                .maxTotalBidirectionalStreams(3)
+                .maxBidirectionalStreamBufferSize(1_000)
+                .maxConnectionBufferSize(1_000)
+                .build();
+        streamManager.initialize(config);
+        int streamId = 0x01;  // server initiated bidirectional stream
+
+        // When
+        streamManager.process(new StreamFrame(streamId, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 4, new byte[0], false));
+        streamManager.process(new StreamFrame(streamId + 8, new byte[0], false));
+        streamManager.streamClosed(streamId);
+        streamManager.streamClosed(streamId + 4);
+        streamManager.streamClosed(streamId + 8);
+
+        // Then
+        verify(quicConnection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        // And
+        assertThatThrownBy(() ->
+                streamManager.process(new StreamFrame(streamId + 12, new byte[0], false))
+        ).isInstanceOf(TransportError.class);
     }
     //endregion
 

@@ -25,7 +25,7 @@ import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
@@ -74,10 +74,10 @@ class QuicClientConnectionImplTest {
     private SenderImpl sender;
     private TlsClientEngine tlsClientEngine;
 
+    //region setup
     @BeforeAll
     static void initLogger() {
-        logger = new SysOutLogger();
-        // logger.logDebug(true);
+        logger = new NullLogger();
     }
 
     @BeforeEach
@@ -92,7 +92,9 @@ class QuicClientConnectionImplTest {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
     }
+    //endregion
 
+    //region retry
     @Test
     void testRetryPacketInitiatesInitialPacketWithToken() throws Exception {
         simulateSuccessfulConnect();
@@ -111,13 +113,6 @@ class QuicClientConnectionImplTest {
         // A second InitialPacket should be send with token
         verify(sender).setInitialToken(
                 argThat(token -> token != null && Arrays.equals(token, new byte[] { 0x01, 0x02, 0x03 })));
-    }
-
-    private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
-        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
-        FieldSetter.setField(connectionIdManager,
-                connectionIdManager.getClass().getDeclaredField("originalDestinationConnectionId"),
-                originalConnectionId);
     }
 
     @Test
@@ -139,15 +134,6 @@ class QuicClientConnectionImplTest {
         connection.process(secondRetryPacket, null);
 
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
-    }
-
-    private RetryPacket createRetryPacket(byte[] originalDestinationConnectionId, String integrityTagValue) throws Exception {
-        byte[] sourceConnectionId = { 0x0b, 0x0b, 0x0b, 0x0b };
-        byte[] destinationConnectionId = { 0x0f, 0x0f, 0x0f, 0x0f };
-        byte[] retryToken = { 0x01, 0x02, 0x03 };
-        RetryPacket retryPacket = new RetryPacket(Version.getDefault(), sourceConnectionId, destinationConnectionId, originalDestinationConnectionId, retryToken);
-        FieldSetter.setField(retryPacket, RetryPacket.class.getDeclaredField("retryIntegrityTag"), ByteUtils.hexToBytes(integrityTagValue));
-        return retryPacket;
     }
 
     @Test
@@ -252,31 +238,12 @@ class QuicClientConnectionImplTest {
         verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
+    //endregion
 
-    private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
-        simulateSuccessfulConnect();
-
-        originalDestinationId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
-        // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
-        setFixedOriginalDestinationConnectionId(originalDestinationId);
-
-        // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
-        connection.process(retryPacket, null);
-        return retryPacket;
-    }
-    
-    private void simulateSuccessfulConnect() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
-
-        tlsClientEngine = mock(TlsClientEngine.class);
-        FieldSetter.setField(connection, "tlsEngine", tlsClientEngine);
-        FieldSetter.setField(connection, "originalClientHello", createClientHello());
-    }
-    
+    //region stream
     @Test
     void testCreateStream() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 10, 10, 10);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -291,15 +258,20 @@ class QuicClientConnectionImplTest {
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
     }
+    //endregion
 
+    //region parsing version packet
     @Test
     void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
         QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
         assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);
     }
+    //endregion
 
+    //region flow control
     @Test
-    void receivingTransportParametersInitializesFlowController() {
+    void receivingTransportParametersInitializesFlowController() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(30, 9000, 1, 1);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -309,7 +281,8 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void receivingMaxStreamDataFrameIncreasesFlowControlLimit() {
+    void receivingMaxStreamDataFrameIncreasesFlowControlLimit() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -327,7 +300,8 @@ class QuicClientConnectionImplTest {
     }
 
     @Test
-    void receivingMaxDataFrameIncreasesFlowControlLimit() {
+    void receivingMaxDataFrameIncreasesFlowControlLimit() throws Exception {
+        simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
         parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
@@ -343,8 +317,9 @@ class QuicClientConnectionImplTest {
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(4_000);
     }
+    //endregion
 
-
+    //region connection close
     @Test
     void receivingConnectionCloseWhileConnectedResultsInReplyWithConnectionClose() throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
@@ -388,6 +363,7 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
+        simulateSuccessfulConnect();
         setTransportParametersWithActiveConnectionIdLimit(3);
         connection.newConnectionIds(1, 0);
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
@@ -398,10 +374,13 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
         verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
+    //endregion
 
+    //region connection id
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
+        simulateSuccessfulConnect();
         setTransportParametersWithActiveConnectionIdLimit(7);
 
         // When
@@ -512,7 +491,9 @@ class QuicClientConnectionImplTest {
         // Then
         verify(sender).send(argThat(frame -> frame.equals(new RetireConnectionIdFrame(Version.getDefault(), 2))), any(EncryptionLevel.class), any(Consumer.class));
     }
+    //endregion
 
+    // region version negotiation
     @Test
     void processingVersionNegotationWithClientVersionShouldBeIgnored() {
         VersionNegotiationPacket vnWithClientVersion = mock(VersionNegotiationPacket.class);
@@ -539,7 +520,9 @@ class QuicClientConnectionImplTest {
             fail();
         }
     }
+    //endregion
 
+    //region packet parsing
     @Test
     void parseEmptyPacket() throws Exception {
         assertThatThrownBy(
@@ -574,7 +557,9 @@ class QuicClientConnectionImplTest {
                 connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }))
         ).isInstanceOf(InvalidPacketException.class);
     }
+    //endregion
 
+    //region discard keys
     @Test
     void whenHandshakePacketIsSendInitialKeysShouldBeDiscarded() throws Exception {
         // Given
@@ -603,6 +588,49 @@ class QuicClientConnectionImplTest {
         // Then
         verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Handshake));
     }
+    //endregion
+
+    //region helper methods
+    private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
+        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        FieldSetter.setField(connectionIdManager,
+                connectionIdManager.getClass().getDeclaredField("originalDestinationConnectionId"),
+                originalConnectionId);
+    }
+
+    private RetryPacket createRetryPacket(byte[] originalDestinationConnectionId, String integrityTagValue) throws Exception {
+        byte[] sourceConnectionId = { 0x0b, 0x0b, 0x0b, 0x0b };
+        byte[] destinationConnectionId = { 0x0f, 0x0f, 0x0f, 0x0f };
+        byte[] retryToken = { 0x01, 0x02, 0x03 };
+        RetryPacket retryPacket = new RetryPacket(Version.getDefault(), sourceConnectionId, destinationConnectionId, originalDestinationConnectionId, retryToken);
+        FieldSetter.setField(retryPacket, RetryPacket.class.getDeclaredField("retryIntegrityTag"), ByteUtils.hexToBytes(integrityTagValue));
+        return retryPacket;
+    }
+
+    private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
+        simulateSuccessfulConnect();
+
+        originalDestinationId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
+        setFixedOriginalDestinationConnectionId(originalDestinationId);
+
+        // Simulate a RetryPacket is received
+        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
+        connection.process(retryPacket, null);
+        return retryPacket;
+    }
+
+    private void simulateSuccessfulConnect() throws Exception {
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
+
+        tlsClientEngine = mock(TlsClientEngine.class);
+        FieldSetter.setField(connection, "tlsEngine", tlsClientEngine);
+        FieldSetter.setField(connection, "originalClientHello", createClientHello());
+
+        TransportParameters transportParams = connection.initTransportParameters();
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("transportParams"), transportParams);
+    }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
         TransportParameters params = new TransportParameters();
@@ -619,4 +647,5 @@ class QuicClientConnectionImplTest {
         ECPublicKey publicKey = (ECPublicKey) keyPair.getPublic();
         return new ClientHello("example.com", publicKey);
     }
+    //endregion
 }
