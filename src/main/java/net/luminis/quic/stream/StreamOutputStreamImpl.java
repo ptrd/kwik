@@ -38,7 +38,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static net.luminis.quic.core.EncryptionLevel.App;
 
-class StreamOutputStream extends OutputStream implements FlowControlUpdateListener {
+class StreamOutputStreamImpl extends OutputStream implements FlowControlUpdateListener {
 
     // Minimum stream frame size: frame type (1), stream id (1..8), offset (1..8), length (1..2), data (1...)
     // Note that in practice stream id and offset will seldom / never occupy 8 bytes, so the minimum leaves more room for data.
@@ -73,7 +73,7 @@ class StreamOutputStream extends OutputStream implements FlowControlUpdateListen
     private volatile boolean aborted;
 
 
-    StreamOutputStream(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl) {
+    StreamOutputStreamImpl(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl) {
         this.quicStream = quicStream;
         flowController = flowControl;
         bufferedBytes = new AtomicInteger();

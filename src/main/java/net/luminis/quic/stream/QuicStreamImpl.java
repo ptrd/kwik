@@ -41,8 +41,8 @@ public class QuicStreamImpl implements QuicStream {
     protected final QuicConnectionImpl connection;
     private final StreamManager streamManager;
     protected final Logger log;
-    private final StreamInputStream inputStream;
-    private final StreamOutputStream outputStream;
+    private final StreamInputStreamImpl inputStream;
+    private final StreamOutputStreamImpl outputStream;
     private volatile boolean outputClosed;
     private volatile boolean inputClosed;
     private final ReentrantLock stateLock;
@@ -68,7 +68,7 @@ public class QuicStreamImpl implements QuicStream {
         this.streamManager = streamManager;
         this.log = log;
 
-        inputStream = new StreamInputStream(this, determineInitialReceiveBufferSize());
+        inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize());
         outputStream = createStreamOutputStream(sendBufferSize, flowController);
 
         stateLock = new ReentrantLock();
@@ -169,8 +169,8 @@ public class QuicStreamImpl implements QuicStream {
         return "Stream " + streamId;
     }
 
-    protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
-        return new StreamOutputStream(this, sendBufferSize, flowControl);
+    protected StreamOutputStreamImpl createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
+        return new StreamOutputStreamImpl(this, sendBufferSize, flowControl);
     }
 
     /**

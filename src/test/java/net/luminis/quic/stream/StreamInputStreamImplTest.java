@@ -29,9 +29,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class StreamInputStreamTest {
+class StreamInputStreamImplTest {
 
-    private StreamInputStream streamInputStream;
+    private StreamInputStreamImpl streamInputStream;
 
     @BeforeEach
     void setUp() {
@@ -42,7 +42,7 @@ class StreamInputStreamTest {
         when(streamManager.getConnectionConfig()).thenReturn(config);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
-        streamInputStream = new StreamInputStream(quicStream, 10_000L);
+        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L);
     }
 
     @Test

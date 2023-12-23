@@ -37,7 +37,7 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERR
 /**
  * Input stream for reading data received by the QUIC stream.
  */
-class StreamInputStream extends InputStream {
+class StreamInputStreamImpl extends InputStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
 
@@ -56,7 +56,7 @@ class StreamInputStream extends InputStream {
     private volatile boolean aborted;
     private volatile long finalSize = -1;
 
-    public StreamInputStream(QuicStreamImpl quicStream, long receiveBufferSize) {
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize) {
         this.quicStream = quicStream;
         receiveBuffer = new ReceiveBufferImpl();
 

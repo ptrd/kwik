@@ -75,13 +75,13 @@ class QuicStreamImplTest {
     //region setup
     @BeforeEach
     void setFiniteWaitForNextFrameTimeout() {
-        originalWaitForNextFrameTimeoutValue = StreamInputStream.waitForNextFrameTimeout;
-        StreamInputStream.waitForNextFrameTimeout = 5;
+        originalWaitForNextFrameTimeoutValue = StreamInputStreamImpl.waitForNextFrameTimeout;
+        StreamInputStreamImpl.waitForNextFrameTimeout = 5;
     }
 
     @AfterEach
     void resetWaitForNextFrameTimeout() {
-        StreamInputStream.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
+        StreamInputStreamImpl.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
     }
 
     @BeforeEach
@@ -341,7 +341,7 @@ class QuicStreamImplTest {
 
     @Test
     void closingInputStreamShouldUnblockWatingReader() throws Exception {
-        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
+        StreamInputStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
         InputStream inputStream = quicStream.getInputStream();
 
@@ -406,7 +406,7 @@ class QuicStreamImplTest {
 
     @Test
     void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
-        StreamInputStream.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
+        StreamInputStreamImpl.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
         // Given
         InputStream inputStream = quicStream.getInputStream();
         quicStream.addStreamData(resurrect(new StreamFrame(0, "data".getBytes(), false)));
@@ -443,7 +443,7 @@ class QuicStreamImplTest {
     //region inputstream flow control updates
     @Test
     void testStreamFlowControlUpdates() throws Exception {
-        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
         when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
@@ -514,7 +514,7 @@ class QuicStreamImplTest {
     @Test
     void whenAbortReadingBlockingReadShouldBeInterupted() throws Exception {
         // Given
-        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;
+        StreamInputStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
         new Thread(() -> {
@@ -579,7 +579,7 @@ class QuicStreamImplTest {
         quicStream.addStreamData(new StreamFrame(streamId, 2000, new byte[1000], false));
 
         // Then
-        StreamInputStream streamInputStream = (StreamInputStream) quicStream.getInputStream();
+        StreamInputStreamImpl streamInputStream = (StreamInputStreamImpl) quicStream.getInputStream();
         ReceiveBufferImpl receiveBuffer = (ReceiveBufferImpl) new FieldReader(streamInputStream, "receiveBuffer").read();
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
@@ -1084,7 +1084,7 @@ class QuicStreamImplTest {
 
         // When
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1144,7 +1144,7 @@ class QuicStreamImplTest {
         quicStream.getInputStream().readAllBytes();
         // And
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1161,7 +1161,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().readAllBytes();
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1178,7 +1178,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1195,7 +1195,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1273,7 +1273,7 @@ class QuicStreamImplTest {
 
     @Test
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
-        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
         when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
         when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
