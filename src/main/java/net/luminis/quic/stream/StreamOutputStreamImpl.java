@@ -27,7 +27,6 @@ import net.luminis.quic.frame.StreamFrame;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Queue;
@@ -38,7 +37,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static net.luminis.quic.core.EncryptionLevel.App;
 
-class StreamOutputStreamImpl extends OutputStream implements FlowControlUpdateListener {
+class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUpdateListener {
 
     // Minimum stream frame size: frame type (1), stream id (1..8), offset (1..8), length (1..2), data (1...)
     // Note that in practice stream id and offset will seldom / never occupy 8 bytes, so the minimum leaves more room for data.

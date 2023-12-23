@@ -579,7 +579,7 @@ class QuicStreamImplTest {
         quicStream.addStreamData(new StreamFrame(streamId, 2000, new byte[1000], false));
 
         // Then
-        StreamInputStreamImpl streamInputStream = (StreamInputStreamImpl) quicStream.getInputStream();
+        StreamInputStream streamInputStream = (StreamInputStream) quicStream.getInputStream();
         ReceiveBufferImpl receiveBuffer = (ReceiveBufferImpl) new FieldReader(streamInputStream, "receiveBuffer").read();
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }

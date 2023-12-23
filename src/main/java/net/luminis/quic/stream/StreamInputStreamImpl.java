@@ -25,7 +25,6 @@ import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -37,7 +36,7 @@ import static net.luminis.quic.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERR
 /**
  * Input stream for reading data received by the QUIC stream.
  */
-class StreamInputStreamImpl extends InputStream {
+class StreamInputStreamImpl extends StreamInputStream {
 
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
 
