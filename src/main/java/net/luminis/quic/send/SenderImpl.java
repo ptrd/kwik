@@ -22,13 +22,17 @@ import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
-import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.IdleTimer;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
@@ -45,7 +49,11 @@ import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -493,6 +501,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     public void setReceiverMaxAckDelay(int maxAckDelay) {
         this.receiverMaxAckDelay = maxAckDelay;
         rttEstimater.setMaxAckDelay(maxAckDelay);
+        recoveryManager.setReceiverMaxAckDelay(maxAckDelay);
     }
 
     public GlobalAckGenerator getGlobalAckGenerator() {
