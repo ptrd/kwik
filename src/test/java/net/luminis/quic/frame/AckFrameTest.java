@@ -19,17 +19,21 @@
 package net.luminis.quic.frame;
 
 import net.luminis.quic.ack.Range;
+import net.luminis.quic.core.Version;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
+import static net.luminis.quic.frame.AckFrame.FIXED_SENDER_ACK_DELAY_EXPONENT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class AckFrameTest extends FrameTest {
 
+    //region parse frame
     @Test
     void testParse() throws Exception {
         byte[] data = new byte[] { 0x02, 0x00, 0x00, 0x00, 0x00 };
@@ -154,5 +158,27 @@ class AckFrameTest extends FrameTest {
         assertThat(ack.getAckedPacketNumbers()).containsOnly(2L, 0L);
         assertThat(ack.toString()).contains("[2,0|");
     }
+    //endregion
 
+    //region serialize frame
+    @Test
+    void checkAckDelayInEncodedFrameIsInMicroSecondsAndTakesAckDelayExponentIntoAccount() throws Exception {
+        // Given
+        int ackDelayInMillis = 25;
+        AckFrame ackFrame = new AckFrame(Version.getDefault(), List.of(new Range(5, 5)), ackDelayInMillis);
+        ByteBuffer buffer = ByteBuffer.allocate(6);
+        int senderAckDelayFactor = (int) Math.pow(2, FIXED_SENDER_ACK_DELAY_EXPONENT);
+
+        // When
+        ackFrame.serialize(buffer);
+        buffer.flip();
+
+        // Then
+        assertThat(VariableLengthInteger.parse(buffer)).isEqualTo(0x02);  // frame type
+        assertThat(VariableLengthInteger.parse(buffer)).isEqualTo(0x05);  // largest ack
+        long ackDelay = VariableLengthInteger.parseLong(buffer);
+        long expectedEncodedAckDelayValue = ackDelayInMillis * 1000 / senderAckDelayFactor;
+        assertThat(ackDelay).isEqualTo(expectedEncodedAckDelayValue);
+    }
+    //endregion
 }

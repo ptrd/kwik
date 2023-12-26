@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.frame;
 
+import net.luminis.quic.ack.Range;
+import net.luminis.quic.core.Version;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.core.Version;
-import net.luminis.quic.ack.Range;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 
@@ -38,7 +38,10 @@ import java.util.stream.Stream;
  */
 public class AckFrame extends QuicFrame {
 
-    public static final int MAX_FRAME_SIZE = 1000;  // Should be large enough; leave some space for packet overhead.
+    public static final int FIXED_SENDER_ACK_DELAY_EXPONENT = 3;
+
+    private static final int FIXED_SENDER_ACK_DELAY_SCALE = (int) Math.pow(2, FIXED_SENDER_ACK_DELAY_EXPONENT);
+    private static final int MAX_FRAME_SIZE = 1000;  // Should be large enough; leave some space for packet overhead.
 
     private byte[] frameBytes;
     private long largestAcknowledged;
@@ -68,15 +71,16 @@ public class AckFrame extends QuicFrame {
      * Creates an AckFrame given a (sorted, non-adjacent) list of ranges and an ack delay.
      * @param quicVersion
      * @param ackRanges
-     * @param ackDelay   the ack delay in milliseconds
+     * @param ackDelayInMillis   the ack delay in milliseconds
      */
-    public AckFrame(Version quicVersion, List<Range> ackRanges, int ackDelay) {
+    public AckFrame(Version quicVersion, List<Range> ackRanges, int ackDelayInMillis) {
         if (! Range.validRangeList(ackRanges)) {
             throw new IllegalArgumentException("invalid range");  // TODO: replace by assert?
         }
 
         acknowledgedRanges = List.copyOf(ackRanges);
-        this.ackDelay = ackDelay * 1000 / delayScale;   // In an ack frame, the delay is in _microseconds_!
+        this.delayScale = FIXED_SENDER_ACK_DELAY_SCALE;
+        this.ackDelay = ackDelayInMillis * 1000 / delayScale;   // In an ack frame, the delay is in _microseconds_!
 
         Iterator<Range> rangeIterator = ackRanges.iterator();
         Range firstRange = rangeIterator.next();
