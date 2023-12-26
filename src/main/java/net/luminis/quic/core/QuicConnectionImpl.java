@@ -412,6 +412,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    /**
+     * Process the transport parameters that are common to client and server.
+     * @param peerTransportParams  the transport parameters to process
+     */
+    protected void processCommonTransportParameters(TransportParameters peerTransportParams) {
+        getStreamManager().setInitialMaxStreamsBidi(peerTransportParams.getInitialMaxStreamsBidi());
+        getStreamManager().setInitialMaxStreamsUni(peerTransportParams.getInitialMaxStreamsUni());
+
+        peerAckDelayExponent = peerTransportParams.getAckDelayExponent();
+        getSender().setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
+
+        getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
+    }
+
     protected void processPacket(Instant timeReceived, QuicPacket packet) {
         log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
 

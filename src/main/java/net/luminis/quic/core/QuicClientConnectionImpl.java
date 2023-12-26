@@ -809,10 +809,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             flowController.updateInitialValues(peerTransportParams);
         }
 
-        streamManager.setInitialMaxStreamsBidi(peerTransportParams.getInitialMaxStreamsBidi());
-        streamManager.setInitialMaxStreamsUni(peerTransportParams.getInitialMaxStreamsUni());
-
-        sender.setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
         connectionIdManager.registerPeerCidLimit(peerTransportParams.getActiveConnectionIdLimit());
 
         determineIdleTimeout(transportParams.getMaxIdleTimeout(), peerTransportParams.getMaxIdleTimeout());
@@ -831,9 +827,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
         }
 
-        peerAckDelayExponent = peerTransportParams.getAckDelayExponent();
-
-        sender.registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
+        processCommonTransportParameters(peerTransportParams);
     }
 
     private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {
