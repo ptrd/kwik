@@ -485,6 +485,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        log.warn("Received " + dataBlockedFrame);
     }
 
     @Override
@@ -555,10 +556,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        log.warn("Received " + streamDataBlockedFrame);
     }
 
     @Override
     public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        log.warn("Received " + streamsBlockedFrame);
     }
 
     protected CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
