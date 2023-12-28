@@ -94,7 +94,110 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
         <version>0.8.7</version>
     </dependency>
 
-### Building
+### Client
+
+To connect to a QUIC server, first create a connection object with the builder, e.g.
+
+    String applicationProtocolId = "....";
+    QuicClientConnection connection = QuicClientConnection.newBuilder()
+            .uri(URI.create("https://sample.com:443"))
+            .applicationProtocol(applicationProtocolId)
+            .build();
+
+You need to provide the ALPN protocol ID of the application protocol that you want to run on top of QUIC (and that the
+server you connect to supports). On the connection object simply call `connect()`:
+
+    connection.connect();
+
+Once connected, you can create a stream and start sending/receiving data, e.g.
+
+    QuicStream quicStream = connection.createStream(true);
+    OutputStream output = quicStream.getOutputStream();
+    output.write(...)
+    output.close();
+    InputStream input = quicStream.getInputStream();
+    input.read(...)
+    
+As QUIC servers generally limit the number of streams that clients can open concurrently, it is wise to close streams
+when not used anymore. Kwik does this automatically when you `close()` the `OutputStream` and read *all* data from the
+`InputStream`. If, for some reason, you do not read all data from the `InputStream`, call `QuicStream.abortReading()`
+to free resources and let the server you know you abandoned the stream.
+
+When, for example with local development, the server uses self-signed certificates, you need to disable certificate
+checking. The builder has a method for this:
+
+    builder.noServerCertificateCheck()
+
+The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/QuicClientConnection.java#L77).
+
+The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/log/Logger.java); Kwik provides two convenient implementations
+that you can use: `SysOutLogger` and `FileLogger`. Various log categories can be enabled or disabled by the 
+`logXXX()` methods, e.g. `logger.logInfo(true)`.
+
+Take a look at the samples in the [sample package](https://github.com/ptrd/kwik/tree/master/src/main/java/net/luminis/quic/sample)
+for more inspiration.
+
+### Server
+
+Creating a QUIC server with Kwik consist of a few steps. First you need to create an application protocol handler by
+implementing the [ApplicationProtocolConnectionFactory](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolConnectionFactory.java) interface. Its `createConnection` method should return an implementation of [ApplicationProtocolConnection](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolConnection.java) that, as the name suggests,
+represents your application protocol connection. It's `acceptPeerInitiatedStream` method is the handler that is called by 
+Kwik when a client initiates a stream for the given protocol. The implementation of this `acceptPeerInitiatedStream` method
+should start a stream handler, but should itself return immediately, as it is called on the thread that handles
+incoming QUIC messages. If, for example, your application protocol follows the request-response model, the stream handler
+reads the request from the QUIC stream, processes it, creates a response, writes the response to the QUIC stream and closes the stream.
+
+To complete the `ApplicationProtocolConnectionFactory` you should at least override the following two methods of the
+[ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolSettings.java) 
+interface:
+
+    int maxConcurrentUnidirectionalStreams()
+    int maxConcurrentBidirectionalStreams()
+
+These methods communicate to Kwik how many (concurrent) streams the protocol needs. In most cases, these methods return either 0 or Long.MAX_VALUE,
+to indicate that unidirectional or bidirectional streams are used (Long.MAX_VALUE) or are not used (value 0) by the application protocol.
+Some protocols define an exact number of unidirectional streams to be used as control stream, for example HTTP/3 needs 3 unidirectional streams, no more, no less.
+In such cases, the `maxConcurrentUnidirectionalStreams` method should return the exact number.
+
+Once you have a proper implementations of `ApplicationProtocolConnectionFactory` and `ApplicationProtocolConnection`, 
+you can create a `ServerConnector` and register the `ApplicationProtocolConnectionFactory`. The `ServerConnector` listens 
+for new connections on a given port and handles them according to protocols that are registered on it. 
+To create a `ServerConnector`, use the builder, e.g.
+
+    ServerConnector serverConnector = ServerConnector.builder()
+            .withPort(443)
+            .withCertificate(new FileInputStream("server.cert"), new FileInputStream("servercert.key"))
+            .withConfiguration(serverConnectionConfig)
+            .withLogger(log)
+            .build(); 
+
+register your protocol handler:
+
+    serverConnector.registerApplicationProtocol("myapplicationprotocol", new MyApplicationProtocolConnectionFactory);
+
+and start the connector:
+
+    serverConnector.start();
+
+The `serverConnectionConfig` that is needed by the `ServerConnector.Builder` defines the configuration for your server. 
+For most settings you can get away with the defaults, except for one thing: you need to specify how many streams
+the client is allowed to have open *concurrently* in one QUIC connection. A larger value means your client(s) can
+do more work in parallel, but also can claim more resources. So `infinite` would be a bad choice, as that would make your
+server an easy victim for a denial of service attack. Furthermore: only allow the type of stream (unidirectional or bidirectional)
+that you actually support in the application protocol handler; again, if you fail to do so, you give attackers a change
+to claim resources that are not used. For example, if your application protocol does not use unidirectional streams, 
+just don't set `maxOpenUnidirectionalStreams` as the default is 0, and provide a valid value for bidirectional streams, e.g.
+
+    ServerConnectionConfig.builder()
+            .maxOpenBidirectionalStreams(50)  // Mandatory setting to maximize concurrent streams on a connection.
+            .build();
+
+That concludes creating a server. You can find working examples in the
+[sample directory](https://github.com/ptrd/kwik/tree/master/src/main/java/net/luminis/quic/sample).
+
+
+
+### Development
 
 To build the project:
 
@@ -103,21 +206,17 @@ To build the project:
 
 Gradle will write the output to `build/libs`.
 
-### Kwik library
+To use IntelliJ for development, either just open the project directory in IntelliJ and it will pick up the gradle file,
+or generate IntelliJ project files with `gradle idea` and open the generated kwik.ipr file. The second option will
+give a better developer experience.
 
-If you want to use kwik as a library, there are various client & server examples in the 
-[sample package](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/sample/),
-that show how you can set up a QUIC connection and use streams to run your own application protocol on top of it.
-Of course, the [sample client](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/KwikCli.java) and
-[sample server](https://bitbucket.org/pjtr/kwik/src/master/src/main/java/net/luminis/quic/run/SampleWebServer.java) 
-also can provide inspiration! 
 
-### Client
+### Sample Client
 
-Kwik is both a library that can be used in any Java application to set up and use a QUIC connection, 
-and a (sample) command line client that can be used to experiment with the QUIC protocol. 
+Kwik also provides a command line client that can be used to experiment with the QUIC protocol and
+even provides an interactive shell for more QUIC fun.
 
-To run the sample client, execute the `kwik.sh` script or `java -jar build/libs/kwik.jar`. 
+To run the sample client, execute the `kwik.sh` script or run `java -jar build/libs/kwik.jar`. 
 
 Usage of the sample client:
 
@@ -158,11 +257,11 @@ Usage of the sample client:
             
 If you do not provide the `--http` or the `--keepAlive` option, the Quic connection will be closed immediately after setup.
 
-Plain Kwik will use HTTP 0.9 for http requests. However, if the flupke-plugin.jar is on the classpath (when using
+Plain Kwik will use HTTP 0.9 for http requests. However, if the flupke.jar is on the classpath (when using
 the kwik.sh script, it will try to load the plugin from the `libs` directory), it will use Flupke HTTP3 client for the
 HTTP request.
 
-### Server
+### Sample Server
 
 To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.run.SampleWebServer` with the following arguments:
 - certificate file
@@ -171,13 +270,8 @@ To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.run.Samp
 - www directory to serve
 
 This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc9000.html#name-address-validation-using-re).
-To run without retry-mode, add the `--noRetry` flag as first argument.  
+To run without retry-mode, add the `--noRetry` flag as first argument.
 
-### Development
-
-To use IntelliJ for development, either just open the project directory in IntelliJ and it will pick up the gradle file,
-or generate IntelliJ project files with `gradle idea` and open the generated kwik.ipr file. The second option will
-give a better developer experience.
 
 ## Adding HTTP/3 Support to Kwik client or server.
 
