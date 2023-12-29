@@ -28,22 +28,22 @@ public interface ConnectionConfig {
     /**
      * @return  the maximum number of concurrent unidirectional streams that can be opened by the peer.
      */
-    int maxOpenUnidirectionalStreams();
+    int maxOpenPeerInitiatedUnidirectionalStreams();
 
     /**
      * @return the total number of unidirectional streams that the peer can open during the lifetime of the connection.
      */
-    long maxTotalUnidirectionalStreams();
+    long maxTotalPeerInitiatedUnidirectionalStreams();
 
     /**
      * @return  the maximum number of concurrent bidirectional streams that can be opened by the peer.
      */
-    int maxOpenBidirectionalStreams();
+    int maxOpenPeerInitiatedBidirectionalStreams();
 
     /**
      * @return  the total number of bidirectional streams that the peer can open during the lifetime of the connection.
      */
-    long maxTotalBidirectionalStreams();
+    long maxTotalPeerInitiatedBidirectionalStreams();
 
     /**
      * @return  the maximum buffer size on connection level (shared by all streams).

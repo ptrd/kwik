@@ -18,15 +18,28 @@
  */
 package net.luminis.quic.stream;
 
-import java.io.OutputStream;
+import java.io.IOException;
 
-public abstract class StreamOutputStream extends OutputStream {
-    
-    abstract void reset(long errorCode);
+public class NullStreamOutputStream extends StreamOutputStream {
 
-    protected abstract void resetOutputStream();
+    @Override
+    void reset(long errorCode) {
+    }
 
-    protected abstract void stopFlowControl();
+    @Override
+    protected void resetOutputStream() {
+    }
 
-    abstract void abort();
+    @Override
+    protected void stopFlowControl() {
+    }
+
+    @Override
+    void abort() {
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+        throw new IOException("Stream is not writable");
+    }
 }

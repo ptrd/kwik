@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -70,18 +69,17 @@ class QuicStreamImplTest {
     private Logger logger;
     private Random randomGenerator = new Random();
     private Role role;
-    private ConnectionConfig config;
 
     //region setup
     @BeforeEach
     void setFiniteWaitForNextFrameTimeout() {
-        originalWaitForNextFrameTimeoutValue = StreamInputStream.waitForNextFrameTimeout;
-        StreamInputStream.waitForNextFrameTimeout = 5;
+        originalWaitForNextFrameTimeoutValue = StreamInputStreamImpl.waitForNextFrameTimeout;
+        StreamInputStreamImpl.waitForNextFrameTimeout = 5;
     }
 
     @AfterEach
     void resetWaitForNextFrameTimeout() {
-        StreamInputStream.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
+        StreamInputStreamImpl.waitForNextFrameTimeout = originalWaitForNextFrameTimeoutValue;
     }
 
     @BeforeEach
@@ -89,10 +87,8 @@ class QuicStreamImplTest {
         long initialMaxStreamData = 9999;
         connection = mock(QuicConnectionImpl.class);
         streamManager = mock(StreamManager.class);
-        config = mock(ConnectionConfig.class);
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
-        when(streamManager.getConnectionConfig()).thenReturn(config);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
         logger = mock(Logger.class);
         role = Role.Client;
 
@@ -341,7 +337,7 @@ class QuicStreamImplTest {
 
     @Test
     void closingInputStreamShouldUnblockWatingReader() throws Exception {
-        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
+        StreamInputStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;  // No finite wait for this test!
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger);
         InputStream inputStream = quicStream.getInputStream();
 
@@ -406,7 +402,7 @@ class QuicStreamImplTest {
 
     @Test
     void receivingEmptyLastFrameTerminatesBlockingRead() throws Exception {
-        StreamInputStream.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
+        StreamInputStreamImpl.waitForNextFrameTimeout = 10_000;  // Just a large value, but not infinite to avoid a failing test to block forever.
         // Given
         InputStream inputStream = quicStream.getInputStream();
         quicStream.addStreamData(resurrect(new StreamFrame(0, "data".getBytes(), false)));
@@ -438,15 +434,27 @@ class QuicStreamImplTest {
         // - a non-blocking read takes (far) less than 50 ms
         assertThat(readDuration).isGreaterThan(Duration.of(50, ChronoUnit.MILLIS));
     }
+
+    @Test
+    void cantReadFromSelfInitiatedUnidirectionalStream() throws Exception {
+        // Given
+        int streamId = 0x02;  // client initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        int read = quicStream.getInputStream().read(new byte[1]);
+
+        assertThat(read).isEqualTo(-1);
+    }
     //endregion
 
     //region inputstream flow control updates
     @Test
     void testStreamFlowControlUpdates() throws Exception {
-        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
@@ -514,7 +522,7 @@ class QuicStreamImplTest {
     @Test
     void whenAbortReadingBlockingReadShouldBeInterupted() throws Exception {
         // Given
-        StreamInputStream.waitForNextFrameTimeout = Integer.MAX_VALUE;
+        StreamInputStreamImpl.waitForNextFrameTimeout = Integer.MAX_VALUE;
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
         new Thread(() -> {
@@ -558,7 +566,8 @@ class QuicStreamImplTest {
     @Test
     void afterAbortReadingInputForUnidirectionStreamStreamShouldBeClosed() throws Exception {
         // Given
-        quicStream = new QuicStreamImpl(0x02, role, connection, streamManager, mock(FlowControl.class));
+        int streamId = 0x03;  // server initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
 
         // When
         quicStream.abortReading(9);
@@ -846,6 +855,21 @@ class QuicStreamImplTest {
 
         assertThat(dataSent.array()).isEqualTo(data);
     }
+
+    @Test
+    void cantWriteToPeerInitiatedUnidirectionalStream() throws Exception {
+        // Given
+        int streamId = 0x03;  // server initiated unidirectional
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, mock(FlowControl.class));
+
+        // When
+        assertThatThrownBy(() ->
+                // When
+                quicStream.getOutputStream().write(new byte[1]))
+                // Then
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("not writable");
+    }
     //endregion
 
     //region outputstream flow control
@@ -1084,7 +1108,7 @@ class QuicStreamImplTest {
 
         // When
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1144,7 +1168,7 @@ class QuicStreamImplTest {
         quicStream.getInputStream().readAllBytes();
         // And
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1161,7 +1185,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().readAllBytes();
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1178,7 +1202,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().close();
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1195,7 +1219,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStream) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1273,10 +1297,10 @@ class QuicStreamImplTest {
 
     @Test
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
-        float factor = StreamInputStream.receiverMaxDataIncrementFactor;
+        float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.addStreamData(resurrect(new StreamFrame(0, new byte[1000], true)));

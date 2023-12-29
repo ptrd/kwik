@@ -111,8 +111,8 @@ public class InteropServer {
                 .maxUnidirectionalStreamBufferSize(1_000_000)
                 .maxBidirectionalStreamBufferSize(1_000_000)
                 .maxConnectionBufferSize(10_000_000)
-                .maxOpenUnidirectionalStreams(10)
-                .maxOpenBidirectionalStreams(100)
+                .maxOpenPeerInitiatedUnidirectionalStreams(10)
+                .maxOpenPeerInitiatedBidirectionalStreams(100)
                 .retryRequired(! cmd.hasOption("noRetry"))
                 .connectionIdLength(8)
                 .build();

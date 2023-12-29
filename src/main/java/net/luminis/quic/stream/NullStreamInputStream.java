@@ -18,15 +18,38 @@
  */
 package net.luminis.quic.stream;
 
-import java.io.OutputStream;
+import net.luminis.quic.core.TransportError;
+import net.luminis.quic.frame.StreamFrame;
 
-public abstract class StreamOutputStream extends OutputStream {
-    
-    abstract void reset(long errorCode);
+import java.io.IOException;
 
-    protected abstract void resetOutputStream();
+public class NullStreamInputStream extends StreamInputStream {
 
-    protected abstract void stopFlowControl();
+    @Override
+    long addDataFrom(StreamFrame frame) throws TransportError {
+        return 0;
+    }
 
-    abstract void abort();
+    @Override
+    long getCurrentReceiveOffset() {
+        return 0;
+    }
+
+    @Override
+    void abortReading(long applicationProtocolErrorCode) {
+    }
+
+    @Override
+    long terminate(long errorCode, long finalSize) throws TransportError {
+        return 0;
+    }
+
+    @Override
+    void abort() {
+    }
+
+    @Override
+    public int read() throws IOException {
+        return -1;
+    }
 }

@@ -107,10 +107,10 @@ public class StreamManager {
 
     public void initialize(ConnectionConfig config) {
         this.config = config;
-        this.currentUnidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenUnidirectionalStreams(), role.other(), false);
-        this.currentBidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenBidirectionalStreams(), role.other(), true);
-        absoluteUnidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalUnidirectionalStreams()), role.other(), false);
-        absoluteBidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalBidirectionalStreams()), role.other(), true);
+        this.currentUnidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenPeerInitiatedUnidirectionalStreams(), role.other(), false);
+        this.currentBidirectionalStreamIdLimit = computeMaxStreamIdLimit(config.maxOpenPeerInitiatedBidirectionalStreams(), role.other(), true);
+        absoluteUnidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalPeerInitiatedUnidirectionalStreams()), role.other(), false);
+        absoluteBidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalPeerInitiatedBidirectionalStreams()), role.other(), true);
 
         initConnectionFlowControl(config.maxConnectionBufferSize());
 
@@ -509,12 +509,24 @@ public class StreamManager {
         return maxStreamsAcceptedByPeerBidi;
     }
 
-    public long getMaxUnirectionalStreams() {
+    public long getMaxUnidirectionalStreams() {
         return maxStreamsAcceptedByPeerUni;
     }
 
-    public ConnectionConfig getConnectionConfig() {
-        return config;
+    public long getMaxUnidirectionalStreamBufferSize() {
+        return config.maxUnidirectionalStreamBufferSize();
+    }
+
+    public long getMaxBidirectionalStreamBufferSize() {
+        return config.maxBidirectionalStreamBufferSize();
+    }
+
+    public void setDefaultUnidirectionalStreamReceiveBufferSize(long newSize) {
+        config = ConnectionConfigImpl.cloneWithMaxUnidirectionalStreamReceiveBufferSize(config, newSize);
+    }
+
+    public void setDefaultBidirectionalStreamReceiveBufferSize(long newSize) {
+        config = ConnectionConfigImpl.cloneWithMaxBidirectionalStreamReceiveBufferSize(config, newSize);
     }
 
     interface QuicStreamSupplier {

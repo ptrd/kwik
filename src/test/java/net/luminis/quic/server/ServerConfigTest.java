@@ -11,33 +11,33 @@ class ServerConfigTest {
     void whenMaxConcurrentUnidirectionalStreamsNotSetInProtocolSettingsServerConfigValueShouldBeUsed() {
         // Given
         ServerConnectionConfig config = ServerConnectionConfig.builder()
-                .maxOpenUnidirectionalStreams(10)
+                .maxOpenPeerInitiatedUnidirectionalStreams(10)
                 .build();
 
         // When
         ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {});
 
         // Then
-        assertThat(mergedConfig.maxOpenUnidirectionalStreams()).isEqualTo(10);
+        assertThat(mergedConfig.maxOpenPeerInitiatedUnidirectionalStreams()).isEqualTo(10);
     }
 
     @Test
     void whenMaxConcurrentUnidirectionalStreamsIsSetInProtocolSettingsItShouldBeUsed() {
         // Given
         ServerConnectionConfig config = ServerConnectionConfig.builder()
-                .maxOpenUnidirectionalStreams(10)
+                .maxOpenPeerInitiatedUnidirectionalStreams(10)
                 .build();
 
         // When
         ServerConnectionConfig mergedConfig = config.merge(new ApplicationProtocolSettings() {
             @Override
-            public int maxConcurrentUnidirectionalStreams() {
+            public int maxConcurrentPeerInitiatedUnidirectionalStreams() {
                 return 3;
             }
         });
 
         // Then
-        assertThat(mergedConfig.maxOpenUnidirectionalStreams()).isEqualTo(3);
+        assertThat(mergedConfig.maxOpenPeerInitiatedUnidirectionalStreams()).isEqualTo(3);
     }
 
     @Test

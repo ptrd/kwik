@@ -67,8 +67,8 @@ class StreamManagerTest {
     void init() {
         quicConnection = mock(QuicConnectionImpl.class);
         defaultConfig = ServerConnectionConfig.builder()
-                .maxOpenUnidirectionalStreams(10)
-                .maxOpenBidirectionalStreams(10)
+                .maxOpenPeerInitiatedUnidirectionalStreams(10)
+                .maxOpenPeerInitiatedBidirectionalStreams(10)
                 .maxConnectionBufferSize(10_000)
                 .maxUnidirectionalStreamBufferSize(10_000)
                 .maxBidirectionalStreamBufferSize(10_000)
@@ -131,8 +131,8 @@ class StreamManagerTest {
     void inServerRoleClientInitiatedStreamCausesCallback() throws Exception {
         // Given
         ServerConnectionConfig config = ServerConnectionConfig.builder()
-                .maxOpenUnidirectionalStreams(10)
-                .maxOpenBidirectionalStreams(10)
+                .maxOpenPeerInitiatedUnidirectionalStreams(10)
+                .maxOpenPeerInitiatedBidirectionalStreams(10)
                 .maxConnectionBufferSize(10_000)
                 .maxBidirectionalStreamBufferSize(10_000)
                 .build();
@@ -440,8 +440,8 @@ class StreamManagerTest {
     void whenAbsoluteMaxUnidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
         // Given
         ServerConnectionConfig config = ServerConnectionConfig.builder()
-                .maxOpenUnidirectionalStreams(3)
-                .maxTotalUnidirectionalStreams(3)
+                .maxOpenPeerInitiatedUnidirectionalStreams(3)
+                .maxTotalPeerInitiatedUnidirectionalStreams(3)
                 .maxUnidirectionalStreamBufferSize(1_000)
                 .maxConnectionBufferSize(1_000)
                 .build();
@@ -468,8 +468,8 @@ class StreamManagerTest {
     void whenAbsoluteMaxBidirectionalStreamsIsReachedNoMaxStreamsFrameIsSent() throws Exception {
         // Given
         ServerConnectionConfig config = ServerConnectionConfig.builder()
-                .maxOpenBidirectionalStreams(3)
-                .maxTotalBidirectionalStreams(3)
+                .maxOpenPeerInitiatedBidirectionalStreams(3)
+                .maxTotalPeerInitiatedBidirectionalStreams(3)
                 .maxBidirectionalStreamBufferSize(1_000)
                 .maxConnectionBufferSize(1_000)
                 .build();
@@ -517,7 +517,7 @@ class StreamManagerTest {
         streamManager.process(new MaxStreamsFrame(5, false));
 
         // Then
-        assertThat(streamManager.getMaxUnirectionalStreams()).isGreaterThanOrEqualTo(8);
+        assertThat(streamManager.getMaxUnidirectionalStreams()).isGreaterThanOrEqualTo(8);
     }
 
     @Test
@@ -539,7 +539,7 @@ class StreamManagerTest {
         // When
         streamManager.setInitialMaxStreamsUni(3);
 
-        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(10);
+        assertThat(streamManager.getMaxUnidirectionalStreams()).isEqualTo(10);
     }
     //endregion
     
@@ -850,6 +850,28 @@ class StreamManagerTest {
                 streamManager.process(finalFrame))
                 // Then
                 .doesNotThrowAnyException();
+    }
+    //endregion
+
+    //region buffer size
+    @Test
+    void whenDefaultUnidirectionalStreamBufferSizeIsChangedNewStreamShouldUseNewValue() {
+        // When
+        streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(6789);
+
+        // Then
+        assertThat(streamManager.getMaxUnidirectionalStreamBufferSize()).isEqualTo(6789);
+        assertThat(streamManager.getMaxBidirectionalStreamBufferSize()).isEqualTo(10000);
+    }
+
+    @Test
+    void whenDefaultBidirectionalStreamBufferSizeIsChangedNewStreamShouldUseNewValue() {
+        // When
+        streamManager.setDefaultBidirectionalStreamReceiveBufferSize(6789);
+
+        // Then
+        assertThat(streamManager.getMaxBidirectionalStreamBufferSize()).isEqualTo(6789);
+        assertThat(streamManager.getMaxUnidirectionalStreamBufferSize()).isEqualTo(10000);
     }
     //endregion
 

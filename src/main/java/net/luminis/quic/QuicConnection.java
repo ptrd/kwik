@@ -36,7 +36,14 @@ public interface QuicConnection {
      * If the value is 0, the peer is not allowed to open any bidirectional stream.
      * This method must be called before calling connect().
      * @param max
+     * @deprecated use
+     * QuicClientConnection.Builder.maxOpenPeerInitiatedBidirectionalStreams(int)
+     * or
+     * ServerConnector.Builder.withConfiguration(ServerConnectionConfig)
+     * with ServerConnectionConfig.Builder.maxOpenPeerInitiatedBidirectionalStreams(int)
+     * instead
      */
+    @Deprecated
     void setMaxAllowedBidirectionalStreams(int max);
 
     /**
@@ -44,7 +51,14 @@ public interface QuicConnection {
      * If the value is 0, the peer is not allowed to open any unidirectional stream.
      * This method must be called before calling connect().
      * @param max
+     * @deprecated use
+     * QuicClientConnection.Builder.maxOpenPeerInitiatedUnidirectionalStreams(int)
+     * or
+     * ServerConnector.Builder.withConfiguration(ServerConnectionConfig)
+     * with ServerConnectionConfig.Builder.maxOpenPeerInitiatedUnidirectionalStreams(int)
+     * instead
      */
+    @Deprecated
     void setMaxAllowedUnidirectionalStreams(int max);
 
     /**

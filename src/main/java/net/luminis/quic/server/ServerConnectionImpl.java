@@ -87,7 +87,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
     private int allowedClientConnectionIds = 3;
-
+    private boolean applicationProtocolStarted;
 
     /**
      * Creates a server connection implementation.
@@ -264,8 +264,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             }
         }
 
-        if (!acceptedEarlyData) {
+        if (!applicationProtocolStarted) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+            applicationProtocolStarted = true;
         }
         connectionIdManager.handshakeFinished();
     }
@@ -342,11 +343,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
-        if (alpSettings.maxConcurrentUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+        if (alpSettings.maxConcurrentPeerInitiatedUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentUnidirectionalStreams; this will be required in future versions of Kwik");
         }
-        if (alpSettings.maxConcurrentBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+        if (alpSettings.maxConcurrentPeerInitiatedBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentBidirectionalStreams; this will be required in future versions of Kwik");
         }
@@ -361,8 +362,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         parameters.setInitialMaxStreamDataBidiRemote(configuration.maxBidirectionalStreamBufferSize());
         parameters.setInitialMaxStreamDataUni(configuration.maxUnidirectionalStreamBufferSize());
         parameters.setInitialMaxData(configuration.maxConnectionBufferSize());
-        parameters.setInitialMaxStreamsBidi(configuration.maxOpenBidirectionalStreams());
-        parameters.setInitialMaxStreamsUni(configuration.maxOpenUnidirectionalStreams());
+        parameters.setInitialMaxStreamsBidi(configuration.maxOpenPeerInitiatedBidirectionalStreams());
+        parameters.setInitialMaxStreamsUni(configuration.maxOpenPeerInitiatedUnidirectionalStreams());
         return parameters;
     }
 
@@ -383,8 +384,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (acceptEarlyData) {
             // Remember that server connection actually accepted early data
             acceptedEarlyData = true;
-            applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
-
             log.info("Server accepted early data");
             return true;
         }
@@ -534,7 +533,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(ZeroRttPacket packet, Instant time) {
-       if (acceptedEarlyData) {
+        if (acceptedEarlyData) {
+            if (! applicationProtocolStarted) {
+                applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+                applicationProtocolStarted = true;
+            }
+
             processFrames(packet, time);
         }
         else {
@@ -685,14 +689,20 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
+        throw new UnsupportedOperationException("Not implemented for server connection."
+                + "If you really need this functionality, create an issue at https://github.com/ptrd/kwik/issues");
     }
 
     @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
+        throw new UnsupportedOperationException("Not implemented for server connection."
+                + "If you really need this functionality, create an issue at https://github.com/ptrd/kwik/issues");
     }
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
+        streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(size);
+        streamManager.setDefaultBidirectionalStreamReceiveBufferSize(size);
     }
 
     @Override

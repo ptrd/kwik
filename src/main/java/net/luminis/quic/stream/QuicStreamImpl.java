@@ -68,18 +68,29 @@ public class QuicStreamImpl implements QuicStream {
         this.streamManager = streamManager;
         this.log = log;
 
-        inputStream = new StreamInputStream(this, determineInitialReceiveBufferSize());
-        outputStream = createStreamOutputStream(sendBufferSize, flowController);
+        if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
+            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize());
+        }
+        else {
+            inputStream = new NullStreamInputStream();
+        }
+
+        if (isBidirectional() || isUnidirectional() && isSelfInitiated()) {
+            outputStream = createStreamOutputStream(sendBufferSize, flowController);
+        }
+        else {
+            outputStream = new NullStreamOutputStream();
+        }
 
         stateLock = new ReentrantLock();
     }
 
     private long determineInitialReceiveBufferSize() {
         if (isBidirectional()) {
-            return streamManager.getConnectionConfig().maxBidirectionalStreamBufferSize();
+            return streamManager.getMaxBidirectionalStreamBufferSize();
         }
         else {
-            return streamManager.getConnectionConfig().maxUnidirectionalStreamBufferSize();
+            return streamManager.getMaxUnidirectionalStreamBufferSize();
         }
     }
 
@@ -170,7 +181,7 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
-        return new StreamOutputStream(this, sendBufferSize, flowControl);
+        return new StreamOutputStreamImpl(this, sendBufferSize, flowControl);
     }
 
     /**

@@ -36,12 +36,12 @@ public class Http09ApplicationProtocolFactory implements ApplicationProtocolConn
     }
 
     @Override
-    public int maxConcurrentUnidirectionalStreams() {
+    public int maxConcurrentPeerInitiatedUnidirectionalStreams() {
         return 0;
     }
 
     @Override
-    public int maxConcurrentBidirectionalStreams() {
+    public int maxConcurrentPeerInitiatedBidirectionalStreams() {
         return 100;
     }
 
