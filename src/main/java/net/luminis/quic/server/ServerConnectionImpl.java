@@ -87,7 +87,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private boolean acceptEarlyData = true;
     private boolean acceptedEarlyData = false;
     private int allowedClientConnectionIds = 3;
-
+    private boolean applicationProtocolStarted;
 
     /**
      * Creates a server connection implementation.
@@ -264,8 +264,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             }
         }
 
-        if (!acceptedEarlyData) {
+        if (!applicationProtocolStarted) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+            applicationProtocolStarted = true;
         }
         connectionIdManager.handshakeFinished();
     }
@@ -383,8 +384,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (acceptEarlyData) {
             // Remember that server connection actually accepted early data
             acceptedEarlyData = true;
-            applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
-
             log.info("Server accepted early data");
             return true;
         }
@@ -534,7 +533,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(ZeroRttPacket packet, Instant time) {
-       if (acceptedEarlyData) {
+        if (acceptedEarlyData) {
+            if (! applicationProtocolStarted) {
+                applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
+                applicationProtocolStarted = true;
+            }
+
             processFrames(packet, time);
         }
         else {
