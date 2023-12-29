@@ -1,5 +1,13 @@
 # Releases
 
+
+## 0.8.8 (2023-12-29)
+
+- Server connection settings are now determined by combination of server configuration and protocol requirements, 
+  see [the readme](readme.md) for explanation and example(s).
+- Reading or writing the "wrong" side of a unidirectional stream will now fail. 
+- Two fixes with respect to ack delay.
+
 ## 0.8.7 (2023-12-19)
 
 Fixed path challenge denial of service vulnerability
