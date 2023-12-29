@@ -345,11 +345,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
         if (alpSettings.maxConcurrentPeerInitiatedUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
-                    " does not define (override) maxConcurrentUnidirectionalStreams; this will be required in future versions of Kwik");
+                    " does not define (override) maxConcurrentPeerInitiatedUnidirectionalStreams; this will be required in future versions of Kwik");
         }
         if (alpSettings.maxConcurrentPeerInitiatedBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
-                    " does not define (override) maxConcurrentBidirectionalStreams; this will be required in future versions of Kwik");
+                    " does not define (override) maxConcurrentPeerInitiatedBidirectionalStreams; this will be required in future versions of Kwik");
         }
         configuration = configuration.merge(alpSettings);
         streamManager.initialize(configuration);
