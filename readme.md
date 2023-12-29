@@ -151,8 +151,8 @@ To complete the `ApplicationProtocolConnectionFactory` you should at least overr
 [ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolSettings.java) 
 interface:
 
-    int maxConcurrentUnidirectionalStreams()
-    int maxConcurrentBidirectionalStreams()
+    int maxConcurrentPeerInitiatedUnidirectionalStreams()
+    int maxConcurrentPeerInitiatedBidirectionalStreams()
 
 These methods communicate to Kwik how many (concurrent) streams the protocol needs. In most cases, these methods return either 0 or Long.MAX_VALUE,
 to indicate that unidirectional or bidirectional streams are used (Long.MAX_VALUE) or are not used (value 0) by the application protocol.
@@ -189,7 +189,7 @@ to claim resources that are not used. For example, if your application protocol 
 just don't set `maxOpenUnidirectionalStreams` as the default is 0, and provide a valid value for bidirectional streams, e.g.
 
     ServerConnectionConfig.builder()
-            .maxOpenBidirectionalStreams(50)  // Mandatory setting to maximize concurrent streams on a connection.
+            .maxOpenPeerInitiatedBidirectionalStreams(50)  // Mandatory setting to maximize concurrent streams on a connection.
             .build();
 
 That concludes creating a server. You can find working examples in the
