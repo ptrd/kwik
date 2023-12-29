@@ -521,6 +521,14 @@ public class StreamManager {
         return config.maxBidirectionalStreamBufferSize();
     }
 
+    public void setDefaultUnidirectionalStreamReceiveBufferSize(long newSize) {
+        config = ConnectionConfigImpl.cloneWithMaxUnidirectionalStreamReceiveBufferSize(config, newSize);
+    }
+
+    public void setDefaultBidirectionalStreamReceiveBufferSize(long newSize) {
+        config = ConnectionConfigImpl.cloneWithMaxBidirectionalStreamReceiveBufferSize(config, newSize);
+    }
+
     interface QuicStreamSupplier {
         QuicStreamImpl apply(int streamId);
     }

@@ -853,6 +853,28 @@ class StreamManagerTest {
     }
     //endregion
 
+    //region buffer size
+    @Test
+    void whenDefaultUnidirectionalStreamBufferSizeIsChangedNewStreamShouldUseNewValue() {
+        // When
+        streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(6789);
+
+        // Then
+        assertThat(streamManager.getMaxUnidirectionalStreamBufferSize()).isEqualTo(6789);
+        assertThat(streamManager.getMaxBidirectionalStreamBufferSize()).isEqualTo(10000);
+    }
+
+    @Test
+    void whenDefaultBidirectionalStreamBufferSizeIsChangedNewStreamShouldUseNewValue() {
+        // When
+        streamManager.setDefaultBidirectionalStreamReceiveBufferSize(6789);
+
+        // Then
+        assertThat(streamManager.getMaxBidirectionalStreamBufferSize()).isEqualTo(6789);
+        assertThat(streamManager.getMaxUnidirectionalStreamBufferSize()).isEqualTo(10000);
+    }
+    //endregion
+
     //region test helper methods
     void verifyMaxStreamsFrameIsToBeSent(int expectedMaxStreams) {
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);

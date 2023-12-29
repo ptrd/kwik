@@ -704,6 +704,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
+        streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(size);
+        streamManager.setDefaultBidirectionalStreamReceiveBufferSize(size);
     }
 
     @Override
