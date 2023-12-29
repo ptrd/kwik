@@ -343,11 +343,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
-        if (alpSettings.maxConcurrentUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+        if (alpSettings.maxConcurrentPeerInitiatedUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentUnidirectionalStreams; this will be required in future versions of Kwik");
         }
-        if (alpSettings.maxConcurrentBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+        if (alpSettings.maxConcurrentPeerInitiatedBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentBidirectionalStreams; this will be required in future versions of Kwik");
         }
@@ -362,8 +362,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         parameters.setInitialMaxStreamDataBidiRemote(configuration.maxBidirectionalStreamBufferSize());
         parameters.setInitialMaxStreamDataUni(configuration.maxUnidirectionalStreamBufferSize());
         parameters.setInitialMaxData(configuration.maxConnectionBufferSize());
-        parameters.setInitialMaxStreamsBidi(configuration.maxOpenBidirectionalStreams());
-        parameters.setInitialMaxStreamsUni(configuration.maxOpenUnidirectionalStreams());
+        parameters.setInitialMaxStreamsBidi(configuration.maxOpenPeerInitiatedBidirectionalStreams());
+        parameters.setInitialMaxStreamsUni(configuration.maxOpenPeerInitiatedUnidirectionalStreams());
         return parameters;
     }
 

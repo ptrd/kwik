@@ -34,10 +34,10 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     public static ConnectionConfig cloneWithMaxUnidirectionalStreamReceiveBufferSize(ConnectionConfig config, long maxUnidirectionalStreamBufferSize) {
         return new ConnectionConfigImpl(
                 config.maxIdleTimeout(),
-                config.maxOpenUnidirectionalStreams(),
-                config.maxTotalUnidirectionalStreams(),
-                config.maxOpenBidirectionalStreams(),
-                config.maxTotalBidirectionalStreams(),
+                config.maxOpenPeerInitiatedUnidirectionalStreams(),
+                config.maxTotalPeerInitiatedUnidirectionalStreams(),
+                config.maxOpenPeerInitiatedBidirectionalStreams(),
+                config.maxTotalPeerInitiatedBidirectionalStreams(),
                 config.maxConnectionBufferSize(),
                 maxUnidirectionalStreamBufferSize,
                 config.maxBidirectionalStreamBufferSize());
@@ -46,10 +46,10 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     public static ConnectionConfig cloneWithMaxBidirectionalStreamReceiveBufferSize(ConnectionConfig config, long maxBidirectionalStreamBufferSize) {
         return new ConnectionConfigImpl(
                 config.maxIdleTimeout(),
-                config.maxOpenUnidirectionalStreams(),
-                config.maxTotalUnidirectionalStreams(),
-                config.maxOpenBidirectionalStreams(),
-                config.maxTotalBidirectionalStreams(),
+                config.maxOpenPeerInitiatedUnidirectionalStreams(),
+                config.maxTotalPeerInitiatedUnidirectionalStreams(),
+                config.maxOpenPeerInitiatedBidirectionalStreams(),
+                config.maxTotalPeerInitiatedBidirectionalStreams(),
                 config.maxConnectionBufferSize(),
                 config.maxUnidirectionalStreamBufferSize(),
                 maxBidirectionalStreamBufferSize);
@@ -76,22 +76,22 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     }
 
     @Override
-    public int maxOpenUnidirectionalStreams() {
+    public int maxOpenPeerInitiatedUnidirectionalStreams() {
         return maxOpenUnidirectionalStreams;
     }
 
     @Override
-    public long maxTotalUnidirectionalStreams() {
+    public long maxTotalPeerInitiatedUnidirectionalStreams() {
         return maxTotalUnidirectionalStreams;
     }
 
     @Override
-    public int maxOpenBidirectionalStreams() {
+    public int maxOpenPeerInitiatedBidirectionalStreams() {
         return maxOpenBidirectionalStreams;
     }
 
     @Override
-    public long maxTotalBidirectionalStreams() {
+    public long maxTotalPeerInitiatedBidirectionalStreams() {
         return maxTotalBidirectionalStreams;
     }
 

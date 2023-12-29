@@ -28,13 +28,13 @@ public interface ApplicationProtocolSettings {
      *
      * @return the maximum number of concurrent unidirectional streams that the peer may initiate.
      */
-    default int maxConcurrentUnidirectionalStreams() { return NOT_SPECIFIED; }
+    default int maxConcurrentPeerInitiatedUnidirectionalStreams() { return NOT_SPECIFIED; }
 
     /**
      * The total number of unidirectional streams that the peer may initiate during the lifetime of the connection.
      * @return
      */
-    default long maxTotalUnidirectionalStreams() { return Long.MAX_VALUE; }
+    default long maxTotalPeerInitiatedUnidirectionalStreams() { return Long.MAX_VALUE; }
 
     /**
      * The maximum number of concurrent bidirectional streams that the peer may initiate.
@@ -42,13 +42,13 @@ public interface ApplicationProtocolSettings {
      *
      * @return
      */
-    default int maxConcurrentBidirectionalStreams() { return NOT_SPECIFIED; }
+    default int maxConcurrentPeerInitiatedBidirectionalStreams() { return NOT_SPECIFIED; }
 
     /**
      * The total number of bidirectional streams that the peer may initiate during the lifetime of the connection.
      * @return
      */
-    default long maxTotalBidirectionalStreams() { return Long.MAX_VALUE; }
+    default long maxTotalPeerInitiatedBidirectionalStreams() { return Long.MAX_VALUE; }
 
     /**
      * The minimum receive buffer size that this peer will use for unidirectional streams.

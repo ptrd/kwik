@@ -252,15 +252,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             throw new IllegalArgumentException("maxBidirectionalStreamBufferSize must be set");
         }
 
-        if (connectionProperties.maxOpenBidirectionalStreams() >= 0) {
-            parameters.setInitialMaxStreamsBidi(connectionProperties.maxOpenBidirectionalStreams());
+        if (connectionProperties.maxOpenPeerInitiatedBidirectionalStreams() >= 0) {
+            parameters.setInitialMaxStreamsBidi(connectionProperties.maxOpenPeerInitiatedBidirectionalStreams());
         }
         else {
             throw new IllegalArgumentException("maxOpenBidirectionalStreams must be set");
         }
 
-        if (connectionProperties.maxOpenUnidirectionalStreams() >= 0) {
-            parameters.setInitialMaxStreamsUni(connectionProperties.maxOpenUnidirectionalStreams());
+        if (connectionProperties.maxOpenPeerInitiatedUnidirectionalStreams() >= 0) {
+            parameters.setInitialMaxStreamsUni(connectionProperties.maxOpenPeerInitiatedUnidirectionalStreams());
         }
         else {
             throw new IllegalArgumentException("maxOpenUnidirectionalStreams must be set");
@@ -1035,7 +1035,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot change setting after or while connection is being established");
         }
-        connectionProperties.setMaxOpenBidirectionalStreams(max);
+        connectionProperties.setMaxOpenPeerInitiatedBidirectionalStreams(max);
     }
 
     @Override
@@ -1043,7 +1043,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (connectionState != Status.Created) {
             throw new IllegalStateException("Cannot change setting after or while connection is being established");
         }
-        connectionProperties.setMaxOpenUnidirectionalStreams(max);
+        connectionProperties.setMaxOpenPeerInitiatedUnidirectionalStreams(max);
     }
 
     @Override
@@ -1188,8 +1188,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
-            connectionProperties.setMaxOpenUnidirectionalStreams(MAX_OPEN_PEER_INITIATED_UNI_STREAMS);
-            connectionProperties.setMaxOpenBidirectionalStreams(MAX_OPEN_PEER_INITIATED_BIDI_STREAMS);
+            connectionProperties.setMaxOpenPeerInitiatedUnidirectionalStreams(MAX_OPEN_PEER_INITIATED_UNI_STREAMS);
+            connectionProperties.setMaxOpenPeerInitiatedBidirectionalStreams(MAX_OPEN_PEER_INITIATED_BIDI_STREAMS);
             connectionProperties.setMaxConnectionBufferSize(MAX_DATA_FACTOR * DEFAULT_MAX_STREAM_DATA);
             connectionProperties.setMaxUnidirectionalStreamBufferSize(DEFAULT_MAX_STREAM_DATA);
             connectionProperties.setMaxBidirectionalStreamBufferSize(DEFAULT_MAX_STREAM_DATA);
@@ -1265,7 +1265,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (max < 0) {
                 throw new IllegalArgumentException("Max open peer initiated bidirectional streams must be larger than 0.");
             }
-            connectionProperties.setMaxOpenBidirectionalStreams(max);
+            connectionProperties.setMaxOpenPeerInitiatedBidirectionalStreams(max);
             return this;
         }
 
@@ -1274,7 +1274,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (max < 0) {
                 throw new IllegalArgumentException("Max open peer initiated unidirectional streams must be larger than 0.");
             }
-            connectionProperties.setMaxOpenUnidirectionalStreams(max);
+            connectionProperties.setMaxOpenPeerInitiatedUnidirectionalStreams(max);
             return this;
         }
 

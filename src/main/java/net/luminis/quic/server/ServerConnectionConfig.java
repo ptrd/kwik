@@ -54,22 +54,22 @@ public class ServerConnectionConfig implements ConnectionConfig {
     }
 
     @Override
-    public int maxOpenUnidirectionalStreams() {
+    public int maxOpenPeerInitiatedUnidirectionalStreams() {
         return maxOpenUnidirectionalStreams;
     }
 
     @Override
-    public long maxTotalUnidirectionalStreams() {
+    public long maxTotalPeerInitiatedUnidirectionalStreams() {
         return maxTotalUnidirectionalStreams;
     }
 
     @Override
-    public int maxOpenBidirectionalStreams() {
+    public int maxOpenPeerInitiatedBidirectionalStreams() {
         return maxOpenBidirectionalStreams;
     }
 
     @Override
-    public long maxTotalBidirectionalStreams() {
+    public long maxTotalPeerInitiatedBidirectionalStreams() {
         return maxTotalBidirectionalStreams;
     }
 
@@ -117,14 +117,14 @@ public class ServerConnectionConfig implements ConnectionConfig {
         long maxConnectionBufferSize = max(max(maxUnidirectionalStreamBufferSize, maxBidirectionalStreamBufferSize), this.maxConnectionBufferSize());
         configBuilder.maxConnectionBufferSize(maxConnectionBufferSize);
 
-        configBuilder.maxOpenUnidirectionalStreams(limitValue(0,
-                protocol.maxConcurrentUnidirectionalStreams(), this.maxOpenUnidirectionalStreams()));
+        configBuilder.maxOpenPeerInitiatedUnidirectionalStreams(limitValue(0,
+                protocol.maxConcurrentPeerInitiatedUnidirectionalStreams(), this.maxOpenPeerInitiatedUnidirectionalStreams()));
 
-        configBuilder.maxOpenBidirectionalStreams(limitValue(0,
-                protocol.maxConcurrentBidirectionalStreams(), this.maxOpenBidirectionalStreams()));
+        configBuilder.maxOpenPeerInitiatedBidirectionalStreams(limitValue(0,
+                protocol.maxConcurrentPeerInitiatedBidirectionalStreams(), this.maxOpenPeerInitiatedBidirectionalStreams()));
 
-        configBuilder.maxTotalUnidirectionalStreams(protocol.maxTotalUnidirectionalStreams());
-        configBuilder.maxTotalBidirectionalStreams(protocol.maxTotalBidirectionalStreams());
+        configBuilder.maxTotalPeerInitiatedUnidirectionalStreams(protocol.maxTotalPeerInitiatedUnidirectionalStreams());
+        configBuilder.maxTotalPeerInitiatedBidirectionalStreams(protocol.maxTotalPeerInitiatedBidirectionalStreams());
         configBuilder.retryRequired(this.retryRequired());
         configBuilder.connectionIdLength(this.connectionIdLength());
 
@@ -241,7 +241,7 @@ public class ServerConnectionConfig implements ConnectionConfig {
             return this;
         }
 
-        public Builder maxOpenUnidirectionalStreams(int max) {
+        public Builder maxOpenPeerInitiatedUnidirectionalStreams(int max) {
             if (max < 0) {
                 throw new IllegalArgumentException();
             }
@@ -249,7 +249,7 @@ public class ServerConnectionConfig implements ConnectionConfig {
             return this;
         }
 
-        public Builder maxOpenBidirectionalStreams(int max) {
+        public Builder maxOpenPeerInitiatedBidirectionalStreams(int max) {
             if (max < 0) {
                 throw new IllegalArgumentException();
             }
@@ -275,12 +275,12 @@ public class ServerConnectionConfig implements ConnectionConfig {
             return this;
         }
 
-        public Builder maxTotalUnidirectionalStreams(long max) {
+        public Builder maxTotalPeerInitiatedUnidirectionalStreams(long max) {
             config.maxTotalUnidirectionalStreams = max;
             return this;
         }
 
-        public Builder maxTotalBidirectionalStreams(long max) {
+        public Builder maxTotalPeerInitiatedBidirectionalStreams(long max) {
             config.maxTotalBidirectionalStreams = max;
             return this;
         }

@@ -70,7 +70,7 @@ public class EchoServer {
         log.logInfo(true);
 
         ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
-                .maxOpenBidirectionalStreams(12)  // Mandatory setting to maximize concurrent streams on a connection.
+                .maxOpenPeerInitiatedBidirectionalStreams(12)  // Mandatory setting to maximize concurrent streams on a connection.
                 .build();
 
         ServerConnector serverConnector = ServerConnector.builder()
@@ -107,12 +107,12 @@ public class EchoServer {
         }
 
         @Override
-        public int maxConcurrentUnidirectionalStreams() {
+        public int maxConcurrentPeerInitiatedUnidirectionalStreams() {
             return 0;  // Because unidirectional streams are not used
         }
 
         @Override
-        public int maxConcurrentBidirectionalStreams() {
+        public int maxConcurrentPeerInitiatedBidirectionalStreams() {
             return Integer.MAX_VALUE;   // Because from protocol perspective, there is no limit
         }
     }
