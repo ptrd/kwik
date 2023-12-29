@@ -696,10 +696,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void setMaxAllowedBidirectionalStreams(int max) {
+        throw new UnsupportedOperationException("Not implemented for server connection."
+                + "If you really need this functionality, create an issue at https://github.com/ptrd/kwik/issues");
     }
 
     @Override
     public void setMaxAllowedUnidirectionalStreams(int max) {
+        throw new UnsupportedOperationException("Not implemented for server connection."
+                + "If you really need this functionality, create an issue at https://github.com/ptrd/kwik/issues");
     }
 
     @Override
