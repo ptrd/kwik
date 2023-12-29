@@ -509,12 +509,16 @@ public class StreamManager {
         return maxStreamsAcceptedByPeerBidi;
     }
 
-    public long getMaxUnirectionalStreams() {
+    public long getMaxUnidirectionalStreams() {
         return maxStreamsAcceptedByPeerUni;
     }
 
-    public ConnectionConfig getConnectionConfig() {
-        return config;
+    public long getMaxUnidirectionalStreamBufferSize() {
+        return config.maxUnidirectionalStreamBufferSize();
+    }
+
+    public long getMaxBidirectionalStreamBufferSize() {
+        return config.maxBidirectionalStreamBufferSize();
     }
 
     interface QuicStreamSupplier {

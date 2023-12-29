@@ -87,10 +87,10 @@ public class QuicStreamImpl implements QuicStream {
 
     private long determineInitialReceiveBufferSize() {
         if (isBidirectional()) {
-            return streamManager.getConnectionConfig().maxBidirectionalStreamBufferSize();
+            return streamManager.getMaxBidirectionalStreamBufferSize();
         }
         else {
-            return streamManager.getConnectionConfig().maxUnidirectionalStreamBufferSize();
+            return streamManager.getMaxUnidirectionalStreamBufferSize();
         }
     }
 

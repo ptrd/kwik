@@ -517,7 +517,7 @@ class StreamManagerTest {
         streamManager.process(new MaxStreamsFrame(5, false));
 
         // Then
-        assertThat(streamManager.getMaxUnirectionalStreams()).isGreaterThanOrEqualTo(8);
+        assertThat(streamManager.getMaxUnidirectionalStreams()).isGreaterThanOrEqualTo(8);
     }
 
     @Test
@@ -539,7 +539,7 @@ class StreamManagerTest {
         // When
         streamManager.setInitialMaxStreamsUni(3);
 
-        assertThat(streamManager.getMaxUnirectionalStreams()).isEqualTo(10);
+        assertThat(streamManager.getMaxUnidirectionalStreams()).isEqualTo(10);
     }
     //endregion
     

@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicClientConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -50,7 +49,6 @@ class EarlyDataStreamTest {
     @BeforeEach
     void initObjectUnderTest() {
         streamManager = mock(StreamManager.class);
-        when(streamManager.getConnectionConfig()).thenReturn(mock(ConnectionConfig.class));
 
         connection = mock(QuicClientConnectionImpl.class);
         int maxData = 5000;

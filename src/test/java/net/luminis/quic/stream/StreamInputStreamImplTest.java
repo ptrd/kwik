@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
 import net.luminis.quic.frame.StreamFrame;
@@ -27,7 +26,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class StreamInputStreamImplTest {
 
@@ -35,11 +33,7 @@ class StreamInputStreamImplTest {
 
     @BeforeEach
     void setUp() {
-        ConnectionConfig config = mock(ConnectionConfig.class);
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn(10_000L);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn(10_000L);
         StreamManager streamManager = mock(StreamManager.class);
-        when(streamManager.getConnectionConfig()).thenReturn(config);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
         streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L);

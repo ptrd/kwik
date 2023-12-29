@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.QuicConnectionImpl;
 import net.luminis.quic.core.Role;
@@ -70,7 +69,6 @@ class QuicStreamImplTest {
     private Logger logger;
     private Random randomGenerator = new Random();
     private Role role;
-    private ConnectionConfig config;
 
     //region setup
     @BeforeEach
@@ -89,10 +87,8 @@ class QuicStreamImplTest {
         long initialMaxStreamData = 9999;
         connection = mock(QuicConnectionImpl.class);
         streamManager = mock(StreamManager.class);
-        config = mock(ConnectionConfig.class);
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
-        when(streamManager.getConnectionConfig()).thenReturn(config);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn(initialMaxStreamData);
         logger = mock(Logger.class);
         role = Role.Client;
 
@@ -457,8 +453,8 @@ class QuicStreamImplTest {
     void testStreamFlowControlUpdates() throws Exception {
         float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
 
@@ -1303,8 +1299,8 @@ class QuicStreamImplTest {
     void lostMaxStreamDataFrameShouldBeResentWithActualValues() throws Exception {
         float factor = StreamInputStreamImpl.receiverMaxDataIncrementFactor;
         int initialWindow = 1000;
-        when(config.maxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
-        when(config.maxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxBidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
+        when(streamManager.getMaxUnidirectionalStreamBufferSize()).thenReturn((long) initialWindow);
 
         quicStream = new QuicStreamImpl(0, role, connection, streamManager, mock(FlowControl.class), logger);  // Re-instantiate because constructor reads initial max stream data from connection
         quicStream.addStreamData(resurrect(new StreamFrame(0, new byte[1000], true)));
