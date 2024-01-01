@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.crypto.Aead;
 import org.junit.jupiter.api.BeforeEach;
 
 public class AbstractSenderTest {

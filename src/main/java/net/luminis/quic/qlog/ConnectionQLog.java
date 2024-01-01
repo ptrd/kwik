@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -26,7 +26,11 @@ import net.luminis.tls.util.ByteUtils;
 
 import javax.json.Json;
 import javax.json.stream.JsonGenerator;
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;

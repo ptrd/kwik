@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,14 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.frame.AckFrame;
-import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.awt.*;
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;

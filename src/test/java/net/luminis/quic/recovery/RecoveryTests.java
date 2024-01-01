@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -22,7 +22,11 @@ import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.packet.*;
+import net.luminis.quic.packet.HandshakePacket;
+import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.LongHeaderPacket;
+import net.luminis.quic.packet.QuicPacket;
+import net.luminis.quic.packet.ShortHeaderPacket;
 import net.luminis.quic.test.FieldSetter;
 
 import java.time.Instant;

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022, 2023 Peter Doornbosch
+ * Copyright © 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.cid;
 
+import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.server.ServerConnectionProxy;
 import net.luminis.quic.server.ServerConnectionRegistry;
@@ -33,7 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-import static net.luminis.quic.QuicConstants.TransportErrorCode.*;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.CONNECTION_ID_LIMIT_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static net.luminis.quic.core.EncryptionLevel.App;
 
 /**

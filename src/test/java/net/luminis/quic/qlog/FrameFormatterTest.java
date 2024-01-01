@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -26,11 +26,9 @@ import org.junit.jupiter.api.Test;
 import javax.json.Json;
 import javax.json.stream.JsonGenerator;
 import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class FrameFormatterTest {
 

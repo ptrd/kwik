@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -20,16 +20,24 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.ack.GlobalAckGenerator;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
-import net.luminis.quic.core.*;
 import net.luminis.quic.packet.InitialPacket;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
-import static net.luminis.quic.core.EncryptionLevel.*;
+import static net.luminis.quic.core.EncryptionLevel.Handshake;
+import static net.luminis.quic.core.EncryptionLevel.Initial;
+import static net.luminis.quic.core.EncryptionLevel.ZeroRTT;
 
 /**
  * Assembles QUIC packets for sending.

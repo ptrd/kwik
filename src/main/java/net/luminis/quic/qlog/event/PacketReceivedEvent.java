@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -19,7 +19,6 @@
 package net.luminis.quic.qlog.event;
 
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.qlog.QLogEvent;
 
 import java.time.Instant;
 

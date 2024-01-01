@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 

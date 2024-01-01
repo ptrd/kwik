@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023 Peter Doornbosch
+ * Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.core.TransportParameters;
-import net.luminis.quic.log.Logger;
 import net.luminis.quic.core.ProtocolError;
 import net.luminis.quic.core.Role;
+import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
