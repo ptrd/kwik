@@ -63,10 +63,25 @@ public interface QuicConnection {
 
     /**
      * Set the maximum size of the stream receive buffer.
-     * Must be set before calling connect().
      * @param size
+     * @deprecated use setDefaultUnidirectionalStreamReceiveBufferSize(long) or setDefaultBidirectionalStreamReceiveBufferSize(long)
      */
+    @Deprecated
     void setDefaultStreamReceiveBufferSize(long size);
+
+    /**
+     * Set the maximum size of the stream receive buffer for (peer initiated) unidirectional streams.
+     * @param size  the new max buffer size, must be a value between 1024 en the connection buffer size
+     * @throws IllegalArgumentException when the new size is larger than the connection buffer size or less than 1024
+     */
+    void setDefaultUnidirectionalStreamReceiveBufferSize(long size);
+
+    /**
+     * Set the maximum size of the stream receive buffer for bidirectional streams (both self-initiated or peer-initiated).
+     * @param size  the new max buffer size, must be a value between 1024 en the connection buffer size
+     * @throws IllegalArgumentException when the new size is larger than the connection buffer size or less than 1024
+     */
+    void setDefaultBidirectionalStreamReceiveBufferSize(long size);
 
     QuicStream createStream(boolean bidirectional);
 

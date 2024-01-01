@@ -1055,6 +1055,44 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    @Override
+    public void setDefaultUnidirectionalStreamReceiveBufferSize(long size) {
+        if (size < 1024) {
+            throw new IllegalArgumentException("Receiver buffer size must be at least 1024");
+        }
+        if (size > connectionProperties.maxConnectionBufferSize()) {
+            throw new IllegalArgumentException("Unidirectional stream buffer size cannot be larger than connection buffer size");
+        }
+        if (connectionState == Status.Created) {
+            connectionProperties.setMaxUnidirectionalStreamBufferSize(size);
+        }
+        else if (connectionState == Status.Connected) {
+            streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(size);
+        }
+        else {
+            throw new IllegalStateException("Cannot change setting while connection is being established or closed");
+        }
+    }
+
+    @Override
+    public void setDefaultBidirectionalStreamReceiveBufferSize(long size) {
+        if (size < 1024) {
+            throw new IllegalArgumentException("Receiver buffer size must be at least 1024");
+        }
+        if (size > connectionProperties.maxConnectionBufferSize()) {
+            throw new IllegalArgumentException("Bidirectional stream buffer size cannot be larger than connection buffer size");
+        }
+        if (connectionState == Status.Created) {
+            connectionProperties.setMaxBidirectionalStreamBufferSize(size);
+        }
+        else if (connectionState == Status.Connected) {
+            streamManager.setDefaultBidirectionalStreamReceiveBufferSize(size);
+        }
+        else {
+            throw new IllegalStateException("Cannot change setting while connection is being established or closed");
+        }
+    }
+
     public FlowControl getFlowController() {
         return flowController;
     }

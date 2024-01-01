@@ -408,6 +408,14 @@ class QuicConnectionImplTest {
         }
 
         @Override
+        public void setDefaultUnidirectionalStreamReceiveBufferSize(long size) {
+        }
+
+        @Override
+        public void setDefaultBidirectionalStreamReceiveBufferSize(long size) {
+        }
+
+        @Override
         public QuicStream createStream(boolean bidirectional) {
             return null;
         }

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.core;
 
+import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
@@ -590,6 +591,66 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region change settings
+    @Test
+    void settingUniBufferSizeBeforeConnectShouldWork() throws Exception {
+        // When
+        connection.setDefaultUnidirectionalStreamReceiveBufferSize(1024);
+        simulateSuccessfulConnect();
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxUnidirectionalStreamBufferSize()).isEqualTo(1024);
+    }
+
+    @Test
+    void settingUniBufferSizeAterConnectShouldWork() throws Exception {
+        // When
+        simulateSuccessfulConnect();
+        connection.setDefaultUnidirectionalStreamReceiveBufferSize(1024);
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxUnidirectionalStreamBufferSize()).isEqualTo(1024);
+    }
+
+    @Test
+    void settingUniBufferSizeToValueLargerThanConnectionBufferSizeShouldThrow() throws Exception {
+        assertThatThrownBy(() ->
+                // When
+                connection.setDefaultUnidirectionalStreamReceiveBufferSize(3_500_000))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void settingBidiBufferSizeBeforeConnectShouldWork() throws Exception {
+        // When
+        connection.setDefaultBidirectionalStreamReceiveBufferSize(1024);
+        simulateSuccessfulConnect();
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxBidirectionalStreamBufferSize()).isEqualTo(1024);
+    }
+
+    @Test
+    void settingBidiBufferSizeAfterConnectShouldWork() throws Exception {
+        // When
+        simulateSuccessfulConnect();
+        connection.setDefaultBidirectionalStreamReceiveBufferSize(1024);
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxBidirectionalStreamBufferSize()).isEqualTo(1024);
+    }
+
+    @Test
+    void settingBidiBufferSizeToValueLargerThanConnectionBufferSizeShouldThrow() throws Exception {
+        // When
+        simulateSuccessfulConnect();
+
+        // Then
+        assertThatThrownBy(() -> connection.setDefaultBidirectionalStreamReceiveBufferSize(3_500_000))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+    //endregion
+
     //region helper methods
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
@@ -628,8 +689,13 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, "tlsEngine", tlsClientEngine);
         FieldSetter.setField(connection, "originalClientHello", createClientHello());
 
+        Object connectionProperties = new FieldReader(connection, connection.getClass().getDeclaredField("connectionProperties")).read();
+        connection.getStreamManager().initialize((ConnectionConfig) connectionProperties);
+
         TransportParameters transportParams = connection.initTransportParameters();
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("transportParams"), transportParams);
+
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {

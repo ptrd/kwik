@@ -701,7 +701,31 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void setDefaultStreamReceiveBufferSize(long size) {
+        setDefaultUnidirectionalStreamReceiveBufferSize(size);
+        setDefaultBidirectionalStreamReceiveBufferSize(size);
+    }
+
+    @Override
+    public void setDefaultUnidirectionalStreamReceiveBufferSize(long size) {
+        assert applicationProtocolStarted;
+        if (size < 1024) {
+            throw new IllegalArgumentException("Buffer size must be at least 1024");
+        }
+        if (size > configuration.maxConnectionBufferSize()) {
+            throw new IllegalArgumentException("Buffer size cannot be larger than connection buffer size");
+        }
         streamManager.setDefaultUnidirectionalStreamReceiveBufferSize(size);
+    }
+
+    @Override
+    public void setDefaultBidirectionalStreamReceiveBufferSize(long size) {
+        assert applicationProtocolStarted;
+        if (size < 1024) {
+            throw new IllegalArgumentException("Buffer size must be at least 1024");
+        }
+        if (size > configuration.maxConnectionBufferSize()) {
+            throw new IllegalArgumentException("Buffer size cannot be larger than connection buffer size");
+        }
         streamManager.setDefaultBidirectionalStreamReceiveBufferSize(size);
     }
 

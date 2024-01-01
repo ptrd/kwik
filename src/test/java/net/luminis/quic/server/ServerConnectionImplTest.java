@@ -598,6 +598,54 @@ class ServerConnectionImplTest {
     }
     //endregion
 
+    //region change settings after handshake
+    @Test
+    void settingSmallerDefaultUniBufferSizeShouldBeAccepted() throws Exception {
+        // Given
+        simulateHandshakeSuccesfullyFinished();
+
+        // When
+        connection.setDefaultUnidirectionalStreamReceiveBufferSize(1029);
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxUnidirectionalStreamBufferSize()).isEqualTo(1029);
+    }
+
+    @Test
+    void settingSmallerDefaultBidiBufferSizeShouldBeAccepted() throws Exception {
+        // Given
+        simulateHandshakeSuccesfullyFinished();
+
+        // When
+        connection.setDefaultBidirectionalStreamReceiveBufferSize(1027);
+
+        // Then
+        assertThat(connection.getStreamManager().getMaxBidirectionalStreamBufferSize()).isEqualTo(1027);
+    }
+
+    @Test
+    void settingDefaultUniBufferSizeGreaterThanConnectionBufferLeadsToException() throws Exception {
+        // Given
+        simulateHandshakeSuccesfullyFinished();
+
+        // When
+        assertThatThrownBy(() -> connection.setDefaultUnidirectionalStreamReceiveBufferSize(10_000_111))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void settingDefaultBidiBufferSizeGreaterThanConnectionBufferLeadsToException() throws Exception {
+        // Given
+        simulateHandshakeSuccesfullyFinished();
+
+        // When
+        assertThatThrownBy(() -> connection.setDefaultBidirectionalStreamReceiveBufferSize(10_000_111))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+    //endregion
+
     //region test helper methods
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
@@ -709,6 +757,14 @@ class ServerConnectionImplTest {
         return connectionSecrets;
     }
 
+    private void simulateHandshakeSuccesfullyFinished() throws Exception {
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        connection.extensionsReceived(clientExtensions);
+        connection.earlySecretsKnown();
+        connection.handshakeSecretsKnown();
+        connection.handshakeFinished();
+    }
+
     static class MockTlsServerEngine extends TlsServerEngine {
 
         private Supplier<TlsProtocolException> exceptionSupplier;
@@ -728,8 +784,37 @@ class ServerConnectionImplTest {
         public void injectErrorInReceivingClientHello(Supplier<TlsProtocolException> exceptionSupplier) {
             this.exceptionSupplier = exceptionSupplier;
         }
-    }
 
+        @Override
+        public TlsConstants.CipherSuite getSelectedCipher() {
+            return TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256;
+        }
+
+        @Override
+        public byte[] getClientEarlyTrafficSecret() {
+            return new byte[32];
+        }
+
+        @Override
+        public byte[] getClientHandshakeTrafficSecret() {
+            return new byte[32];
+        }
+
+        @Override
+        public byte[] getServerHandshakeTrafficSecret() {
+            return new byte[32];
+        }
+
+        @Override
+        public byte[] getClientApplicationTrafficSecret() {
+            return new byte[32];
+        }
+
+        @Override
+        public byte[] getServerApplicationTrafficSecret() {
+            return new byte[32];
+        }
+    }
     /**
      * For testing behaviour when invalid parameters are sent (for client or server), the serialize method must be
      * overridden, because the original will check for each parameter whether it is valid to sent for the given role.
