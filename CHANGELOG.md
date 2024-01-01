@@ -1,5 +1,8 @@
 # Releases
 
+## 0.8.9 (2024-01-01)
+
+Deprecated connection method `setDefaultStreamReceiveBufferSize()` and replaced it by a specific one for each stream type (unidirectional/bidirectional).  
 
 ## 0.8.8 (2023-12-29)
 
