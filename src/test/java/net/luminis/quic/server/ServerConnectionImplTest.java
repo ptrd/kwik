@@ -87,12 +87,15 @@ class ServerConnectionImplTest {
     private TlsServerEngine tlsServerEngine;
     private TlsServerEngineFactory tlsServerEngineFactory;
 
+    //region setup
     @BeforeEach
     void setupObjectUnderTest() throws Exception {
         tlsServerEngineFactory = createTlsServerEngine();
         connection = createServerConnection(tlsServerEngineFactory, false, new byte[8]);
     }
+    //endregion
 
+    //region tls error in handshake
     @Test
     void whenParsingClientHelloLeadsToTlsErrorConnectionIsClosed() throws Exception {
         // When
@@ -131,7 +134,9 @@ class ServerConnectionImplTest {
                 && ((ConnectionCloseFrame) frame).getErrorCode() == 0x100 + TlsConstants.AlertDescription.no_application_protocol.value),
                 eq(EncryptionLevel.Initial));
     }
+    //endregion
 
+    //region transport parameters
     @Test
     void clientHelloLackingTransportParametersExtensionLeadsToConnectionClose() throws Exception {
         // When
@@ -213,6 +218,37 @@ class ServerConnectionImplTest {
     }
 
     @Test
+    void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(ApplicationLayerProtocolNegotiationExtension.class);
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
+    }
+
+    @Test
+    void serverShouldSendTransportParameterDisableActiveMigration() throws Exception {
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getDisableMigration()).isTrue();
+    }
+    //endregion
+
+    //region compatible version negotiation
+    @Test
     void versionInformationWithSupportedOtherVersionLeadsToVersionChange() throws Exception {
         var connectionSecrets = spyOnConnectionSecrets();
 
@@ -247,51 +283,9 @@ class ServerConnectionImplTest {
         assertThat(connection.getQuicVersion()).isEqualTo(QuicConnection.QuicVersion.V1);
         verify(connectionSecrets, never()).recomputeInitialKeys();
     }
+    //endregion
 
-    @Test
-    void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
-        // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
-
-        // Then
-        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
-        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(ApplicationLayerProtocolNegotiationExtension.class);
-        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
-    }
-
-    @Test
-    void serverShouldSendTransportParameterDisableActiveMigration() throws Exception {
-        // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
-
-        // Then
-        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
-        assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
-        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
-        assertThat(tpExtension.getTransportParameters().getDisableMigration()).isTrue();
-    }
-
-    @Test
-    void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
-        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-        CryptoFrame firstFrame = mock(CryptoFrame.class);
-        CryptoFrame secondFrame = mock(CryptoFrame.class);
-        InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
-        InitialPacket packet2 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, secondFrame);
-        connection.process(packet1, Instant.now());
-        connection.process(packet2, Instant.now());
-
-        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
-        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
-    }
-
+    //region destination connection id
     @Test
     void newServerConnectionUsesOriginalScidAsDcid() throws Exception {
         byte[] clientSourceCid = new byte[] { 0x03, 0x07, 0x05, 0x01 };
@@ -303,7 +297,9 @@ class ServerConnectionImplTest {
         // Then
         assertThat(connection.getDestinationConnectionId()).isEqualTo(clientSourceCid);
     }
+    //endregion
 
+    //region retry
     @Test
     void whenRetryIsRequiredFirstInitialLeadsToRetryPacket() throws Exception {
         // Given
@@ -418,7 +414,9 @@ class ServerConnectionImplTest {
         // Then
         assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(null));
     }
+    //endregion
 
+    //region close callback
     @Test
     void whenServerConnectionIsAbortedCloseCallbackShouldBeCalled() throws Exception {
         // Given
@@ -432,7 +430,9 @@ class ServerConnectionImplTest {
         // Then
         assertThat(closeCallbackIsCalled.get()).isTrue();
     }
+    //endregion
 
+    //region anti amplification
     @Test
     void receivingInitialPacketShouldSetAntiAmplification() throws Exception {
         // Given
@@ -488,7 +488,9 @@ class ServerConnectionImplTest {
         // Then
         verify(connection.getSender()).unsetAntiAmplificationLimit();
     }
+    //endregion
 
+    //region initial packet validation
     @Test
     void initialPacketCarriedInDatagramSmallerThan1200BytesShouldBeDropped() throws Exception {
         // Given
@@ -538,6 +540,23 @@ class ServerConnectionImplTest {
     }
 
     @Test
+    void retransmittedInitialPacketShouldBeAccepted() throws Exception {
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+        CryptoFrame firstFrame = mock(CryptoFrame.class);
+        CryptoFrame secondFrame = mock(CryptoFrame.class);
+        InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
+        InitialPacket packet2 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, secondFrame);
+        connection.process(packet1, Instant.now());
+        connection.process(packet2, Instant.now());
+
+        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
+        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
+    }
+    //endregion
+
+    //region handle missing or dicarded keys
+    @Test
     void whenParsingZeroRttPacketItShouldFailOnMissingKeys() throws Exception {
         // Given
         byte[] data = { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -577,7 +596,9 @@ class ServerConnectionImplTest {
         // Then
         verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Handshake));
     }
+    //endregion
 
+    //region test helper methods
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
@@ -757,4 +778,5 @@ class ServerConnectionImplTest {
             FieldSetter.setField(this, QuicTransportParametersExtension.class, "data", data);
         }
     }
+    //endregion
 }
