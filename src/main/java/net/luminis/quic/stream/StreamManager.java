@@ -277,6 +277,8 @@ public class StreamManager {
     private void createPeerInitiatedStreams(int requestedStreamId, int nextStreamId, Runnable nextStreamIdUpdate) throws TransportError {
         if (requestedStreamId >= nextStreamId) {
             assert (requestedStreamId - nextStreamId) % 4 == 0;
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-receiving-stream-states
+            // "Before a stream is created, all streams of the same type with lower-numbered stream IDs MUST be created."
             for (int streamId = nextStreamId; streamId <= requestedStreamId; streamId += 4) {
                 QuicStreamImpl stream = new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
                 streams.put(streamId, stream);
