@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -111,6 +112,8 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
     private volatile boolean hasBeenReset = false;
+    private final ReentrantLock scheduleTimerLock = new ReentrantLock();
+    
 
     public RecoveryManager(Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
         this(Clock.systemUTC(), role, rttEstimater, congestionController, sender, logger);
@@ -385,21 +388,23 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     void rescheduleLossDetectionTimeout(Instant scheduledTime) {
+        scheduleTimerLock.lock();
         try {
-            synchronized (scheduleLock) {
-                // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
-                lossDetectionFuture.cancel(false);
-                timerExpiration = scheduledTime;
-                long delay = Duration.between(clock.instant(), scheduledTime).toMillis();
-                // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
-                lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
-            }
+            // Cancelling the current future and setting the new must be in a sync'd block to ensure the right future is cancelled
+            lossDetectionFuture.cancel(false);
+            timerExpiration = scheduledTime;
+            long delay = Duration.between(clock.instant(), scheduledTime).toMillis();
+            // Delay can be 0 or negative, but that's no problem for ScheduledExecutorService: "Zero and negative delays are also allowed, and are treated as requests for immediate execution."
+            lossDetectionFuture = scheduler.schedule(this::runLossDetectionTimeout, delay, TimeUnit.MILLISECONDS);
         }
         catch (RejectedExecutionException taskRejected) {
             // Can happen if has been reset concurrently
             if (!hasBeenReset) {
                 throw taskRejected;
             }
+        }
+        finally {
+            scheduleTimerLock.unlock();
         }
     }
 
