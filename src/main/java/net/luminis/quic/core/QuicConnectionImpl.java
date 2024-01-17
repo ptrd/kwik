@@ -67,7 +67,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.tls.util.ByteUtils.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor {
+public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor, PacketFilter {
 
     public enum Status {
         Created,
@@ -101,6 +101,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected final VersionHolder quicVersion;
     private final Role role;
     protected final Logger log;
+    protected final PacketFilter processorChain;
     protected VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
     protected final ConnectionSecrets connectionSecrets;
@@ -128,6 +129,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
+
+        processorChain = new ClosingOrDrainingFilter(this);
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -197,7 +200,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
 
                 if (checkDestinationConnectionId(packet)) {
-                    processPacket(timeReceived, packet);
+                    processorChain.processPacket(timeReceived, packet);
                     getSender().packetProcessed(data.hasRemaining());
                 }
             }
@@ -426,31 +429,24 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
     }
 
-    protected void processPacket(Instant timeReceived, QuicPacket packet) {
+    @Override
+    public void processPacket(Instant timeReceived, QuicPacket packet) {
         log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
 
-        if (! connectionState.closingOrDraining()) {
-            ProcessResult result = packet.accept(this, timeReceived);
-            if (result == ProcessResult.Abort) {
-                return;
-            }
+        ProcessResult result = packet.accept(this, timeReceived);
+        if (result == ProcessResult.Abort) {
+            return;
+        }
 
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.1
-            // "A packet MUST NOT be acknowledged until packet protection has been successfully removed and all frames
-            //  contained in the packet have been processed."
-            // "Once the packet has been fully processed, a receiver acknowledges receipt by sending one or more ACK
-            //  frames containing the packet number of the received packet."
-            getAckGenerator().packetReceived(packet);
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
-            // "An endpoint restarts its idle timer when a packet from its peer is received and processed successfully."
-            idleTimer.packetProcessed();
-        }
-        else if (connectionState.isClosing()) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
-            // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response
-            //  to any incoming packet that it attributes to the connection."
-            handlePacketInClosingState(packet);
-        }
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.1
+        // "A packet MUST NOT be acknowledged until packet protection has been successfully removed and all frames
+        //  contained in the packet have been processed."
+        // "Once the packet has been fully processed, a receiver acknowledges receipt by sending one or more ACK
+        //  frames containing the packet number of the received packet."
+        getAckGenerator().packetReceived(packet);
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
+        // "An endpoint restarts its idle timer when a packet from its peer is received and processed successfully."
+        idleTimer.packetProcessed();
     }
 
     @Override
@@ -929,5 +925,30 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {
         this.recoveryManager = recoveryManager;
+    }
+
+    class ClosingOrDrainingFilter extends BasePacketFilter {
+
+        public ClosingOrDrainingFilter(PacketFilter next) {
+            super(next);
+        }
+
+        @Override
+        public void processPacket(Instant timeReceived, QuicPacket packet) {
+            if (connectionState.closingOrDraining()) {
+                if (connectionState.isClosing()) {
+                    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
+                    // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response
+                    //  to any incoming packet that it attributes to the connection."
+                    handlePacketInClosingState(packet);
+                }
+                else {
+                    discard(packet, "in draining state");
+                }
+            }
+            else {
+                next(timeReceived, packet);
+            }
+        }
     }
 }

@@ -62,11 +62,12 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(Instant.now(), packet);
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -75,12 +76,13 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(Initial);
         connection.runPostProcessingActions();
 
         // When
         InitialPacket packet = spy(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(Instant.now(), packet);
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -89,12 +91,13 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingNormalPacketLeadsToSendingConnectionClose() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(App);
         clearInvocations(sender);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(Instant.now(), packet);
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -133,12 +136,13 @@ class QuicConnectionImplTest {
 
     @Test
     void whenReceivingCloseNormalPacketsAreNotProcessed() {
-        // When
+        // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(Instant.now(), packet);
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -200,6 +204,11 @@ class QuicConnectionImplTest {
         verify(sender, atLeast(1)).send(
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
+    }
+
+    //region helper methods
+    private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
+        return connection.new ClosingOrDrainingFilter(connection);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {
@@ -424,4 +433,5 @@ class QuicConnectionImplTest {
         public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer) {
         }
     }
+    //endregion
 }
