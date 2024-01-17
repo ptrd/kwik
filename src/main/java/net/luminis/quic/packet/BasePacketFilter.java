@@ -18,14 +18,29 @@
  */
 package net.luminis.quic.packet;
 
+import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
+
 import java.time.Instant;
 
 public abstract class BasePacketFilter implements PacketFilter {
 
     private final PacketFilter next;
+    private final Logger log;
 
     public BasePacketFilter(PacketFilter next) {
         this.next = next;
+        log = new NullLogger();
+    }
+
+    public BasePacketFilter(PacketFilter next, Logger log) {
+        this.next = next;
+        this.log = log != null ? log : new NullLogger();
+    }
+
+    public BasePacketFilter(BasePacketFilter next) {
+        this.next = next;
+        this.log = next.logger();
     }
 
     public void next(Instant timeReceived, QuicPacket packet) {
@@ -33,5 +48,10 @@ public abstract class BasePacketFilter implements PacketFilter {
     }
 
     protected void discard(QuicPacket packet, String reason) {
+        logger().debug("Discarding packet " + packet + ": " + reason);
+    }
+
+    protected Logger logger() {
+        return log;
     }
 }

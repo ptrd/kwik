@@ -208,7 +208,7 @@ class QuicConnectionImplTest {
 
     //region helper methods
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
-        return connection.new ClosingOrDrainingFilter(connection);
+        return connection.new ClosingOrDrainingFilter(connection, null);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {

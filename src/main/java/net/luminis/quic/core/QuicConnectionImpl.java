@@ -131,7 +131,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.role = role;
         this.log = log;
 
-        processorChain = new QlogPacketFilter(new ClosingOrDrainingFilter(this), log);
+        processorChain =
+                new QlogPacketFilter(
+                        new ClosingOrDrainingFilter(this, log));
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -928,8 +930,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     class ClosingOrDrainingFilter extends BasePacketFilter {
 
-        public ClosingOrDrainingFilter(PacketFilter next) {
-            super(next);
+        public ClosingOrDrainingFilter(PacketFilter next, Logger log) {
+            super(next, log);
         }
 
         @Override

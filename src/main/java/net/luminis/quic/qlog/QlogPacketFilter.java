@@ -27,16 +27,17 @@ import java.time.Instant;
 
 public class QlogPacketFilter extends BasePacketFilter {
 
-    private final Logger log;
-
     public QlogPacketFilter(PacketFilter next, Logger log) {
+        super(next, log);
+    }
+
+    public QlogPacketFilter(BasePacketFilter next) {
         super(next);
-        this.log = log;
     }
 
     @Override
     public void processPacket(Instant timeReceived, QuicPacket packet) {
-        log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
+        logger().getQLog().emitPacketReceivedEvent(packet, timeReceived);
         next(timeReceived, packet);
     }
 }
