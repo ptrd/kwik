@@ -33,6 +33,7 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
@@ -130,7 +131,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.role = role;
         this.log = log;
 
-        processorChain = new ClosingOrDrainingFilter(this);
+        processorChain = new QlogPacketFilter(new ClosingOrDrainingFilter(this), log);
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -431,8 +432,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void processPacket(Instant timeReceived, QuicPacket packet) {
-        log.getQLog().emitPacketReceivedEvent(packet, timeReceived);
-
         ProcessResult result = packet.accept(this, timeReceived);
         if (result == ProcessResult.Abort) {
             return;
