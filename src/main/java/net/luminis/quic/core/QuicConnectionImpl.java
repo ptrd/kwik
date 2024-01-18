@@ -132,8 +132,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.log = log;
 
         processorChain =
-                new QlogPacketFilter(
-                        new ClosingOrDrainingFilter(this, log));
+                new DropDuplicatePacketsFilter(
+                        new QlogPacketFilter(
+                                new ClosingOrDrainingFilter(this, log)));
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 

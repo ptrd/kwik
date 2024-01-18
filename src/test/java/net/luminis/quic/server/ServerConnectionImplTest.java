@@ -391,15 +391,20 @@ class ServerConnectionImplTest {
         // Given
         byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         connection = createServerConnection(createTlsServerEngine(), true, odcid);
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
-        initialPacket.setPacketNumber(0);
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
-        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial));
-        ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
-        paddedInitial.put(initialPacketBytes);
 
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        initialPacket.setPacketNumber(0);
+        ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
+        paddedInitial.put(initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
+
+        InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        secondInitialPacket.setPacketNumber(1);
+        ByteBuffer secondPaddedInitial = ByteBuffer.allocate(1200);
+        secondPaddedInitial.put(secondInitialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
+
+        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor1.capture());
         byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(null);
