@@ -23,12 +23,23 @@ import java.time.Instant;
 public class PacketMetaData {
 
     private final Instant timeReceived;
+    private final boolean moreDataInDatagram;
 
     public PacketMetaData(Instant timeReceived) {
         this.timeReceived = timeReceived;
+        moreDataInDatagram = false;
+    }
+
+    public PacketMetaData(Instant timeReceived, boolean moreDataInDatagram) {
+        this.timeReceived = timeReceived;
+        this.moreDataInDatagram = moreDataInDatagram;
     }
 
     public Instant timeReceived() {
         return timeReceived;
+    }
+
+    public boolean moreDataInDatagram() {
+        return moreDataInDatagram;
     }
 }

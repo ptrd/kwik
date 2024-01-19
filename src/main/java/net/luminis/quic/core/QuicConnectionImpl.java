@@ -133,8 +133,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         processorChain =
                 new DropDuplicatePacketsFilter(
-                        new QlogPacketFilter(
-                                new ClosingOrDrainingFilter(this, log)));
+                        new PostProcessingFilter(
+                                new QlogPacketFilter(
+                                        new ClosingOrDrainingFilter(this, log))));
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -204,8 +205,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
 
                 if (checkDestinationConnectionId(packet)) {
-                    processorChain.processPacket(packet, new PacketMetaData(timeReceived));
-                    getSender().packetProcessed(data.hasRemaining());
+                    processorChain.processPacket(packet, new PacketMetaData(timeReceived, data.hasRemaining()));
                 }
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
@@ -952,5 +952,18 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 next(packet, metaData);
             }
         }
+    }
+
+    class PostProcessingFilter extends BasePacketFilter {
+
+            public PostProcessingFilter(PacketFilter next) {
+                super(next);
+            }
+
+            @Override
+            public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+                next(packet, metaData);
+                getSender().packetProcessed(metaData.moreDataInDatagram());
+            }
     }
 }
