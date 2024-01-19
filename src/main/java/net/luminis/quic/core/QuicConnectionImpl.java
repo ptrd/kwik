@@ -132,10 +132,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.log = log;
 
         processorChain =
-                new DropDuplicatePacketsFilter(
-                        new PostProcessingFilter(
-                                new QlogPacketFilter(
-                                        new ClosingOrDrainingFilter(this, log))));
+                new CheckDestinationFilter(
+                        new DropDuplicatePacketsFilter(
+                                new PostProcessingFilter(
+                                        new QlogPacketFilter(
+                                                new ClosingOrDrainingFilter(this, log)))));
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -204,9 +205,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                     parsedPacket = null;
                 }
 
-                if (checkDestinationConnectionId(packet)) {
-                    processorChain.processPacket(packet, new PacketMetaData(timeReceived, data.hasRemaining()));
-                }
+                processorChain.processPacket(packet, new PacketMetaData(timeReceived, data.hasRemaining()));
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#name-coalescing-packets
@@ -927,6 +926,23 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {
         this.recoveryManager = recoveryManager;
+    }
+
+    class CheckDestinationFilter extends BasePacketFilter {
+
+        public CheckDestinationFilter(PacketFilter next) {
+            super(next);
+        }
+
+        @Override
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+            if (checkDestinationConnectionId(packet)) {
+                next(packet, metaData);
+            }
+            else {
+                discard(packet, "with unknown destination connection ID");
+            }
+        }
     }
 
     class ClosingOrDrainingFilter extends BasePacketFilter {
