@@ -204,7 +204,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
 
                 if (checkDestinationConnectionId(packet)) {
-                    processorChain.processPacket(timeReceived, packet);
+                    processorChain.processPacket(packet, new PacketMetaData(timeReceived));
                     getSender().packetProcessed(data.hasRemaining());
                 }
             }
@@ -434,8 +434,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void processPacket(Instant timeReceived, QuicPacket packet) {
-        ProcessResult result = packet.accept(this, timeReceived);
+    public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        ProcessResult result = packet.accept(this, metaData.timeReceived());
         if (result == ProcessResult.Abort) {
             return;
         }
@@ -936,7 +936,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         @Override
-        public void processPacket(Instant timeReceived, QuicPacket packet) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
             if (connectionState.closingOrDraining()) {
                 if (connectionState.isClosing()) {
                     // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
@@ -949,7 +949,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 }
             }
             else {
-                next(timeReceived, packet);
+                next(packet, metaData);
             }
         }
     }

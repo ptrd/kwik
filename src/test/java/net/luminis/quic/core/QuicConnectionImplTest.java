@@ -67,7 +67,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        packetProcessor.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -82,7 +82,7 @@ class QuicConnectionImplTest {
 
         // When
         InitialPacket packet = spy(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new CryptoFrame()));
-        packetProcessor.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -97,7 +97,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        packetProcessor.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -142,7 +142,7 @@ class QuicConnectionImplTest {
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        packetProcessor.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -186,7 +186,7 @@ class QuicConnectionImplTest {
         // When
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame());
         for (int i = 0; i < 100; i++) {
-            connection.processPacket(Instant.now(), packet);
+            connection.processPacket(packet, metaDataForNow());
         }
 
         // Then
@@ -207,6 +207,10 @@ class QuicConnectionImplTest {
     }
 
     //region helper methods
+    private PacketMetaData metaDataForNow() {
+        return new PacketMetaData(Instant.now());
+    }
+
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
         return connection.new ClosingOrDrainingFilter(connection, null);
     }

@@ -21,8 +21,6 @@ package net.luminis.quic.packet;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 
-import java.time.Instant;
-
 public abstract class BasePacketFilter implements PacketFilter {
 
     private final PacketFilter next;
@@ -43,8 +41,8 @@ public abstract class BasePacketFilter implements PacketFilter {
         this.log = next.logger();
     }
 
-    public void next(Instant timeReceived, QuicPacket packet) {
-        next.processPacket(timeReceived, packet);
+    public void next(QuicPacket packet, PacketMetaData metaData) {
+        next.processPacket(packet, metaData);
     }
 
     protected void discard(QuicPacket packet, String reason) {

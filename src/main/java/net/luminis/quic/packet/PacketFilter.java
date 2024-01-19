@@ -18,9 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import java.time.Instant;
-
 public interface PacketFilter {
 
-    void processPacket(Instant timeReceived, QuicPacket packet);
+    void processPacket(QuicPacket packet, PacketMetaData metaData);
 }

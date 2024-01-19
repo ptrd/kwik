@@ -45,140 +45,140 @@ class DropDuplicatePacketsFilterTest {
 
         // When
         QuicPacket initialPacket = createInitialPacket(0);
-        filter.processPacket(null, initialPacket);
+        filter.processPacket(initialPacket, null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 0));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 0), any());
     }
 
     @Test
     void samePacketNumberOnDifferentLevelWillBePassed() {
         // Given
         QuicPacket initialPacket = createInitialPacket(0);
-        filter.processPacket(null, initialPacket);
+        filter.processPacket(initialPacket, null);
         clearInvocations(endpoint);
 
         // When
         QuicPacket handshakePacket = createHandshakePacket(0);
-        filter.processPacket(null, handshakePacket);
+        filter.processPacket(handshakePacket, null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 0));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 0), any());
     }
 
     @Test
     void duplicatePacketWillBeDropped() {
         // Given
         QuicPacket packet3 = createInitialPacket(3);
-        filter.processPacket(null, packet3);
+        filter.processPacket(packet3, null);
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, packet3);
+        filter.processPacket(packet3, null);
 
         // Then
-        verify(endpoint, never()).processPacket(any(), any(QuicPacket.class));
+        verify(endpoint, never()).processPacket(any(QuicPacket.class), any());
     }
 
     @Test
     void delayedPacketWillBeProcessed() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9).forEach(packet -> filter.processPacket(packet, null));
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(4));
+        filter.processPacket(createInitialPacket(4), null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 4));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 4), any());
     }
 
     @Test
     void delayedPacketInsideWindowWillBeProcessed() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14).forEach(packet -> filter.processPacket(packet, null));
         // Window is now 5 .. 14
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(8));
+        filter.processPacket(createInitialPacket(8), null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 8));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 8), any());
     }
 
     @Test
     void afterTotalRollOverDelayedPacketInsideWindowWillBeProcessed() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23).forEach(packet -> filter.processPacket(packet, null));
         // Window is now 14 .. 23
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(16));
+        filter.processPacket(createInitialPacket(16), null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 16));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 16), any());
     }
 
     @Test
     void newPacketOutsideWindowsWillBeProcessed() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(12));
+        filter.processPacket(createInitialPacket(12), null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), argThat(packet -> packet.getPacketNumber() == 12));
+        verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 12), any());
     }
 
     @Test
     void duplicatePacketsInsideWindowWillBeDiscarded() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
         // Window is now: 2 .. 11
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(2));
-        filter.processPacket(null, createInitialPacket(10));
+        filter.processPacket(createInitialPacket(2), null);
+        filter.processPacket(createInitialPacket(10), null);
 
         // Then
-        verify(endpoint, never()).processPacket(any(), any(QuicPacket.class));
+        verify(endpoint, never()).processPacket(any(QuicPacket.class), any());
     }
 
     @Test
     void packetNumberOutsideWindowIsAlwaysDiscarded() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 14).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 14).forEach(packet -> filter.processPacket(packet, null));
         // Window is now: 5 .. 14
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(0));
-        filter.processPacket(null, createInitialPacket(1));
-        filter.processPacket(null, createInitialPacket(2));
-        filter.processPacket(null, createInitialPacket(3));
-        filter.processPacket(null, createInitialPacket(4));
+        filter.processPacket(createInitialPacket(0), null);
+        filter.processPacket(createInitialPacket(1), null);
+        filter.processPacket(createInitialPacket(2), null);
+        filter.processPacket(createInitialPacket(3), null);
+        filter.processPacket(createInitialPacket(4), null);
 
         // Then
-        verify(endpoint, never()).processPacket(any(), any(QuicPacket.class));
+        verify(endpoint, never()).processPacket(any(QuicPacket.class), any());
     }
 
     @Test
     void duplicatePacketOutsideWindowIsDiscarded() {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(null, packet));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
         // Window is now: 2 .. 11
         clearInvocations(endpoint);
 
         // When
-        filter.processPacket(null, createInitialPacket(1));
+        filter.processPacket(createInitialPacket(1), null);
 
         // Then
-        verify(endpoint, never()).processPacket(any(), any(QuicPacket.class));
+        verify(endpoint, never()).processPacket(any(QuicPacket.class), any());
     }
 
     @Test
@@ -187,10 +187,10 @@ class DropDuplicatePacketsFilterTest {
         QuicPacket packet = createNoPacketNumberPacket();
 
         // When
-        filter.processPacket(null, packet);
+        filter.processPacket(packet, null);
 
         // Then
-        verify(endpoint, times(1)).processPacket(any(), eq(packet));
+        verify(endpoint, times(1)).processPacket(eq(packet), any());
     }
 
     private QuicPacket createInitialPacket(int packetNumber) {

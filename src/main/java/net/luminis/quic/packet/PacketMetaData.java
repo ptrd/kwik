@@ -16,27 +16,19 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.qlog;
+package net.luminis.quic.packet;
 
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.BasePacketFilter;
-import net.luminis.quic.packet.PacketFilter;
-import net.luminis.quic.packet.PacketMetaData;
-import net.luminis.quic.packet.QuicPacket;
+import java.time.Instant;
 
-public class QlogPacketFilter extends BasePacketFilter {
+public class PacketMetaData {
 
-    public QlogPacketFilter(PacketFilter next, Logger log) {
-        super(next, log);
+    private final Instant timeReceived;
+
+    public PacketMetaData(Instant timeReceived) {
+        this.timeReceived = timeReceived;
     }
 
-    public QlogPacketFilter(BasePacketFilter next) {
-        super(next);
-    }
-
-    @Override
-    public void processPacket(QuicPacket packet, PacketMetaData metaData) {
-        logger().getQLog().emitPacketReceivedEvent(packet, metaData.timeReceived());
-        next(packet, metaData);
+    public Instant timeReceived() {
+        return timeReceived;
     }
 }

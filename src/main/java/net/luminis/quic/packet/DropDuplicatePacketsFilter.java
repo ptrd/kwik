@@ -20,7 +20,6 @@ package net.luminis.quic.packet;
 
 import net.luminis.quic.core.PnSpace;
 
-import java.time.Instant;
 import java.util.Arrays;
 
 /**
@@ -57,9 +56,9 @@ public class DropDuplicatePacketsFilter extends BasePacketFilter {
     }
 
     @Override
-    public void processPacket(Instant timeReceived, QuicPacket packet) {
+    public void processPacket(QuicPacket packet, PacketMetaData metaData) {
         if (packet.getPnSpace() == null || packetNumberSpace[packet.getPnSpace().ordinal()].checkPacketNumber(packet)) {
-            next(timeReceived, packet);
+            next(packet, metaData);
         }
         else {
             discard(packet, "duplicate packet");
