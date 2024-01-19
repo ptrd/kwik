@@ -58,7 +58,7 @@ public class DropDuplicatePacketsFilter extends BasePacketFilter {
 
     @Override
     public void processPacket(Instant timeReceived, QuicPacket packet) {
-        if (packetNumberSpace[packet.getPnSpace().ordinal()].checkPacketNumber(packet)) {
+        if (packet.getPnSpace() == null || packetNumberSpace[packet.getPnSpace().ordinal()].checkPacketNumber(packet)) {
             next(timeReceived, packet);
         }
         else {

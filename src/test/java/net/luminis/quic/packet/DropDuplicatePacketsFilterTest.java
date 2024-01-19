@@ -181,6 +181,18 @@ class DropDuplicatePacketsFilterTest {
         verify(endpoint, never()).processPacket(any(), any(QuicPacket.class));
     }
 
+    @Test
+    void retryOrVersionNegotiationPacketsAreAlwaysProcessed() {
+        // Given
+        QuicPacket packet = createNoPacketNumberPacket();
+
+        // When
+        filter.processPacket(null, packet);
+
+        // Then
+        verify(endpoint, times(1)).processPacket(any(), eq(packet));
+    }
+
     private QuicPacket createInitialPacket(int packetNumber) {
         QuicPacket packet = mock(QuicPacket.class);
         when(packet.getPacketNumber()).thenReturn((long) packetNumber);
@@ -203,5 +215,13 @@ class DropDuplicatePacketsFilterTest {
 
     private Stream<QuicPacket> createHandshakePackets(Integer... packetNumbers) {
         return Stream.of(packetNumbers).map(this::createHandshakePacket);
+    }
+
+    private QuicPacket createNoPacketNumberPacket() {
+        QuicPacket packet = mock(QuicPacket.class);
+        when(packet.getPacketNumber()).thenReturn(null);
+        when(packet.getEncryptionLevel()).thenReturn(null);
+        when(packet.getPnSpace()).thenReturn(null);
+        return packet;
     }
 }
