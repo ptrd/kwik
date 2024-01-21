@@ -29,10 +29,10 @@ import java.time.Instant;
  * but does not execute on a separate thread (which makes testing difficult). Just like the ServerConnectionThread,
  * this class receives the first parse initial packet in its constructor and passes it to the ServerConnectionImpl.
  */
-class ServerConnectionWrapper implements ServerConnectionProxy {
+class ServerConnectionThreadDummy implements ServerConnectionProxy {
     private final ServerConnectionImpl connection;
 
-    public ServerConnectionWrapper(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
+    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
         this.connection = connection;
         connection.parseAndProcessPackets(0, time, data, packet);
     }

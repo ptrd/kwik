@@ -19,6 +19,8 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.packet.DatagramFilter;
+import net.luminis.quic.packet.PacketMetaData;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
@@ -26,7 +28,6 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,29 +37,29 @@ class ClientAddressFilterTest {
     @Test
     void filterAllowsPacketsFromInitialClientAddress() {
         // Given
-        ServerConnectionProxy connection = mock(ServerConnectionProxy.class);
+        DatagramFilter sink = mock(DatagramFilter.class);
         InetSocketAddress initialClientAddress = new InetSocketAddress("www.example.com", 5839);
-        ClientAddressFilter filter = new ClientAddressFilter(connection, initialClientAddress, mock(Logger.class));
+        ClientAddressFilter filter = new ClientAddressFilter(initialClientAddress, mock(Logger.class), sink);
 
         // When
-        filter.parsePackets(1, Instant.now(), ByteBuffer.allocate(50), initialClientAddress);
+        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), initialClientAddress, 0));
 
         // Then
-        verify(connection).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any(InetSocketAddress.class));
+        verify(sink).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));
     }
 
     @Test
     void filterDropsPacketsNotFromInitialClientAddress() {
         // Given
-        ServerConnectionProxy connection = mock(ServerConnectionProxy.class);
+        DatagramFilter sink = mock(DatagramFilter.class);
         InetSocketAddress initialClientAddress = new InetSocketAddress("www.example.com", 5839);
-        ClientAddressFilter filter = new ClientAddressFilter(connection, initialClientAddress, mock(Logger.class));
+        ClientAddressFilter filter = new ClientAddressFilter(initialClientAddress, mock(Logger.class), sink);
 
         // When
         InetSocketAddress otherAddress = new InetSocketAddress("www.example.com", 5840);
-        filter.parsePackets(1, Instant.now(), ByteBuffer.allocate(50), otherAddress);
+        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), otherAddress, 0));
 
         // Then
-        verify(connection, never()).parsePackets(anyInt(), any(Instant.class), any(ByteBuffer.class), any(InetSocketAddress.class));
+        verify(sink, never()).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));
     }
 }

@@ -195,7 +195,7 @@ class ServerConnectorTest {
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection);
         when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(Instant.class), any(ByteBuffer.class)))
-                .thenAnswer(i -> new ServerConnectionWrapper(i.getArgument(0), i.getArgument(1), i.getArgument(2), i.getArgument(3)));
+                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), i.getArgument(2), i.getArgument(3)));
 
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
 

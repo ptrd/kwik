@@ -18,21 +18,35 @@
  */
 package net.luminis.quic.packet;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 
 public class PacketMetaData {
 
     private final Instant timeReceived;
+    private final InetSocketAddress sourceAddress;
+    private final int datagramNumber;
     private final boolean moreDataInDatagram;
 
     public PacketMetaData(Instant timeReceived) {
         this.timeReceived = timeReceived;
         moreDataInDatagram = false;
+        sourceAddress = null;
+        datagramNumber = -1;
     }
 
     public PacketMetaData(Instant timeReceived, boolean moreDataInDatagram) {
         this.timeReceived = timeReceived;
         this.moreDataInDatagram = moreDataInDatagram;
+        sourceAddress = null;
+        datagramNumber = -1;
+    }
+
+    public PacketMetaData(Instant timeReceived, InetSocketAddress sourceAddress, int datagramNumber) {
+        this.timeReceived = timeReceived;
+        this.sourceAddress = sourceAddress;
+        this.datagramNumber = datagramNumber;
+        moreDataInDatagram = false;
     }
 
     public Instant timeReceived() {
@@ -41,5 +55,13 @@ public class PacketMetaData {
 
     public boolean moreDataInDatagram() {
         return moreDataInDatagram;
+    }
+
+    public InetSocketAddress sourceAddress() {
+        return sourceAddress;
+    }
+
+    public int datagramNumber() {
+        return datagramNumber;
     }
 }

@@ -150,7 +150,7 @@ class ServerConnectionCandidateTest {
 
         @Override
         public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
-            return new ServerConnectionWrapper(connection, initialPacket, packetReceived, datagram);
+            return new ServerConnectionThreadDummy(connection, initialPacket, packetReceived, datagram);
         }
     }
 }
