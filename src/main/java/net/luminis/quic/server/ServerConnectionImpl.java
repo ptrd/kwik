@@ -420,12 +420,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
-        if (InitialPacket.isInitial(data) && data.limit() < 1200) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14.1
-            // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller
-            //  than the smallest allowed maximum datagram size of 1200 bytes."
-            return;
-        }
 
         // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8
         // "Therefore, after receiving packets from an address that is not yet validated, an endpoint MUST limit the

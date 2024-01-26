@@ -25,7 +25,6 @@ import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.FrameProcessor;
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
@@ -499,37 +498,6 @@ class ServerConnectionImplTest {
     //endregion
 
     //region initial packet validation
-    @Test
-    void initialPacketCarriedInDatagramSmallerThan1200BytesShouldBeDropped() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
-
-        // Then
-        verify(connection.getSender(), never()).send(any(QuicFrame.class), any(EncryptionLevel.class));
-    }
-
-    @Test
-    void initialPacketWithPaddingInDatagramShouldBeAccepted() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        ByteBuffer buffer = ByteBuffer.allocate(1200);
-        buffer.put(initialPacketBytes);
-        buffer.position(0);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
-
-        // Then
-        verify(connection.getSender(), atLeastOnce()).send(any(QuicFrame.class), any(EncryptionLevel.class));
-    }
-
     @Test
     void whenInitialPacketPaddedInDatagramAllBytesShouldBeCountedInAntiAmplificationLimit() throws Exception {
         // Given

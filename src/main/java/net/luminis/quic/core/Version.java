@@ -48,7 +48,7 @@ public class Version {
         return null;
     }
     
-    Version(int versionId) {
+    public Version(int versionId) {
         this.versionId = versionId;
     }
 
