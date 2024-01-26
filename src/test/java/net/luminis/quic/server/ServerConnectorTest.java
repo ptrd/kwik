@@ -20,7 +20,10 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.receive.RawPacket;
 import net.luminis.quic.test.FieldReader;
@@ -59,7 +62,7 @@ class ServerConnectorTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, mock(Logger.class));
+        server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, new SysOutLogger());
         server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
         clock = new TestClock();
         context = mock(Context.class);
@@ -194,8 +197,8 @@ class ServerConnectorTest {
         when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
                 .thenReturn(connection);
-        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(Instant.class), any(ByteBuffer.class)))
-                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), i.getArgument(2), i.getArgument(3)));
+        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(PacketMetaData.class)))
+                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), ((PacketMetaData) i.getArgument(2)).timeReceived()));
 
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
 
@@ -205,8 +208,7 @@ class ServerConnectorTest {
 
         // Then
         verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
-        // And
-        verify(connection).parseAndProcessPackets(anyInt(), any(Instant.class), any(ByteBuffer.class), argThat(packet -> packet instanceof InitialPacket));
+        verify(connection).processPacket(any(QuicPacket.class), any(PacketMetaData.class));
     }
 
     @Test

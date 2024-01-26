@@ -111,7 +111,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
                 data.rewind();
-                createAndRegisterServerConnection(initialPacket, timeReceived, data);
+                createAndRegisterServerConnection(initialPacket, metaData, data);
             }
         } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
@@ -134,13 +134,13 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
     }
 
-    private void createAndRegisterServerConnection(InitialPacket initialPacket, Instant timeReceived, ByteBuffer data) {
+    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer data) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
         ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
 
         // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
-        ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, timeReceived, data);
+        ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, metaData);
         connection.increaseAntiAmplificationLimit(data.remaining());
 
         ServerConnectionProxy wrappedConnection = wrapWithFilters(connectionProxy, connection::increaseAntiAmplificationLimit);

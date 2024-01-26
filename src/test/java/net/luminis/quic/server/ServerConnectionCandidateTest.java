@@ -22,6 +22,7 @@ import net.luminis.quic.core.TestUtils;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
@@ -149,8 +150,8 @@ class ServerConnectionCandidateTest {
         }
 
         @Override
-        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
-            return new ServerConnectionThreadDummy(connection, initialPacket, packetReceived, datagram);
+        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, PacketMetaData metaData) {
+            return new ServerConnectionThreadDummy(connection, initialPacket, metaData.timeReceived());
         }
     }
 }

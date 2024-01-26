@@ -19,6 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -32,9 +33,10 @@ import java.time.Instant;
 class ServerConnectionThreadDummy implements ServerConnectionProxy {
     private final ServerConnectionImpl connection;
 
-    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
+    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, Instant time) {
         this.connection = connection;
-        connection.parseAndProcessPackets(0, time, data, packet);
+        assert(packet != null);
+        connection.processPacket(packet, new PacketMetaData(time));
     }
 
     @Override
@@ -44,7 +46,7 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        connection.parseAndProcessPackets(datagramNumber, timeReceived, data, null);
+        connection.parseAndProcessPackets(datagramNumber, timeReceived, data);
     }
 
     @Override

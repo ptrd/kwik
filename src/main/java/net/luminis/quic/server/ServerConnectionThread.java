@@ -19,6 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -38,15 +39,13 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final BlockingQueue<ReceivedDatagram> queue;
     private final Thread connectionReceiverThread;
     private final InitialPacket firstInitialPacket;
-    private final Instant firstPacketReceived;
-    private final ByteBuffer firstDatagram;
+    private final PacketMetaData firstInitialPacketMetaData;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, Instant firstPacketReceived, ByteBuffer firstDatagram) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, PacketMetaData initialPacketMetaData) {
         this.serverConnection = serverConnection;
         this.firstInitialPacket = firstInitialPacket;
-        this.firstPacketReceived = firstPacketReceived;
-        this.firstDatagram = firstDatagram;
+        this.firstInitialPacketMetaData = initialPacketMetaData;
 
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
@@ -77,11 +76,11 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private void process() {
         try {
             if (firstInitialPacket != null) {
-                serverConnection.parseAndProcessPackets(0, firstPacketReceived, firstDatagram, firstInitialPacket);
+                serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
             }
             while (! connectionReceiverThread.isInterrupted()) {
                 ReceivedDatagram datagram = queue.take();
-                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data, null);
+                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data);
             }
         }
         catch (InterruptedException e) {

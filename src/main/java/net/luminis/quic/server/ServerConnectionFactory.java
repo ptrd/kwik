@@ -21,13 +21,12 @@ package net.luminis.quic.server;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
@@ -78,7 +77,7 @@ public class ServerConnectionFactory {
         return connection;
     }
 
-    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, Instant packetReceived, ByteBuffer datagram) {
-        return new ServerConnectionThread(connection, initialPacket, packetReceived, datagram);
+    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, PacketMetaData metaData) {
+        return new ServerConnectionThread(connection, initialPacket, metaData);
     }
 }

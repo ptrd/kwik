@@ -191,19 +191,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return getStreamManager().createStream(bidirectional);
     }
 
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
-        while (data.remaining() > 0 || parsedPacket != null) {
+    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data) {
+        while (data.remaining() > 0) {
             try {
                 QuicPacket packet;
-                if (parsedPacket == null) {
-                    packet = parsePacket(data);
-                    log.received(timeReceived, datagram, packet);
-                    log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
-                }
-                else {
-                    packet = parsedPacket;
-                    parsedPacket = null;
-                }
+                packet = parsePacket(data);
+                log.received(timeReceived, datagram, packet);
+                log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
 
                 processorChain.processPacket(packet, new PacketMetaData(timeReceived, data.hasRemaining()));
             }
@@ -922,6 +916,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public Role getRole() {
         return role;
+    }
+
+    public PacketFilter getPacketProcessorChain() {
+        return processorChain;
     }
 
     public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {

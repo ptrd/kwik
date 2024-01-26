@@ -405,7 +405,7 @@ class ServerConnectionImplTest {
         secondPaddedInitial.put(secondInitialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
         secondPaddedInitial.position(0);
 
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
 
         verify(connection.getSender()).send(argumentCaptor1.capture());
@@ -413,7 +413,7 @@ class ServerConnectionImplTest {
         clearInvocations(connection.getSender());
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial);
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
         RetryPacket retryPacket2 = argumentCaptor1.getValue();
