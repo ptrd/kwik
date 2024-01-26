@@ -138,6 +138,9 @@ public class FlowControl {
      */
     public BlockReason getFlowControlBlockReason(QuicStream stream) {
         int streamId = stream.getStreamId();
+        if (! maxStreamDataAllowed.containsKey(streamId)) {
+            return BlockReason.NOT_BLOCKED;
+        }
         if (maxStreamDataAssigned.get(streamId).equals(maxStreamDataAllowed.get(streamId))) {
             return BlockReason.STREAM_DATA_BLOCKED;
         }
