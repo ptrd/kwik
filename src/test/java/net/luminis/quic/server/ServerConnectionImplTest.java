@@ -398,20 +398,23 @@ class ServerConnectionImplTest {
         initialPacket.setPacketNumber(0);
         ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
         paddedInitial.put(initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
+        paddedInitial.position(0);
 
         InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
         secondInitialPacket.setPacketNumber(1);
         ByteBuffer secondPaddedInitial = ByteBuffer.allocate(1200);
         secondPaddedInitial.put(secondInitialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
+        secondPaddedInitial.position(0);
 
-        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
+
         verify(connection.getSender()).send(argumentCaptor1.capture());
         byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(null);
         clearInvocations(connection.getSender());
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial, null);
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
         RetryPacket retryPacket2 = argumentCaptor1.getValue();
@@ -520,6 +523,7 @@ class ServerConnectionImplTest {
         // When
         ByteBuffer buffer = ByteBuffer.allocate(1200);
         buffer.put(initialPacketBytes);
+        buffer.position(0);
         connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
 
         // Then
@@ -536,6 +540,7 @@ class ServerConnectionImplTest {
         // When
         ByteBuffer buffer = ByteBuffer.allocate(1200);
         buffer.put(initialPacketBytes);
+        buffer.position(0);
         connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
 
         // Then
