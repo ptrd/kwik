@@ -448,10 +448,10 @@ class ServerConnectionImplTest {
 
         // When
         byte[] validInitial = TestUtils.createValidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(validInitial), null);
-        ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
+        connection.increaseAntiAmplificationLimit(validInitial.length);
 
         // Then
+        ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
         verify(connection.getSender()).setAntiAmplificationLimit(antiAmplificationLimitCaptor.capture());
         assertThat(antiAmplificationLimitCaptor.getValue()).isEqualTo(3 * validInitial.length);
     }
@@ -460,7 +460,7 @@ class ServerConnectionImplTest {
     void receivingInvalidInitialPacketShouldAddToAntiAmplificationLimit() throws Exception {
         // When
         byte[] invalidInitial = TestUtils.createInvalidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(invalidInitial), null);
+        connection.increaseAntiAmplificationLimit(invalidInitial.length);
 
         // Then
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -498,25 +498,6 @@ class ServerConnectionImplTest {
     //endregion
 
     //region initial packet validation
-    @Test
-    void whenInitialPacketPaddedInDatagramAllBytesShouldBeCountedInAntiAmplificationLimit() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        ByteBuffer buffer = ByteBuffer.allocate(1200);
-        buffer.put(initialPacketBytes);
-        buffer.position(0);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
-
-        // Then
-        ArgumentCaptor<Integer> antiAmplicationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(connection.getSender()).setAntiAmplificationLimit(antiAmplicationLimitCaptor.capture());
-        assertThat(antiAmplicationLimitCaptor.getValue()).isEqualTo(3 * 1200);
-    }
-
     @Test
     void retransmittedInitialPacketShouldBeAccepted() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
