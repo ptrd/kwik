@@ -22,6 +22,7 @@ import net.luminis.quic.core.Version;
 import net.luminis.quic.packet.BaseDatagramFilter;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.PacketMetaData;
 
 import java.nio.ByteBuffer;
@@ -41,11 +42,13 @@ public class InitialPacketMinimumSizeFilter extends BaseDatagramFilter {
     public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
         data.mark();
         int datagramLength = data.limit() - data.position();
-        int flags = data.get();
-        Version packetVersion = new Version(data.getInt());
+        byte flags = data.get();
+        Version longHeaderPacketVersion = new Version(data.getInt());  // Field only represents version when long header packet
         data.rewind();
 
-        if (InitialPacket.isInitial((flags & 0x30) >> 4, packetVersion) && datagramLength < 1200) {
+        if (LongHeaderPacket.isLongHeaderPacket(flags, longHeaderPacketVersion)
+                && InitialPacket.isInitial((flags & 0x30) >> 4, longHeaderPacketVersion)
+                && datagramLength < 1200) {
             discard(data, metaData, "Initial packet is smaller than minimum size");
         }
         else {

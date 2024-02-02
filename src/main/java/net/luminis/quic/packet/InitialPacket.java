@@ -52,8 +52,15 @@ public class InitialPacket extends LongHeaderPacket {
         return (flags & 0xf0) == 0b1100_0000;
     }
 
-    public static boolean isInitial(int type, Version quicVersion) {
-        if (quicVersion.isV2()) {
+    /**
+     * Determines if the given long header type indicates an Initial packet.
+     * WARNING: should only be used for long header packets!
+     * @param type  the type of the packet, WARNING: this is not the raw flags byte!
+     * @param packetVersion  the QUIC version of the long header packet
+     * @return
+     */
+    public static boolean isInitial(int type, Version packetVersion) {
+        if (packetVersion.isV2()) {
             return type == V2_type;
         }
         else {

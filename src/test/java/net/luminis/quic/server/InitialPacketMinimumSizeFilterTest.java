@@ -81,4 +81,14 @@ class InitialPacketMinimumSizeFilterTest {
 
         verify(sink).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));
     }
+
+    @Test
+    void oneRttPacketShouldPassFilter() {
+        // Given
+        byte oneRttPacketFlags = (byte) 0b0100_0000;
+        byte[] packetBytes = new byte[] { oneRttPacketFlags, 0, 0, 0, 0 };
+        filter.processDatagram(ByteBuffer.wrap(packetBytes), metaData);
+
+        verify(sink).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));
+    }
 }
