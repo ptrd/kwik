@@ -19,6 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.BaseDatagramFilter;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.InitialPacket;
@@ -34,8 +35,8 @@ import java.nio.ByteBuffer;
  */
 public class InitialPacketMinimumSizeFilter extends BaseDatagramFilter {
 
-    public InitialPacketMinimumSizeFilter(DatagramFilter next) {
-        super(next);
+    public InitialPacketMinimumSizeFilter(Logger log, DatagramFilter next) {
+        super(next, log);
     }
 
     @Override

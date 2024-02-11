@@ -70,7 +70,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         this.connectionRegistry = connectionRegistry;
         this.log = log;
 
-        filterChain = new InitialPacketMinimumSizeFilter(this);
+        filterChain = new InitialPacketMinimumSizeFilter(log, this);
     }
 
     @Override
@@ -153,7 +153,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         // Add filter to check client address.
         return new ServerConnectionWrapper(connection, log,
                 new ClientAddressFilter(clientAddress, log,
-                        new InitialPacketMinimumSizeFilter(adapter)));
+                        new InitialPacketMinimumSizeFilter(log, adapter)));
     }
 
     @Override

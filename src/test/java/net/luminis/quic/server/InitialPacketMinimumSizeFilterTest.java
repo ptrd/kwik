@@ -19,6 +19,7 @@
 
 import net.luminis.quic.core.TestUtils;
 import net.luminis.quic.core.Version;
+import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.PacketMetaData;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +42,7 @@ class InitialPacketMinimumSizeFilterTest {
     @BeforeEach
     void setUp() {
         sink = mock(DatagramFilter.class);
-        filter = new InitialPacketMinimumSizeFilter(sink);
+        filter = new InitialPacketMinimumSizeFilter(mock(Logger.class), sink);
         metaData = mock(PacketMetaData.class);
     }
 
