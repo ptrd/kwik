@@ -240,7 +240,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             // Make sure the packet starts at the beginning of the buffer (required by parse routines)
             data = data.slice();
         }
+    }
 
+    public void datagramProcessed() {
         // Processed all packets in the datagram, so not expecting more.
         getSender().packetProcessed(false);
 

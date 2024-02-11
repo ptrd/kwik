@@ -425,6 +425,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private void receiveAndProcessPackets() {
         Thread currentThread = Thread.currentThread();
         int receivedPacketCounter = 0;
+        DatagramFilter adapter = (data, metaData) -> this.parseAndProcessPackets(metaData.datagramNumber(), metaData.timeReceived(), data);
+        DatagramFilter datagramProcessingChain = new DatagramPostProcessingFilter(this::datagramProcessed, adapter);
 
         try {
             while (! currentThread.isInterrupted()) {
@@ -434,7 +436,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData());
+                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), null, receivedPacketCounter);
+                    datagramProcessingChain.processDatagram(rawPacket.getData(), metaData);
+
                     sender.datagramProcessed(receiver.hasMore());
                 }
             }
