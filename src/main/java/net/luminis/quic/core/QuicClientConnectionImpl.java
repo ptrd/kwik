@@ -228,6 +228,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
     }
 
+    @Override
+    protected boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
+        if (checkForStatelessResetToken(data)) {
+            if (enterDrainingState()) {
+                log.info("Entering draining state because stateless reset was received");
+            }
+            else {
+                log.debug("Received stateless reset");
+            }
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
     protected TransportParameters initTransportParameters() {
         TransportParameters parameters = new TransportParameters();
 

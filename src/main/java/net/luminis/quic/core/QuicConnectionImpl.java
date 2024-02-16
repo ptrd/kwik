@@ -205,16 +205,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                     // Nothing could be made out of it, so the whole datagram will be discarded
                     nrOfPacketBytes = data.remaining();
                 }
-                if (checkForStatelessResetToken(data)) {
-                    if (enterDrainingState()) {
-                        log.info("Entering draining state because stateless reset was received");
-                    }
-                    else {
-                        log.debug("Received stateless reset");
-                    }
-                    break;
-                }
-                else {
+                if (! handleUnprotectPacketFailure(data, cannotParse)) {
                     log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
                 }
             }
@@ -234,6 +225,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             // Make sure the packet starts at the beginning of the buffer (required by parse routines)
             data = data.slice();
         }
+    }
+
+    protected boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
+        return false;
     }
 
     public void datagramProcessed() {
