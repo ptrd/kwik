@@ -295,40 +295,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Aead aead;
-            if (packet.getVersion().equals(quicVersion.getVersion())) {
-                aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
-            }
-            else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
-                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
-                // "Both endpoints MUST send Handshake or 1-RTT packets using the negotiated version. An endpoint MUST
-                //  drop packets using any other version."
-                log.warn("Dropping packet not using negotiated version");
-                throw new InvalidPacketException("invalid version");
-            }
-            else if (role == Role.Client && packet.getEncryptionLevel() == Initial) {
-                log.info(String.format("Receiving packet with version %s, while connection version is %s", packet.getVersion(), quicVersion));
-                // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
-                ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
-                altSecrets.computeInitialKeys(getDestinationConnectionId());
-                aead = altSecrets.getPeerAead(packet.getEncryptionLevel());
-            }
-            else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
-                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
-                // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
-                aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
-            }
-            else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
-                // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
-                // "The server MUST NOT discard its original version Initial receive keys until it successfully processes
-                //  a packet with the negotiated version."
-                aead = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
-            }
-            else {
-                log.warn("Dropping packet not using negotiated version");
-                throw new InvalidPacketException("invalid version");
-            }
-
+            Aead aead = getAead(packet);
             long largestPN = packet.getPnSpace() != null? largestPacketNumber[packet.getPnSpace().ordinal()]: 0;
             packet.parse(data, aead, largestPN, log, getSourceConnectionIdLength());
         }
@@ -342,6 +309,43 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             largestPacketNumber[packet.getPnSpace().ordinal()] = packet.getPacketNumber();
         }
         return packet;
+    }
+
+    private Aead getAead(QuicPacket packet) throws MissingKeysException, InvalidPacketException {
+        Aead aead;
+        if (packet.getVersion().equals(quicVersion.getVersion())) {
+            aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
+        }
+        else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
+            // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+            // "Both endpoints MUST send Handshake or 1-RTT packets using the negotiated version. An endpoint MUST
+            //  drop packets using any other version."
+            log.warn("Dropping packet not using negotiated version");
+            throw new InvalidPacketException("invalid version");
+        }
+        else if (role == Role.Client && packet.getEncryptionLevel() == Initial) {
+            log.info(String.format("Receiving packet with version %s, while connection version is %s", packet.getVersion(), quicVersion));
+            // Need other secrets to decrypt packet; when version negotiation succeeds, connection version will be adapted.
+            ConnectionSecrets altSecrets = new ConnectionSecrets(new VersionHolder(packet.getVersion()), role, null, new NullLogger());
+            altSecrets.computeInitialKeys(getDestinationConnectionId());
+            aead = altSecrets.getPeerAead(packet.getEncryptionLevel());
+        }
+        else if (role == Role.Server && packet.getEncryptionLevel() == ZeroRTT) {
+            // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+            // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
+            aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
+        }
+        else if (role == Role.Server && packet.getEncryptionLevel() == Initial && versionNegotiationStatus == VersionChangeUnconfirmed) {
+            // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
+            // "The server MUST NOT discard its original version Initial receive keys until it successfully processes
+            //  a packet with the negotiated version."
+            aead = connectionSecrets.getInitialPeerSecretsForVersion(packet.getVersion());
+        }
+        else {
+            log.warn("Dropping packet not using negotiated version");
+            throw new InvalidPacketException("invalid version");
+        }
+        return aead;
     }
 
     protected void processFrames(QuicPacket packet, Instant timeReceived) {
