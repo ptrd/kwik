@@ -87,7 +87,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
-    protected enum VersionNegotiationStatus {
+    public enum VersionNegotiationStatus {
         NotStarted,
         VersionChangeUnconfirmed,
         VersionNegotiated
@@ -298,9 +298,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             Aead aead;
             if (packet.getVersion().equals(quicVersion.getVersion())) {
                 aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
-                if (role == Role.Server && versionNegotiationStatus == VersionChangeUnconfirmed) {
-                    versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
-                }
             }
             else if (packet.getEncryptionLevel() == App || packet.getEncryptionLevel() == Handshake) {
                 // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ

@@ -64,6 +64,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.core.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
@@ -161,9 +162,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected PacketFilter createProcessorChain() {
         return new CheckDestinationFilter(
                 new DropDuplicatePacketsFilter(
-                        new PostProcessingFilter(
-                                new QlogPacketFilter(
-                                        new ClosingOrDrainingFilter(this, log)))));
+                        new VersionNegotiationConfirmedFilter(
+                                new PostProcessingFilter(
+                                        new QlogPacketFilter(
+                                                new ClosingOrDrainingFilter(this, log))))));
     }
 
     @Override
@@ -734,5 +736,22 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 + "(" + getQuicVersion() + ")"
                 + " " + initialClientAddress
                 + "]";
+    }
+
+    class VersionNegotiationConfirmedFilter extends BasePacketFilter {
+
+        public VersionNegotiationConfirmedFilter(PacketFilter next) {
+            super(next);
+        }
+
+        @Override
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+            if (versionNegotiationStatus == VersionChangeUnconfirmed) {
+                if (packet.getVersion().equals(quicVersion.getVersion())) {
+                    versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
+                }
+            }
+            next(packet, metaData);
+        }
     }
 }
