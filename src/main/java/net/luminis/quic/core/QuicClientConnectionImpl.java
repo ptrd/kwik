@@ -216,6 +216,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }, this);
     }
 
+    @Override
+    protected PacketFilter createProcessorChain() {
+        return new CheckDestinationFilter(
+                new DropDuplicatePacketsFilter(
+                        new PostProcessingFilter(
+                                new ClosingOrDrainingFilter(this, log))));
+    }
+
     private Predicate<DatagramPacket> createPacketFilter() {
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
     }

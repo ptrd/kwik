@@ -32,6 +32,7 @@ import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
@@ -154,6 +155,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         streamManager = new StreamManager(this, Role.Server, log, configuration);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
+    }
+
+    @Override
+    protected PacketFilter createProcessorChain() {
+        return new CheckDestinationFilter(
+                new DropDuplicatePacketsFilter(
+                        new PostProcessingFilter(
+                                new QlogPacketFilter(
+                                        new ClosingOrDrainingFilter(this, log)))));
     }
 
     @Override

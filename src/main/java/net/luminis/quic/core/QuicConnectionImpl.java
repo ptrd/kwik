@@ -33,7 +33,6 @@ import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
@@ -131,12 +130,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.role = role;
         this.log = log;
 
-        processorChain =
-                new CheckDestinationFilter(
-                        new DropDuplicatePacketsFilter(
-                                new PostProcessingFilter(
-                                        new QlogPacketFilter(
-                                                new ClosingOrDrainingFilter(this, log)))));
+        processorChain = createProcessorChain();
 
         connectionSecrets = new ConnectionSecrets(quicVersion, role, secretsFile, log);
 
@@ -877,6 +871,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return quicVersion.getVersion().toQuicVersion();
     }
 
+    protected abstract PacketFilter createProcessorChain();
+    
     protected abstract SenderImpl getSender();
 
     protected abstract TlsEngine getTlsEngine();
@@ -928,7 +924,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         this.recoveryManager = recoveryManager;
     }
 
-    class CheckDestinationFilter extends BasePacketFilter {
+    protected class CheckDestinationFilter extends BasePacketFilter {
 
         public CheckDestinationFilter(PacketFilter next) {
             super(next);
@@ -945,7 +941,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
-    class ClosingOrDrainingFilter extends BasePacketFilter {
+    protected class ClosingOrDrainingFilter extends BasePacketFilter {
 
         public ClosingOrDrainingFilter(PacketFilter next, Logger log) {
             super(next, log);
@@ -970,7 +966,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
-    class PostProcessingFilter extends BasePacketFilter {
+    protected class PostProcessingFilter extends BasePacketFilter {
 
             public PostProcessingFilter(PacketFilter next) {
                 super(next);
