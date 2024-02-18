@@ -22,6 +22,7 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.core.*;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.HandshakeDoneFrame;
@@ -29,6 +30,8 @@ import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.NewTokenFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -405,29 +408,26 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
-        try {
-            return super.parsePacket(data);
-        }
-        catch (DecryptionException decryptionException) {
-            Version connectionVersion = quicVersion.getVersion();
-            if (retryRequired
-                    && LongHeaderPacket.isLongHeaderPacket(data.get(0), connectionVersion)
-                    && InitialPacket.isInitial((data.get(0) & 0x30) >> 4, connectionVersion)) {
-                // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
-                try {
-                    data.rewind();
-                    connectionSecrets.computeInitialKeys(connectionIdManager.getOriginalDestinationConnectionId());
-                    return super.parsePacket(data);
-                }
-                finally {
-                    connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
-                }
+    protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException {
+        if (retryRequired && packet instanceof InitialPacket) {
+            // Check whether the packet has a (retry) token
+            data.mark();
+            int destCidLength = data.get(5) & 0xff;
+            int srcCidLength = data.get(6 + destCidLength) & 0xff;
+            data.position(7 + destCidLength + srcCidLength);
+            int tokenLength;
+            try {
+                tokenLength = VariableLengthInteger.parse(data);
+            } catch (InvalidIntegerEncodingException e) {
+                throw new InvalidPacketException();
             }
-            else {
-                throw decryptionException;
+            data.reset();
+            if (tokenLength == 0) {
+                // If the packet has no token, it uses the secrets based on the original destination connection id.
+                return connectionSecrets.getOriginalClientInitialAead();
             }
         }
+        return super.getAead(packet, data);
     }
 
     void increaseAntiAmplificationLimit(int increment) {
@@ -455,7 +455,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
-                connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
+                connectionSecrets.recomputeInitialKeys(connectionIdManager.getInitialConnectionId());
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
             else if (!Arrays.equals(packet.getToken(), token)) {

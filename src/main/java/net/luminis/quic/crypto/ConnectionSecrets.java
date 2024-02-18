@@ -66,6 +66,7 @@ public class ConnectionSecrets {
     private byte[] clientRandom;
     private Aead[] clientSecrets = new Aead[EncryptionLevel.values().length];
     private Aead[] serverSecrets = new Aead[EncryptionLevel.values().length];
+    private Aead originalClientInitialSecret;
     private boolean writeSecretsToFile;
     private Path wiresharkSecretsFile;
     private byte[] originalDestinationConnectionId;
@@ -106,6 +107,20 @@ public class ConnectionSecrets {
         //  Initial packet sent by the client; "
         clientSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Client, log);
         serverSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Server, log);
+    }
+
+    /**
+     * Recompute the initial secrets based on a new destination connection id. This only happens when the server sends
+     * a Retry packet; a Retry packet contains a new (server) source destination id, which must be used by the client as
+     * the new destination connection id.
+     * This method keeps the original (client) initial keys that must be used for decoding client packets without the
+     * (retry) token (which can happen if the retry is lost or otherwise not received in time by the client).
+     * @param destConnectionId
+     */
+    public synchronized void recomputeInitialKeys(byte[] destConnectionId) {
+        originalClientInitialSecret = clientSecrets[EncryptionLevel.Initial.ordinal()];
+        this.originalDestinationConnectionId = destConnectionId;
+        computeInitialKeys(destConnectionId);
     }
 
     /**
@@ -238,6 +253,21 @@ public class ConnectionSecrets {
     public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
         Aead aead = (ownRole == Role.Client) ? clientSecrets[encryptionLevel.ordinal()] : serverSecrets[encryptionLevel.ordinal()];
         return checkNotNull(aead, encryptionLevel);
+    }
+
+    /**
+     * Returns the initial secrets based on the original (server) destination connection id.
+     * This differs from the current initial secrets when the server has sent a Retry packet.
+     * The original (client) initial keys must be used for decoding client packets without the
+     * (retry) token (which can happen if the retry is lost or otherwise not received in time by the client).
+     */
+    public synchronized Aead getOriginalClientInitialAead() {
+        if (originalClientInitialSecret != null) {
+            return originalClientInitialSecret;
+        }
+        else {
+            return clientSecrets[EncryptionLevel.Initial.ordinal()];
+        }
     }
 
     private Aead checkNotNull(Aead aead, EncryptionLevel encryptionLevel) throws MissingKeysException {

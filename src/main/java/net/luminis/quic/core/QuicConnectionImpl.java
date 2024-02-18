@@ -262,7 +262,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return false;
     }
 
-    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+    public QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
         data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
@@ -290,7 +290,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         data.rewind();
 
         if (packet.getEncryptionLevel() != null) {
-            Aead aead = getAead(packet);
+            Aead aead = getAead(packet, data);
             long largestPN = packet.getPnSpace() != null? largestPacketNumber[packet.getPnSpace().ordinal()]: 0;
             packet.parse(data, aead, largestPN, log, getSourceConnectionIdLength());
         }
@@ -306,7 +306,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return packet;
     }
 
-    private Aead getAead(QuicPacket packet) throws MissingKeysException, InvalidPacketException {
+    protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException {
         Aead aead;
         if (packet.getVersion().equals(quicVersion.getVersion())) {
             aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
