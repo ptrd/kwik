@@ -21,13 +21,13 @@ package net.luminis.quic.server;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.FrameProcessor;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.send.SenderImpl;
@@ -395,17 +395,11 @@ class ServerConnectionImplTest {
 
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
         initialPacket.setPacketNumber(0);
-        ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
-        paddedInitial.put(initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
-        paddedInitial.position(0);
 
         InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
         secondInitialPacket.setPacketNumber(1);
-        ByteBuffer secondPaddedInitial = ByteBuffer.allocate(1200);
-        secondPaddedInitial.put(secondInitialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial)));
-        secondPaddedInitial.position(0);
 
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial);
+        connection.getPacketProcessorChain().processPacket(initialPacket, new PacketMetaData(Instant.now(), false));
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
 
         verify(connection.getSender()).send(argumentCaptor1.capture());
@@ -413,13 +407,13 @@ class ServerConnectionImplTest {
         clearInvocations(connection.getSender());
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), secondPaddedInitial);
+        connection.getPacketProcessorChain().processPacket(secondInitialPacket, new PacketMetaData(Instant.now(), false));
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
-        RetryPacket retryPacket2 = argumentCaptor1.getValue();
+        byte[] retryPacket2 = argumentCaptor1.getValue().generatePacketBytes(null);
 
         // Then
-        assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(null));
+        assertThat(retryPacket1).isEqualTo(retryPacket2);
     }
     //endregion
 
@@ -515,20 +509,6 @@ class ServerConnectionImplTest {
     //endregion
 
     //region handle missing or dicarded keys
-    @Test
-    void whenParsingZeroRttPacketItShouldFailOnMissingKeys() throws Exception {
-        // Given
-        byte[] data = { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-
-        assertThatThrownBy(() ->
-                // When
-                connection.parsePacket(ByteBuffer.wrap(data))
-        )
-                // Then
-                .isInstanceOf(MissingKeysException.class)
-                .hasMessageContaining("ZeroRTT");
-    }
-
     @Test
     void whenHandshakePacketIsProcessedInitialKeysShouldBeDiscarded() throws NoSuchFieldException {
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);

@@ -180,6 +180,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
         connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
+        parser = new ClientRolePacketParser(connectionSecrets, quicVersion, connectionIdManager.getConnectionIdLength(),
+                connectionIdManager.getOriginalDestinationConnectionId(),
+                createProcessorChain(), this::handleUnprotectPacketFailure, log);
 
         connectionState = Status.Created;
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
@@ -228,8 +231,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
     }
 
-    @Override
-    protected boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
+    boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
         if (checkForStatelessResetToken(data)) {
             if (enterDrainingState()) {
                 log.info("Entering draining state because stateless reset was received");
@@ -667,6 +669,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 connectionIdManager.registerRetrySourceConnectionId(peerConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(peerConnectionId));
                 generateInitialKeys();
+                ((ClientRolePacketParser) parser).setOriginalDestinationConnectionId(peerConnectionId);
 
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
                 // "A Retry or Version Negotiation packet causes a client to send another
@@ -964,7 +967,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return newConnectionId;
     }
 
-    @Override
     protected boolean checkForStatelessResetToken(ByteBuffer data) {
         byte[] tokenCandidate = new byte[16];
         data.position(data.limit() - 16);

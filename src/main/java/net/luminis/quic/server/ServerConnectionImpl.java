@@ -22,16 +22,12 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.core.*;
-import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.CryptoStream;
-import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.HandshakeDoneFrame;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.NewTokenFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
-import net.luminis.quic.generic.InvalidIntegerEncodingException;
-import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -141,6 +137,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
+
+        parser = new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(), retryRequired,
+                processorChain, () -> versionNegotiationStatus, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -407,28 +406,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
     }
 
-    @Override
-    protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException {
-        if (retryRequired && packet instanceof InitialPacket) {
-            // Check whether the packet has a (retry) token
-            data.mark();
-            int destCidLength = data.get(5) & 0xff;
-            int srcCidLength = data.get(6 + destCidLength) & 0xff;
-            data.position(7 + destCidLength + srcCidLength);
-            int tokenLength;
-            try {
-                tokenLength = VariableLengthInteger.parse(data);
-            } catch (InvalidIntegerEncodingException e) {
-                throw new InvalidPacketException();
-            }
-            data.reset();
-            if (tokenLength == 0) {
-                // If the packet has no token, it uses the secrets based on the original destination connection id.
-                return connectionSecrets.getOriginalClientInitialAead();
-            }
-        }
-        return super.getAead(packet, data);
-    }
 
     void increaseAntiAmplificationLimit(int increment) {
         bytesReceived += increment;
