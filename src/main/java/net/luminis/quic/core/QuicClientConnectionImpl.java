@@ -113,6 +113,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final InetAddress serverAddress;
     private final SenderImpl sender;
     private final Receiver receiver;
+    private volatile PacketParser parser;
     private final StreamManager streamManager;
     private volatile TransportParameters transportParams;
     private final X509Certificate clientCertificate;
@@ -180,9 +181,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             immediateCloseWithError(EncryptionLevel.App, error, reason);
         };
         connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
-        parser = new ClientRolePacketParser(connectionSecrets, quicVersion, connectionIdManager.getConnectionIdLength(),
-                connectionIdManager.getOriginalDestinationConnectionId(),
-                createProcessorChain(), this::handleUnprotectPacketFailure, log);
 
         connectionState = Status.Created;
         tlsEngine = new TlsClientEngine(new ClientMessageSender() {
@@ -451,8 +449,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private void receiveAndProcessPackets() {
         Thread currentThread = Thread.currentThread();
         int receivedPacketCounter = 0;
-        DatagramFilter adapter = (data, metaData) -> this.parseAndProcessPackets(metaData.datagramNumber(), metaData.timeReceived(), data);
-        DatagramFilter datagramProcessingChain = new DatagramPostProcessingFilter(this::datagramProcessed, adapter);
+        parser = new ClientRolePacketParser(connectionSecrets, quicVersion, connectionIdManager.getConnectionIdLength(),
+                connectionIdManager.getOriginalDestinationConnectionId(),
+                createProcessorChain(), this::handleUnprotectPacketFailure, log);
+        DatagramFilter datagramProcessingChain = new DatagramPostProcessingFilter(this::datagramProcessed,
+                new DatagramParserFilter(parser));
 
         try {
             while (! currentThread.isInterrupted()) {

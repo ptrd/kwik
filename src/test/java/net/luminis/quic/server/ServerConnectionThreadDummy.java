@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.packet.DatagramParserFilter;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
 
@@ -32,11 +33,13 @@ import java.time.Instant;
  */
 class ServerConnectionThreadDummy implements ServerConnectionProxy {
     private final ServerConnectionImpl connection;
+    private final DatagramParserFilter datagramProcessingChain;
 
     public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, Instant time) {
         this.connection = connection;
         assert(packet != null);
         connection.processPacket(packet, new PacketMetaData(time));
+        datagramProcessingChain = new DatagramParserFilter(connection.createParser());
     }
 
     @Override
@@ -46,7 +49,8 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        connection.parseAndProcessPackets(datagramNumber, timeReceived, data);
+        PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+        datagramProcessingChain.processDatagram(data, metaData);
     }
 
     @Override

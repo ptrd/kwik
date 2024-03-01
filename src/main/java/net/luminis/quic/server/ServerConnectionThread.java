@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.packet.DatagramParserFilter;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.tls.util.ByteUtils;
@@ -60,7 +61,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data));
+        queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data, sourceAddress));
     }
 
     @Override
@@ -78,9 +79,12 @@ public class ServerConnectionThread implements ServerConnectionProxy {
             if (firstInitialPacket != null) {
                 serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
             }
+            DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
+
             while (! connectionReceiverThread.isInterrupted()) {
                 ReceivedDatagram datagram = queue.take();
-                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data);
+                PacketMetaData metaData = new PacketMetaData(datagram.timeReceived, datagram.sourceAddress, datagram.datagramNumber);
+                datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
         catch (InterruptedException e) {
@@ -102,11 +106,13 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         final int datagramNumber;
         final Instant timeReceived;
         final ByteBuffer data;
+        final InetSocketAddress sourceAddress;
 
-        public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data) {
+        public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
             this.datagramNumber = datagramNumber;
             this.timeReceived = timeReceived;
             this.data = data;
+            this.sourceAddress = sourceAddress;
         }
     }
 }

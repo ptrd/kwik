@@ -138,8 +138,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         };
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
-        parser = new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(), retryRequired,
-                processorChain, () -> versionNegotiationStatus, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -168,6 +166,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                                 new PostProcessingFilter(
                                         new QlogPacketFilter(
                                                 new ClosingOrDrainingFilter(this, log))))));
+    }
+
+    PacketParser createParser() {
+        return new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(), retryRequired,
+                processorChain, () -> versionNegotiationStatus, log);
     }
 
     @Override

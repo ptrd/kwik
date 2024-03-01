@@ -32,7 +32,6 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.BasePacketFilter;
 import net.luminis.quic.packet.PacketFilter;
 import net.luminis.quic.packet.PacketMetaData;
-import net.luminis.quic.packet.PacketParser;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.send.SenderImpl;
@@ -44,7 +43,6 @@ import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.ErrorAlert;
 import net.luminis.tls.handshake.TlsEngine;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -103,7 +101,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private final Role role;
     protected final Logger log;
     protected final PacketFilter processorChain;
-    protected PacketParser parser;
     protected VersionNegotiationStatus versionNegotiationStatus = VersionNegotiationStatus.NotStarted;
 
     protected final ConnectionSecrets connectionSecrets;
@@ -185,10 +182,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     @Override
     public QuicStream createStream(boolean bidirectional) {
         return getStreamManager().createStream(bidirectional);
-    }
-
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data) {
-        parser.parseAndProcessPackets(datagram, timeReceived, data);
     }
 
     public void datagramProcessed() {

@@ -27,11 +27,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.packet.RetryPacket;
-import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -88,6 +84,7 @@ class QuicClientConnectionImplTest {
                 .uri(new URI("//localhost:443"))
                 .applicationProtocol("hq-interop")
                 .logger(logger).build();
+        FieldSetter.setField(connection, "parser", mock(ClientRolePacketParser.class));
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);

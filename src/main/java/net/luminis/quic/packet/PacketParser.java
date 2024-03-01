@@ -63,7 +63,7 @@ public abstract class PacketParser {
         largestPacketNumber = new long[PnSpace.values().length];
     }
 
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data) {
+    void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data) {
         while (data.remaining() > 0) {
             try {
                 QuicPacket packet;
