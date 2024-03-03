@@ -1,5 +1,10 @@
 # Releases
 
+## 0.8.10 (2024-03-03)
+
+- Upgraded agent15 to 1.0.6
+- Fix NPE in stream handling
+
 ## 0.8.9 (2024-01-01)
 
 Deprecated connection method `setDefaultStreamReceiveBufferSize()` and replaced it by a specific one for each stream type (unidirectional/bidirectional).  
