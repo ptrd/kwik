@@ -33,6 +33,6 @@ public class DatagramParserFilter implements DatagramFilter {
 
     @Override
     public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
-        packetParser.parseAndProcessPackets(metaData.datagramNumber(), metaData.timeReceived(), data);
+        packetParser.parseAndProcessPackets(data, metaData);
     }
 }

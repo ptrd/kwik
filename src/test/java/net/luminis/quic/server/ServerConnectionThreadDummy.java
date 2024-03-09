@@ -35,10 +35,10 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
     private final ServerConnectionImpl connection;
     private final DatagramParserFilter datagramProcessingChain;
 
-    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, Instant time) {
+    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, PacketMetaData initialPacketMetaData) {
         this.connection = connection;
         assert(packet != null);
-        connection.processPacket(packet, new PacketMetaData(time));
+        connection.processPacket(packet, initialPacketMetaData);
         datagramProcessingChain = new DatagramParserFilter(connection.createParser());
     }
 

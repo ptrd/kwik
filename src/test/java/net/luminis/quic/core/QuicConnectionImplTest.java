@@ -34,6 +34,7 @@ import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -209,7 +210,8 @@ class QuicConnectionImplTest {
 
     //region helper methods
     private PacketMetaData metaDataForNow() {
-        return new PacketMetaData(Instant.now());
+        InetSocketAddress sourceAddress = new InetSocketAddress(52719);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0);
     }
 
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {

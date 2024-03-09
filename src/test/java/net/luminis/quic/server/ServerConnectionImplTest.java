@@ -399,7 +399,7 @@ class ServerConnectionImplTest {
         InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
         secondInitialPacket.setPacketNumber(1);
 
-        connection.getPacketProcessorChain().processPacket(initialPacket, new PacketMetaData(Instant.now(), false));
+        connection.getPacketProcessorChain().processPacket(initialPacket, metaDataForNow());
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
 
         verify(connection.getSender()).send(argumentCaptor1.capture());
@@ -407,7 +407,7 @@ class ServerConnectionImplTest {
         clearInvocations(connection.getSender());
 
         // When
-        connection.getPacketProcessorChain().processPacket(secondInitialPacket, new PacketMetaData(Instant.now(), false));
+        connection.getPacketProcessorChain().processPacket(secondInitialPacket, metaDataForNow());
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
         byte[] retryPacket2 = argumentCaptor1.getValue().generatePacketBytes(null);
@@ -586,6 +586,11 @@ class ServerConnectionImplTest {
     //endregion
 
     //region test helper methods
+    private PacketMetaData metaDataForNow() {
+        InetSocketAddress sourceAddress = new InetSocketAddress(52719);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);

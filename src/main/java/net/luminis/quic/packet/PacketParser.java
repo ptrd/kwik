@@ -25,7 +25,6 @@ import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.function.BiFunction;
 
 public abstract class PacketParser {
@@ -63,15 +62,14 @@ public abstract class PacketParser {
         largestPacketNumber = new long[PnSpace.values().length];
     }
 
-    void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data) {
+    void parseAndProcessPackets(ByteBuffer data, PacketMetaData metaData) {
         while (data.remaining() > 0) {
             try {
-                QuicPacket packet;
-                packet = parsePacket(data);
-                log.received(timeReceived, datagram, packet);
+                QuicPacket packet = parsePacket(data);
+                log.received(metaData.timeReceived(), metaData.datagramNumber(), packet);
                 log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
 
-                processorChain.processPacket(packet, new PacketMetaData(timeReceived, data.hasRemaining()));
+                processorChain.processPacket(packet, new PacketMetaData(metaData, data.hasRemaining()));
             }
             catch (DecryptionException | MissingKeysException cannotParse) {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#name-coalescing-packets

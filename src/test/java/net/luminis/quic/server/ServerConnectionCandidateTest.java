@@ -151,7 +151,7 @@ class ServerConnectionCandidateTest {
 
         @Override
         public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, PacketMetaData metaData) {
-            return new ServerConnectionThreadDummy(connection, initialPacket, metaData.timeReceived());
+            return new ServerConnectionThreadDummy(connection, initialPacket, metaData);
         }
     }
 }
