@@ -47,6 +47,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long streamEndOffset = -1;
     private volatile long bufferedOutOfOrderData;
     private final int maxCombinedFrameSize;
+    private volatile boolean discarded;
 
     public ReceiveBufferImpl() {
         this(DEFAULT_MAX_COMBINED_FRAME_SIZE);
@@ -110,28 +111,45 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public boolean add(StreamElement frame) {
-        if (frame.getLength() > 0) {
-            addWithoutOverlap(frame);
-        }
-        if (frame.isFinal()) {
-            streamEndOffset = frame.getUpToOffset();
-        }
+        try {
+            if (frame.getLength() > 0) {
+                addWithoutOverlap(frame);
+            }
+            if (frame.isFinal()) {
+                streamEndOffset = frame.getUpToOffset();
+            }
 
-        long previousContiguousUpToOffset = contiguousUpToOffset;
-        while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
-            StreamElement nextFrame = outOfOrderFrames.pollFirst();
-            if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
-                if (nextFrame.getOffset() < contiguousUpToOffset) {
-                    nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
+            long previousContiguousUpToOffset = contiguousUpToOffset;
+            while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
+                StreamElement nextFrame = outOfOrderFrames.pollFirst();
+                if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
+                    if (nextFrame.getOffset() < contiguousUpToOffset) {
+                        nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
+                    }
+                    // First add frame and ...
+                    contiguousFrames.add(nextFrame);
+                    // ... then update the offset (otherwise: race condition)
+                    contiguousUpToOffset = nextFrame.getUpToOffset();
+                    bufferedOutOfOrderData -= nextFrame.getLength();
                 }
-                // First add frame and ...
-                contiguousFrames.add(nextFrame);
-                // ... then update the offset (otherwise: race condition)
-                contiguousUpToOffset = nextFrame.getUpToOffset();
-                bufferedOutOfOrderData -= nextFrame.getLength();
+            }
+            return contiguousUpToOffset > previousContiguousUpToOffset;
+        }
+        catch (Exception e) {
+            // Because the add method is the only method making modifications to the outOfOrderFrames, race conditions
+            // will not occur. However, there is one exception: the discardAllData method. Concurrent call to this method
+            // can cause a race condition, which can lead to various runtime exceptions in the code block wrapped by this
+            // try-catch (e.g. NoSuchElementException, NullPointerException, etc.). Preventing them would require either
+            // a lock or a lot of additional and ugly code, while not needed because when the discardAllData method has
+            // been called, it doesn't matter whether the add method fails or not. It should just not throw an exception
+            // in that case.
+            if (discarded) {
+                return false;
+            }
+            else {
+                throw e;
             }
         }
-        return contiguousUpToOffset > previousContiguousUpToOffset;
     }
 
     public long bufferedOutOfOrderData() {
@@ -286,6 +304,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     public void discardAllData() {
+        discarded = true;
         outOfOrderFrames.clear();
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
