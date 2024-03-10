@@ -21,14 +21,13 @@ package net.luminis.quic.server;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.ConnectionSecrets;
-import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.FrameProcessor;
-import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.send.SenderImpl;
@@ -391,28 +390,30 @@ class ServerConnectionImplTest {
         // Given
         byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         connection = createServerConnection(createTlsServerEngine(), true, odcid);
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
-        initialPacket.setPacketNumber(0);
         ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
         clientConnectionSecrets.computeInitialKeys(odcid);
-        byte[] initialPacketBytes = initialPacket.generatePacketBytes(clientConnectionSecrets.getClientAead(EncryptionLevel.Initial));
-        ByteBuffer paddedInitial = ByteBuffer.allocate(1200);
-        paddedInitial.put(initialPacketBytes);
 
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        initialPacket.setPacketNumber(0);
+
+        InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
+        secondInitialPacket.setPacketNumber(1);
+
+        connection.getPacketProcessorChain().processPacket(initialPacket, metaDataForNow());
         ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
+
         verify(connection.getSender()).send(argumentCaptor1.capture());
         byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(null);
         clearInvocations(connection.getSender());
 
         // When
-        connection.parseAndProcessPackets(0, Instant.now(), paddedInitial, null);
+        connection.getPacketProcessorChain().processPacket(secondInitialPacket, metaDataForNow());
         ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor2.capture());
-        RetryPacket retryPacket2 = argumentCaptor1.getValue();
+        byte[] retryPacket2 = argumentCaptor1.getValue().generatePacketBytes(null);
 
         // Then
-        assertThat(retryPacket1).isEqualTo(retryPacket2.generatePacketBytes(null));
+        assertThat(retryPacket1).isEqualTo(retryPacket2);
     }
     //endregion
 
@@ -441,10 +442,10 @@ class ServerConnectionImplTest {
 
         // When
         byte[] validInitial = TestUtils.createValidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(validInitial), null);
-        ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
+        connection.increaseAntiAmplificationLimit(validInitial.length);
 
         // Then
+        ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
         verify(connection.getSender()).setAntiAmplificationLimit(antiAmplificationLimitCaptor.capture());
         assertThat(antiAmplificationLimitCaptor.getValue()).isEqualTo(3 * validInitial.length);
     }
@@ -453,7 +454,7 @@ class ServerConnectionImplTest {
     void receivingInvalidInitialPacketShouldAddToAntiAmplificationLimit() throws Exception {
         // When
         byte[] invalidInitial = TestUtils.createInvalidInitial(Version.getDefault());
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(invalidInitial), null);
+        connection.increaseAntiAmplificationLimit(invalidInitial.length);
 
         // Then
         ArgumentCaptor<Integer> antiAmplificationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -492,54 +493,6 @@ class ServerConnectionImplTest {
 
     //region initial packet validation
     @Test
-    void initialPacketCarriedInDatagramSmallerThan1200BytesShouldBeDropped() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        connection.parseAndProcessPackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
-
-        // Then
-        verify(connection.getSender(), never()).send(any(QuicFrame.class), any(EncryptionLevel.class));
-    }
-
-    @Test
-    void initialPacketWithPaddingInDatagramShouldBeAccepted() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        ByteBuffer buffer = ByteBuffer.allocate(1200);
-        buffer.put(initialPacketBytes);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
-
-        // Then
-        verify(connection.getSender(), atLeastOnce()).send(any(QuicFrame.class), any(EncryptionLevel.class));
-    }
-
-    @Test
-    void whenInitialPacketPaddedInDatagramAllBytesShouldBeCountedInAntiAmplificationLimit() throws Exception {
-        // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
-
-        // When
-        ByteBuffer buffer = ByteBuffer.allocate(1200);
-        buffer.put(initialPacketBytes);
-        connection.parseAndProcessPackets(0, Instant.now(), buffer, null);
-
-        // Then
-        ArgumentCaptor<Integer> antiAmplicationLimitCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(connection.getSender()).setAntiAmplificationLimit(antiAmplicationLimitCaptor.capture());
-        assertThat(antiAmplicationLimitCaptor.getValue()).isEqualTo(3 * 1200);
-    }
-
-    @Test
     void retransmittedInitialPacketShouldBeAccepted() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         connection = createServerConnection(tlsServerEngineFactory, false, odcid);
@@ -556,20 +509,6 @@ class ServerConnectionImplTest {
     //endregion
 
     //region handle missing or dicarded keys
-    @Test
-    void whenParsingZeroRttPacketItShouldFailOnMissingKeys() throws Exception {
-        // Given
-        byte[] data = { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-
-        assertThatThrownBy(() ->
-                // When
-                connection.parsePacket(ByteBuffer.wrap(data))
-        )
-                // Then
-                .isInstanceOf(MissingKeysException.class)
-                .hasMessageContaining("ZeroRTT");
-    }
-
     @Test
     void whenHandshakePacketIsProcessedInitialKeysShouldBeDiscarded() throws NoSuchFieldException {
         ConnectionSecrets connectionSecrets = mock(ConnectionSecrets.class);
@@ -647,6 +586,11 @@ class ServerConnectionImplTest {
     //endregion
 
     //region test helper methods
+    private PacketMetaData metaDataForNow() {
+        InetSocketAddress sourceAddress = new InetSocketAddress(52719);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+    }
+
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
         TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
         invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);

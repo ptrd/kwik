@@ -23,7 +23,6 @@ import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.core.*;
 import net.luminis.quic.crypto.CryptoStream;
-import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.HandshakeDoneFrame;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.NewTokenFrame;
@@ -32,6 +31,7 @@ import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
@@ -63,6 +63,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.core.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
@@ -137,6 +138,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         };
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
+
         ackGenerator = sender.getGlobalAckGenerator();
 
         if (retryRequired) {
@@ -154,6 +156,21 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         streamManager = new StreamManager(this, Role.Server, log, configuration);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
+    }
+
+    @Override
+    protected PacketFilter createProcessorChain() {
+        return new CheckDestinationFilter(
+                new DropDuplicatePacketsFilter(
+                        new VersionNegotiationConfirmedFilter(
+                                new PostProcessingFilter(
+                                        new QlogPacketFilter(
+                                                new ClosingOrDrainingFilter(this, log))))));
+    }
+
+    PacketParser createParser() {
+        return new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(), retryRequired,
+                processorChain, () -> versionNegotiationStatus, log);
     }
 
     @Override
@@ -392,55 +409,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
     }
 
-    @Override
-    protected QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
-        try {
-            return super.parsePacket(data);
-        }
-        catch (DecryptionException decryptionException) {
-            Version connectionVersion = quicVersion.getVersion();
-            if (retryRequired
-                    && LongHeaderPacket.isLongHeaderPacket(data.get(0), connectionVersion)
-                    && InitialPacket.isInitial((data.get(0) & 0x30) >> 4, connectionVersion)) {
-                // If retry packet has been sent, but lost, client will send another initial with keys based on odcid
-                try {
-                    data.rewind();
-                    connectionSecrets.computeInitialKeys(connectionIdManager.getOriginalDestinationConnectionId());
-                    return super.parsePacket(data);
-                }
-                finally {
-                    connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
-                }
-            }
-            else {
-                throw decryptionException;
-            }
-        }
-    }
 
-    @Override
-    public void parseAndProcessPackets(int datagram, Instant timeReceived, ByteBuffer data, QuicPacket parsedPacket) {
-        if (InitialPacket.isInitial(data) && data.limit() < 1200) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14.1
-            // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller
-            //  than the smallest allowed maximum datagram size of 1200 bytes."
-            return;
-        }
-
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8
-        // "Therefore, after receiving packets from an address that is not yet validated, an endpoint MUST limit the
-        //  amount of data it sends to the unvalidated address to three times the amount of data received from that address."
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8.1
-        // "For the purposes of avoiding amplification prior to address validation, servers MUST count all of the
-        //  payload bytes received in datagrams that are uniquely attributed to a single connection. This includes
-        //  datagrams that contain packets that are successfully processed and datagrams that contain packets that
-        //  are all discarded."
-        bytesReceived += data.remaining();
+    void increaseAntiAmplificationLimit(int increment) {
+        bytesReceived += increment;
         if (! addressValidated) {
             sender.setAntiAmplificationLimit(3 * (int) bytesReceived);
         }
-
-        super.parseAndProcessPackets(datagram, timeReceived, data, parsedPacket);
     }
 
     @Override
@@ -461,7 +435,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
-                connectionSecrets.computeInitialKeys(connectionIdManager.getInitialConnectionId());
+                connectionSecrets.recomputeInitialKeys(connectionIdManager.getInitialConnectionId());
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
             else if (!Arrays.equals(packet.getToken(), token)) {
@@ -742,5 +716,22 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 + "(" + getQuicVersion() + ")"
                 + " " + initialClientAddress
                 + "]";
+    }
+
+    class VersionNegotiationConfirmedFilter extends BasePacketFilter {
+
+        public VersionNegotiationConfirmedFilter(PacketFilter next) {
+            super(next);
+        }
+
+        @Override
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+            if (versionNegotiationStatus == VersionChangeUnconfirmed) {
+                if (packet.getVersion().equals(quicVersion.getVersion())) {
+                    versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
+                }
+            }
+            next(packet, metaData);
+        }
     }
 }

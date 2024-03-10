@@ -24,6 +24,7 @@ import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
+import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldSetter;
@@ -33,6 +34,7 @@ import net.luminis.tls.handshake.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -62,11 +64,12 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -75,12 +78,13 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(Initial);
         connection.runPostProcessingActions();
 
         // When
         InitialPacket packet = spy(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -89,12 +93,13 @@ class QuicConnectionImplTest {
     @Test
     void whenClosingNormalPacketLeadsToSendingConnectionClose() {
         // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose(App);
         clearInvocations(sender);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -133,12 +138,13 @@ class QuicConnectionImplTest {
 
     @Test
     void whenReceivingCloseNormalPacketsAreNotProcessed() {
-        // When
+        // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
-        connection.processPacket(Instant.now(), packet);
+        packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
         verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
@@ -182,7 +188,7 @@ class QuicConnectionImplTest {
         // When
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame());
         for (int i = 0; i < 100; i++) {
-            connection.processPacket(Instant.now(), packet);
+            connection.processPacket(packet, metaDataForNow());
         }
 
         // Then
@@ -200,6 +206,16 @@ class QuicConnectionImplTest {
         verify(sender, atLeast(1)).send(
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
+    }
+
+    //region helper methods
+    private PacketMetaData metaDataForNow() {
+        InetSocketAddress sourceAddress = new InetSocketAddress(52719);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+    }
+
+    private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
+        return connection.new ClosingOrDrainingFilter(connection, null);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {
@@ -423,5 +439,14 @@ class QuicConnectionImplTest {
         @Override
         public void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer) {
         }
+
+        protected CheckDestinationFilter createProcessorChain() {
+            return new CheckDestinationFilter(
+                    new DropDuplicatePacketsFilter(
+                            new PostProcessingFilter(
+                                    new QlogPacketFilter(
+                                            new ClosingOrDrainingFilter(this, log)))));
+        }
     }
+    //endregion
 }

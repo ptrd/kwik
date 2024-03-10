@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -19,31 +19,42 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.BaseDatagramFilter;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.PacketMetaData;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
-public class ClientAddressFilter extends BaseDatagramFilter {
+public class ServerConnectionWrapper implements ServerConnectionProxy {
 
-    private final InetSocketAddress clientAddress;
+    private final ServerConnectionProxy connection;
+    private final Logger log;
+    private final DatagramFilter filter;
 
-    public ClientAddressFilter(InetSocketAddress clientAddress, Logger log, DatagramFilter next) {
-        super(next, log);
-        this.clientAddress = clientAddress;
+    public ServerConnectionWrapper(ServerConnectionProxy connection, Logger log, DatagramFilter filter) {
+        this.connection = connection;
+        this.log = log;
+        this.filter = filter;
     }
 
     @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
-        if (metaData.sourceAddress().equals(clientAddress)) {
-            next(data, metaData);
-        }
-        else {
-            discard(data, metaData,
-                    String.format("Dropping packet with unmatched source address %s (expected %s).", metaData.sourceAddress(), clientAddress));
-        }
+    public byte[] getOriginalDestinationConnectionId() {
+        return connection.getOriginalDestinationConnectionId();
+    }
 
+    @Override
+    public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
+        filter.processDatagram(data, new PacketMetaData(timeReceived, sourceAddress, datagramNumber));
+    }
+
+    @Override
+    public boolean isClosed() {
+        return connection.isClosed();
+    }
+
+    @Override
+    public void dispose() {
+        connection.dispose();
     }
 }

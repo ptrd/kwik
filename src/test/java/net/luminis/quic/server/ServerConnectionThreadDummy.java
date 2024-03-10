@@ -18,7 +18,9 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.packet.DatagramParserFilter;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -29,12 +31,15 @@ import java.time.Instant;
  * but does not execute on a separate thread (which makes testing difficult). Just like the ServerConnectionThread,
  * this class receives the first parse initial packet in its constructor and passes it to the ServerConnectionImpl.
  */
-class ServerConnectionWrapper implements ServerConnectionProxy {
+class ServerConnectionThreadDummy implements ServerConnectionProxy {
     private final ServerConnectionImpl connection;
+    private final DatagramParserFilter datagramProcessingChain;
 
-    public ServerConnectionWrapper(ServerConnectionImpl connection, InitialPacket packet, Instant time, ByteBuffer data) {
+    public ServerConnectionThreadDummy(ServerConnectionImpl connection, InitialPacket packet, PacketMetaData initialPacketMetaData) {
         this.connection = connection;
-        connection.parseAndProcessPackets(0, time, data, packet);
+        assert(packet != null);
+        connection.processPacket(packet, initialPacketMetaData);
+        datagramProcessingChain = new DatagramParserFilter(connection.createParser());
     }
 
     @Override
@@ -44,7 +49,8 @@ class ServerConnectionWrapper implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        connection.parseAndProcessPackets(datagramNumber, timeReceived, data, null);
+        PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+        datagramProcessingChain.processDatagram(data, metaData);
     }
 
     @Override

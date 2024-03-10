@@ -28,7 +28,10 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
+import net.luminis.quic.packet.DatagramFilter;
+import net.luminis.quic.packet.DatagramPostProcessingFilter;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -37,13 +40,14 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * A server connection candidate: whether an initial packet causes a new server connection to be created cannot be
  * decided until the initial packet has been successfully parsed and decrypted (to avoid that corrupt packets change
  * server state).
  */
-public class ServerConnectionCandidate implements ServerConnectionProxy {
+public class ServerConnectionCandidate implements ServerConnectionProxy, DatagramFilter {
 
     private final Version quicVersion;
     private final InetSocketAddress clientAddress;
@@ -51,6 +55,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     private final ServerConnectionFactory serverConnectionFactory;
     private final ServerConnectionRegistry connectionRegistry;
     private final Logger log;
+    private final DatagramFilter filterChain;
     private volatile ServerConnectionProxy registeredConnection;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduledExecutor;
@@ -66,6 +71,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
         this.serverConnectionFactory = serverConnectionFactory;
         this.connectionRegistry = connectionRegistry;
         this.log = log;
+
+        filterChain = new InitialPacketMinimumSizeFilter(log, this);
     }
 
     @Override
@@ -86,56 +93,75 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
                     return;
                 }
 
-                try {
-                    InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
-
-                    log.received(timeReceived, datagramNumber, initialPacket);
-                    log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
-
-                    // Packet is valid. This is the moment to create a real server connection and continue processing.
-                    if (registeredConnection == null) {
-                        data.rewind();
-                        createAndRegisterServerConnection(initialPacket, timeReceived, data);
-                    }
-                }
-                catch (InvalidPacketException | DecryptionException cannotParsePacket) {
-                    // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
-                    log.debug("Dropped invalid initial packet (no connection created)");
-                    // But still the (now useless) candidate should be removed from the connection registry.
-                    // To avoid race conditions with incoming duplicated first packets (possibly leading to scheduling
-                    // a task for this candidate while it is not registered anymore), the removal of the candidate is
-                    // delayed until connection setup is over.
-                    // The delay should be longer then the maximum connection timeout clients (are likely to) use.
-                    // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
-                    scheduledExecutor.schedule(() -> {
-                                // But only if no connection is created in the meantime (which will do the cleanup)
-                                if (registeredConnection == null) {
-                                    connectionRegistry.deregisterConnection(this, dcid);
-                                }
-                            },
-                            30, TimeUnit.SECONDS);
-                }
-                catch (Exception error) {
-                    log.error("error while parsing or processing initial packet", error);
-                }
+                PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+                filterChain.processDatagram(data, metaData);
             }
         });
     }
 
-    private void createAndRegisterServerConnection(InitialPacket initialPacket, Instant timeReceived, ByteBuffer data) {
+    @Override
+    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
+        try {
+            int datagramNumber = metaData.datagramNumber();
+            Instant timeReceived = metaData.timeReceived();
+            InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
+
+            log.received(timeReceived, datagramNumber, initialPacket);
+            log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+
+            // Packet is valid. This is the moment to create a real server connection and continue processing.
+            if (registeredConnection == null) {
+                data.rewind();
+                createAndRegisterServerConnection(initialPacket, metaData, data);
+            }
+        } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
+            // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
+            log.debug("Dropped invalid initial packet (no connection created)");
+            // But still the (now useless) candidate should be removed from the connection registry.
+            // To avoid race conditions with incoming duplicated first packets (possibly leading to scheduling
+            // a task for this candidate while it is not registered anymore), the removal of the candidate is
+            // delayed until connection setup is over.
+            // The delay should be longer then the maximum connection timeout clients (are likely to) use.
+            // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
+            scheduledExecutor.schedule(() -> {
+                        // But only if no connection is created in the meantime (which will do the cleanup)
+                        if (registeredConnection == null) {
+                            connectionRegistry.deregisterConnection(this, dcid);
+                        }
+                    },
+                    30, TimeUnit.SECONDS);
+        } catch (Exception error) {
+            log.error("error while parsing or processing initial packet", error);
+        }
+    }
+
+    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer data) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
         ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
-        log.info("Creating new connection with version " + quicVersion + " for odcid " + ByteUtils.bytesToHex(originalDcid)
-                + " with " + clientAddress.getAddress().getHostAddress() + ": " + ByteUtils.bytesToHex(connection.getInitialConnectionId()));
 
         // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
-        registeredConnection = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, timeReceived, data);
+        ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, metaData);
+        connection.increaseAntiAmplificationLimit(data.remaining());
 
-        // Add filter to check client address.
-        ClientAddressFilter wrappedConnection = new ClientAddressFilter(registeredConnection, clientAddress, log);
+        ServerConnectionProxy wrappedConnection = wrapWithFilters(connectionProxy, connection::increaseAntiAmplificationLimit, connection::datagramProcessed);
+
         // Register new connection with the new connection id (the one generated by the server)
         connectionRegistry.registerConnection(wrappedConnection, connection.getInitialConnectionId());
+        registeredConnection = wrappedConnection;
+    }
+
+    private ServerConnectionProxy wrapWithFilters(ServerConnectionProxy connection, Consumer<Integer> receivedPayloadBytesCounterFunction, Runnable postProcessingFunction) {
+        DatagramFilter adapter = (data, metaData) -> connection.parsePackets(metaData.datagramNumber(), metaData.timeReceived(), data, metaData.sourceAddress());
+
+        // The wrapper takes care of propagating other (non-filter) methods to the connection proxy.
+        return new ServerConnectionWrapper(connection, log,
+                        // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
+                        new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
+                                new ClientAddressFilter(clientAddress, log,
+                                        new InitialPacketMinimumSizeFilter(log,
+                                                new DatagramPostProcessingFilter(postProcessingFunction, log,
+                                                        adapter)))));
     }
 
     @Override
@@ -148,12 +174,6 @@ public class ServerConnectionCandidate implements ServerConnectionProxy {
     }
 
     InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14.1
-        // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller than
-        //  the smallest allowedmaximum datagram size of 1200 bytes."
-        if (data.limit() < 1200) {
-            throw new InvalidPacketException("Initial packets is carried in a datagram that is smaller than 1200 (" + data.limit() + ")");
-        }
         // Note that the caller already has extracted connection id's from the raw data, so checking for minimal length is not necessary here.
         int flags = data.get();
         data.rewind();

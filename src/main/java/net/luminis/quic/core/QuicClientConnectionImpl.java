@@ -113,6 +113,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final InetAddress serverAddress;
     private final SenderImpl sender;
     private final Receiver receiver;
+    private volatile PacketParser parser;
     private final StreamManager streamManager;
     private volatile TransportParameters transportParams;
     private final X509Certificate clientCertificate;
@@ -216,8 +217,31 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }, this);
     }
 
+    @Override
+    protected PacketFilter createProcessorChain() {
+        return new CheckDestinationFilter(
+                new DropDuplicatePacketsFilter(
+                        new PostProcessingFilter(
+                                new ClosingOrDrainingFilter(this, log))));
+    }
+
     private Predicate<DatagramPacket> createPacketFilter() {
         return packet -> packet.getAddress().equals(serverAddress) && packet.getPort() == serverPort;
+    }
+
+    boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
+        if (checkForStatelessResetToken(data)) {
+            if (enterDrainingState()) {
+                log.info("Entering draining state because stateless reset was received");
+            }
+            else {
+                log.debug("Received stateless reset");
+            }
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     protected TransportParameters initTransportParameters() {
@@ -425,6 +449,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private void receiveAndProcessPackets() {
         Thread currentThread = Thread.currentThread();
         int receivedPacketCounter = 0;
+        parser = new ClientRolePacketParser(connectionSecrets, quicVersion, connectionIdManager.getConnectionIdLength(),
+                connectionIdManager.getOriginalDestinationConnectionId(),
+                createProcessorChain(), this::handleUnprotectPacketFailure, log);
+        DatagramFilter datagramProcessingChain = new DatagramPostProcessingFilter(this::datagramProcessed,
+                new DatagramParserFilter(parser));
 
         try {
             while (! currentThread.isInterrupted()) {
@@ -434,7 +463,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    parseAndProcessPackets(receivedPacketCounter, rawPacket.getTimeReceived(), rawPacket.getData(), null);
+                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), null, receivedPacketCounter);
+                    datagramProcessingChain.processDatagram(rawPacket.getData(), metaData);
+
                     sender.datagramProcessed(receiver.hasMore());
                 }
             }
@@ -639,6 +670,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 connectionIdManager.registerRetrySourceConnectionId(peerConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(peerConnectionId));
                 generateInitialKeys();
+                ((ClientRolePacketParser) parser).setOriginalDestinationConnectionId(peerConnectionId);
 
                 // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
                 // "A Retry or Version Negotiation packet causes a client to send another
@@ -936,7 +968,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return newConnectionId;
     }
 
-    @Override
     protected boolean checkForStatelessResetToken(ByteBuffer data) {
         byte[] tokenCandidate = new byte[16];
         data.position(data.limit() - 16);

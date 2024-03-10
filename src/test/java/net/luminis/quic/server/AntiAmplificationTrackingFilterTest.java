@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -18,32 +18,32 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.BaseDatagramFilter;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.PacketMetaData;
+import org.junit.jupiter.api.Test;
 
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
-public class ClientAddressFilter extends BaseDatagramFilter {
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
-    private final InetSocketAddress clientAddress;
+class AntiAmplificationTrackingFilterTest {
 
-    public ClientAddressFilter(InetSocketAddress clientAddress, Logger log, DatagramFilter next) {
-        super(next, log);
-        this.clientAddress = clientAddress;
-    }
+    @Test
+    void allReceivedBytesShouldBeCounted() {
+        // Given
+        DatagramFilter sink = mock(DatagramFilter.class);
+        Consumer<Integer> counterFunction = mock(Consumer.class);
+        AntiAmplificationTrackingFilter filter = new AntiAmplificationTrackingFilter(counterFunction, sink);
 
-    @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
-        if (metaData.sourceAddress().equals(clientAddress)) {
-            next(data, metaData);
-        }
-        else {
-            discard(data, metaData,
-                    String.format("Dropping packet with unmatched source address %s (expected %s).", metaData.sourceAddress(), clientAddress));
-        }
+        // When
+        filter.processDatagram(ByteBuffer.allocate(381), mock(PacketMetaData.class));
 
+        // Then
+        verify(counterFunction).accept(381);
+        verify(sink).processDatagram(argThat(b -> b.remaining() == 381), any(PacketMetaData.class));
     }
 }

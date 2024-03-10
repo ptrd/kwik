@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, 2024 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,34 +16,29 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.packet;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.BaseDatagramFilter;
-import net.luminis.quic.packet.DatagramFilter;
-import net.luminis.quic.packet.PacketMetaData;
 
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
-public class ClientAddressFilter extends BaseDatagramFilter {
+public class DatagramPostProcessingFilter extends BaseDatagramFilter {
 
-    private final InetSocketAddress clientAddress;
+    private final Runnable postProcessingFunction;
 
-    public ClientAddressFilter(InetSocketAddress clientAddress, Logger log, DatagramFilter next) {
+    public DatagramPostProcessingFilter(Runnable postProcessingFunction, Logger log, DatagramFilter next) {
         super(next, log);
-        this.clientAddress = clientAddress;
+        this.postProcessingFunction = postProcessingFunction;
+    }
+
+    public DatagramPostProcessingFilter(Runnable postProcessingFunction, DatagramFilter next) {
+        super(next);
+        this.postProcessingFunction = postProcessingFunction;
     }
 
     @Override
     public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
-        if (metaData.sourceAddress().equals(clientAddress)) {
-            next(data, metaData);
-        }
-        else {
-            discard(data, metaData,
-                    String.format("Dropping packet with unmatched source address %s (expected %s).", metaData.sourceAddress(), clientAddress));
-        }
-
+        next(data, metaData);
+        postProcessingFunction.run();
     }
 }

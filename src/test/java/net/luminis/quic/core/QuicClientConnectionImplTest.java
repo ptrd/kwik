@@ -27,11 +27,7 @@ import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
-import net.luminis.quic.packet.InitialPacket;
-import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.packet.RetryPacket;
-import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.quic.packet.VersionNegotiationPacket;
+import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -45,7 +41,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.net.URI;
-import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.ECPublicKey;
@@ -89,6 +84,7 @@ class QuicClientConnectionImplTest {
                 .uri(new URI("//localhost:443"))
                 .applicationProtocol("hq-interop")
                 .logger(logger).build();
+        FieldSetter.setField(connection, "parser", mock(ClientRolePacketParser.class));
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
@@ -258,14 +254,6 @@ class QuicClientConnectionImplTest {
 
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
-    }
-    //endregion
-
-    //region parsing version packet
-    @Test
-    void parsingValidVersionNegotiationPacketShouldSucceed() throws Exception {
-        QuicPacket packet = connection.parsePacket(ByteBuffer.wrap(ByteUtils.hexToBytes("ff00000000040a0b0c0d040f0e0d0cff000018")));
-        assertThat(packet).isInstanceOf(VersionNegotiationPacket.class);
     }
     //endregion
 
@@ -522,44 +510,7 @@ class QuicClientConnectionImplTest {
         }
     }
     //endregion
-
-    //region packet parsing
-    @Test
-    void parseEmptyPacket() throws Exception {
-        assertThatThrownBy(
-                () -> connection.parsePacket(ByteBuffer.wrap(new byte[0]))
-        ).isInstanceOf(InvalidPacketException.class);
-    }
-
-    @Test
-    void parseLongHeaderPacketWithInvalidHeader1() throws Exception {
-        assertThatThrownBy(
-                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0xc0, 0x00}))
-        ).isInstanceOf(InvalidPacketException.class);
-    }
-
-    @Test
-    void parseLongHeaderPacketWithInvalidHeader2() throws Exception {
-        assertThatThrownBy(
-                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0xc0, 0x00, 0x00, 0x00 }))
-        ).isInstanceOf(InvalidPacketException.class);
-    }
-
-    @Test
-    void parseShortHeaderPacketWithInvalidHeader() throws Exception {
-        assertThatThrownBy(
-                () -> connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0x40 }))
-        ).isInstanceOf(InvalidPacketException.class);
-    }
-
-    @Test
-    void clientParsingZeroRttPacketShouldThrow() throws Exception {
-        assertThatThrownBy(() ->
-                connection.parsePacket(ByteBuffer.wrap(new byte[] { (byte) 0b11010001, 0x00, 0x00, 0x00, 0x01, 0, 0, 17, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }))
-        ).isInstanceOf(InvalidPacketException.class);
-    }
-    //endregion
-
+    
     //region discard keys
     @Test
     void whenHandshakePacketIsSendInitialKeysShouldBeDiscarded() throws Exception {

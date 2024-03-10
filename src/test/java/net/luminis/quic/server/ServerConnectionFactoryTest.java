@@ -27,6 +27,8 @@ import net.luminis.tls.handshake.TlsStatusEventHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,18 +39,20 @@ import static org.mockito.Mockito.when;
 class ServerConnectionFactoryTest {
 
     private TlsServerEngineFactory tlsServerEngineFactory;
+    private InetSocketAddress someClient;
 
     @BeforeEach()
     void initTlsServerEngineFactory() {
         tlsServerEngineFactory = mock(TlsServerEngineFactory.class);
         when(tlsServerEngineFactory.createServerEngine(any(ServerMessageSender.class), any(TlsStatusEventHandler.class))).thenReturn(mock(TlsServerEngine.class));
+        someClient = new InetSocketAddress("10.0.0.10", 32942);
     }
 
     @Test
     void newConnectionHasRandomSourceConnectionId() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(null, tlsServerEngineFactory, getConfig(16), null, null, cid -> {}, mock(Logger.class));
-        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
-        ServerConnectionImpl conn2 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), someClient, new byte[8], new byte[8]);
+        ServerConnectionImpl conn2 = connectionFactory.createNewConnection(Version.getDefault(), someClient, new byte[8], new byte[8]);
 
         assertThat(conn1.getSourceConnectionId()).hasSize(16);
         assertThat(conn2.getSourceConnectionId()).hasSize(16);
@@ -58,14 +62,14 @@ class ServerConnectionFactoryTest {
     @Test
     void connectionFactorySupportsConnectionIdsWithSmallLength() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(null, tlsServerEngineFactory, getConfig(4), null, null, cid -> {}, mock(Logger.class));
-        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), someClient, new byte[8], new byte[8]);
         assertThat(conn1.getSourceConnectionId()).hasSize(4);
     }
 
     @Test
     void connectionFactorySupportsConnectionIdsWithLargeLength() {
         ServerConnectionFactory connectionFactory = new ServerConnectionFactory(null, tlsServerEngineFactory, getConfig(20), null, null, cid -> {}, mock(Logger.class));
-        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), null, new byte[8], new byte[8]);
+        ServerConnectionImpl conn1 = connectionFactory.createNewConnection(Version.getDefault(), someClient, new byte[8], new byte[8]);
         assertThat(conn1.getSourceConnectionId()).hasSize(20);
     }
 

@@ -18,7 +18,9 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.packet.DatagramParserFilter;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;
@@ -38,15 +40,13 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final BlockingQueue<ReceivedDatagram> queue;
     private final Thread connectionReceiverThread;
     private final InitialPacket firstInitialPacket;
-    private final Instant firstPacketReceived;
-    private final ByteBuffer firstDatagram;
+    private final PacketMetaData firstInitialPacketMetaData;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, Instant firstPacketReceived, ByteBuffer firstDatagram) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, PacketMetaData initialPacketMetaData) {
         this.serverConnection = serverConnection;
         this.firstInitialPacket = firstInitialPacket;
-        this.firstPacketReceived = firstPacketReceived;
-        this.firstDatagram = firstDatagram;
+        this.firstInitialPacketMetaData = initialPacketMetaData;
 
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
@@ -61,7 +61,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data));
+        queue.add(new ReceivedDatagram(datagramNumber, timeReceived, data, sourceAddress));
     }
 
     @Override
@@ -77,11 +77,14 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private void process() {
         try {
             if (firstInitialPacket != null) {
-                serverConnection.parseAndProcessPackets(0, firstPacketReceived, firstDatagram, firstInitialPacket);
+                serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
             }
+            DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
+
             while (! connectionReceiverThread.isInterrupted()) {
                 ReceivedDatagram datagram = queue.take();
-                serverConnection.parseAndProcessPackets(datagram.datagramNumber, datagram.timeReceived, datagram.data, null);
+                PacketMetaData metaData = new PacketMetaData(datagram.timeReceived, datagram.sourceAddress, datagram.datagramNumber);
+                datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
         catch (InterruptedException e) {
@@ -103,11 +106,13 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         final int datagramNumber;
         final Instant timeReceived;
         final ByteBuffer data;
+        final InetSocketAddress sourceAddress;
 
-        public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data) {
+        public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
             this.datagramNumber = datagramNumber;
             this.timeReceived = timeReceived;
             this.data = data;
+            this.sourceAddress = sourceAddress;
         }
     }
 }
