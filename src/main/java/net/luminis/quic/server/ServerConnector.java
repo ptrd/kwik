@@ -34,6 +34,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -98,12 +99,20 @@ public class ServerConnector {
     }
 
     private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        serverSocket = socket;
+        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, log);
+    }
+
+    private ServerConnector(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword), supportedVersions, configuration, log);
+    }
+
+    private ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+        this.serverSocket = socket;
+        this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
         this.log = Objects.requireNonNull(log);
         connectionIdLength = configuration.connectionIdLength();
 
-        tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
         serverConnectionFactory = new ServerConnectionFactory(serverSocket, tlsEngineFactory,
@@ -333,6 +342,9 @@ public class ServerConnector {
         private List<Version> supportedVersions = new ArrayList<>(List.of(Version.QUIC_version_1));
         private ServerConnectionConfig configuration = getDefaultConfiguration(true);
         private Logger log;
+        private KeyStore keyStore;
+        private String certificateAlias;
+        private char[] privateKeyPassword;
 
         public Builder withPort(int port) {
             this.port = port;
@@ -345,8 +357,15 @@ public class ServerConnector {
         }
 
         public Builder withCertificate(InputStream certificateFile, InputStream certificateKeyFile) {
-            this.certificateFile = certificateFile;
-            this.certificateKeyFile = certificateKeyFile;
+            this.certificateFile = Objects.requireNonNull(certificateFile);
+            this.certificateKeyFile = Objects.requireNonNull(certificateKeyFile);
+            return this;
+        }
+
+        public Builder withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword) {
+            this.keyStore = Objects.requireNonNull(keyStore);
+            this.certificateAlias = Objects.requireNonNull(certificateAlias);
+            this.privateKeyPassword = Objects.requireNonNull(privateKeyPassword);
             return this;
         }
 
@@ -361,7 +380,7 @@ public class ServerConnector {
         }
 
         public Builder withConfiguration(ServerConnectionConfig configuration) {
-            this.configuration = configuration;
+            this.configuration = Objects.requireNonNull(configuration);
             return this;
         }
 
@@ -371,10 +390,22 @@ public class ServerConnector {
         }
 
         public ServerConnector build() throws Exception {
+            if (port == 0) {
+                throw new IllegalStateException("port number not set");
+            }
+            if (certificateFile == null && keyStore == null) {
+                throw new IllegalStateException("server certificate not set");
+            }
+
             if (socket == null) {
                 socket = new DatagramSocket(port);
             }
-            return new ServerConnector(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);
+            if (keyStore != null) {
+                return new ServerConnector(socket, keyStore, certificateAlias, privateKeyPassword, supportedVersions, configuration, log);
+            }
+            else {
+                return new ServerConnector(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);
+            }
         }
     }
 }
