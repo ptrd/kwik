@@ -33,8 +33,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.security.KeyStore;
 import java.util.List;
 
 /**
@@ -80,24 +80,23 @@ public class InteropServer {
         log.logWarning(true);
         log.logInfo(true);
 
-
-        File certificateFile = new File(args.get(0));
-        if (!certificateFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(0));
+        File keyStoreFile = new File(args.get(0));
+        if (!keyStoreFile.exists()) {
+            System.err.println("Cannot open keystore file " + args.get(0));
             System.exit(1);
         }
 
-        File certificateKeyFile = new File(args.get(1));
-        if (!certificateKeyFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(1));
-            System.exit(1);
-        }
+        String certificateAlias = args.get(1);
+        String keyStorePassword = args.get(2);
+        String keyPassword = args.get(3);
 
-        int port = Integer.parseInt(args.get(2));
+        KeyStore keyStore = KeyStore.getInstance(keyStoreFile, keyStorePassword.toCharArray());
+
+        int port = Integer.parseInt(args.get(4));
 
         File wwwDir = null;
-        if (args.size() > 3) {
-            wwwDir = new File(args.get(3));
+        if (args.size() > 5) {
+            wwwDir = new File(args.get(5));
             if (!wwwDir.exists() || !wwwDir.isDirectory() || !wwwDir.canRead()) {
                 System.err.println("Cannot read www dir '" + wwwDir + "'");
                 System.exit(1);
@@ -119,7 +118,7 @@ public class InteropServer {
 
         ServerConnector serverConnector = ServerConnector.builder()
                 .withPort(port)
-                .withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile))
+                .withKeyStore(keyStore, certificateAlias, keyPassword.toCharArray())
                 .withSupportedVersions(supportedVersions)
                 .withConfiguration(serverConnectionConfig)
                 .withLogger(log)
