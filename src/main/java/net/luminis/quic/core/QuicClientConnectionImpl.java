@@ -47,11 +47,15 @@ import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
 import net.luminis.tls.util.ByteUtils;
 
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -1201,8 +1205,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
         };
+        System.out.println("SECURITY WARNING: INSECURE configuration! Server certificate validation is disabled; QUIC connections may be subject to man-in-the-middle attacks!");
         tlsEngine.setTrustManager(trustAllCerts);
         tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
+    }
+
+    protected void setTrustStore(KeyStore customTrustStore) throws KeyStoreException {
+        try {
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("PKIX");
+            trustManagerFactory.init(customTrustStore);
+            X509TrustManager trustManager = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
+            tlsEngine.setTrustManager(trustManager);
+        }
+        catch (NoSuchAlgorithmException e) {
+            // Inappropriate runtime environment (fairly impossible, because PKIX is required to be supported by JDK)
+            throw new QuicRuntimeException(e);
+        }
     }
 
     private void enableQuantumReadinessTest(int nrDummyBytes) {
@@ -1248,6 +1266,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private DatagramSocketFactory socketFactory;
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
+        private KeyStore customTrustStore;
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
@@ -1285,6 +1304,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
+            }
+            if (customTrustStore != null) {
+                try {
+                    quicConnection.setTrustStore(customTrustStore);
+                }
+                catch (KeyStoreException e) {
+                    // Should be thrown as checked exception, but would require (incompatible) interface change.
+                    throw new RuntimeException(e);
+                }
             }
             if (quantumReadinessTest != null) {
                 quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
@@ -1414,6 +1442,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder noServerCertificateCheck() {
             omitCertificateCheck = true;
+            return this;
+        }
+
+        @Override
+        public Builder customTrustStore(KeyStore customTrustStore) {
+            this.customTrustStore = customTrustStore;
             return this;
         }
 

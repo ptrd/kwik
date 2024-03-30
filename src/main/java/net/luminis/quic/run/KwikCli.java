@@ -52,6 +52,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyFactory;
+import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
@@ -104,6 +105,10 @@ public class KwikCli {
 
         if (cmd.hasOption("noCertificateCheck")) {
             connectionBuilder.noServerCertificateCheck();
+        }
+        if (cmd.hasOption("trustStore")) {
+            String password = cmd.hasOption("trustStorePassword")? cmd.getOptionValue("trustStorePassword"): "";
+            connectionBuilder.customTrustStore(KeyStore.getInstance(new File(cmd.getOptionValue("trustStore")), password.toCharArray()));
         }
 
         if (cmd.hasOption("saveServerCertificates")) {
@@ -774,5 +779,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 cipher suite");
         cmdLineOptions.addOption(null, "aes128gcm", false, "use AEAD_AES_128_GCM cipher suite");
         cmdLineOptions.addOption(null, "aes256gcm", false, "use AEAD_AES_256_GCM cipher suite");
+        cmdLineOptions.addOption(null, "trustStore", true, "use custom trust store (to use non default CA's)");
+        cmdLineOptions.addOption(null, "trustStorePassword", true, "password for custom trust store");
     }
 }

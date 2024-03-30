@@ -28,6 +28,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
+import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -125,6 +126,8 @@ public interface QuicClientConnection extends QuicConnection {
         Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
 
         Builder noServerCertificateCheck();
+
+        Builder customTrustStore(KeyStore customTrustStore);
 
         Builder quantumReadinessTest(int nrOfDummyBytes);
 
