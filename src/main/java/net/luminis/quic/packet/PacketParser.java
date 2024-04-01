@@ -27,6 +27,8 @@ import net.luminis.quic.log.Logger;
 import java.nio.ByteBuffer;
 import java.util.function.BiFunction;
 
+import static net.luminis.quic.crypto.MissingKeysException.Cause.DiscardedKeys;
+
 public abstract class PacketParser {
 
     protected ConnectionSecrets connectionSecrets;
@@ -82,7 +84,12 @@ public abstract class PacketParser {
                     nrOfPacketBytes = data.remaining();
                 }
                 if (!handleUnprotectPacketFailureFunction.apply(data, cannotParse)) {
-                    log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
+                    if (cannotParse instanceof  MissingKeysException && ((MissingKeysException) cannotParse).getMissingKeysCause().equals(DiscardedKeys)) {
+                        log.warn("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse.getMessage() + ")");
+                    }
+                    else {
+                        log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
+                    }
                 }
             }
             catch (InvalidPacketException invalidPacket) {
