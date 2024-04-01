@@ -77,26 +77,33 @@ public class InteropRunner extends KwikCli {
         }
 
         if (args.length < 2) {
-            System.out.println("Expected at least 3 arguments: <downloadDir> <testcase> <URL>");
+            System.out.println("Expected 5 arguments: <downloadDir> <trustStore> <trustStorePassword> <testcase> <URL>");
             System.exit(1);
         }
 
-        outputDir = new File(args[0]);
+        int currentArg = 0;
+        outputDir = new File(args[currentArg++]);
         if (! outputDir.isDirectory()) {
             outputDir.mkdir();
         }
 
-        String testCase = args[1];
+        File trustStore = new File(args[currentArg++]);
+        if (! trustStore.exists() || ! trustStore.canRead()) {
+            System.out.println("Can't read trust store file " + trustStore);
+            System.exit(1);
+        }
+        String trustStorePassword = args[currentArg++];
+
+        String testCase = args[currentArg++];
         if (! TESTCASES.contains(testCase)) {
             System.out.println("Invalid argument; test case '" + testCase + "' not known.");
             System.out.println("Available test cases: " + TESTCASES);
         }
 
-        int i = -1;
         try {
             List<URL> downloadUrls = new ArrayList<>();
-            for (i = 2; i < args.length; i++) {
-                downloadUrls.add(new URL(args[i]));
+            for (; currentArg < args.length; currentArg++) {
+                downloadUrls.add(new URL(args[currentArg]));
             }
 
             QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
@@ -129,7 +136,7 @@ public class InteropRunner extends KwikCli {
                 testKeyUpdate(downloadUrls, builder);
             }
         } catch (MalformedURLException | URISyntaxException e) {
-            System.out.println("Invalid argument: cannot parse URL '" + args[i] + "'");
+            System.out.println("Invalid argument: cannot parse URL '" + args[currentArg] + "'");
         } catch (IOException e) {
             System.out.println("I/O Error: " + e);
         }
