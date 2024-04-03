@@ -38,6 +38,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Paths;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -62,9 +66,10 @@ public class InteropRunner extends KwikCli {
 
     private static File outputDir;
     private static Logger logger;
+    private static KeyStore trustStore;
 
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException {
         File logDir = new File("/logs");   // Interop runner runs in docker container and is expected to write logs to /logs
         String logFile = (logDir.exists()? "/logs/": "./") + "kwik_client.log";
         try {
@@ -87,12 +92,13 @@ public class InteropRunner extends KwikCli {
             outputDir.mkdir();
         }
 
-        File trustStore = new File(args[currentArg++]);
-        if (! trustStore.exists() || ! trustStore.canRead()) {
-            System.out.println("Can't read trust store file " + trustStore);
+        File trustStoreFile = new File(args[currentArg++]);
+        if (! trustStoreFile.exists() || ! trustStoreFile.canRead()) {
+            System.out.println("Can't read trust store file " + trustStoreFile);
             System.exit(1);
         }
         String trustStorePassword = args[currentArg++];
+        trustStore = KeyStore.getInstance(trustStoreFile, trustStorePassword.toCharArray());
 
         String testCase = args[currentArg++];
         if (! TESTCASES.contains(testCase)) {
@@ -109,7 +115,7 @@ public class InteropRunner extends KwikCli {
             QuicClientConnectionImpl.Builder builder = QuicClientConnectionImpl.newBuilder();
             builder.version(QuicConnection.QuicVersion.V1);
             builder.applicationProtocol("hq-interop");
-            builder.noServerCertificateCheck();
+            builder.customTrustStore(trustStore);
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
@@ -193,7 +199,7 @@ public class InteropRunner extends KwikCli {
         builder.version(QuicConnection.QuicVersion.V1);
         builder.applicationProtocol("hq-interop");
         builder.uri(url2.toURI());
-        builder.noServerCertificateCheck();  // Not necessary if server accepts PSK, but when not, test would fail for wrong reason.
+        builder.customTrustStore(trustStore);  // Not necessary if server accepts PSK, but when not, test would fail for wrong reason.
         builder.logger(logger);
         builder.sessionTicket(newSessionTickets.get(0));
         QuicClientConnection connection2 = builder.build();
