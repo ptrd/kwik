@@ -490,15 +490,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
-        if (clientCertificate != null && clientCertificateKey != null) {
-            tlsEngine.setClientCertificateCallback(authorities -> {
-                if (! authorities.contains(clientCertificate.getIssuerX500Principal())) {
-                    log.warn("Client certificate is not signed by one of the requested authorities: " + authorities);
-                }
-                return new CertificateWithPrivateKey(clientCertificate, clientCertificateKey);
-            });
-        }
 
+        handleClientAuthentication();
+        
         if (preferredVersion != null && !preferredVersion.equals(originalVersion)) {
             transportParams.setVersionInformation(new TransportParameters.VersionInformation(originalVersion,
                     List.of(preferredVersion, originalVersion)));
@@ -524,6 +518,17 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             tlsEngine.startHandshake();
         } catch (IOException e) {
             // Will not happen, as our ClientMessageSender implementation will not throw.
+        }
+    }
+
+    private void handleClientAuthentication() {
+        if (clientCertificate != null && clientCertificateKey != null) {
+            tlsEngine.setClientCertificateCallback(authorities -> {
+                if (! authorities.contains(clientCertificate.getIssuerX500Principal())) {
+                    log.warn("Client certificate is not signed by one of the requested authorities: " + authorities);
+                }
+                return new CertificateWithPrivateKey(clientCertificate, clientCertificateKey);
+            });
         }
     }
 
