@@ -53,6 +53,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyFactory;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
@@ -474,6 +475,20 @@ public class KwikCli {
     }
 
     private void processClientCertificateArgs(CommandLine cmd, QuicClientConnection.Builder builder) {
+        if (cmd.hasOption("clientCertificate") && cmd.hasOption("keyManager")) {
+            throw new IllegalArgumentException("Options --clientCertificate and --keyManager should not be used together");
+        }
+        if (cmd.hasOption("keyManager")) {
+            try {
+                String keyStorePassword = cmd.hasOption("keyManagerPassword")? cmd.getOptionValue("keyManagerPassword"): "";
+                builder.clientKeyManager(KeyStore.getInstance(new File(cmd.getOptionValue("keyManager")), keyStorePassword.toCharArray()));
+                // Same password for key manager and key
+                builder.clientKey(keyStorePassword);
+            }
+            catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+                throw new IllegalArgumentException("Error while reading client key manager", e);
+            }
+        }
         if (cmd.hasOption("clientCertificate") && cmd.hasOption("clientKey")) {
             try {
                 builder.clientCertificate(readCertificate(cmd.getOptionValue("clientCertificate")));
@@ -781,5 +796,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "aes256gcm", false, "use AEAD_AES_256_GCM cipher suite");
         cmdLineOptions.addOption(null, "trustStore", true, "use custom trust store (to use non default CA's)");
         cmdLineOptions.addOption(null, "trustStorePassword", true, "password for custom trust store");
+        cmdLineOptions.addOption(null, "keyManager", true, "client authentication key manager");
+        cmdLineOptions.addOption(null, "keyManagerPassword", true, "password for client authentication key manager and key password");
     }
 }

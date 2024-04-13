@@ -53,10 +53,7 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -122,6 +119,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile TransportParameters transportParams;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
+    private KeyStore keyManager;
+    private String keyManagerPrivateKeyPassword;
     private final ConnectionIdManager connectionIdManager;
     private final Version originalVersion;
     private final Version preferredVersion;
@@ -528,6 +527,34 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.warn("Client certificate is not signed by one of the requested authorities: " + authorities);
                 }
                 return new CertificateWithPrivateKey(clientCertificate, clientCertificateKey);
+            });
+        }
+        if (keyManager != null) {
+            tlsEngine.setClientCertificateCallback(authorities -> {
+                try {
+                    List<String> aliases = Collections.list(keyManager.aliases());
+                    for (String alias: aliases) {
+                        X509Certificate certificate = (X509Certificate) keyManager.getCertificate(alias);
+                        if (authorities.contains(certificate.getIssuerX500Principal())) {
+                            Key key = keyManager.getKey(alias, keyManagerPrivateKeyPassword.toCharArray());
+                            return new CertificateWithPrivateKey(certificate, (PrivateKey) key);
+                        }
+                    }
+                    log.warn("None of the provided client certificates is signed by one of the requested authorities: " + authorities);
+                    // Fallback to the first certificate in the key store.
+                    if (!aliases.isEmpty()) {
+                        return new CertificateWithPrivateKey((X509Certificate) keyManager.getCertificate(aliases.get(0)),
+                                (PrivateKey) keyManager.getKey(aliases.get(0), keyManagerPrivateKeyPassword.toCharArray()));
+                    }
+                    else {
+                       log.error("No client certificate found in key store");
+                    }
+                    return null;
+                }
+                catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
+                    log.error("Failed to extract client certificate from key store", e);
+                    return null;
+                }
             });
         }
     }
@@ -1228,6 +1255,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    private void setKeyManager(KeyStore keyManager) {
+        this.keyManager = keyManager;
+    }
+
+    private void setKeyManagerPrivateKeyPassword(String keyPassword) {
+        this.keyManagerPrivateKeyPassword = keyPassword;
+    }
+
     private void enableQuantumReadinessTest(int nrDummyBytes) {
         clientHelloEnlargement = nrDummyBytes;
     }
@@ -1272,6 +1307,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
         private KeyStore customTrustStore;
+        private KeyStore keyManager;
+        private String keyPassword;
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
@@ -1286,18 +1323,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public QuicClientConnectionImpl build() throws SocketException, UnknownHostException {
-            if (host == null) {
-                throw new IllegalStateException("Cannot create connection when URI is not set");
-            }
-            if (applicationProtocol.isBlank()) {
-                throw new IllegalStateException("Application protocol must be set");
-            }
-            if (connectTimeoutInMillis < 1) {
-                throw new IllegalArgumentException("Connect timeout must be larger than 0.");
-            }
-            if (initialRtt != null && initialRtt < 1) {
-                throw new IllegalArgumentException("Initial RTT must be larger than 0.");
-            }
+            checkBuilderArguments();
+
             if (cipherSuites.isEmpty()) {
                 cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
             }
@@ -1310,6 +1337,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
             }
+
             if (customTrustStore != null) {
                 try {
                     quicConnection.setTrustStore(customTrustStore);
@@ -1319,11 +1347,41 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     throw new RuntimeException(e);
                 }
             }
+
+            if (keyManager != null) {
+                quicConnection.setKeyManager(keyManager);
+                quicConnection.setKeyManagerPrivateKeyPassword(keyPassword);
+            }
+
             if (quantumReadinessTest != null) {
                 quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
             }
 
             return quicConnection;
+        }
+
+        private void checkBuilderArguments() {
+            if (host == null) {
+                throw new IllegalStateException("Cannot create connection when URI is not set");
+            }
+            if (applicationProtocol.isBlank()) {
+                throw new IllegalStateException("Application protocol must be set");
+            }
+            if (connectTimeoutInMillis < 1) {
+                throw new IllegalArgumentException("Connect timeout must be larger than 0.");
+            }
+            if (initialRtt != null && initialRtt < 1) {
+                throw new IllegalArgumentException("Initial RTT must be larger than 0.");
+            }
+            if (clientCertificate != null && keyManager != null) {
+                throw new IllegalArgumentException("Cannot set both client certificate and key manager");
+            }
+            if (clientCertificate != null && clientCertificateKey == null) {
+                throw new IllegalArgumentException("Client certificate key must be set when client certificate is set");
+            }
+            if (keyManager != null && keyPassword == null) {
+                throw new IllegalArgumentException("Key password must be set when key manager is set");
+            }
         }
 
         @Override
@@ -1471,6 +1529,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder clientCertificateKey(PrivateKey privateKey) {
             this.clientCertificateKey = privateKey;
+            return this;
+        }
+
+        @Override
+        public Builder clientKeyManager(KeyStore keyManager) {
+            this.keyManager = keyManager;
+            return this;
+        }
+
+        @Override
+        public Builder clientKey(String keyPassword) {
+            this.keyPassword = keyPassword;
             return this;
         }
 
