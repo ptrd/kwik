@@ -18,13 +18,13 @@
  */
 package net.luminis.quic.qlog;
 
+import jakarta.json.Json;
+import jakarta.json.stream.JsonGenerator;
 import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.AckFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import javax.json.Json;
-import javax.json.stream.JsonGenerator;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 

@@ -1,5 +1,9 @@
 package net.luminis.quic.qlog;
 
+import jakarta.json.Json;
+import jakarta.json.JsonArray;
+import jakarta.json.JsonObject;
+import jakarta.json.JsonReader;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.MockPacket;
 import net.luminis.quic.qlog.event.ConnectionCreatedEvent;
@@ -7,10 +11,6 @@ import net.luminis.quic.qlog.event.PacketLostEvent;
 import net.luminis.quic.qlog.event.PacketSentEvent;
 import org.junit.jupiter.api.Test;
 
-import javax.json.Json;
-import javax.json.JsonArray;
-import javax.json.JsonObject;
-import javax.json.JsonReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

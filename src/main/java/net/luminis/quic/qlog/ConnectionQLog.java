@@ -18,14 +18,14 @@
  */
 package net.luminis.quic.qlog;
 
+import jakarta.json.Json;
+import jakarta.json.stream.JsonGenerator;
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.qlog.event.*;
 import net.luminis.tls.util.ByteUtils;
 
-import javax.json.Json;
-import javax.json.stream.JsonGenerator;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -35,8 +35,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
+import static jakarta.json.stream.JsonGenerator.PRETTY_PRINTING;
 import static java.util.Collections.emptyMap;
-import static javax.json.stream.JsonGenerator.PRETTY_PRINTING;
 
 
 /**
