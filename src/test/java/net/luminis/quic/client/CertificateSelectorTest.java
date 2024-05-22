@@ -33,8 +33,6 @@ import static org.mockito.Mockito.mock;
 
 class CertificateSelectorTest {
 
-    private CertificateSelector certificateSelector;
-
     @Test
     void whenCertIssuerDnMatchesCertShouldBeSelected() throws Exception {
         // Given
@@ -51,7 +49,7 @@ class CertificateSelectorTest {
                 .withCertificate(endEntityCertificate2, endEntityCertificate2Key)
                 .build();
 
-        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA2");
@@ -71,7 +69,7 @@ class CertificateSelectorTest {
         KeyStore keyStore = new KeyStoreBuilder()
                 .withCertificate(endEntityCertificate2, endEntityCertificate2Key)
                 .build();
-        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
         X500Principal authority = new X500Principal("CN=SampleCA1");
         X500Principal issuer = endEntityCertificate2.getIssuerX500Principal();
 
@@ -91,7 +89,7 @@ class CertificateSelectorTest {
                         TestCertificates.getEndEntityCertificate1_1(), TestCertificates.getSubCACertificate1())
                 .build();
 
-        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA1");
@@ -108,7 +106,7 @@ class CertificateSelectorTest {
                         TestCertificates.getEndEntityCertificate1_1())
                 .build();
 
-        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA1");
@@ -126,7 +124,7 @@ class CertificateSelectorTest {
                 .withCertificate(endEntityCertificate1, endEntityCertificate1Key)
                 .build();
 
-        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA9");
@@ -134,5 +132,21 @@ class CertificateSelectorTest {
 
         // Then
         assertThat(selected).isNotNull();
+    }
+
+    @Test
+    void worksWithEcToo() throws Exception {
+        // Given
+        KeyStore keyStore = new KeyStoreBuilder()
+                .withCertificate(TestCertificates.getEcCErt(), TestCertificates.getEcCertKey())
+                .build();
+        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+
+        // When
+        X500Principal authority = new X500Principal("CN=SampleECRoot");
+        var certificateWithKey = certificateSelector.selectCertificate(List.of(authority), false);
+
+        // Then
+        assertThat(certificateWithKey).isNotNull();
     }
 }

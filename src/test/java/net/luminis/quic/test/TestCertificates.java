@@ -34,7 +34,7 @@ public class TestCertificates {
     }
 
     public static PrivateKey getEndEntityCertificate1Key() throws Exception {
-        return inflatePrivateKey(encodedEndEntityCertificate1PrivateKey);
+        return inflatePrivateKey(encodedEndEntityCertificate1PrivateKey, "RSA");
     }
 
     public static X509Certificate getEndEntityCertificate2() throws Exception {
@@ -42,7 +42,7 @@ public class TestCertificates {
     }
 
     public static PrivateKey getEndEntityCertificate2Key() throws Exception {
-        return inflatePrivateKey(encodedEndEntityCertificate2PrivateKey);
+        return inflatePrivateKey(encodedEndEntityCertificate2PrivateKey, "RSA");
     }
 
     public static X509Certificate getSubCACertificate1() throws Exception {
@@ -54,7 +54,11 @@ public class TestCertificates {
     }
 
     public static PrivateKey getEndEntityCertificate1_1Key() throws Exception {
-        return inflatePrivateKey(encodedEndEntityCertificate1_1PrivateKey);
+        return inflatePrivateKey(encodedEndEntityCertificate1_1PrivateKey, "RSA");
+    }
+
+    public static X509Certificate getEcCErt() throws Exception {
+        return inflateCertificate(encodedEcEndEntityCertificate);
     }
 
     private static X509Certificate inflateCertificate(String encodedCertificate) throws Exception {
@@ -63,9 +67,12 @@ public class TestCertificates {
         return (X509Certificate) certificate;
     }
 
-    private static PrivateKey inflatePrivateKey(String encodedPrivateKey) throws Exception {
+    public static PrivateKey getEcCertKey() throws Exception {
+        return inflatePrivateKey(encodedEcEndEntityCertificatePrivateKey, "EC");
+    }
+    private static PrivateKey inflatePrivateKey(String encodedPrivateKey, String keyType) throws Exception {
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(encodedPrivateKey.getBytes()));
-        KeyFactory kf = KeyFactory.getInstance("RSA");
+        KeyFactory kf = KeyFactory.getInstance(keyType);
         PrivateKey privKey = kf.generatePrivate(keySpec);
         return privKey;
     }
@@ -213,4 +220,26 @@ public class TestCertificates {
             "4x6UzvcwMyxdQRePyTAfBgNVHSMEGDAWgBRgOdAu3eybOgAhMkgQu4co7LFrEzAN" +
             "BgkqhkiG9w0BAQsFAANBALQrd5R6L5wK3o3CfAoaGCrJU8iNGb7RL9y5LnJSgPzZ" +
             "XhICQVljZRoiniAzCHzXCbn5Z0IyD8qiK2wHA5iLsGE=";
+
+    // generated with: openssl req -new -key ec_key.pem -x509 -nodes -days 3650 -out ec1_cert.pem -subj="/CN=SampleECRoot"
+    private static String encodedEcEndEntityCertificate = "" +
+            "MIIBgzCCASmgAwIBAgIUNzmFH62kWOW8B6eWZSY5j2gyHwkwCgYIKoZIzj0EAwIw" +
+            "FzEVMBMGA1UEAwwMU2FtcGxlRUNSb290MB4XDTI0MDUyMTE5NDUyNFoXDTM0MDUx" +
+            "OTE5NDUyNFowFzEVMBMGA1UEAwwMU2FtcGxlRUNSb290MFkwEwYHKoZIzj0CAQYI" +
+            "KoZIzj0DAQcDQgAEZIPsPYIIdFL8mbd5qPQuIwm7dVa/epFCY4vTnhS2tIw5RKaa" +
+            "t1urxRvxMgi1/ColM8F/RFSFErR6A2ANkicNSaNTMFEwHQYDVR0OBBYEFB1vMRJd" +
+            "cxjPwYJ9IXziKdyn4FkUMB8GA1UdIwQYMBaAFB1vMRJdcxjPwYJ9IXziKdyn4FkU" +
+            "MA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSAAwRQIhAJ01ZZtO6KPhT2Ap" +
+            "ppgU3YodziRMezdkcXSawqBnwwVJAiBHY/ZSa3f9R95Jxc8MToS12QggtJaDSFCy" +
+            "sV6kzP/1ZA==";
+
+    // generated:
+    // - openssl ecparam -out ec_key.pem -name secp256r1 -genkey
+    // - openssl pkcs8 -in ec_key.pem -inform PEM -topk8 -nocrypt -out ec_key-pkcs8.der -outform DER
+    // - base64 -d -i ec_key-pkcs8.der -o encoded_ec.key
+    private static String encodedEcEndEntityCertificatePrivateKey =
+            "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg/7THqb775dzQvdOy" +
+            "43UPGlTbog99/XZb9vTd6kgAZDihRANCAARkg+w9ggh0UvyZt3mo9C4jCbt1Vr96" +
+            "kUJji9OeFLa0jDlEppq3W6vFG/EyCLX8KiUzwX9EVIUStHoDYA2SJw1J";
+
 }
