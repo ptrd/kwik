@@ -45,6 +45,18 @@ public class TestCertificates {
         return inflatePrivateKey(encodedEndEntityCertificate2PrivateKey);
     }
 
+    public static X509Certificate getSubCACertificate1() throws Exception {
+        return inflateCertificate(encodedsubCA1Cert);
+    }
+
+    public static X509Certificate getEndEntityCertificate1_1() throws Exception {
+        return inflateCertificate(encodedEndEntityCertificate1_1);
+    }
+
+    public static PrivateKey getEndEntityCertificate1_1Key() throws Exception {
+        return inflatePrivateKey(encodedEndEntityCertificate1_1PrivateKey);
+    }
+
     private static X509Certificate inflateCertificate(String encodedCertificate) throws Exception {
         CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
         Certificate certificate = certificateFactory.generateCertificate(new ByteArrayInputStream(Base64.getDecoder().decode(encodedCertificate.getBytes())));
@@ -153,4 +165,52 @@ public class TestCertificates {
             "xxSAEBtbIVYDtLvms4SMaIvZnT1JAiEAx9gnArn2QHXLHUt8iGBPj9PvkhrkA75k" +
             "U4kfPF1uleg=";
 
+    // generated with: openssl genrsa -out subca1.key 512
+    private static String encodedSubCa1PrivateKey = "" +
+            "MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAwi1HigKXn7OuahCD" +
+            "SDAv26u0P2prrpV+Z469HZ7mIvGudpR0qmC+RWfvv7xLiEki9wlFovhv9lDnkL3h" +
+            "ztPBLwIDAQABAkAT/k2LbFDoZLvkt+aMnEmRONDKZs7HnyTwzMW0MxRHLKVMxBvW" +
+            "QxcInG5MC7f/kRZy3W+NyEyA65vq1E8WnyshAiEA8+SzVwseZ7C2ittCTuS3n6Mk" +
+            "7rcd8qO9oVq6adDD6c0CIQDL0M02uPIDle1gUmr2Sufu61dszYJjeqH2THa5lqKq" +
+            "6wIgIp7pUkbSxxdPokBjlj1jT3biLDy0NJhHt9rgMVsgJFUCIB2/5pRcPocjdTig" +
+            "DxjQKjaHh4VMIgIfPlDTLGk+gZPtAiBgfr53FV+G9LkYY5Lf2K5+oMTEOLsVi2Ey" +
+            "CM9K2eB3Pw==";
+
+    // generated with:
+    // - openssl req -key subca1.key -new -out subca1-cert.csr -subj='/CN=SubCA'
+    // - openssl x509 -req -in subca1-cert.csr -CAkey ca1.key -CA ca1-cert.pem -out subca1-cert.pem -days 3650
+    private static String encodedsubCA1Cert = "" +
+            "MIIBajCCARSgAwIBAgIUEK9K4Vhh/MlyctyknceomBMEwoswDQYJKoZIhvcNAQEL" +
+            "BQAwFDESMBAGA1UEAwwJU2FtcGxlQ0ExMB4XDTI0MDUyMDIwMTAwOVoXDTM0MDUx" +
+            "ODIwMTAwOVowEDEOMAwGA1UEAwwFU3ViQ0EwXDANBgkqhkiG9w0BAQEFAANLADBI" +
+            "AkEAwi1HigKXn7OuahCDSDAv26u0P2prrpV+Z469HZ7mIvGudpR0qmC+RWfvv7xL" +
+            "iEki9wlFovhv9lDnkL3hztPBLwIDAQABo0IwQDAdBgNVHQ4EFgQUYDnQLt3smzoA" +
+            "ITJIELuHKOyxaxMwHwYDVR0jBBgwFoAU9xiJxtKozEkKyZf/xBf14YzDMTIwDQYJ" +
+            "KoZIhvcNAQELBQADQQArXzO2d/NjE5GGVj09M3lV6X5ZeB7K4C+X+p7dmILmbEfe" +
+            "t/jOz29t2Ao4jR99sowpcQIQ2o7jL6bHp45vXtb+";
+
+    // generated with: openssl genrsa -out ee1_1.key 512
+    private static String encodedEndEntityCertificate1_1PrivateKey = "" +
+            "MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAq7yC0UcnBdpe5/kC" +
+            "KF1Z5Qg921EJ/AljzefiWWew1jYwm4iqqdJOTzbjfxD00aak03g0aVWtEuUhmcFw" +
+            "PeJoPwIDAQABAkAq0BoEtipCSUgzqF4jVfJdKIrTLAbDMEwTPuWsyC7Ll9pGRO6X" +
+            "2Y70q4kB911iy2Rmm+dpqzncAS8FhwLaDrVxAiEA0zQJjzBpbJmGG1bRBEaYflgi" +
+            "Be0dsLWZqvJz9Dcf7tsCIQDQKX23BhVieVNuWbH9G3LSDqbYYAksmwuss0363aav" +
+            "bQIgLsOT5keS4D/yCLWlXCwBceAz0FobO9hJ6Sb787QM9wcCIQDKIjAgRLkJSZUZ" +
+            "h+HNTRUfIvkjDYZ7GQeqKOclHo0YtQIhAJZxxVQQsMa9lqANJnpNUqAXCvM+cH5o" +
+            "NLf0sgL77MwV";
+
+    // generated with:
+    // - openssl req -key ee1_1.key -new -out ee1_1-cert.csr -subj='/C=NL/O=Kwik/OU=Kwik Dev/CN=endentity1_1'
+    // - openssl x509 -req -in ee1_1-cert.csr -CAkey subca1.key -CA subca1-cert.pem -out ee1_1-cert.pem -days 3650
+    private static String encodedEndEntityCertificate1_1 = "" +
+            "MIIBnDCCAUagAwIBAgIUAl8gP00aavlFWwbsw6njyIfb62EwDQYJKoZIhvcNAQEL" +
+            "BQAwEDEOMAwGA1UEAwwFU3ViQ0EwHhcNMjQwNTIwMjAxMTQ5WhcNMzQwNTE4MjAx" +
+            "MTQ5WjBGMQswCQYDVQQGEwJOTDENMAsGA1UECgwES3dpazERMA8GA1UECwwIS3dp" +
+            "ayBEZXYxFTATBgNVBAMMDGVuZGVudGl0eTFfMTBcMA0GCSqGSIb3DQEBAQUAA0sA" +
+            "MEgCQQCrvILRRycF2l7n+QIoXVnlCD3bUQn8CWPN5+JZZ7DWNjCbiKqp0k5PNuN/" +
+            "EPTRpqTTeDRpVa0S5SGZwXA94mg/AgMBAAGjQjBAMB0GA1UdDgQWBBSNUUufLezA" +
+            "4x6UzvcwMyxdQRePyTAfBgNVHSMEGDAWgBRgOdAu3eybOgAhMkgQu4co7LFrEzAN" +
+            "BgkqhkiG9w0BAQsFAANBALQrd5R6L5wK3o3CfAoaGCrJU8iNGb7RL9y5LnJSgPzZ" +
+            "XhICQVljZRoiniAzCHzXCbn5Z0IyD8qiK2wHA5iLsGE=";
 }

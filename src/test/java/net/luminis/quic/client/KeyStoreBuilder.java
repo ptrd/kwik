@@ -41,4 +41,10 @@ public class KeyStoreBuilder {
         keyStore.setKeyEntry("" + entriesCount, privateKey, "".toCharArray(), new X509Certificate[]{certificate});
         return this;
     }
+
+    public KeyStoreBuilder withCertificates(PrivateKey privateKey, X509Certificate... certificates) throws Exception {
+        entriesCount++;
+        keyStore.setKeyEntry("" + entriesCount, privateKey, "".toCharArray(), certificates);
+        return this;
+    }
 }

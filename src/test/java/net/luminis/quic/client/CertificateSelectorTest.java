@@ -83,4 +83,56 @@ class CertificateSelectorTest {
         assertThat(certificate).isNull();
     }
 
+    @Test
+    void endEntitySignedBySubcaWithCaMatchingShouldBeSelected() throws Exception {
+        KeyStore keyStore = new KeyStoreBuilder()
+                .withCertificates(TestCertificates.getEndEntityCertificate1_1Key(),
+                        // Order is important, first the end entity certificate, then the sub CA certificate
+                        TestCertificates.getEndEntityCertificate1_1(), TestCertificates.getSubCACertificate1())
+                .build();
+
+        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+
+        // When
+        X500Principal authority = new X500Principal("CN=SampleCA1");
+        var certificateWithKey = certificateSelector.selectCertificate(List.of(authority), false);
+
+        assertThat(certificateWithKey).isNotNull();
+        assertThat(certificateWithKey.getCertificate()).isEqualTo(TestCertificates.getEndEntityCertificate1_1());
+    }
+
+    @Test
+    void endEntitySignedByUnknownSubcaShouldNotBeSelected() throws Exception {
+        KeyStore keyStore = new KeyStoreBuilder()
+                .withCertificates(TestCertificates.getEndEntityCertificate1_1Key(),
+                        TestCertificates.getEndEntityCertificate1_1())
+                .build();
+
+        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+
+        // When
+        X500Principal authority = new X500Principal("CN=SampleCA1");
+        var certificateWithKey = certificateSelector.selectCertificate(List.of(authority), false);
+
+        assertThat(certificateWithKey).isNull();
+    }
+
+    @Test
+    void whenNoCertificateMatchesFallbackIsUsed() throws Exception {
+        // Given
+        X509Certificate endEntityCertificate1 = TestCertificates.getEndEntityCertificate1();
+        PrivateKey endEntityCertificate1Key = TestCertificates.getEndEntityCertificate1Key();
+        KeyStore keyStore = new KeyStoreBuilder()
+                .withCertificate(endEntityCertificate1, endEntityCertificate1Key)
+                .build();
+
+        certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+
+        // When
+        X500Principal authority = new X500Principal("CN=SampleCA9");
+        var selected = certificateSelector.selectCertificate(List.of(authority), true);
+
+        // Then
+        assertThat(selected).isNotNull();
+    }
 }
