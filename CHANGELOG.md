@@ -1,5 +1,15 @@
 # Releases
 
+## 0.8.11 (2024-05-28)
+
+- upgraded agent15 to 1.1 (accepting ECDSA certificates for server identification)
+- accept ECDSA certificates for client authentication
+- added options to provide server and client certificate as well as client truststore as Java key store objects
+- large refactor involving processor chain for processing datagrams / packets
+- drop duplicate packets (as mandated by RFC 9000)
+- log parse error caused by discarded keys as warning, not as error
+- fixed two situations where a runtime exception might occur
+
 ## 0.8.10 (2024-03-03)
 
 - Upgraded agent15 to 1.0.6
