@@ -1,1 +1,5 @@
 rootProject.name = 'kwik'
+
+include('core')
+
+project(":core").name = "kwik"
