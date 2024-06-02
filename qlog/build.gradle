@@ -16,17 +16,18 @@ dependencies {
 
     implementation group: 'tech.kwik', name: 'agent15', version: '1.1'
 
-    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
+    implementation(project(':kwik')) // Add kwik core as a dependency
 
-    // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+    // Default provider for Jakarta JSON Processing
+    implementation 'org.eclipse.parsson:parsson:1.1.6'
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
     testImplementation("org.mockito:mockito-core:5.6.0")
     testImplementation("org.assertj:assertj-core:3.24.2")
+
+    testImplementation(project(':kwik').sourceSets.test.output)  // Necessary to use test utils from kwik core
 }
 
 sourceSets {
@@ -54,19 +55,6 @@ test {
         if (!desc.parent) { // will match the outermost suite
             println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
         }
-    }
-}
-
-jar {
-    manifest {
-        attributes 'Main-Class': 'net.luminis.quic.run.KwikCli'
-    }
-
-    doFirst {
-        from {
-           configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-        }
-        exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA', 'META-INF/LICENSE.md', 'META-INF/NOTICE.md', 'module-info.class'
     }
 }
 
@@ -110,7 +98,7 @@ java {
 publishing {
     publications {
         kwik(MavenPublication) {
-            artifactId = 'kwik'
+            artifactId = 'kwik-qlog'
             from components.java
             pom {
                 name = 'Kwik'

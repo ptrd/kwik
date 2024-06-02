@@ -20,8 +20,9 @@ package net.luminis.quic.log;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.qlog.QLogFrontEnd;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +34,18 @@ public class LogProxy implements Logger {
 
     public LogProxy(Logger log, byte[] originalDestinationConnectionId) {
         this.proxiedLogger = log;
-        qlogFrontEnd = new QLogFrontEnd(originalDestinationConnectionId);
+        qlogFrontEnd = loadImplementation(originalDestinationConnectionId);
+    }
+
+    private QLog loadImplementation(byte[] originalDestinationConnectionId) {
+        try {
+            Class clazz = this.getClass().getClassLoader().loadClass("net.luminis.quic.qlog.QLogFrontEnd");
+            Constructor constructor = clazz.getConstructor(byte[].class);
+            return (QLog) constructor.newInstance(originalDestinationConnectionId);
+        }
+        catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            return new NullQLog();
+        }
     }
 
     @Override
