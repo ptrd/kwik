@@ -24,7 +24,6 @@ import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldSetter;

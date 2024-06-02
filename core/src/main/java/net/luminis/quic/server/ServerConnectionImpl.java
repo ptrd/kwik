@@ -31,7 +31,6 @@ import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
-import net.luminis.quic.qlog.QlogPacketFilter;
 import net.luminis.quic.send.SenderImpl;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;

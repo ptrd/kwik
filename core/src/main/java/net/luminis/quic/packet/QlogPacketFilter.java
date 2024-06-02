@@ -16,13 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.qlog;
+package net.luminis.quic.packet;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.quic.packet.BasePacketFilter;
-import net.luminis.quic.packet.PacketFilter;
-import net.luminis.quic.packet.PacketMetaData;
-import net.luminis.quic.packet.QuicPacket;
 
 public class QlogPacketFilter extends BasePacketFilter {
 
