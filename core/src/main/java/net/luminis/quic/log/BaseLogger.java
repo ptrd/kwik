@@ -20,8 +20,6 @@ package net.luminis.quic.log;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.qlog.NullQLog;
-import net.luminis.quic.qlog.QLog;
 import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;

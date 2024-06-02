@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.qlog;
 
+import net.luminis.quic.log.QLog;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.qlog.event.*;
 

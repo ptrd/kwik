@@ -33,10 +33,10 @@ import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.QLog;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;
-import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.recovery.RecoveryManager;
 import net.luminis.quic.recovery.RttEstimator;
 

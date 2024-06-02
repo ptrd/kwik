@@ -20,7 +20,6 @@ package net.luminis.quic.log;
 
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.quic.qlog.QLog;
 import net.luminis.quic.qlog.QLogFrontEnd;
 
 import java.nio.ByteBuffer;
@@ -29,7 +28,7 @@ import java.util.List;
 
 public class LogProxy implements Logger {
 
-    private final QLogFrontEnd qlogFrontEnd;
+    private final QLog qlogFrontEnd;
     private Logger proxiedLogger;
 
     public LogProxy(Logger log, byte[] originalDestinationConnectionId) {

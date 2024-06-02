@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.qlog;
+package net.luminis.quic.log;
 
 import net.luminis.quic.packet.QuicPacket;
 
