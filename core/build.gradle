@@ -1,19 +1,9 @@
-apply plugin: 'java'
-apply plugin: 'idea'
-apply plugin: 'eclipse'
-apply plugin: 'maven-publish'
-apply plugin: 'signing'
-
-sourceCompatibility = 11
-targetCompatibility = 11
-
-repositories {
-    mavenCentral()
+plugins {
+    id 'buildlogic.java-common-conventions'
 }
 
-dependencies {
-    def junitVersion = "5.10.0"
 
+dependencies {
     implementation group: 'tech.kwik', name: 'agent15', version: '1.1'
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
@@ -21,41 +11,8 @@ dependencies {
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
-
-    testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
-    testImplementation("org.mockito:mockito-core:5.6.0")
-    testImplementation("org.assertj:assertj-core:3.24.2")
 }
 
-sourceSets {
-    main {
-        resources {
-            srcDir "${buildDir}/generated"
-            exclude 'sources/**'
-        }
-    }
-}
-
-test {
-    useJUnitPlatform()
-    testLogging {
-        showStandardStreams = true
-        events "passed", "skipped", "failed"
-        afterSuite { desc, result ->
-            if (!desc.parent) { // will match the outermost suite
-                println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
-            }
-        }
-    }
-
-    afterSuite { desc, result ->
-        if (!desc.parent) { // will match the outermost suite
-            println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
-        }
-    }
-}
 
 jar {
     manifest {
@@ -70,92 +27,16 @@ jar {
     }
 }
 
-task determineVersion {
-    doLast {
-        def proc = "git describe --always --dirty".execute()
-        proc.waitFor()
-        if (proc.exitValue()) {
-            logger.quiet("Building development version.")
-        } else {
-            def versionTag = proc.in.readLines()[0]
-            // Check that tag matches format like v1.0 or v1.0.19
-            if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
-                if (versionTag.startsWith("v")) {
-                    versionTag = versionTag[1..-1]
-                }
-                logger.quiet("Building version ${versionTag}.")
-            }
-            else {
-                logger.error("Version tag '${versionTag}' does not contain a valid version.");
-            }
-            project.version = versionTag
-
-            ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
-            versionDir.mkdirs()
-
-            new File(versionDir, "version.properties").text = versionTag
-        }
-    }
-}
-
-compileJava.dependsOn (determineVersion, processResources)
-
-group = 'tech.kwik'
-
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
-
 publishing {
     publications {
         kwik(MavenPublication) {
             artifactId = 'kwik'
             from components.java
-            pom {
-                name = 'Kwik'
-                description = 'A QUIC implementation in Java'
-                url = 'https://github.com/ptrd/kwik'
-
-                licenses {
-                    license {
-                        name = 'GNU Lesser General Public License v3'
-                        url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'peterd'
-                        name = 'Peter Doornbosch'
-                        email = 'peter.doornbosch@luminis.eu'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:git@github.com:ptrd/kwik.git'
-                    developerConnection = 'scm:git:git@github.com:ptrd/kwik.git'
-                    url = 'https://github.com/ptrd/kwik'
-                }
-            }
-        }
-    }
-    repositories {
-        maven {
-            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-            credentials {
-                username = project.properties.ossrhUsername
-                password = project.properties.ossrhPassword
-            }
+            pom pomContent
         }
     }
 }
 
 signing {
     sign publishing.publications.kwik
-}
-
-javadoc {
-    options.addStringOption('Xdoclint:none', '-quiet')
-    options.addBooleanOption('html5', true)
 }
