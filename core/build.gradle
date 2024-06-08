@@ -8,9 +8,6 @@ dependencies {
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
     implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
-
-    // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 }
 
 

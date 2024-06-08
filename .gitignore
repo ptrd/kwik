@@ -6,6 +6,7 @@ libs
 /kwik.ipr
 /kwik.iml
 /kwik.iws
+*.iml
 out
 /.classpath
 /.project
@@ -15,4 +16,4 @@ out
 certs/
 www
 /todo
-
+.DS_Store

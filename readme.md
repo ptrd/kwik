@@ -263,7 +263,7 @@ HTTP request.
 
 ### Sample Server
 
-To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.run.SampleWebServer` with the following arguments:
+To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.sample.SampleWebServer` with the following arguments:
 - certificate file
 - private key file
 - port number
@@ -280,7 +280,7 @@ have been using for early testing.
 
 To add HTTP/3 to Kwik you should use the flupke plugin:
 - Download the flupke jar from [Maven](https://search.maven.org/artifact/tech.kwik/flupke)
-- Add the flupke jar to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-<version>.jar net.luminis.quic.run.SampleWebServer`. 
+- Add the flupke jar to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-<version>.jar net.luminis.quic.sample.SampleWebServer`. 
                                 
 ## Contact
 

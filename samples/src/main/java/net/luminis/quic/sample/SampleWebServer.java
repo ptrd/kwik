@@ -16,12 +16,13 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.run;
+package net.luminis.quic.sample;
 
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
+import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
