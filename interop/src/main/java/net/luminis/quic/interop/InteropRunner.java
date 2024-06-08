@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.run;
+package net.luminis.quic.interop;
 
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
@@ -55,7 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 
-public class InteropRunner extends KwikCli {
+public class InteropRunner {
 
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";

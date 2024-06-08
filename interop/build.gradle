@@ -1,0 +1,26 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation(project(':kwik')) // Add kwik core as a dependency
+
+    // https://mvnrepository.com/artifact/commons-cli/commons-cli
+    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+}
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik-interop'
+            from components.java
+            pom pomContent
+            pom.name = 'Kwik interop'
+            pom.description = 'Interop implementation for Kwik'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}
