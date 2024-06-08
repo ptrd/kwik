@@ -5,9 +5,11 @@ include('qlog')
 include('interop')
 include('cli')
 include('samples')
+include('h09')
 
 project(":core").name = "kwik"
 project(":qlog").name = "kwik-qlog"
 project(":interop").name = "kwik-interop"
 project(":cli").name = "kwik-cli"
 project(":samples").name = "kwik-samples"
+project(":h09").name = "kwik-h09"

@@ -1,0 +1,23 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation(project(':kwik')) // Add kwik core as a dependency
+}
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik-h09'
+            from components.java
+            pom pomContent
+            pom.name = 'Kwik H09'
+            pom.description = 'H09 implementation for Kwik'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}
