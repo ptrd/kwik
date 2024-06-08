@@ -2,24 +2,23 @@ plugins {
     id 'buildlogic.java-common-conventions'
 }
 
-
 dependencies {
-    implementation group: 'tech.kwik', name: 'agent15', version: '1.1'
+    implementation(project(':kwik')) // Add kwik core as a dependency
 
-    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
+    implementation group: 'tech.kwik', name: 'agent15', version: '1.1'
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 }
 
-
 publishing {
     publications {
         kwik(MavenPublication) {
-            artifactId = 'kwik'
+            artifactId = 'kwik-cli'
             from components.java
             pom pomContent
+            pom.name = 'Kwik Cli'
+            pom.description = 'Cli implementation for Kwik'
         }
     }
 }

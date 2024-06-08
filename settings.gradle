@@ -3,7 +3,9 @@ rootProject.name = 'kwik'
 include('core')
 include('qlog')
 include('interop')
+include('cli')
 
 project(":core").name = "kwik"
 project(":qlog").name = "kwik-qlog"
 project(":interop").name = "kwik-interop"
+project(":cli").name = "kwik-cli"
