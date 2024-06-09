@@ -21,8 +21,10 @@ package net.luminis.quic.server;
 import net.luminis.quic.QuicConnection;
 
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 
 public interface ServerConnection extends QuicConnection {
 
     InetAddress getInitialClientAddress();
+    InetSocketAddress getInitialClientSocketAddress();
 }

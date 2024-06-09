@@ -25,7 +25,6 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.client.CertificateSelector;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.*;
@@ -54,10 +53,7 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -534,8 +530,32 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             });
         }
         if (keyManager != null) {
-            tlsEngine.setClientCertificateCallback(authorities ->
-                new CertificateSelector(keyManager, keyManagerPrivateKeyPassword, log).selectCertificate(authorities, true));
+            tlsEngine.setClientCertificateCallback(authorities -> {
+                try {
+                    List<String> aliases = Collections.list(keyManager.aliases());
+                    for (String alias: aliases) {
+                        X509Certificate certificate = (X509Certificate) keyManager.getCertificate(alias);
+                        if (authorities.contains(certificate.getIssuerX500Principal())) {
+                            Key key = keyManager.getKey(alias, keyManagerPrivateKeyPassword.toCharArray());
+                            return new CertificateWithPrivateKey(certificate, (PrivateKey) key);
+                        }
+                    }
+                    log.warn("None of the provided client certificates is signed by one of the requested authorities: " + authorities);
+                    // Fallback to the first certificate in the key store.
+                    if (!aliases.isEmpty()) {
+                        return new CertificateWithPrivateKey((X509Certificate) keyManager.getCertificate(aliases.get(0)),
+                                (PrivateKey) keyManager.getKey(aliases.get(0), keyManagerPrivateKeyPassword.toCharArray()));
+                    }
+                    else {
+                       log.error("No client certificate found in key store");
+                    }
+                    return null;
+                }
+                catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
+                    log.error("Failed to extract client certificate from key store", e);
+                    return null;
+                }
+            });
         }
     }
 

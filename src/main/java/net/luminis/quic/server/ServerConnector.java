@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.CertificatePair;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
@@ -35,16 +36,26 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -68,45 +79,15 @@ public class ServerConnector {
     private ServerConnectionRegistryImpl connectionRegistry;
     private int connectionIdLength;
 
-    /**
-     * @deprecated use {@link ServerConnector.Builder} instead
-     * @param port
-     * @param certificateFile
-     * @param certificateKeyFile
-     * @param supportedVersions
-     * @param requireRetry
-     * @param log
-     * @throws Exception
-     */
-    @Deprecated
-    public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
-        this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
-    }
-
-    /**
-     * @deprecated use {@link ServerConnector.Builder} instead
-     * @param socket
-     * @param certificateFile
-     * @param certificateKeyFile
-     * @param supportedVersions
-     * @param requireRetry
-     * @param log
-     * @throws Exception
-     */
-    @Deprecated
-    public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
-        this(socket, certificateFile, certificateKeyFile, supportedVersions, getDefaultConfiguration(requireRetry), log);
-    }
-
-    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, log);
-    }
-
-    private ServerConnector(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    public ServerConnector(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword), supportedVersions, configuration, log);
     }
 
-    private ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    public ServerConnector(DatagramSocket socket, ConcurrentHashMap<String, CertificatePair> certificatesMap, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+        this(socket, new TlsServerEngineFactory(certificatesMap), supportedVersions, configuration, log);
+    }
+
+    public ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
@@ -124,7 +105,7 @@ public class ServerConnector {
     }
 
     // Intentionally private: for use with deprecated constructors only.
-    private static ServerConnectionConfig getDefaultConfiguration(boolean requireRetry) {
+    public static ServerConnectionConfig getDefaultConfiguration(boolean requireRetry) {
         return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
@@ -333,7 +314,7 @@ public class ServerConnector {
     public static Builder builder() {
         return new Builder();
     }
-
+    
     public static class Builder {
         private int port;
         private DatagramSocket socket;
@@ -345,6 +326,7 @@ public class ServerConnector {
         private KeyStore keyStore;
         private String certificateAlias;
         private char[] privateKeyPassword;
+        protected ConcurrentHashMap<String, CertificatePair> certificatesMap = new ConcurrentHashMap<>();
 
         public Builder withPort(int port) {
             this.port = port;
@@ -366,6 +348,11 @@ public class ServerConnector {
             this.keyStore = Objects.requireNonNull(keyStore);
             this.certificateAlias = Objects.requireNonNull(certificateAlias);
             this.privateKeyPassword = Objects.requireNonNull(privateKeyPassword);
+            return this;
+        }
+
+        public Builder withCertificatesMap(ConcurrentHashMap<String, CertificatePair> certificatesMap) {
+            this.certificatesMap = certificatesMap;
             return this;
         }
 
@@ -393,19 +380,13 @@ public class ServerConnector {
             if (port == 0) {
                 throw new IllegalStateException("port number not set");
             }
-            if (certificateFile == null && keyStore == null) {
-                throw new IllegalStateException("server certificate not set");
+            if (certificatesMap == null) {
+                throw new IllegalStateException("server certificateMap not set");
             }
-
             if (socket == null) {
                 socket = new DatagramSocket(port);
             }
-            if (keyStore != null) {
-                return new ServerConnector(socket, keyStore, certificateAlias, privateKeyPassword, supportedVersions, configuration, log);
-            }
-            else {
-                return new ServerConnector(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);
-            }
+            return new ServerConnector(socket, certificatesMap, supportedVersions, configuration, log);
         }
     }
 }
