@@ -33,7 +33,7 @@ import java.nio.charset.StandardCharsets;
  * stream is closed.
  *
  * The main method requires one argument:
- * - port number of the server (server is assumed to run on politest.fun)
+ * - port number of the server (server is assumed to run on localhost)
  */
 public class SimpleEchoClient {
 
@@ -62,7 +62,7 @@ public class SimpleEchoClient {
         // log.logPackets(true);     // Set various log categories with log.logABC()
 
         connection = QuicClientConnection.newBuilder()
-                .uri(URI.create("echo://politest.fun:" + serverPort))
+                .uri(URI.create("echo://localhost:" + serverPort))
                 .applicationProtocol("echo")
                 .logger(log)
                 .noServerCertificateCheck()

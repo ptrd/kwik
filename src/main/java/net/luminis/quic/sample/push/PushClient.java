@@ -68,7 +68,7 @@ public class PushClient {
         // log.logPackets(true);     // Set various log categories with log.logABC()
 
         connection = newBuilder()
-                .uri(URI.create("push://politest.fun:" + serverPort))
+                .uri(URI.create("push://localhost:" + serverPort))
                 .applicationProtocol("push")
                 .logger(log)
                 .noServerCertificateCheck()

@@ -47,7 +47,7 @@ import java.util.List;
  * run the client a single time to obtain a session ticket.
  *
  * The class' main method requires one argument:
- * - port number of the server (which is assumed to run on politest.fun)
+ * - port number of the server (which is assumed to run on localhost)
  */
 
 public class EchoClientUsing0RTT {
@@ -80,7 +80,7 @@ public class EchoClientUsing0RTT {
 
         // Create connection builder (do not yet create connection!)
         QuicClientConnection.Builder connectionBuilder = QuicClientConnection.newBuilder()
-                .uri(URI.create("echo://politest.fun:" + serverPort))
+                .uri(URI.create("echo://localhost:" + serverPort))
                 .logger(log)
                 .version(QuicConnection.QuicVersion.V1)
                 .applicationProtocol("echo")

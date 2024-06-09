@@ -46,7 +46,7 @@ public class SendUnlimited {
                             .applicationProtocol("hq-interop")
                             .noServerCertificateCheck()
                             .logger(log)
-                            .uri(new URI("https://politest.fun:4433"))
+                            .uri(new URI("https://localhost:4433"))
                             .build();
 
             connection.connect();
