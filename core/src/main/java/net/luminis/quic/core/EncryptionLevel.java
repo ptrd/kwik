@@ -18,8 +18,6 @@
  */
 package net.luminis.quic.core;
 
-import java.util.Optional;
-
 /**
  * https://tools.ietf.org/html/draft-ietf-quic-tls-29#section2.1
  * "Data is protected using a number of encryption levels:
@@ -38,10 +36,6 @@ public enum EncryptionLevel {
     Handshake,
     App;
 
-    public boolean higher(EncryptionLevel other) {
-        return this.ordinal() > other.ordinal();
-    }
-
     public PnSpace relatedPnSpace() {
         switch(this) {
             case ZeroRTT: return PnSpace.App;
@@ -49,16 +43,6 @@ public enum EncryptionLevel {
             case Handshake: return PnSpace.Handshake;
             case App: return PnSpace.App;
             default: return null;   // Never gets here
-        }
-    }
-
-    public Optional<EncryptionLevel> next() {
-        switch (this) {
-            case ZeroRTT: return Optional.of(Initial);
-            case Initial: return Optional.of(Handshake);
-            case Handshake: return Optional.of(App);
-            case App: return Optional.empty();
-            default: return Optional.empty();   // Never gets here
         }
     }
 }
