@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.cid;
 
-import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.server.ServerConnectionProxy;

@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.core;
 
+import net.luminis.quic.core.EncryptionLevel;
+
 /**
  * Packet numbers are divided into three spaces in QUIC.
  *

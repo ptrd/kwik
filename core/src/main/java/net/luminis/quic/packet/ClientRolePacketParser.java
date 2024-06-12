@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.InvalidPacketException;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.DecryptionException;
+import net.luminis.quic.impl.DecryptionException;
 
 /**
  * https://www.rfc-editor.org/rfc/rfc9001.html#name-packet-protection

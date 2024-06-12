@@ -19,10 +19,10 @@
 package net.luminis.quic.tls;
 
 import net.luminis.quic.QuicConstants;
-import net.luminis.quic.core.ProtocolError;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportParameters;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.ProtocolError;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportParameters;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
@@ -38,7 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static net.luminis.quic.QuicConstants.TransportParameterId.*;
-import static net.luminis.quic.core.Role.Server;
+import static net.luminis.quic.impl.Role.Server;
 
 /**
  * Quic transport parameter TLS extension.

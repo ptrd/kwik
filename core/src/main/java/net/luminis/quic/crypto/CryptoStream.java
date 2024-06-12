@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
-import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.stream.ReceiveBuffer;

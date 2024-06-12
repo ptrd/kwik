@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.LogProxy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

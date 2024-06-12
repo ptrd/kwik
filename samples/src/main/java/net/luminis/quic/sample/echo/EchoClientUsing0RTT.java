@@ -22,7 +22,7 @@ import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.core.QuicSessionTicketImpl;
+import net.luminis.quic.impl.QuicSessionTicketImpl;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;

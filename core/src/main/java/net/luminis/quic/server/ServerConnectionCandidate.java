@@ -18,14 +18,14 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.core.DecryptionException;
-import net.luminis.quic.core.InvalidPacketException;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.Version;
-import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.impl.DecryptionException;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.DatagramFilter;

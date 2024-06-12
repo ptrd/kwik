@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.ack;
 
-import net.luminis.quic.core.FrameReceivedListener;
-import net.luminis.quic.core.PnSpace;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.impl.FrameReceivedListener;
+import net.luminis.quic.core.PnSpace;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.NullAckGenerator;
 import net.luminis.quic.send.Sender;

@@ -17,8 +17,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */package net.luminis.quic.server;
 
-import net.luminis.quic.core.TestUtils;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.TestUtils;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.PacketMetaData;

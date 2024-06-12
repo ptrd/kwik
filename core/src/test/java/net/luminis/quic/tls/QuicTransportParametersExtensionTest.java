@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.quic.core.ProtocolError;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportParameters;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.ProtocolError;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportParameters;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.util.ByteUtils;

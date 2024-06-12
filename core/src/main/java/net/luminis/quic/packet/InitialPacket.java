@@ -18,15 +18,15 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.InvalidPacketException;
-import net.luminis.quic.core.PacketProcessor;
-import net.luminis.quic.core.PnSpace;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.PacketProcessor;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.impl.Version;
 import net.luminis.tls.util.ByteUtils;
 
 import java.nio.ByteBuffer;

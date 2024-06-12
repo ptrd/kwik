@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.cc;
 
-import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.impl.MockPacket;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.Logger;

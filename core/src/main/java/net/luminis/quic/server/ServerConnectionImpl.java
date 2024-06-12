@@ -21,13 +21,15 @@ package net.luminis.quic.server;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.core.*;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.PnSpace;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.frame.HandshakeDoneFrame;
 import net.luminis.quic.frame.NewConnectionIdFrame;
 import net.luminis.quic.frame.NewTokenFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.RetireConnectionIdFrame;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
@@ -61,8 +63,8 @@ import java.util.function.Consumer;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
-import static net.luminis.quic.core.QuicConnectionImpl.Status.Connected;
-import static net.luminis.quic.core.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
+import static net.luminis.quic.impl.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.impl.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.sample;
 
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;

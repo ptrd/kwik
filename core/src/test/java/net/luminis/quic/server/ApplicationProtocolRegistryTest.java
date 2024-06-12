@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.server;
 
-import net.luminis.quic.core.QuicConnectionImpl;
+import net.luminis.quic.impl.QuicConnectionImpl;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

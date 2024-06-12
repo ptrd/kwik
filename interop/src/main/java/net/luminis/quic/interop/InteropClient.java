@@ -23,7 +23,7 @@ import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.client.h09.Http09Client;
-import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 

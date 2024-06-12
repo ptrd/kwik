@@ -20,12 +20,12 @@ package net.luminis.quic.send;
 
 import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.ack.GlobalAckGenerator;
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.PnSpace;
-import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PathChallengeFrame;
 import net.luminis.quic.frame.PathResponseFrame;
+import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.packet.InitialPacket;
 
 import java.time.Instant;

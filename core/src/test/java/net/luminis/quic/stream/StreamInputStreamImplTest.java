@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.core.QuicConnectionImpl;
-import net.luminis.quic.core.Role;
+import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.impl.Role;
 import net.luminis.quic.frame.StreamFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

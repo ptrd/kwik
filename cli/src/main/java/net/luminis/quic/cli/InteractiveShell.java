@@ -19,8 +19,8 @@
 package net.luminis.quic.cli;
 
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.core.QuicClientConnectionImpl;
-import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
+import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.receive.Receiver;
 import net.luminis.tls.util.ByteUtils;
 

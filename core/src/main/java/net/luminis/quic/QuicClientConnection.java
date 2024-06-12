@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsConstants;
 

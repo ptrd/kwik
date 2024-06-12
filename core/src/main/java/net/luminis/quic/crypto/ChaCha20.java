@@ -19,10 +19,10 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.hkdf.HKDF;
-import net.luminis.quic.core.DecryptionException;
-import net.luminis.quic.core.QuicRuntimeException;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.DecryptionException;
+import net.luminis.quic.impl.QuicRuntimeException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 
 import javax.crypto.AEADBadTagException;
