@@ -23,6 +23,7 @@ import net.luminis.quic.core.MockPacket;
 import net.luminis.quic.core.PnSpace;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.Range;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.send.Sender;

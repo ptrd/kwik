@@ -20,8 +20,8 @@ package net.luminis.quic.qlog;
 
 import jakarta.json.Json;
 import jakarta.json.stream.JsonGenerator;
-import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.AckFrame;
+import net.luminis.quic.frame.Range;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

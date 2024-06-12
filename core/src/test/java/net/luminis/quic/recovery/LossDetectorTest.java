@@ -18,7 +18,6 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.ack.Range;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
@@ -31,6 +30,7 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
+import net.luminis.quic.frame.Range;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.NullQLog;
 import net.luminis.quic.packet.PacketInfo;

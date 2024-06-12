@@ -19,7 +19,6 @@
 package net.luminis.quic.qlog;
 
 import jakarta.json.stream.JsonGenerator;
-import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.tls.util.ByteUtils;
