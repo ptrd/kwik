@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.interop;
 
+import net.luminis.quic.KwikVersion;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;

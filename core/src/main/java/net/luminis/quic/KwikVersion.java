@@ -16,9 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.run;
-
-import net.luminis.quic.QuicConnection;
+package net.luminis.quic;
 
 import java.io.BufferedReader;
 import java.io.IOException;

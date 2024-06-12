@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.cli;
 
+import net.luminis.quic.KwikVersion;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
@@ -28,7 +29,6 @@ import net.luminis.quic.impl.VersionNegotiationFailure;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.run.KwikVersion;
 import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
 
