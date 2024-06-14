@@ -20,269 +20,48 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.ConnectionConfig;
 
-import static java.lang.Long.max;
-import static java.lang.Long.min;
-import static net.luminis.quic.server.ApplicationProtocolSettings.NOT_SPECIFIED;
-import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
-import static net.luminis.quic.server.Constants.MINIMUM_CONNECTION_ID_LENGTH;
 
-
-public class ServerConnectionConfig implements ConnectionConfig {
-
-    private static final int DEFAULT_MAX_IDLE_TIMEOUT = 30_000;
-    private static final int DEFAULT_CONNECTION_ID_LENGTH = 8;
+public interface ServerConnectionConfig extends ConnectionConfig {
 
     public enum RetryRequired { Always, Never }
 
-    private int maxIdleTimeout = DEFAULT_MAX_IDLE_TIMEOUT;
-    private int maxOpenUnidirectionalStreams;
-    private long maxTotalUnidirectionalStreams = Long.MAX_VALUE;
-    private int maxOpenBidirectionalStreams;
-    private long maxTotalBidirectionalStreams = Long.MAX_VALUE;
-    private long maxConnectionBufferSize;
-    private long maxUnidirectionalStreamBufferSize;
-    private long maxBidirectionalStreamBufferSize;
-    private RetryRequired retryRequired;
-    private int connectionIdLength = DEFAULT_CONNECTION_ID_LENGTH;
+    public int connectionIdLength();
 
-    private ServerConnectionConfig() {
-    }
+    public RetryRequired retryRequired();
 
-    @Override
-    public int maxIdleTimeout() {
-        return maxIdleTimeout;
-    }
+    public int initialRtt();
 
-    @Override
-    public int maxOpenPeerInitiatedUnidirectionalStreams() {
-        return maxOpenUnidirectionalStreams;
-    }
-
-    @Override
-    public long maxTotalPeerInitiatedUnidirectionalStreams() {
-        return maxTotalUnidirectionalStreams;
-    }
-
-    @Override
-    public int maxOpenPeerInitiatedBidirectionalStreams() {
-        return maxOpenBidirectionalStreams;
-    }
-
-    @Override
-    public long maxTotalPeerInitiatedBidirectionalStreams() {
-        return maxTotalBidirectionalStreams;
-    }
-
-    @Override
-    public long maxConnectionBufferSize() {
-        return maxConnectionBufferSize;
-    }
-
-    @Override
-    public long maxUnidirectionalStreamBufferSize() {
-        return maxUnidirectionalStreamBufferSize;
-    }
-
-    @Override
-    public long maxBidirectionalStreamBufferSize() {
-        return maxBidirectionalStreamBufferSize;
-    }
-
-    public int connectionIdLength() {
-        return connectionIdLength;
-    }
-
-    public RetryRequired retryRequired() {
-        return retryRequired;
-    }
-
-    public int initialRtt() {
-        return 100;
-    }
-
-    ServerConnectionConfig merge(ApplicationProtocolSettings protocol) {
-        ServerConnectionConfig.Builder configBuilder = ServerConnectionConfig.builder();
-
-        configBuilder.maxIdleTimeout(this.maxIdleTimeout());
-
-        long maxUnidirectionalStreamBufferSize = limitValue(protocol.minUnidirectionalStreamReceiverBufferSize(),
-                protocol.maxUnidirectionalStreamReceiverBufferSize(), this.maxUnidirectionalStreamBufferSize());
-        configBuilder.maxUnidirectionalStreamBufferSize(maxUnidirectionalStreamBufferSize);
-
-        long maxBidirectionalStreamBufferSize = limitValue(protocol.minBidirectionalStreamReceiverBufferSize(),
-                protocol.maxBidirectionalStreamReceiverBufferSize(), this.maxBidirectionalStreamBufferSize());
-        configBuilder.maxBidirectionalStreamBufferSize(maxBidirectionalStreamBufferSize);
-
-        // Connection buffer size must be at least as large as the largest stream buffer size.
-        long maxConnectionBufferSize = max(max(maxUnidirectionalStreamBufferSize, maxBidirectionalStreamBufferSize), this.maxConnectionBufferSize());
-        configBuilder.maxConnectionBufferSize(maxConnectionBufferSize);
-
-        configBuilder.maxOpenPeerInitiatedUnidirectionalStreams(limitValue(0,
-                protocol.maxConcurrentPeerInitiatedUnidirectionalStreams(), this.maxOpenPeerInitiatedUnidirectionalStreams()));
-
-        configBuilder.maxOpenPeerInitiatedBidirectionalStreams(limitValue(0,
-                protocol.maxConcurrentPeerInitiatedBidirectionalStreams(), this.maxOpenPeerInitiatedBidirectionalStreams()));
-
-        configBuilder.maxTotalPeerInitiatedUnidirectionalStreams(protocol.maxTotalPeerInitiatedUnidirectionalStreams());
-        configBuilder.maxTotalPeerInitiatedBidirectionalStreams(protocol.maxTotalPeerInitiatedBidirectionalStreams());
-        configBuilder.retryRequired(this.retryRequired());
-        configBuilder.connectionIdLength(this.connectionIdLength());
-
-        return configBuilder.build();
-    }
-
-    private long limitValue(int minimumValue, long maximumValue, long currentValue) {
-        if (minimumValue == NOT_SPECIFIED) {
-            minimumValue = 0;
-        }
-        if (maximumValue == NOT_SPECIFIED) {
-            maximumValue = Long.MAX_VALUE;
-        }
-        if (minimumValue > maximumValue) {
-            throw new IllegalArgumentException();
-        }
-
-        long newValue;
-
-        if (minimumValue < 0) {
-            throw new IllegalArgumentException();
-        }
-        newValue = max(minimumValue, currentValue);
-
-        if (maximumValue < 0) {
-            throw new IllegalArgumentException();
-        }
-        newValue = min(newValue, maximumValue);
-
-        return newValue;
-    }
-
-    private int limitValue(int minimumValue, int maximumValue, int currentValue) {
-        if (minimumValue == NOT_SPECIFIED) {
-            minimumValue = 0;
-        }
-        if (maximumValue == NOT_SPECIFIED) {
-            maximumValue = Integer.MAX_VALUE;
-        }
-        if (minimumValue > maximumValue) {
-            throw new IllegalArgumentException();
-        }
-
-        int newValue;
-
-        if (minimumValue < 0) {
-            throw new IllegalArgumentException();
-        }
-        newValue = Integer.max(minimumValue, currentValue);
-
-        if (maximumValue < 0) {
-            throw new IllegalArgumentException();
-        }
-        newValue = Integer.min(newValue, maximumValue);
-
-        return newValue;
-    }
+    ServerConnectionConfig merge(ApplicationProtocolSettings protocol);
 
     public static Builder builder() {
-        return new Builder();
+        return new ServerConnectionConfigImpl.BuilderImpl();
     }
 
-    public static class Builder {
+    public static interface Builder {
+        ServerConnectionConfig build();
 
-        private ServerConnectionConfig config = new ServerConnectionConfig();
+        Builder maxIdleTimeoutInSeconds(int timeoutInSeconds);
 
-        public ServerConnectionConfig build() {
-            if (config.maxConnectionBufferSize < config.maxUnidirectionalStreamBufferSize) {
-                throw new IllegalArgumentException("Connection buffer size can't be less then unidirectional stream buffer size");
-            }
-            if (config.maxConnectionBufferSize < config.maxBidirectionalStreamBufferSize) {
-                throw new IllegalArgumentException("Connection buffer size can't be less then bidirectional stream buffer size");
-            }
-            return config;
-        }
+        Builder maxIdleTimeout(int milliSeconds);
 
-        public Builder maxIdleTimeoutInSeconds(int timeoutInSeconds) {
-            if (timeoutInSeconds <= 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxIdleTimeout = timeoutInSeconds * 1000;
-            return this;
-        }
+        Builder maxConnectionBufferSize(long size);
 
-        public Builder maxIdleTimeout(int milliSeconds) {
-            if (milliSeconds <= 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxIdleTimeout = milliSeconds;
-            return this;
-        }
+        Builder maxUnidirectionalStreamBufferSize(long size);
 
-        public Builder maxConnectionBufferSize(long size) {
-            if (size < 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxConnectionBufferSize = size;
-            return this;
-        }
+        Builder maxBidirectionalStreamBufferSize(long size);
 
-        public Builder maxUnidirectionalStreamBufferSize(long size) {
-            if (size < 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxUnidirectionalStreamBufferSize = size;
-            return this;
-        }
+        Builder maxOpenPeerInitiatedUnidirectionalStreams(int max);
 
-        public Builder maxBidirectionalStreamBufferSize(long size) {
-            if (size < 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxBidirectionalStreamBufferSize = size;
-            return this;
-        }
+        Builder maxOpenPeerInitiatedBidirectionalStreams(int max);
 
-        public Builder maxOpenPeerInitiatedUnidirectionalStreams(int max) {
-            if (max < 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxOpenUnidirectionalStreams = max;
-            return this;
-        }
+        Builder retryRequired(boolean retryRequired);
 
-        public Builder maxOpenPeerInitiatedBidirectionalStreams(int max) {
-            if (max < 0) {
-                throw new IllegalArgumentException();
-            }
-            config.maxOpenBidirectionalStreams = max;
-            return this;
-        }
+        Builder retryRequired(RetryRequired retryRequired);
 
-        public Builder retryRequired(boolean retryRequired) {
-            config.retryRequired = retryRequired? RetryRequired.Always : RetryRequired.Never;
-            return this;
-        }
+        Builder connectionIdLength(int connectionIdLength);
 
-        public Builder retryRequired(RetryRequired retryRequired) {
-            config.retryRequired = retryRequired;
-            return this;
-        }
+        Builder maxTotalPeerInitiatedUnidirectionalStreams(long max);
 
-        public Builder connectionIdLength(int connectionIdLength) {
-            if (connectionIdLength < MINIMUM_CONNECTION_ID_LENGTH || connectionIdLength > MAXIMUM_CONNECTION_ID_LENGTH) {
-                throw new IllegalArgumentException("Connection ID length must be between " + MINIMUM_CONNECTION_ID_LENGTH + " and " + MAXIMUM_CONNECTION_ID_LENGTH);
-            }
-            config.connectionIdLength = connectionIdLength;
-            return this;
-        }
-
-        public Builder maxTotalPeerInitiatedUnidirectionalStreams(long max) {
-            config.maxTotalUnidirectionalStreams = max;
-            return this;
-        }
-
-        public Builder maxTotalPeerInitiatedBidirectionalStreams(long max) {
-            config.maxTotalBidirectionalStreams = max;
-            return this;
-        }
+        Builder maxTotalPeerInitiatedBidirectionalStreams(long max);
     }
 }
