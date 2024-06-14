@@ -113,6 +113,8 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder sessionTicket(QuicSessionTicket ticket);
 
+        Builder sessionTicket(byte[] ticketData);
+
         Builder proxy(String host);
 
         Builder secrets(Path secretsFile);

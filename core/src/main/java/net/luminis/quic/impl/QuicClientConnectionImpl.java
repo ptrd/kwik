@@ -1445,6 +1445,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         @Override
+        public Builder sessionTicket(byte[] ticketData) {
+            sessionTicket = QuicSessionTicketImpl.deserialize(ticketData);
+            return this;
+        }
+
+        @Override
         public Builder proxy(String host) {
             proxyHost = host;
             return this;

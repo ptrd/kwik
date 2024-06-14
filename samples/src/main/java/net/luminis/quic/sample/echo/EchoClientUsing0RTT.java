@@ -22,7 +22,6 @@ import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicSessionTicket;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.impl.QuicSessionTicketImpl;
 import net.luminis.quic.log.SysOutLogger;
 
 import java.io.IOException;
@@ -90,7 +89,7 @@ public class EchoClientUsing0RTT {
         List<QuicClientConnection.StreamEarlyData> earlyData = Collections.emptyList();
         try {
             byte[] ticketData = Files.readAllBytes(Path.of(SESSIONTICKET_FILE));
-            connectionBuilder.sessionTicket(QuicSessionTicketImpl.deserialize(ticketData));   // This is why the connection should not yet have been created!
+            connectionBuilder.sessionTicket(ticketData);   // This is why the connection should not yet have been created!
             earlyData = List.of(new QuicClientConnection.StreamEarlyData(requestData, true));
         }
         catch (IOException e) {
