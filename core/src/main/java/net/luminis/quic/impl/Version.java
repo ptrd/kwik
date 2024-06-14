@@ -35,7 +35,7 @@ public class Version {
 
     private int versionId;
 
-    static Version of(QuicConnection.QuicVersion version) {
+    public static Version of(QuicConnection.QuicVersion version) {
         if (version == null) {
             return null;
         }

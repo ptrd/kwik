@@ -19,7 +19,7 @@
 package net.luminis.quic.interop;
 
 import net.luminis.quic.KwikVersion;
-import net.luminis.quic.impl.Version;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -104,7 +104,7 @@ public class InteropServer {
             }
         }
 
-        List<Version> supportedVersions = List.of(Version.QUIC_version_1);
+        List<QuicConnection.QuicVersion> supportedVersions = List.of(QuicConnection.QuicVersion.V1);
 
         ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
@@ -62,7 +63,7 @@ class ServerConnectorTest {
         InputStream certificate = getClass().getResourceAsStream("localhost.pem");
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
-        server = new ServerConnector(serverSocket, certificate, privateKey, List.of(Version.getDefault(), Version.QUIC_version_1), false, new SysOutLogger());
+        server = new ServerConnector(serverSocket, certificate, privateKey, List.of(QuicConnection.QuicVersion.V1), false, new SysOutLogger());
         server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
         clock = new TestClock();
         context = mock(Context.class);

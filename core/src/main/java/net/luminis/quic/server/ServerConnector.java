@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
@@ -56,7 +57,7 @@ public class ServerConnector {
 
     private final Receiver receiver;
     private final Logger log;
-    private final List<Version> supportedVersions;
+    private final List<QuicConnection.QuicVersion> supportedVersions;
     private final List<Integer> supportedVersionIds;
     private final DatagramSocket serverSocket;
     private TlsServerEngineFactory tlsEngineFactory;
@@ -79,7 +80,7 @@ public class ServerConnector {
      * @throws Exception
      */
     @Deprecated
-    public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
+    public ServerConnector(int port, InputStream certificateFile, InputStream certificateKeyFile, List<QuicConnection.QuicVersion> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(new DatagramSocket(port), certificateFile, certificateKeyFile, supportedVersions, requireRetry, log);
     }
 
@@ -94,19 +95,19 @@ public class ServerConnector {
      * @throws Exception
      */
     @Deprecated
-    public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, boolean requireRetry, Logger log) throws Exception {
+    public ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<QuicConnection.QuicVersion> supportedVersions, boolean requireRetry, Logger log) throws Exception {
         this(socket, certificateFile, certificateKeyFile, supportedVersions, getDefaultConfiguration(requireRetry), log);
     }
 
-    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    private ServerConnector(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, log);
     }
 
-    private ServerConnector(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    private ServerConnector(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword), supportedVersions, configuration, log);
     }
 
-    private ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    private ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
@@ -118,7 +119,10 @@ public class ServerConnector {
         serverConnectionFactory = new ServerConnectionFactory(serverSocket, tlsEngineFactory,
                 configuration, applicationProtocolRegistry, connectionRegistry, this::closed, log);
 
-        supportedVersionIds = supportedVersions.stream().map(version -> version.getId()).collect(Collectors.toList());
+        supportedVersionIds = supportedVersions.stream()
+                .map(Version::of)
+                .map(Version::getId)
+                .collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
     }
@@ -300,7 +304,8 @@ public class ServerConnector {
             // "The server MUST include the value from the Source Connection ID field of the packet it receives in the
             //  Destination Connection ID field. The value for Source Connection ID MUST be copied from the Destination
             //  Connection ID of the received packet, ..."
-            VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(supportedVersions, dcid, scid);
+            List<Version> versions = supportedVersions.stream().map(Version::of).collect(Collectors.toList());
+            VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(versions, dcid, scid);
             byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null);
             DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
             try {
@@ -339,7 +344,7 @@ public class ServerConnector {
         private DatagramSocket socket;
         private InputStream certificateFile;
         private InputStream certificateKeyFile;
-        private List<Version> supportedVersions = new ArrayList<>(List.of(Version.QUIC_version_1));
+        private List<QuicConnection.QuicVersion> supportedVersions = new ArrayList<>(List.of(QuicConnection.QuicVersion.V1));
         private ServerConnectionConfig configuration = getDefaultConfiguration(true);
         private Logger log;
         private KeyStore keyStore;
@@ -369,12 +374,12 @@ public class ServerConnector {
             return this;
         }
 
-        public Builder withSupportedVersions(List<Version> supportedVersions) {
+        public Builder withSupportedVersions(List<QuicConnection.QuicVersion> supportedVersions) {
             this.supportedVersions.addAll(supportedVersions);
             return this;
         }
 
-        public Builder withSupportedVersion(Version supportedVersion) {
+        public Builder withSupportedVersion(QuicConnection.QuicVersion supportedVersion) {
             this.supportedVersions.add(supportedVersion);
             return this;
         }
