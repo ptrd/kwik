@@ -4,9 +4,6 @@ plugins {
 
 dependencies {
     implementation(project(':kwik')) // Add kwik core as a dependency
-
-    // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 }
 
 publishing {

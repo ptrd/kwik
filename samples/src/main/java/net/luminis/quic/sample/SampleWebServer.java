@@ -26,16 +26,12 @@ import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -49,21 +45,19 @@ public class SampleWebServer {
     }
 
     public static void main(String[] rawArgs) throws Exception {
-        Options cmdLineOptions = new Options();
-        cmdLineOptions.addOption(null, "noRetry", false, "disable always use retry");
-
-        CommandLineParser parser = new DefaultParser();
-        CommandLine cmd = null;
-        try {
-            cmd = parser.parse(cmdLineOptions, rawArgs);
-        }
-        catch (ParseException argError) {
-            System.out.println("Invalid argument: " + argError.getMessage());
+        List<String> args = new ArrayList<>(Arrays.asList(rawArgs));
+        if (args.size() < 4) {
             usageAndExit();
         }
 
-        List<String> args = cmd.getArgList();
-        if (args.size() < 4) {
+        boolean withRetry = true;
+        if (args.get(0).equals("--noRetry")) {
+            withRetry = false;
+            System.out.println("Retry disabled");
+            args.remove(0);
+        }
+
+        if (args.size() < 4 || args.stream().anyMatch(arg -> arg.startsWith("-"))) {
             usageAndExit();
         }
 
@@ -111,7 +105,7 @@ public class SampleWebServer {
                 .maxConnectionBufferSize(10_000_000)
                 .maxOpenPeerInitiatedUnidirectionalStreams(10)
                 .maxOpenPeerInitiatedBidirectionalStreams(100)
-                .retryRequired(! cmd.hasOption("noRetry"))
+                .retryRequired(withRetry)
                 .connectionIdLength(8)
                 .build();
 
