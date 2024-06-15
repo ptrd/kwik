@@ -106,6 +106,10 @@ public class ServerConnector {
         this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword), supportedVersions, configuration, log);
     }
 
+    public int getServerListenPort() {
+        return serverSocket.getLocalPort();
+    }
+
     private ServerConnector(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<Version> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
@@ -390,9 +394,6 @@ public class ServerConnector {
         }
 
         public ServerConnector build() throws Exception {
-            if (port == 0) {
-                throw new IllegalStateException("port number not set");
-            }
             if (certificateFile == null && keyStore == null) {
                 throw new IllegalStateException("server certificate not set");
             }
