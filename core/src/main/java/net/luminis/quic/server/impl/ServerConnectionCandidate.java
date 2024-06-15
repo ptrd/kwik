@@ -32,8 +32,9 @@ import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.DatagramPostProcessingFilter;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
-import net.luminis.quic.server.*;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.server.ServerConnectionFactory;
+import net.luminis.quic.server.ServerConnectionRegistry;
+import net.luminis.quic.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -209,6 +210,6 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     @Override
     public String toString() {
-        return "ServerConnectionCandidate[" + ByteUtils.bytesToHex(dcid) + "]";
+        return "ServerConnectionCandidate[" + Bytes.bytesToHex(dcid) + "]";
     }
 }

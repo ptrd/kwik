@@ -22,11 +22,15 @@ import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.*;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TestUtils;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.test.ByteUtils;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.handshake.TlsClientEngine;
-import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

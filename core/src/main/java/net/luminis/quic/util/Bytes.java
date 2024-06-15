@@ -20,6 +20,14 @@ package net.luminis.quic.util;
 
 public class Bytes {
 
+    public static String bytesToHex(byte[] data) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : data) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
     public static boolean allZero(byte[] data) {
         for (int i = 0; i < data.length; i++) {
             if (data[i] != 0) {

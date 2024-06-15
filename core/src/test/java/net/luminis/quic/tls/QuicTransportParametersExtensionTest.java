@@ -23,8 +23,8 @@ import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.test.ByteUtils;
 import net.luminis.tls.alert.DecodeErrorException;
-import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;

@@ -23,7 +23,7 @@ import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.impl.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -308,6 +308,6 @@ public class RetryPacket extends QuicPacket {
                 + "-" + "|"
                 + "R" + "|"
                 + packetSize + "|"
-                + " Retry Token (" + retryToken.length + "): " + ByteUtils.bytesToHex(retryToken);
+                + " Retry Token (" + retryToken.length + "): " + Bytes.bytesToHex(retryToken);
     }
 }

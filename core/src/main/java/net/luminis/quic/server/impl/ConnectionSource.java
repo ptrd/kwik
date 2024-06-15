@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.server.impl;
 
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.util.Arrays;
 
@@ -47,6 +47,6 @@ public class ConnectionSource {
 
     @Override
     public String toString() {
-        return "ConnectionSource[" + ByteUtils.bytesToHex(dcid) + "]";
+        return "ConnectionSource[" + Bytes.bytesToHex(dcid) + "]";
     }
 }

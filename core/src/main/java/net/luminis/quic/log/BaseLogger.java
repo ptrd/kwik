@@ -20,7 +20,7 @@ package net.luminis.quic.log;
 
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -190,7 +190,7 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void info(String message, byte[] data) {
         if (logInfo) {
-            log(formatTime() + " " + message + " (" + data.length + "): " + ByteUtils.bytesToHex(data));
+            log(formatTime() + " " + message + " (" + data.length + "): " + Bytes.bytesToHex(data));
         }
     }
 
@@ -209,8 +209,8 @@ public abstract class BaseLogger implements Logger {
                     + encryptionLevel.name().charAt(0) + "|"
                     + "." + "|"
                     + "L" + "|"
-                    + ByteUtils.bytesToHex(dcid) + "|"
-                    + ByteUtils.bytesToHex(scid));
+                    + Bytes.bytesToHex(dcid) + "|"
+                    + Bytes.bytesToHex(scid));
         }
     }
 

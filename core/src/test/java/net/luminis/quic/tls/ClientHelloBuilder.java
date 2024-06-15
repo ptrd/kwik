@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.tls;
 
+import net.luminis.quic.test.ByteUtils;
 import net.luminis.tls.ProtectionKeysType;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.handshake.HandshakeMessage;
 import net.luminis.tls.handshake.MessageProcessor;
 import net.luminis.tls.handshake.TlsMessageParser;
-import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

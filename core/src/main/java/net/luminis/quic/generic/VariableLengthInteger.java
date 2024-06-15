@@ -18,8 +18,6 @@
  */
 package net.luminis.quic.generic;
 
-import net.luminis.tls.util.ByteUtils;
-
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -207,13 +205,6 @@ public class VariableLengthInteger {
         }
         else {
             throw new IllegalArgumentException("value cannot be encoded in variable-length integer");
-        }
-    }
-
-    public static void main(String[] args) throws InvalidIntegerEncodingException {
-        for (int i = 0; i < args.length; i++) {
-            long value = parseLong(ByteBuffer.wrap(ByteUtils.hexToBytes(args[i])));
-            System.out.println(args[i] + " => " + value);
         }
     }
 }

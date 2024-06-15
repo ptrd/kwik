@@ -65,7 +65,7 @@ import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.APPLICATION_ERROR;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.QUIC_LAYER_ERROR;
 import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
-import static net.luminis.tls.util.ByteUtils.bytesToHex;
+import static net.luminis.quic.util.Bytes.bytesToHex;
 
 
 public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor, PacketFilter {

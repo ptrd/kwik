@@ -41,6 +41,7 @@ import net.luminis.quic.stream.EarlyDataStream;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.CertificateWithPrivateKey;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
@@ -48,7 +49,6 @@ import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
-import net.luminis.tls.util.ByteUtils;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -80,7 +80,7 @@ import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Accepted;
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.None;
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Requested;
-import static net.luminis.tls.util.ByteUtils.bytesToHex;
+import static net.luminis.quic.util.Bytes.bytesToHex;
 
 
 /**
@@ -1252,8 +1252,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public String toString() {
         return "ClientConnection["
-                + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
-                + "/" + ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId())
+                + Bytes.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
+                + "/" + Bytes.bytesToHex(connectionIdManager.getInitialConnectionId())
                 + "(" + getQuicVersion() + ")"
                 + " with " + new InetSocketAddress(serverAddress, serverPort)
                 + "]";

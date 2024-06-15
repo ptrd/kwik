@@ -19,7 +19,7 @@
 package net.luminis.quic.impl;
 
 import net.luminis.quic.receive.Receiver;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -236,7 +236,7 @@ public class TransportParameters {
 
     private String formatCid(byte[] data) {
         if (data != null) {
-            return ByteUtils.bytesToHex(data);
+            return Bytes.bytesToHex(data);
         }
         else {
             return "null";

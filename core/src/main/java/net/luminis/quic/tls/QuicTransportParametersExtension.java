@@ -19,17 +19,16 @@
 package net.luminis.quic.tls;
 
 import net.luminis.quic.QuicConstants;
+import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.impl.ProtocolError;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.impl.Version;
-import net.luminis.quic.generic.InvalidIntegerEncodingException;
-import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.util.Bytes;
 import net.luminis.tls.alert.DecodeErrorException;
 import net.luminis.tls.extension.Extension;
-import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -264,7 +263,7 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == stateless_reset_token.value) {
             byte[] resetToken = new byte[16];
             buffer.get(resetToken);
-            log.debug("- stateless reset token: " + ByteUtils.bytesToHex(resetToken));
+            log.debug("- stateless reset token: " + Bytes.bytesToHex(resetToken));
             params.setStatelessResetToken(resetToken);
         }
         else if (parameterId == max_udp_payload_size.value) {
@@ -330,13 +329,13 @@ public class QuicTransportParametersExtension extends Extension {
         else if (parameterId == initial_source_connection_id.value) {
             byte[] initialSourceCid = new byte[size];
             buffer.get(initialSourceCid);
-            log.debug("- initial source connection id: " + ByteUtils.bytesToHex(initialSourceCid));
+            log.debug("- initial source connection id: " + Bytes.bytesToHex(initialSourceCid));
             params.setInitialSourceConnectionId(initialSourceCid);
         }
         else if (parameterId == retry_source_connection_id.value) {
             byte[] retrySourceCid = new byte[size];
             buffer.get(retrySourceCid);
-            log.debug("- retry source connection id: " + ByteUtils.bytesToHex(retrySourceCid));
+            log.debug("- retry source connection id: " + Bytes.bytesToHex(retrySourceCid));
             params.setRetrySourceConnectionId(retrySourceCid);
         }
         else if (parameterId == version_information.value) {

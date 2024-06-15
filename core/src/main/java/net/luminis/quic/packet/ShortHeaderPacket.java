@@ -22,9 +22,12 @@ import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.DecryptionException;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.PacketProcessor;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -183,7 +186,7 @@ public class ShortHeaderPacket extends QuicPacket {
                 + getEncryptionLevel().name().charAt(0) + "|"
                 + (packetNumber >= 0? packetNumber: ".") + "|"
                 + "S" + keyPhaseBit + "|"
-                + ByteUtils.bytesToHex(destinationConnectionId) + "|"
+                + Bytes.bytesToHex(destinationConnectionId) + "|"
                 + packetSize + "|"
                 + frames.size() + "  "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));

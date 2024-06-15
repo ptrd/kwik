@@ -22,7 +22,7 @@ import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -68,7 +68,7 @@ public class NewTokenFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewTokenFrame[" + ByteUtils.bytesToHex(newToken) + "]";
+        return "NewTokenFrame[" + Bytes.bytesToHex(newToken) + "]";
     }
 
     @Override

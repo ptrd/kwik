@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
+import static net.luminis.quic.test.ByteUtils.hexToBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -284,6 +285,13 @@ class VariableLengthIntegerTest {
 
     private InputStream wrapAsStream(byte... bytes) {
         return new ByteArrayInputStream(bytes);
+    }
+
+    public static void main(String[] args) throws InvalidIntegerEncodingException {
+        for (int i = 0; i < args.length; i++) {
+            long value = VariableLengthInteger.parseLong(ByteBuffer.wrap(hexToBytes(args[i])));
+            System.out.println(args[i] + " => " + value);
+        }
     }
 
 }

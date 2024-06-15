@@ -30,8 +30,8 @@ import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnectionFactory;
 import net.luminis.quic.server.ServerConnector;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
-import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -252,7 +252,7 @@ public class ServerConnectorImpl implements ServerConnector {
         data.rewind();
         Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
         connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data, clientAddress),
-                () -> log.warn("Discarding short header packet addressing non existent connection " + ByteUtils.bytesToHex(dcid)));
+                () -> log.warn("Discarding short header packet addressing non existent connection " + Bytes.bytesToHex(dcid)));
     }
 
     private boolean mightStartNewConnection(ByteBuffer packetBytes, int version, byte[] dcid) {

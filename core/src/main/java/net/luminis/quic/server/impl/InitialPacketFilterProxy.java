@@ -23,7 +23,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.ZeroRttPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -61,11 +61,11 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
             }
             else {
                 String type = LongHeaderPacket.determineType(flags, version).getSimpleName();
-                log.info(String.format("Dropping %s (%d bytes) sent to odcid %s.", type, data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
+                log.info(String.format("Dropping %s (%d bytes) sent to odcid %s.", type, data.remaining(), Bytes.bytesToHex(getOriginalDestinationConnectionId())));
             }
         }
         else {
-            log.info(String.format("Dropping ShortHeaderPacket (%d bytes) sent to odcid %s.", data.remaining(), ByteUtils.bytesToHex(getOriginalDestinationConnectionId())));
+            log.info(String.format("Dropping ShortHeaderPacket (%d bytes) sent to odcid %s.", data.remaining(), Bytes.bytesToHex(getOriginalDestinationConnectionId())));
         }
     }
 

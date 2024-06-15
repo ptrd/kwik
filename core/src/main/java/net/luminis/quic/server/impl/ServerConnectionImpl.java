@@ -42,6 +42,7 @@ import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
@@ -50,7 +51,6 @@ import net.luminis.tls.alert.NoApplicationProtocolAlert;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.*;
-import net.luminis.tls.util.ByteUtils;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -133,7 +133,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         ));
 
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, ByteUtils.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, Bytes.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
@@ -549,7 +549,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected void terminate() {
         super.terminate(() -> {
             String statsSummary = getStats().toString().replace("\n", "    ");
-            log.info(String.format("Stats for connection %s: %s", ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
+            log.info(String.format("Stats for connection %s: %s", Bytes.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
         });
         log.getQLog().emitConnectionTerminatedEvent();
         closeCallback.accept(this);
@@ -717,8 +717,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public String toString() {
         return "ServerConnection["
-                + ByteUtils.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
-                + "/" + ByteUtils.bytesToHex(connectionIdManager.getInitialConnectionId())
+                + Bytes.bytesToHex(connectionIdManager.getOriginalDestinationConnectionId())
+                + "/" + Bytes.bytesToHex(connectionIdManager.getInitialConnectionId())
                 + "(" + getQuicVersion() + ")"
                 + " " + initialClientAddress
                 + "]";

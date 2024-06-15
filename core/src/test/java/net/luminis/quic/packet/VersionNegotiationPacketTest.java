@@ -21,7 +21,7 @@ package net.luminis.quic.packet;
 import net.luminis.quic.impl.InvalidPacketException;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.test.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

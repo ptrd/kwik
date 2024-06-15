@@ -18,16 +18,16 @@
  */
 package net.luminis.quic.packet;
 
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
-import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.InvalidPacketException;
 import net.luminis.quic.impl.PacketProcessor;
-import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.impl.Version;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -163,7 +163,7 @@ public class InitialPacket extends LongHeaderPacket {
                 + "L" + "|"
                 + (packetSize >= 0? packetSize: ".") + "|"
                 + frames.size() + "  "
-                + "Token=" + (token != null? ByteUtils.bytesToHex(token): "[]") + " "
+                + "Token=" + (token != null? Bytes.bytesToHex(token): "[]") + " "
                 + frames.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
     }
 

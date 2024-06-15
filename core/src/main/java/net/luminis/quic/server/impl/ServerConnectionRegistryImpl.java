@@ -20,7 +20,7 @@ package net.luminis.quic.server.impl;
 
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.server.ServerConnectionRegistry;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.util.Comparator;
@@ -58,7 +58,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
             currentConnections.put(new ConnectionSource(newConnectionId), connection);
         }
         else {
-            log.error("Cannot add additional cid to non-existing connection " + ByteUtils.bytesToHex(currentConnectionId));
+            log.error("Cannot add additional cid to non-existing connection " + Bytes.bytesToHex(currentConnectionId));
         }
     }
 
@@ -87,7 +87,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
         }
 
         if (! connection.isClosed()) {
-            log.error("Removed connection with dcid " + ByteUtils.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed.");
+            log.error("Removed connection with dcid " + Bytes.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed.");
         }
 
         // Preferably, return the object registered with one of the active cid's, otherwise the one registered with the original dcid.

@@ -26,8 +26,8 @@ import net.luminis.quic.server.impl.ApplicationProtocolRegistry;
 import net.luminis.quic.server.impl.ServerConnectionImpl;
 import net.luminis.quic.server.impl.ServerConnectionProxy;
 import net.luminis.quic.server.impl.ServerConnectionThread;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.handshake.TlsServerEngineFactory;
-import net.luminis.tls.util.ByteUtils;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -75,8 +75,8 @@ public class ServerConnectionFactory {
         ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid,
                 tlsServerEngineFactory, configuration, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
 
-        log.info("Creating new connection with version " + version + " for odcid " + ByteUtils.bytesToHex(originalDcid)
-                + " with " + clientAddress.getAddress().getHostAddress() + ": " + ByteUtils.bytesToHex(connection.getInitialConnectionId()));
+        log.info("Creating new connection with version " + version + " for odcid " + Bytes.bytesToHex(originalDcid)
+                + " with " + clientAddress.getAddress().getHostAddress() + ": " + Bytes.bytesToHex(connection.getInitialConnectionId()));
 
         return connection;
     }

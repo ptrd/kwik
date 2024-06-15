@@ -21,7 +21,7 @@ package net.luminis.quic.server.impl;
 import net.luminis.quic.packet.DatagramParserFilter;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -49,7 +49,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         this.firstInitialPacketMetaData = initialPacketMetaData;
 
         queue = new LinkedBlockingQueue<>();
-        String threadId = "receiver-" + ByteUtils.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
+        String threadId = "receiver-" + Bytes.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
         connectionReceiverThread = new Thread(this::process, threadId);
         connectionReceiverThread.start();
     }
@@ -98,7 +98,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     @Override
     public String toString() {
-        return "ServerConnectionThread[" + ByteUtils.bytesToHex(getOriginalDestinationConnectionId()) + "]";
+        return "ServerConnectionThread[" + Bytes.bytesToHex(getOriginalDestinationConnectionId()) + "]";
     }
 
     static class ReceivedDatagram {
