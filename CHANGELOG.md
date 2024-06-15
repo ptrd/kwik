@@ -2,6 +2,7 @@
 
 ## WIP
 
+- upgraded agent15 to 2.0 (defining Java module)
 - removed dependency on ByteUtils class from agent15
 - moved all server implementation classes to a separate package (net.luminis.quic.server.impl)
 - changed ServerConnector and ServerConnectionConfig into an interface

@@ -27,7 +27,7 @@ import net.luminis.quic.server.impl.ServerConnectionImpl;
 import net.luminis.quic.server.impl.ServerConnectionProxy;
 import net.luminis.quic.server.impl.ServerConnectionThread;
 import net.luminis.quic.util.Bytes;
-import net.luminis.tls.handshake.TlsServerEngineFactory;
+import net.luminis.tls.engine.TlsServerEngineFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;

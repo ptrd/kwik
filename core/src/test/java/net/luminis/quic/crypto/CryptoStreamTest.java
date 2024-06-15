@@ -29,11 +29,19 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.tls.CertificateMessageBuilder;
 import net.luminis.quic.tls.ClientHelloBuilder;
-import net.luminis.tls.Message;
 import net.luminis.tls.ProtectionKeysType;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
-import net.luminis.tls.handshake.*;
+import net.luminis.tls.engine.ClientMessageSender;
+import net.luminis.tls.engine.TlsClientEngine;
+import net.luminis.tls.engine.TlsMessageParser;
+import net.luminis.tls.engine.TlsServerEngine;
+import net.luminis.tls.engine.TlsStatusEventHandler;
+import net.luminis.tls.engine.impl.TlsClientEngineImpl;
+import net.luminis.tls.handshake.CertificateMessage;
+import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.handshake.FinishedMessage;
+import net.luminis.tls.handshake.HandshakeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -70,7 +78,7 @@ class CryptoStreamTest {
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
         cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
-                Role.Client, new TlsClientEngine(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
+                Role.Client, new TlsClientEngineImpl(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
@@ -462,10 +470,10 @@ class CryptoStreamTest {
         };
     }
 
-    private void setParseFunction(Function<ByteBuffer, Message> parseFunction) throws Exception {
-        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class), any(ProtectionKeysType.class))).thenAnswer(new Answer<Message>() {
+    private void setParseFunction(Function<ByteBuffer, HandshakeMessage> parseFunction) throws Exception {
+        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class), any(ProtectionKeysType.class))).thenAnswer(new Answer<HandshakeMessage>() {
             @Override
-            public Message answer(InvocationOnMock invocation) throws Throwable {
+            public HandshakeMessage answer(InvocationOnMock invocation) throws Throwable {
                 ByteBuffer buffer = invocation.getArgument(0);
                 return parseFunction.apply(buffer);
             }

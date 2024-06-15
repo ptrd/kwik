@@ -26,7 +26,7 @@ import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.util.Bytes;
 import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TrafficSecrets;
+import net.luminis.tls.engine.TrafficSecrets;
 
 import java.io.IOException;
 import java.nio.file.Files;

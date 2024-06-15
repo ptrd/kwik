@@ -42,13 +42,20 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.util.Bytes;
-import net.luminis.tls.CertificateWithPrivateKey;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
+import net.luminis.tls.engine.CertificateWithPrivateKey;
+import net.luminis.tls.engine.ClientMessageSender;
+import net.luminis.tls.engine.TlsClientEngine;
+import net.luminis.tls.engine.TlsClientEngineFactory;
+import net.luminis.tls.engine.TlsStatusEventHandler;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.EarlyDataExtension;
 import net.luminis.tls.extension.Extension;
-import net.luminis.tls.handshake.*;
+import net.luminis.tls.handshake.CertificateMessage;
+import net.luminis.tls.handshake.CertificateVerifyMessage;
+import net.luminis.tls.handshake.ClientHello;
+import net.luminis.tls.handshake.FinishedMessage;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -192,7 +199,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
 
         connectionState = Status.Created;
-        tlsEngine = new TlsClientEngine(new ClientMessageSender() {
+        tlsEngine = TlsClientEngineFactory.createClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
                 CryptoStream cryptoStream = getCryptoStream(Initial);

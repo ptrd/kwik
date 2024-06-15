@@ -43,7 +43,7 @@ import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
 import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.ErrorAlert;
-import net.luminis.tls.handshake.TlsEngine;
+import net.luminis.tls.engine.TlsEngine;
 
 import java.nio.file.Path;
 import java.time.Duration;

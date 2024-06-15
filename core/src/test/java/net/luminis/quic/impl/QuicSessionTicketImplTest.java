@@ -20,14 +20,11 @@ package net.luminis.quic.impl;
 
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TlsState;
 import net.luminis.tls.handshake.NewSessionTicketMessage;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class QuicSessionTicketImplTest {
 
@@ -54,9 +51,7 @@ class QuicSessionTicketImplTest {
         tp.setDisableMigration(disableMigration);
         int activeConnectionIdLimit = 7;
         tp.setActiveConnectionIdLimit(activeConnectionIdLimit);
-        TlsState tlsState = mock(TlsState.class);
-        when(tlsState.computePSK(any(byte[].class))).thenReturn(new byte[32]);
-        NewSessionTicket tlsTicket = new NewSessionTicket(tlsState, new NewSessionTicketMessage(1024, 1024, new byte[8], new byte[32]), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        NewSessionTicket tlsTicket = new NewSessionTicket(new byte[32], new NewSessionTicketMessage(1024, 1024, new byte[8], new byte[32]), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
         byte[] serializedTlsTicket = new byte[36];  // Exact size doesn't matter that much, as long as deserialize succeeds
         // And to make the deserialize succeed, the cipher must be a valid value, e.g. 0x13 0x01
         serializedTlsTicket[28] = 0x13;
@@ -122,9 +117,7 @@ class QuicSessionTicketImplTest {
     @Test
     void ticketShouldContainCipher() {
         // Given
-        TlsState tlsState = mock(TlsState.class);
-        when(tlsState.computePSK(any(byte[].class))).thenReturn(new byte[32]);
-        NewSessionTicket tlsSessionTicket = new NewSessionTicket(tlsState, new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When
@@ -137,9 +130,7 @@ class QuicSessionTicketImplTest {
     @Test
     void ticketToStringShouldNotThrow() {
         // Given
-        TlsState tlsState = mock(TlsState.class);
-        when(tlsState.computePSK(any(byte[].class))).thenReturn(new byte[32]);
-        NewSessionTicket tlsSessionTicket = new NewSessionTicket(tlsState, new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When

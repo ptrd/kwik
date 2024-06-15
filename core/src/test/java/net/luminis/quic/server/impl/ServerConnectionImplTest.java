@@ -45,13 +45,14 @@ import net.luminis.tls.ProtectionKeysType;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.HandshakeFailureAlert;
+import net.luminis.tls.engine.ServerMessageSender;
+import net.luminis.tls.engine.TlsServerEngine;
+import net.luminis.tls.engine.TlsServerEngineFactory;
+import net.luminis.tls.engine.TlsStatusEventHandler;
+import net.luminis.tls.engine.impl.TlsServerEngineImpl;
 import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.ClientHello;
-import net.luminis.tls.handshake.ServerMessageSender;
-import net.luminis.tls.handshake.TlsServerEngine;
-import net.luminis.tls.handshake.TlsServerEngineFactory;
-import net.luminis.tls.handshake.TlsStatusEventHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -715,7 +716,7 @@ class ServerConnectionImplTest {
         connection.handshakeFinished();
     }
 
-    static class MockTlsServerEngine extends TlsServerEngine {
+    static class MockTlsServerEngine extends TlsServerEngineImpl {
 
         private Supplier<TlsProtocolException> exceptionSupplier;
 

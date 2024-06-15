@@ -30,7 +30,7 @@ import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
-import net.luminis.tls.handshake.TlsEngine;
+import net.luminis.tls.engine.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
