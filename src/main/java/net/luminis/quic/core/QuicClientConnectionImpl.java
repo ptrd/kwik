@@ -135,7 +135,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private KeepAliveActor keepAliveActor;
-    private String applicationProtocol;
+    private String[] applicationProtocols;
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
@@ -148,7 +148,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile ClientHello originalClientHello;
 
 
-    private QuicClientConnectionImpl(String host, int port, String applicationProtocol, long connectTimeout,
+    private QuicClientConnectionImpl(String host, int port, String[] applicationProtocols, long connectTimeout,
                                      ClientConnectionConfig connectionProperties, QuicSessionTicket sessionTicket,
                                      Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
@@ -156,7 +156,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
         super(originalVersion, Role.Client, secretsFile, log);
-        this.applicationProtocol = applicationProtocol;
+        this.applicationProtocols = applicationProtocols;
         this.connectTimeout = connectTimeout;
         this.connectionProperties = connectionProperties;
         log.info("Creating connection with " + host + ":" + port + " with " + originalVersion);
@@ -357,7 +357,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         sender.start(connectionSecrets);
         startReceiverLoop();
 
-        startHandshake(applicationProtocol, !earlyData.isEmpty());
+        startHandshake(applicationProtocols, !earlyData.isEmpty());
 
         List<QuicStream> earlyDataStreams = sendEarlyData(earlyData);
 
@@ -490,7 +490,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         connectionSecrets.computeInitialKeys(connectionIdManager.getCurrentPeerConnectionId());
     }
 
-    private void startHandshake(String applicationProtocol, boolean withEarlyData) {
+    private void startHandshake(String[] applicationProtocols, boolean withEarlyData) {
         tlsEngine.setServerName(host);
         tlsEngine.addSupportedCiphers(cipherSuites);
 
@@ -509,7 +509,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             tpExtension.addDiscardTransportParameter(clientHelloEnlargement);
         }
         tlsEngine.add(tpExtension);
-        tlsEngine.add(new ApplicationLayerProtocolNegotiationExtension(applicationProtocol));
+        tlsEngine.add(new ApplicationLayerProtocolNegotiationExtension(Arrays.asList(applicationProtocols)));
         if (withEarlyData) {
             tlsEngine.add(new EarlyDataExtension());
         }
@@ -1285,7 +1285,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private PrivateKey clientCertificateKey;
         private DatagramSocketFactory socketFactory;
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
-        private String applicationProtocol = "";
+        private List<String> applicationProtocols = new ArrayList<>();
         private KeyStore customTrustStore;
         private KeyStore keyManager;
         private String keyPassword;
@@ -1310,7 +1310,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
+                    new QuicClientConnectionImpl(host, port, applicationProtocols.toArray(new String[0]), connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
                             Version.of(preferredVersion), log, proxyHost, secretsFile, initialRtt, connectionIdLength,
                             cipherSuites, clientCertificate, clientCertificateKey, socketFactory);
 
@@ -1344,7 +1344,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (host == null) {
                 throw new IllegalStateException("Cannot create connection when URI is not set");
             }
-            if (applicationProtocol.isBlank()) {
+            if (applicationProtocols.isEmpty()) {
                 throw new IllegalStateException("Application protocol must be set");
             }
             if (connectTimeoutInMillis < 1) {
@@ -1366,7 +1366,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder applicationProtocol(String applicationProtocol) {
-            this.applicationProtocol = Objects.requireNonNull(applicationProtocol);
+            this.applicationProtocols.add(Objects.requireNonNull(applicationProtocol));
             return this;
         }
 
