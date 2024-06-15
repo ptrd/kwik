@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.impl.Version;
@@ -27,6 +27,8 @@ import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.receive.RawPacket;
+import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+import net.luminis.quic.server.ServerConnectionFactory;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
@@ -34,6 +36,7 @@ import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.util.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -64,7 +67,7 @@ class ServerConnectorImplTest {
         InputStream privateKey = getClass().getResourceAsStream("localhost.key");
         serverSocket = mock(DatagramSocket.class);
         server = new ServerConnectorImpl(serverSocket, certificate, privateKey, List.of(QuicConnection.QuicVersion.V1), false, new SysOutLogger());
-        server.registerApplicationProtocol("hq-interop", mock(ApplicationProtocolConnectionFactory.class));
+        server.registerApplicationProtocol("hq-interop", Mockito.mock(ApplicationProtocolConnectionFactory.class));
         clock = new TestClock();
         context = mock(Context.class);
         testExecutor = new TestScheduledExecutor(clock);

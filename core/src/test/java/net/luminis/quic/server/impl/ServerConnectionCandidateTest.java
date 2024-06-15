@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.impl.TestUtils;
 import net.luminis.quic.impl.Version;
@@ -24,6 +24,9 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.server.ServerConnectionConfig;
+import net.luminis.quic.server.ServerConnectionFactory;
+import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;

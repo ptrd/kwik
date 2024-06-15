@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
@@ -34,6 +34,11 @@ import net.luminis.quic.log.LogProxy;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+import net.luminis.quic.server.ApplicationProtocolSettings;
+import net.luminis.quic.server.ServerConnection;
+import net.luminis.quic.server.ServerConnectionConfig;
+import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
@@ -106,10 +111,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param closeCallback               callback for notifying interested parties this connection is closed
      * @param log                         logger
      */
-    protected ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                   byte[] peerCid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
-                                   ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                   ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
+    public ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
+                                byte[] peerCid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                                ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;

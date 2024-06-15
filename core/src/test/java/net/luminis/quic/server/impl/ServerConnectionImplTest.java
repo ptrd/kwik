@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.common.EncryptionLevel;
@@ -32,6 +32,10 @@ import net.luminis.quic.packet.PacketMetaData;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.server.ApplicationProtocolConnection;
+import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
+import net.luminis.quic.server.ServerConnectionConfig;
+import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -53,6 +57,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -641,13 +646,13 @@ class ServerConnectionImplTest {
     private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         ApplicationProtocolConnectionFactory applicationProtocolConnectionFactory = mock(ApplicationProtocolConnectionFactory.class);
-        when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(mock(ApplicationProtocolConnection.class));
+        when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(Mockito.mock(ApplicationProtocolConnection.class));
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", applicationProtocolConnectionFactory);
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid,
                 tlsServerEngineFactory, getDefaultConfiguration(retryRequired), applicationProtocolRegistry,
-                mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
+                Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

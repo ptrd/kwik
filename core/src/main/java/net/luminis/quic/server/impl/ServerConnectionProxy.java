@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,14 +16,23 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ScheduledExecutorService;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.time.Instant;
 
-public interface Context {
 
-    ExecutorService getSharedServerExecutor();
+public interface ServerConnectionProxy {
 
-    ScheduledExecutorService getSharedScheduledExecutor();
+    byte[] getOriginalDestinationConnectionId();
+
+    void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress);
+
+    boolean isClosed();
+
+    /**
+     * Disposes the resources used to run the connection. When called, the connection is already closed and terminated.
+     */
+    void dispose();
 }

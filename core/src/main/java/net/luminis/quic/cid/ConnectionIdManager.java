@@ -24,8 +24,8 @@ import net.luminis.quic.frame.RetireConnectionIdFrame;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
-import net.luminis.quic.server.ServerConnectionProxy;
 import net.luminis.quic.server.ServerConnectionRegistry;
+import net.luminis.quic.server.impl.ServerConnectionProxy;
 
 import java.security.SecureRandom;
 import java.util.Arrays;

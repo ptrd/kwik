@@ -16,9 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.server.ApplicationProtocolConnection;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic.server.impl;
 
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
@@ -32,6 +32,7 @@ import net.luminis.quic.packet.DatagramFilter;
 import net.luminis.quic.packet.DatagramPostProcessingFilter;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.PacketMetaData;
+import net.luminis.quic.server.*;
 import net.luminis.tls.util.ByteUtils;
 
 import java.net.InetSocketAddress;

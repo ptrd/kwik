@@ -19,25 +19,25 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.ConnectionConfig;
-
+import net.luminis.quic.server.impl.ServerConnectionConfigImpl;
 
 public interface ServerConnectionConfig extends ConnectionConfig {
 
-    public enum RetryRequired { Always, Never }
+    enum RetryRequired { Always, Never }
 
-    public int connectionIdLength();
+    int connectionIdLength();
 
-    public RetryRequired retryRequired();
+    RetryRequired retryRequired();
 
-    public int initialRtt();
+    int initialRtt();
 
     ServerConnectionConfig merge(ApplicationProtocolSettings protocol);
 
-    public static Builder builder() {
+    static Builder builder() {
         return new ServerConnectionConfigImpl.BuilderImpl();
     }
 
-    public static interface Builder {
+    interface Builder {
         ServerConnectionConfig build();
 
         Builder maxIdleTimeoutInSeconds(int timeoutInSeconds);

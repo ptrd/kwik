@@ -18,6 +18,8 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.server.impl.ServerConnectionProxy;
+
 public interface ServerConnectionRegistry {
 
     void registerConnection(ServerConnectionProxy connection, byte[] connectionId);

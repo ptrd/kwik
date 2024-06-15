@@ -20,6 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.server.impl.ServerConnectionImpl;
 import net.luminis.tls.handshake.ServerMessageSender;
 import net.luminis.tls.handshake.TlsServerEngine;
 import net.luminis.tls.handshake.TlsServerEngineFactory;

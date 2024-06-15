@@ -19,11 +19,20 @@
 package net.luminis.quic.server;
 
 
-class Constants {
+public class Constants {
 
-    static final int MINIMUM_CONNECTION_ID_LENGTH = 4;
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-long-header-packets
-    // "In QUIC version 1, this value MUST NOT exceed 20 bytes."
-    static final int MAXIMUM_CONNECTION_ID_LENGTH = 20;
+    /**
+     * The maximum length of a connection ID.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#name-long-header-packets
+     * "In QUIC version 1, this value MUST NOT exceed 20 bytes."
+     */
+    public static final int MAXIMUM_CONNECTION_ID_LENGTH = 20;
 
+    /**
+     * The minimum length of a connection ID.
+     * This is an implementation choice, not a protocol requirement.
+     * Because this server implementation uses one port for all connections,
+     * the connection ID must be long enough to prevent accidental collisions.
+     */
+    public static final int MINIMUM_CONNECTION_ID_LENGTH = 4;
 }
