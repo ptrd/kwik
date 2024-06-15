@@ -135,7 +135,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final CountDownLatch handshakeFinishedCondition = new CountDownLatch(1);
     private volatile TransportParameters peerTransportParams;
     private KeepAliveActor keepAliveActor;
-    private String[] applicationProtocols;
+    private final String[] applicationProtocols;
+    private String handshakeApplicationProtocol;
     private final List<QuicSessionTicket> newSessionTickets = Collections.synchronizedList(new ArrayList<>());
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
@@ -605,6 +606,15 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
             else if (ex instanceof QuicTransportParametersExtension) {
                 setPeerTransportParameters(((QuicTransportParametersExtension) ex).getTransportParameters());
+            }
+            else if (ex instanceof ApplicationLayerProtocolNegotiationExtension) {
+                ApplicationLayerProtocolNegotiationExtension applicationLayerProtocolNegotiationExtension = (ApplicationLayerProtocolNegotiationExtension) ex;
+                List<String> protocols = applicationLayerProtocolNegotiationExtension.getProtocols();
+                if (protocols.isEmpty()) {
+                    throw new IllegalStateException("No protocols available");
+                } else {
+                    handshakeApplicationProtocol = protocols.get(0);
+                }
             }
         });
     }
@@ -1194,6 +1204,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public List<X509Certificate> getServerCertificateChain() {
         return tlsEngine.getServerCertificateChain();
+    }
+
+    @Override
+    public String getHandshakeApplicationProtocol() {
+        return handshakeApplicationProtocol;
     }
 
     @Override

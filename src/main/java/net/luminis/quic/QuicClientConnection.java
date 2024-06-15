@@ -51,6 +51,8 @@ public interface QuicClientConnection extends QuicConnection {
 
     List<X509Certificate> getServerCertificateChain();
 
+    String getHandshakeApplicationProtocol();
+
     boolean isConnected();
 
     static Builder newBuilder() {
