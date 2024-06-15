@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server;
 
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.core.Version;
 import net.luminis.quic.log.Logger;
@@ -62,8 +63,8 @@ public class ServerConnector {
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
-    private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor();
-    private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor(new DaemonThreadFactory("shared-executor"));
+    private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory("shared-scheduled"));
     private Context context;
     private ServerConnectionRegistryImpl connectionRegistry;
     private int connectionIdLength;
@@ -149,12 +150,22 @@ public class ServerConnector {
         return applicationProtocolRegistry.getRegisteredApplicationProtocols();
     }
 
+    private Thread receiverLoopThread;
+
     public void start() {
         receiver.start();
 
-        new Thread(this::receiveLoop, "server receive loop").start();
+        receiverLoopThread = new Thread(this::receiveLoop, "server receive loop");
+        receiverLoopThread.setDaemon(true);
+        receiverLoopThread.start();
         log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protocols: "
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
+    }
+
+    public void shutdown() {
+        receiver.shutdown();
+        receiverLoopThread.interrupt();
+        serverSocket.close();
     }
 
     protected void receiveLoop() {

@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.core;
 
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.send.Sender;
 
@@ -50,7 +51,7 @@ public class KeepAliveActor {
      * @param sender
      */
     public KeepAliveActor(VersionHolder quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender) {
-        this(Clock.systemUTC(), quicVersion, keepAliveTime, peerIdleTimeout, sender, Executors.newScheduledThreadPool(1));
+        this(Clock.systemUTC(), quicVersion, keepAliveTime, peerIdleTimeout, sender, Executors.newScheduledThreadPool(1, new DaemonThreadFactory("keep-alive")));
     }
 
     KeepAliveActor(Clock clock, VersionHolder quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender, ScheduledExecutorService scheduler) {
