@@ -10,6 +10,16 @@ dependencies {
     implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
 }
 
+task includeVersion {
+    doLast {
+        ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
+        versionDir.mkdirs()
+
+        new File(versionDir, "version.properties").text = project.version
+    }
+}
+
+compileJava.dependsOn (determineVersion, includeVersion, processResources)
 
 publishing {
     publications {
