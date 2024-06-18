@@ -5,11 +5,17 @@ plugins {
 dependencies {
     implementation(project(':kwik')) // Add kwik core as a dependency
     implementation(project(':kwik-h09')) // Add kwik core as a dependency
+    runtimeOnly(project(':kwik-qlog')) // Add kwik core as a dependency
 
     implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+}
+
+application {
+    mainClass = 'net.luminis.quic.interop.InteropRunner'
+    applicationDefaultJvmArgs = ['-Duser.language=en', '-Duser.country=US', '-ea']
 }
 
 publishing {

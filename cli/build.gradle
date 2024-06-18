@@ -12,6 +12,10 @@ dependencies {
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
 }
 
+application {
+    mainClass = 'net.luminis.quic.cli.KwikCli'
+}
+
 publishing {
     publications {
         kwik(MavenPublication) {
