@@ -55,7 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 
-public class InteropRunner {
+public class InteropClient {
 
     public static final String TC_TRANSFER = "transfer";
     public static final String TC_RESUMPTION = "resumption";
