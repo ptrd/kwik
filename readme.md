@@ -19,7 +19,9 @@ my [presentation on Luminis DevCon 2019](https://youtu.be/eR2tPOLQRws).
 
 If you're looking for a Java HTTP3 client or server, check out [Flupke](https://bitbucket.org/pjtr/flupke), which is built on top of Kwik.
 
-Kwik is created and maintained by Peter Doornbosch. The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik).
+Kwik is created and maintained by Peter Doornbosch. 
+The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik)
+or [GitHub](https://github.com/ptrd/kwik).
 
 
 ## Status
@@ -91,7 +93,7 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>kwik</artifactId>
-        <version>0.8.10</version>
+        <version>0.8.11</version>
     </dependency>
 
 ### Client
@@ -204,7 +206,8 @@ To build the project:
 - clone the git repository and cd into the directory
 - build with gradle wrapper: `./gradlew build` (or `gradlew.bat build` on Windows).
 
-Gradle will write the output to `build/libs`.
+Gradle will write the output to each submodule's `build/libs` directory, e.g. the core library can be found
+in `core/build/libs`.
 
 To use IntelliJ for development, either just open the project directory in IntelliJ and it will pick up the gradle file,
 or generate IntelliJ project files with `gradle idea` and open the generated kwik.ipr file. The second option will
@@ -216,7 +219,7 @@ give a better developer experience.
 Kwik also provides a command line client that can be used to experiment with the QUIC protocol and
 even provides an interactive shell for more QUIC fun.
 
-To run the sample client, execute the `kwik.sh` script or run `java -jar build/libs/kwik.jar`. 
+To run the sample client, execute the `kwik.sh` script.
 
 Usage of the sample client:
 
@@ -263,7 +266,7 @@ HTTP request.
 
 ### Sample Server
 
-To run the demo web server, execute `java -cp kwik.jar net.luminis.quic.sample.SampleWebServer` with the following arguments:
+To run the demo web server, execute `net.luminis.quic.sample.SampleWebServer` with the following arguments:
 - certificate file
 - private key file
 - port number
@@ -280,7 +283,8 @@ have been using for early testing.
 
 To add HTTP/3 to Kwik you should use the flupke plugin:
 - Download the flupke jar from [Maven](https://search.maven.org/artifact/tech.kwik/flupke)
-- Add the flupke jar to the client or server classpath, e.g. for the server run `java -cp kwik.jar:flupke-<version>.jar net.luminis.quic.sample.SampleWebServer`. 
+- In the project root directory, create a directory `libs'
+- Copy the `flupke.jar` into this `libs` directory.
                                 
 ## Contact
 
