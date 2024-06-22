@@ -23,7 +23,7 @@ publishing {
             from components.java
             pom pomContent
             pom.name = 'Kwik Cli'
-            pom.description = 'Cli implementation for Kwik'
+            pom.description = 'Command line client for Kwik, the QUIC implementation in Java'
         }
     }
 }

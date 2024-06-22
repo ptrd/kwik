@@ -13,7 +13,7 @@ publishing {
             from components.java
             pom pomContent
             pom.name = 'Kwik H09'
-            pom.description = 'H09 implementation for Kwik'
+            pom.description = 'HTTP/0.9 implementation running on top of Kwik, the QUIC implementation in Java'
         }
     }
 }

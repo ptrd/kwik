@@ -25,7 +25,7 @@ publishing {
             from components.java
             pom pomContent
             pom.name = 'Kwik interop'
-            pom.description = 'Interop implementation for Kwik'
+            pom.description = 'Interop implementation for Kwik, the QUIC implementation in Java'
         }
     }
 }

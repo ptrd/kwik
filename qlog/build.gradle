@@ -20,7 +20,7 @@ publishing {
             from components.java
             pom pomContent
             pom.name = 'Kwik qlog'
-            pom.description = 'Qlog implementation for Kwik'
+            pom.description = 'qlog add-on for Kwik, the QUIC implementation in Java'
         }
     }
 }
