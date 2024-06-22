@@ -1,0 +1,36 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+
+dependencies {
+    implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
+
+    // https://mvnrepository.com/artifact/at.favre.lib/hkdf
+    implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
+}
+
+task includeVersion {
+    doLast {
+        ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
+        versionDir.mkdirs()
+
+        new File(versionDir, "version.properties").text = project.version
+    }
+}
+
+compileJava.dependsOn (determineVersion, includeVersion, processResources)
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik'
+            from components.java
+            pom pomContent
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}

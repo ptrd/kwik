@@ -1,5 +1,18 @@
 # Releases
 
+## WIP
+
+Split source code into separate modules, making dependencies more specific (e.g. the core module no longer has a 
+dependency on `commons-cli`). To enable this change, some classes were moved to other packages.
+
+- moved SampleWebServer to package net.luminis.quic.sample
+- moved KwikCli to package net.luminis.quic.cli
+- moved InteropRunner and InteropServer to package net.luminis.quic.interop
+- moved QlogPacketFilter to package net.luminis.quic.packet
+- moved QLog to package net.luminis.quic.qlog
+- replaced old javax.json lib by jakarta EE version
+- rewrote the `kwik.sh` script
+
 ## 0.8.11 (2024-05-28)
 
 - upgraded agent15 to 1.1 (accepting ECDSA certificates for server identification)

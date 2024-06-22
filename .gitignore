@@ -6,13 +6,14 @@ libs
 /kwik.ipr
 /kwik.iml
 /kwik.iws
+*.iml
 out
 /.classpath
 /.project
 /.settings/
-/qlog
+/qlogs
 /data
 certs/
 www
 /todo
-
+.DS_Store

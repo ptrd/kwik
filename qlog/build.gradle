@@ -1,0 +1,30 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
+
+    implementation(project(':kwik')) // Add kwik core as a dependency
+
+    // Default provider for Jakarta JSON Processing
+    implementation 'org.eclipse.parsson:parsson:1.1.6'
+
+    testImplementation(project(':kwik').sourceSets.test.output)  // Necessary to use test utils from kwik core
+}
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik-qlog'
+            from components.java
+            pom pomContent
+            pom.name = 'Kwik qlog'
+            pom.description = 'qlog add-on for Kwik, the QUIC implementation in Java'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}

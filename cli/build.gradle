@@ -1,0 +1,33 @@
+plugins {
+    id 'buildlogic.java-common-conventions'
+}
+
+dependencies {
+    implementation(project(':kwik')) // Add kwik core as a dependency
+    implementation(project(':kwik-h09')) // Add kwik core as a dependency
+
+    implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
+
+    // https://mvnrepository.com/artifact/commons-cli/commons-cli
+    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+}
+
+application {
+    mainClass = 'net.luminis.quic.cli.KwikCli'
+}
+
+publishing {
+    publications {
+        kwik(MavenPublication) {
+            artifactId = 'kwik-cli'
+            from components.java
+            pom pomContent
+            pom.name = 'Kwik Cli'
+            pom.description = 'Command line client for Kwik, the QUIC implementation in Java'
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.kwik
+}

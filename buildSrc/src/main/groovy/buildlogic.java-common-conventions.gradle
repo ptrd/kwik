@@ -1,0 +1,121 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'maven-publish'
+    id 'signing'
+    id 'application'
+}
+
+group = 'tech.kwik'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    withJavadocJar()
+    withSourcesJar()
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addBooleanOption('html5', true)
+}
+
+repositories {
+    mavenCentral() 
+}
+
+ext.agent15_version = '1.1'
+
+dependencies {
+    testImplementation('org.junit.jupiter:junit-jupiter:5.10.2')
+    testImplementation("org.mockito:mockito-core:5.6.0")
+    testImplementation("org.assertj:assertj-core:3.24.2")
+
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir "${buildDir}/generated"
+            exclude 'sources/**'
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+        events "passed", "skipped", "failed"
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
+            }
+        }
+    }
+}
+
+task determineVersion {
+    doLast {
+        def proc = "git describe --always --dirty".execute()
+        proc.waitFor()
+        if (proc.exitValue()) {
+            logger.quiet("Building development version.")
+        } else {
+            def versionTag = proc.in.readLines()[0]
+            // Check that tag matches format like v1.0 or v1.0.19
+            if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
+                if (versionTag.startsWith("v")) {
+                    versionTag = versionTag[1..-1]
+                }
+                logger.quiet("Building version ${versionTag}.")
+            }
+            else {
+                logger.error("Version tag '${versionTag}' does not contain a valid version.");
+            }
+            project.version = versionTag
+        }
+    }
+}
+
+compileJava.dependsOn (determineVersion, processResources)
+
+ext.pomContent = {
+    name = 'Kwik'
+    description = 'A QUIC implementation in Java'
+    url = 'https://github.com/ptrd/kwik'
+
+    licenses {
+        license {
+            name = 'GNU Lesser General Public License v3'
+            url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
+        }
+    }
+
+    developers {
+        developer {
+            id = 'peterd'
+            name = 'Peter Doornbosch'
+            email = 'peter.doornbosch@luminis.eu'
+        }
+    }
+
+    scm {
+        connection = 'scm:git:git@github.com:ptrd/kwik.git'
+        developerConnection = 'scm:git:git@github.com:ptrd/kwik.git'
+        url = 'https://github.com/ptrd/kwik'
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = project.properties.ossrhUsername
+                password = project.properties.ossrhPassword
+            }
+        }
+    }
+}
