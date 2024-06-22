@@ -1,6 +1,6 @@
 # Releases
 
-## WIP
+## 0.8.12 (2024-06-22)
 
 Split source code into separate modules, making dependencies more specific (e.g. the core module no longer has a 
 dependency on `commons-cli`). To enable this change, some classes were moved to other packages.
