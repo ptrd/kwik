@@ -219,7 +219,12 @@ give a better developer experience.
 Kwik also provides a command line client that can be used to experiment with the QUIC protocol and
 even provides an interactive shell for more QUIC fun.
 
-To run the sample client, execute the `kwik.sh` script.
+To run the sample client, execute the `kwik.sh` script,
+or unzip the cli distribution file in `cli/build/distributions/kwik-cli-*.zip` and run `kwik-cli` or `kwik-cli.bat`.
+In the latter case, the client will not support HTTP/3, as the run script in the distribution does not have `flupke.jar`
+on the classpath (but of course you can modify to script to add that).
+You can also run the client with `gradle run` (after `cd`-ing to the `cli` directory), but than you have to pass
+the command line args for the Kwik cli as `--args='-T -H /index.html example.com 4433'`. This option also lacks HTTP/3 support.
 
 Usage of the sample client:
 
@@ -281,10 +286,8 @@ To run without retry-mode, add the `--noRetry` flag as first argument.
 A plain Kwik client or server will only provide "HTTP/0.9", which is a very simplified form of HTTP/1, which the QUIC implementors
 have been using for early testing. 
 
-To add HTTP/3 to Kwik you should use the flupke plugin:
-- Download the flupke jar from [Maven](https://search.maven.org/artifact/tech.kwik/flupke)
-- In the project root directory, create a directory `libs'
-- Copy the `flupke.jar` into this `libs` directory.
+To add HTTP/3 to Kwik you should use the flupke plugin `flupke.jar`, which you can download 
+from [Maven](https://search.maven.org/artifact/tech.kwik/flupke), and add it to the run classpath.
                                 
 ## Contact
 
