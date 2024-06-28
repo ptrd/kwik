@@ -29,7 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
-import static net.luminis.quic.core.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.App;
 
 
 public class KeepAliveActor {

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.recovery;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.MockPacket;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.log.Logger;

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.test.TestClock;

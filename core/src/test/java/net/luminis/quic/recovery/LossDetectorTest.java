@@ -21,7 +21,7 @@ package net.luminis.quic.recovery;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.MockPacket;
 import net.luminis.quic.impl.MoreArgumentMatchers;
 import net.luminis.quic.impl.PacketMatcherByPacketNumber;

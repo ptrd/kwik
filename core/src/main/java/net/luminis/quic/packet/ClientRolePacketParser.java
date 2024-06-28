@@ -30,9 +30,9 @@ import net.luminis.quic.log.NullLogger;
 import java.nio.ByteBuffer;
 import java.util.function.BiFunction;
 
-import static net.luminis.quic.core.EncryptionLevel.App;
-import static net.luminis.quic.core.EncryptionLevel.Handshake;
-import static net.luminis.quic.core.EncryptionLevel.Initial;
+import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Handshake;
+import static net.luminis.quic.common.EncryptionLevel.Initial;
 
 /**
  * Packet parser for endpoint that has client role.

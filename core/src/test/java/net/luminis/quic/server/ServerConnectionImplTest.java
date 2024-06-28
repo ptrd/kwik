@@ -19,7 +19,7 @@
 package net.luminis.quic.server;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.CryptoFrame;

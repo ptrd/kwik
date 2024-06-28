@@ -16,30 +16,32 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.core;
-
-import net.luminis.quic.core.EncryptionLevel;
+package net.luminis.quic.common;
 
 /**
- * Packet numbers are divided into three spaces in QUIC.
+ * https://tools.ietf.org/html/draft-ietf-quic-tls-29#section2.1
+ * "Data is protected using a number of encryption levels:
+ *  Initial Keys
+ *  Early Data (0-RTT) Keys
+ *  Handshake Keys
+ *  Application Data (1-RTT) Keys"
  *
- * See https://www.rfc-editor.org/rfc/rfc9000.html#name-packet-numbers:
- * Initial space: All Initial packets (Section 17.2.2) are in this space.
- * Handshake space: All Handshake packets (Section 17.2.4) are in this space.
- * Application data space: All 0-RTT (Section 17.2.3) and 1-RTT (Section 17.3.1) packets are in this space.
- *
+ * https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-12.2
+ * "...order of increasing encryption levels (Initial, 0-RTT, Handshake, 1-RTT...)"
  */
-public enum PnSpace {
+public enum EncryptionLevel {
 
     Initial,
+    ZeroRTT,
     Handshake,
     App;
 
-    public EncryptionLevel relatedEncryptionLevel() {
+    public PnSpace relatedPnSpace() {
         switch(this) {
-            case Initial: return EncryptionLevel.Initial;
-            case Handshake: return EncryptionLevel.Handshake;
-            case App: return EncryptionLevel.App;
+            case ZeroRTT: return PnSpace.App;
+            case Initial: return PnSpace.Initial;
+            case Handshake: return PnSpace.Handshake;
+            case App: return PnSpace.App;
             default: return null;   // Never gets here
         }
     }

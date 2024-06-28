@@ -21,7 +21,7 @@ package net.luminis.quic.impl;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
@@ -38,8 +38,8 @@ import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
-import static net.luminis.quic.core.EncryptionLevel.App;
-import static net.luminis.quic.core.EncryptionLevel.Initial;
+import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 

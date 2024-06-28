@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.common.PnSpace;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 

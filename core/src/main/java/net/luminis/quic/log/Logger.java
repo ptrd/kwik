@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.log;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.packet.QuicPacket;
 
 import java.nio.ByteBuffer;

@@ -19,8 +19,8 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.cc.CongestionController;
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.Padding;

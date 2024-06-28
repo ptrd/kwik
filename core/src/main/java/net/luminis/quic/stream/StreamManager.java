@@ -21,7 +21,7 @@ package net.luminis.quic.stream;
 import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.impl.*;
 import net.luminis.quic.log.Logger;

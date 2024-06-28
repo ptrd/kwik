@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;

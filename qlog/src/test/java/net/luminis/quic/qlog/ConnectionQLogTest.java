@@ -4,7 +4,7 @@ import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.MockPacket;
 import net.luminis.quic.qlog.event.ConnectionCreatedEvent;
 import net.luminis.quic.qlog.event.PacketLostEvent;

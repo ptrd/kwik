@@ -32,7 +32,7 @@ import net.luminis.quic.log.Logger;
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
 
-import static net.luminis.quic.core.EncryptionLevel.*;
+import static net.luminis.quic.common.EncryptionLevel.*;
 import static net.luminis.quic.impl.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 /**

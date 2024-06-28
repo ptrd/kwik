@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.QuicConnectionImpl;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.TransportError;

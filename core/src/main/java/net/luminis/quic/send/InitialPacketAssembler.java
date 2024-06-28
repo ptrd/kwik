@@ -19,7 +19,7 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.ack.AckGenerator;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.packet.InitialPacket;

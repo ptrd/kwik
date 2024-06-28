@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import org.junit.jupiter.api.Test;
 
-import static net.luminis.quic.core.EncryptionLevel.*;
+import static net.luminis.quic.common.EncryptionLevel.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class EncryptionLevelTest {

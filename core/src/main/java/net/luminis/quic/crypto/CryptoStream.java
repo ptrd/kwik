@@ -20,7 +20,7 @@ package net.luminis.quic.crypto;
 
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.TransportError;
 import net.luminis.quic.impl.VersionHolder;

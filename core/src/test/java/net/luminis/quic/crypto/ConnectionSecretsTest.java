@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.impl.VersionHolder;

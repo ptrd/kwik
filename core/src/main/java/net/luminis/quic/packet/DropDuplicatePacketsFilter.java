@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.PnSpace;
+import net.luminis.quic.common.PnSpace;
 
 import java.util.Arrays;
 
