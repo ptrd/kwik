@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.server.h09;
 
+import net.luminis.quic.KwikVersion;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.io.LimitExceededException;
 import net.luminis.quic.io.LimitedInputStream;
-import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnection;
 
 import java.io.*;

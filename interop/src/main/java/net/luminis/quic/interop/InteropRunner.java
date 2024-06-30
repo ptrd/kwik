@@ -18,7 +18,8 @@
  */
 package net.luminis.quic.interop;
 
-import net.luminis.quic.run.KwikVersion;
+
+import net.luminis.quic.KwikVersion;
 
 import java.util.Arrays;
 

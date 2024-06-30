@@ -18,26 +18,25 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
-import net.luminis.quic.core.VersionHolder;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.send.Sender;
 import net.luminis.quic.stream.ReceiveBuffer;
 import net.luminis.quic.stream.ReceiveBufferImpl;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
-import net.luminis.tls.Message;
 import net.luminis.tls.ProtectionKeysType;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.InternalErrorAlert;
+import net.luminis.tls.engine.TlsEngine;
+import net.luminis.tls.engine.TlsMessageParser;
 import net.luminis.tls.extension.Extension;
 import net.luminis.tls.handshake.HandshakeMessage;
-import net.luminis.tls.handshake.TlsEngine;
-import net.luminis.tls.handshake.TlsMessageParser;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -64,8 +63,8 @@ public class CryptoStream {
     private final Logger log;
     private final Sender sender;
     private final ReceiveBuffer receiveBuffer;
-    private final List<Message> messagesReceived;
-    private final List<Message> messagesSent;
+    private final List<HandshakeMessage> messagesReceived;
+    private final List<HandshakeMessage> messagesSent;
     private final TlsMessageParser tlsMessageParser;
     private final List<ByteBuffer> dataToSend;
     private final int maxMessageSize;
@@ -214,7 +213,7 @@ public class CryptoStream {
         return toStringWith(messagesSent);
     }
 
-    private String toStringWith(List<Message> messages) {
+    private String toStringWith(List<HandshakeMessage> messages) {
         return "CryptoStream["  + encryptionLevel.name().charAt(0) + "|" + messages.stream()
                 .map(msg -> msg.getClass().getSimpleName())
                 .map(name -> name.endsWith("Message")? name.substring(0, name.length() - 7): name)
@@ -222,7 +221,7 @@ public class CryptoStream {
                 + "]";
     }
 
-    public List<Message> getTlsMessages() {
+    public List<HandshakeMessage> getTlsMessages() {
         return messagesReceived;
     }
 

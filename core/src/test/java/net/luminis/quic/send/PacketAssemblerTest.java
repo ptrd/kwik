@@ -19,8 +19,10 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.ack.AckGenerator;
-import net.luminis.quic.core.*;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.*;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;

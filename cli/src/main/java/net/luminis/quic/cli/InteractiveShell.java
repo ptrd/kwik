@@ -19,10 +19,10 @@
 package net.luminis.quic.cli;
 
 import net.luminis.quic.cid.ConnectionIdStatus;
-import net.luminis.quic.core.QuicClientConnectionImpl;
-import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
+import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.receive.Receiver;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -256,7 +256,7 @@ public class InteractiveShell {
         byte[][] newConnectionIds = quicConnection.newConnectionIds(newConnectionIdCount, retirePriorTo);
         System.out.println("Generated new (source) connection id's: " +
                 Arrays.stream(newConnectionIds)
-                        .map(cid -> ByteUtils.bytesToHex(cid))
+                        .map(cid -> Bytes.bytesToHex(cid))
                         .collect(Collectors.joining(", ")));
     }
 
@@ -265,12 +265,12 @@ public class InteractiveShell {
         quicConnection.getSourceConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
-                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+                        entry.getKey() + ": " + Bytes.bytesToHex(entry.getValue().getConnectionId())));
         System.out.println("Destination (server) connection id's:");
         quicConnection.getDestinationConnectionIds().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> System.out.println(toString(entry.getValue().getConnectionIdStatus()) + " " +
-                        entry.getKey() + ": " + ByteUtils.bytesToHex(entry.getValue().getConnectionId())));
+                        entry.getKey() + ": " + Bytes.bytesToHex(entry.getValue().getConnectionId())));
     }
 
     private String toString(ConnectionIdStatus connectionIdStatus) {
@@ -288,7 +288,7 @@ public class InteractiveShell {
     private void nextDestinationConnectionId(String arg) {
         byte[] newConnectionId = quicConnection.nextDestinationConnectionId();
         if (newConnectionId != null) {
-            System.out.println("Switched to next destination connection id: " + ByteUtils.bytesToHex(newConnectionId));
+            System.out.println("Switched to next destination connection id: " + Bytes.bytesToHex(newConnectionId));
         }
         else {
             System.out.println("Cannot switch to next destination connect id, because there is none available");

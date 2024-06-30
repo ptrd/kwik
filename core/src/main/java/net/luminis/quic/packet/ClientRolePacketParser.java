@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.InvalidPacketException;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -30,9 +30,9 @@ import net.luminis.quic.log.NullLogger;
 import java.nio.ByteBuffer;
 import java.util.function.BiFunction;
 
-import static net.luminis.quic.core.EncryptionLevel.App;
-import static net.luminis.quic.core.EncryptionLevel.Handshake;
-import static net.luminis.quic.core.EncryptionLevel.Initial;
+import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Handshake;
+import static net.luminis.quic.common.EncryptionLevel.Initial;
 
 /**
  * Packet parser for endpoint that has client role.

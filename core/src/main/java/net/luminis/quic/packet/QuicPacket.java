@@ -18,10 +18,12 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.*;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.log.Logger;
 
 import java.nio.BufferUnderflowException;

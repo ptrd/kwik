@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.core.Version;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -89,7 +89,7 @@ public class NewConnectionIdFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "NewConnectionIdFrame[" + sequenceNr + ",<" + retirePriorTo + "|" + ByteUtils.bytesToHex(connectionId) + "|" + ByteUtils.bytesToHex(statelessResetToken) + "]";
+        return "NewConnectionIdFrame[" + sequenceNr + ",<" + retirePriorTo + "|" + Bytes.bytesToHex(connectionId) + "|" + Bytes.bytesToHex(statelessResetToken) + "]";
     }
 
     public int getSequenceNr() {

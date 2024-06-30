@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.cc;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.MockPacket;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.MockPacket;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.PacketInfo;

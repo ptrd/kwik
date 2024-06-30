@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.EncryptionLevel;
+import net.luminis.quic.common.EncryptionLevel;
 
 public class MissingKeysException extends Exception {
 

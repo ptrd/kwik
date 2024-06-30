@@ -19,7 +19,7 @@
 package net.luminis.quic.cid;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.util.Arrays;
 
@@ -57,7 +57,7 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
             connectionIds.values().stream()
                     .filter(cid -> Arrays.equals(cid.getConnectionId(), currentConnectionId))
                     .forEach(cid -> cid.setStatus(ConnectionIdStatus.IN_USE));
-            log.info("Peer has switched to connection id " + ByteUtils.bytesToHex(currentConnectionId));
+            log.info("Peer has switched to connection id " + Bytes.bytesToHex(currentConnectionId));
             return wasNew;
         }
         else {

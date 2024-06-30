@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.TestUtils;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.TestUtils;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;

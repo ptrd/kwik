@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.QuicClientConnectionImpl;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.log.Logger;

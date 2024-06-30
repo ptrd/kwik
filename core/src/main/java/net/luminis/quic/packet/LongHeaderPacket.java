@@ -19,13 +19,13 @@
 package net.luminis.quic.packet;
 
 
-import net.luminis.quic.core.DecryptionException;
-import net.luminis.quic.core.InvalidPacketException;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
 import net.luminis.quic.generic.VariableLengthInteger;
+import net.luminis.quic.impl.DecryptionException;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;

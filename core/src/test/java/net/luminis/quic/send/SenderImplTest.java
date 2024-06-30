@@ -18,7 +18,8 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.core.*;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -26,6 +27,7 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.ShortHeaderPacket;

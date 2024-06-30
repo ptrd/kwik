@@ -19,12 +19,14 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.cc.CongestionController;
-import net.luminis.quic.core.*;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.QLog;
 import net.luminis.quic.packet.InitialPacket;

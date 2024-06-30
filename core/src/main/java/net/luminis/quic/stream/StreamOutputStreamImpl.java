@@ -18,12 +18,12 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.core.EncryptionLevel;
 import net.luminis.quic.frame.DataBlockedFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamDataBlockedFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.common.EncryptionLevel;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static net.luminis.quic.core.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.App;
 
 class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUpdateListener {
 

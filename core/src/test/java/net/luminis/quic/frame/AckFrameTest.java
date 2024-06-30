@@ -18,8 +18,7 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.ack.Range;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.generic.VariableLengthInteger;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;

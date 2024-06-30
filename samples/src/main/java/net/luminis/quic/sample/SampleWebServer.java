@@ -18,11 +18,11 @@
  */
 package net.luminis.quic.sample;
 
-import net.luminis.quic.core.Version;
+import net.luminis.quic.KwikVersion;
+import net.luminis.quic.QuicConnection;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.quic.run.KwikVersion;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.server.ServerConnector;
@@ -94,9 +94,9 @@ public class SampleWebServer {
             System.exit(1);
         }
 
-        List<Version> supportedVersions = new ArrayList<>();
-        supportedVersions.add(Version.QUIC_version_1);
-        supportedVersions.add(Version.QUIC_version_2);
+        List<QuicConnection.QuicVersion> supportedVersions = new ArrayList<>();
+        supportedVersions.add(QuicConnection.QuicVersion.V1);
+        supportedVersions.add(QuicConnection.QuicVersion.V2);
 
         ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
@@ -124,7 +124,7 @@ public class SampleWebServer {
                 + serverConnector.getRegisteredApplicationProtocols());
     }
 
-    private static void registerHttp3(ServerConnector serverConnector, File wwwDir, List<Version> supportedVersions, Logger log) {
+    private static void registerHttp3(ServerConnector serverConnector, File wwwDir, List<QuicConnection.QuicVersion> supportedVersions, Logger log) {
         ApplicationProtocolConnectionFactory http3ApplicationProtocolConnectionFactory = null;
 
         try {

@@ -19,11 +19,11 @@
 package net.luminis.quic.send;
 
 import net.luminis.quic.ack.GlobalAckGenerator;
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.MockPacket;
-import net.luminis.quic.core.PnSpace;
-import net.luminis.quic.core.Version;
-import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.MockPacket;
+import net.luminis.quic.common.PnSpace;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.MaxDataFrame;

@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.crypto;
 
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 

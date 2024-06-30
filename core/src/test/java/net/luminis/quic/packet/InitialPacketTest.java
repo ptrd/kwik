@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.*;
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -26,14 +26,16 @@ import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.CryptoFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.*;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.test.ByteUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static net.luminis.quic.core.Version.IETF_draft_29;
+import static net.luminis.quic.impl.Version.IETF_draft_29;
+import static net.luminis.quic.test.ByteUtils.hexToBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -65,10 +67,10 @@ class InitialPacketTest {
         InitialPacket initialPacket = new InitialPacket(Version.IETF_draft_29);
 
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(Version.IETF_draft_29), Role.Client, null, logger);
-        connectionSecrets.computeInitialKeys(ByteUtils.hexToBytes("dcd29c5480f39a24"));
+        connectionSecrets.computeInitialKeys(hexToBytes("dcd29c5480f39a24"));
 
         Aead aead = connectionSecrets.getServerAead(EncryptionLevel.Initial);
-        initialPacket.parse(ByteBuffer.wrap(ByteUtils.hexToBytes(data)), aead, 0, logger, 0);
+        initialPacket.parse(ByteBuffer.wrap(hexToBytes(data)), aead, 0, logger, 0);
 
         assertThat(initialPacket.getToken()).isNullOrEmpty();
         assertThat(initialPacket.getFrames()).hasOnlyElementsOfTypes(AckFrame.class);

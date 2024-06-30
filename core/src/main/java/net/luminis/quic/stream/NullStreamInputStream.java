@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.stream;
 
-import net.luminis.quic.core.TransportError;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.TransportError;
 
 import java.io.IOException;
 

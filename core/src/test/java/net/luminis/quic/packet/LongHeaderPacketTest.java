@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.packet;
 
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Version;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.PnSpace;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 
 import java.util.List;
 import java.util.function.Consumer;

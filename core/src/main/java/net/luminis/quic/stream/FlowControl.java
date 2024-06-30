@@ -19,12 +19,12 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.core.ImplementationError;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
-import net.luminis.quic.core.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
+import net.luminis.quic.impl.ImplementationError;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 

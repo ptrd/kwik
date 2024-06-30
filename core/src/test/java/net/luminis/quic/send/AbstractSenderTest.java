@@ -18,8 +18,8 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.TestUtils;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.TestUtils;
 import net.luminis.quic.crypto.Aead;
 import org.junit.jupiter.api.BeforeEach;
 

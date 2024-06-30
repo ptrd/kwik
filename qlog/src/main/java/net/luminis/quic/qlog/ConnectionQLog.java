@@ -24,7 +24,7 @@ import net.luminis.quic.packet.LongHeaderPacket;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.RetryPacket;
 import net.luminis.quic.qlog.event.*;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -124,7 +124,7 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeStartArray("traces")
                 .writeStartObject()  // start trace
                 .writeStartObject("common_fields")
-                .write("ODCID", ByteUtils.bytesToHex(cid))
+                .write("ODCID", Bytes.bytesToHex(cid))
                 .write("time_format", "relative")
                 .write("reference_time", startTime.toEpochMilli())
                 .writeEnd()
@@ -216,7 +216,7 @@ public class ConnectionQLog implements QLogEventProcessor {
     }
 
     private static String format(byte[] data, String defaultValue) {
-        return data != null? ByteUtils.bytesToHex(data): defaultValue;
+        return data != null? Bytes.bytesToHex(data): defaultValue;
     }
 
     private void writeFooter() {

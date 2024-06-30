@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.frame;
 
-import net.luminis.quic.core.Version;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -72,7 +72,7 @@ public class PathChallengeFrame extends QuicFrame {
 
     @Override
     public String toString() {
-        return "PathChallengeFrame[" + ByteUtils.bytesToHex(data) + "]";
+        return "PathChallengeFrame[" + Bytes.bytesToHex(data) + "]";
     }
 
     @Override

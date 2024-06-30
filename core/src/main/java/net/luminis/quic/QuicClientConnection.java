@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.quic.core.QuicClientConnectionImpl;
+import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.log.Logger;
 import net.luminis.tls.TlsConstants;
 
@@ -112,6 +112,8 @@ public interface QuicClientConnection extends QuicConnection {
         Builder logger(Logger log);
 
         Builder sessionTicket(QuicSessionTicket ticket);
+
+        Builder sessionTicket(byte[] ticketData);
 
         Builder proxy(String host);
 

@@ -19,10 +19,10 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.core.QuicConnectionImpl;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
-import net.luminis.quic.core.TransportParameters;
+import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import org.junit.jupiter.api.BeforeEach;

@@ -20,11 +20,11 @@ package net.luminis.quic.stream;
 
 import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
-import net.luminis.quic.core.QuicConnectionImpl;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.TransportError;
-import net.luminis.quic.core.Version;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 

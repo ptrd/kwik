@@ -1,5 +1,18 @@
 # Releases
 
+## WIP
+
+- defined Java modules
+- upgraded agent15 to 2.0 (defining Java module)
+- removed dependency on ByteUtils class from agent15
+- moved all server implementation classes to a separate package (net.luminis.quic.server.impl)
+- changed ServerConnector and ServerConnectionConfig into an interface
+- removed Version class from public interfaces/classes ServerConnector and SampleWebServer
+- moved class KwikVersion to net.luminis.quic
+- moved enums EncryptionLevel and PnSpace to net.luminis.quic.common
+- moved all classes from package net.luminis.quic.core (except EncryptionLevel and PnSpace), to net.luminis.quic.impl 
+- moved Range class to package net.luminis.quic.frame
+
 ## 0.8.12 (2024-06-22)
 
 Split source code into separate modules, making dependencies more specific (e.g. the core module no longer has a 

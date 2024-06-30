@@ -19,14 +19,14 @@
 package net.luminis.quic.crypto;
 
 import at.favre.lib.hkdf.HKDF;
-import net.luminis.quic.core.EncryptionLevel;
-import net.luminis.quic.core.Role;
-import net.luminis.quic.core.Version;
-import net.luminis.quic.core.VersionHolder;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.util.Bytes;
 import net.luminis.tls.TlsConstants;
-import net.luminis.tls.TrafficSecrets;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.tls.engine.TrafficSecrets;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -219,11 +219,11 @@ public class ConnectionSecrets {
     private void appendToFile(String label, EncryptionLevel level) {
         List<String> content = new ArrayList<>();
         content.add("CLIENT_" + label + " "
-                + ByteUtils.bytesToHex(clientRandom) + " "
-                + ByteUtils.bytesToHex(clientSecrets[level.ordinal()].getTrafficSecret()));
+                + Bytes.bytesToHex(clientRandom) + " "
+                + Bytes.bytesToHex(clientSecrets[level.ordinal()].getTrafficSecret()));
         content.add("SERVER_" + label + " "
-                + ByteUtils.bytesToHex(clientRandom) + " "
-                + ByteUtils.bytesToHex(serverSecrets[level.ordinal()].getTrafficSecret()));
+                + Bytes.bytesToHex(clientRandom) + " "
+                + Bytes.bytesToHex(serverSecrets[level.ordinal()].getTrafficSecret()));
 
         try {
             Files.write(wiresharkSecretsFile, content, StandardOpenOption.APPEND);

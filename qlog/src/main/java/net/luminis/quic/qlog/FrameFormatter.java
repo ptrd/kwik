@@ -19,10 +19,9 @@
 package net.luminis.quic.qlog;
 
 import jakarta.json.stream.JsonGenerator;
-import net.luminis.quic.ack.Range;
 import net.luminis.quic.frame.*;
 import net.luminis.quic.packet.QuicPacket;
-import net.luminis.tls.util.ByteUtils;
+import net.luminis.quic.util.Bytes;
 
 import java.time.Instant;
 import java.util.ListIterator;
@@ -201,6 +200,6 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     private String format(byte[] data) {
-        return ByteUtils.bytesToHex(data);
+        return Bytes.bytesToHex(data);
     }
 }
