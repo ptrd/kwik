@@ -96,6 +96,14 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
         <version>0.8.12</version>
     </dependency>
 
+### Java Module System
+
+The following Kwik artifacts define a Java module with the given name:
+- kwik: `tech.kwik.core`
+- kwik-h09: `tech.kwik.h09`
+- kwik-qlog: `tech.kwik.qlog`
+- kwik-samples: `tech.kwik.samples`
+
 ### Client
 
 To connect to a QUIC server, first create a connection object with the builder, e.g.

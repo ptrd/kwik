@@ -1,6 +1,6 @@
 # Releases
 
-## WIP
+## 0.8.13 (2024-07-02)
 
 - defined Java modules
 - upgraded agent15 to 2.0 (defining Java module)
