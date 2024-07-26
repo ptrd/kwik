@@ -179,6 +179,9 @@ public class KwikCli {
         catch (VersionNegotiationFailure e) {
             System.out.println("Client and server could not agree on a compatible QUIC version.");
         }
+        catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
     }
 
     private CommandLine getCommandLine(String[] rawArgs) {
