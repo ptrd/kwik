@@ -88,6 +88,7 @@ import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Acc
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.None;
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Requested;
 import static net.luminis.quic.util.Bytes.bytesToHex;
+import static net.luminis.tls.TlsConstants.SignatureScheme.*;
 
 
 /**
@@ -527,8 +528,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         try {
-            tlsEngine.startHandshake();
-        } catch (IOException e) {
+            List<TlsConstants.SignatureScheme> supportedSignatureAlgorithms = List.of(
+                    rsa_pss_rsae_sha256, rsa_pss_rsae_sha384, rsa_pss_rsae_sha512,
+                    ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512);
+            tlsEngine.startHandshake(TlsConstants.NamedGroup.secp256r1, supportedSignatureAlgorithms);
+        }
+        catch (IOException e) {
             // Will not happen, as our ClientMessageSender implementation will not throw.
         }
     }
