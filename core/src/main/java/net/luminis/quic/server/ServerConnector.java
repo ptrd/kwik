@@ -49,6 +49,7 @@ public interface ServerConnector {
 
         Builder withSocket(DatagramSocket socket);
 
+        @Deprecated
         Builder withCertificate(InputStream certificateFile, InputStream certificateKeyFile);
 
         Builder withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword);

@@ -364,6 +364,12 @@ public class ServerConnectorImpl implements ServerConnector {
             return this;
         }
 
+        /**
+         * @deprecated Use withKeyStore instead, which provides support for a broader range of certificate types
+         * @param certificateFile
+         * @param certificateKeyFile
+         * @return
+         */
         @Override
         public ServerConnector.Builder withCertificate(InputStream certificateFile, InputStream certificateKeyFile) {
             this.certificateFile = Objects.requireNonNull(certificateFile);

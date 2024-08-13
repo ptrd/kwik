@@ -172,11 +172,26 @@ In such cases, the `maxConcurrentUnidirectionalStreams` method should return the
 Once you have a proper implementations of `ApplicationProtocolConnectionFactory` and `ApplicationProtocolConnection`, 
 you can create a `ServerConnector` and register the `ApplicationProtocolConnectionFactory`. The `ServerConnector` listens 
 for new connections on a given port and handles them according to protocols that are registered on it. 
+
+The `ServerConnector` needs a server certificate and the corresponding private key for authentication. The preferred way
+to provide these, is via a Java `KeyStore` object. However, if your server certificate is of type RSA you can still use the
+(now deprecated) method that takes `FileInputStream`'s for both the certificate and the private key.
+
+It is not possible to create a Java KeyStore directly from a certificate file in PEM format, but there is a work-around
+using a .p12. For example, if your certificate is stored in PEM format in `cert.pem` and its corresponding private key in
+'key.pem', you can create a Java KeyStore file with
+
+    openssl pkcs12 -export -clcerts -in cert.pem -inkey key.pem -name servercert -out cert.p12
+    keytool -keystore cert.jks -importkeystore -srckeystore cert.p12 -srcstoretype PKCS12 -deststorepass secret -srcstorepass secret
+
+resulting in a KeyStore file named 'cert.jks', containing the given server certificate with alias `servercert` and `secret` 
+as the value for both the container and the key password.
+
 To create a `ServerConnector`, use the builder, e.g.
 
     ServerConnector serverConnector = ServerConnector.builder()
             .withPort(443)
-            .withCertificate(new FileInputStream("server.cert"), new FileInputStream("servercert.key"))
+            .withKeyStore(keyStore, "servercert", "secret".toCharArray())
             .withConfiguration(serverConnectionConfig)
             .withLogger(log)
             .build(); 
@@ -282,6 +297,11 @@ HTTP request.
 To run the demo web server, execute `net.luminis.quic.sample.SampleWebServer` with the following arguments:
 - certificate file
 - private key file
+- port number
+- www directory to serve
+or
+- keystore file containing (only) the server certificate and key
+- keystore password (which should match the key password)
 - port number
 - www directory to serve
 
