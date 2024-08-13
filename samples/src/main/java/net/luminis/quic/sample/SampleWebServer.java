@@ -30,17 +30,27 @@ import net.luminis.quic.server.ServerConnector;
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Simple sample HTTP3 Web server.
+ * For the HTTP/3 implementation, this server uses the Flupke plugin (or add-on) which is not part of the Kwik project.
+ * Because Kwik cannot depend compile time on Flupke, the Flupke plugin is loaded dynamically using reflection.
+ * If the Flupke plugin is not found, the server will exit.
+ *
+ * Do not interpret this as a recommended way to implement an HTTP/3 server.
+ * The reason for this sample is to have an easy way to test and debug the Kwik server implementation, without the need to
+ * make the round-trip to the Flupke project for every change.
+ * See the Flupke project for a better implementation of an HTTP/3 server that does not depend on reflection.
  */
 public class SampleWebServer {
 
     private static void usageAndExit() {
         System.err.println("Usage: [--noRetry] cert file, cert key file, port number, www dir");
+        System.err.println("   or: [--noRetry] key store file, key store (and key) password, port number, www dir");
         System.exit(1);
     }
 
@@ -73,16 +83,27 @@ public class SampleWebServer {
         log.logWarning(true);
         log.logInfo(true);
 
+        File certificateFile = null;
+        File certificateKeyFile = null;
+        KeyStore keyStore = null;
+        String keyStorePassword = null;
 
-        File certificateFile = new File(args.get(0));
-        if (!certificateFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(0));
-            System.exit(1);
+        if (new File(args.get(0)).exists() && new File(args.get(1)).exists()) {
+            certificateFile = new File(args.get(0));
+            certificateKeyFile = new File(args.get(1));
         }
-
-        File certificateKeyFile = new File(args.get(1));
-        if (!certificateKeyFile.exists()) {
-            System.err.println("Cannot open certificate file " + args.get(1));
+        else if (new File(args.get(0)).exists()) {
+            File keyStoreFile = new File(args.get(0));
+            keyStorePassword = args.get(1);
+            keyStore = KeyStore.getInstance(keyStoreFile, keyStorePassword.toCharArray());
+        }
+        else {
+            if (new File(args.get(1)).exists()) {
+                System.err.println("Certificate / Keystore file does not exist or is not readable.");
+            }
+            else {
+                System.err.println("Key file does not exist or is not readable.");
+            }
             System.exit(1);
         }
 
@@ -109,13 +130,22 @@ public class SampleWebServer {
                 .connectionIdLength(8)
                 .build();
 
-        ServerConnector serverConnector = ServerConnector.builder()
+        ServerConnector.Builder builder = ServerConnector.builder()
                 .withPort(port)
-                .withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile))
                 .withSupportedVersions(supportedVersions)
                 .withConfiguration(serverConnectionConfig)
-                .withLogger(log)
-                .build();
+                .withLogger(log);
+
+        if (certificateFile != null) {
+            builder.withCertificate(new FileInputStream(certificateFile), new FileInputStream(certificateKeyFile));
+        }
+        else {
+            String alias = keyStore.aliases().nextElement();
+            System.out.println("Using certificate with alias " + alias + " from keystore");
+            builder.withKeyStore(keyStore, alias, keyStorePassword.toCharArray());
+        }
+
+        ServerConnector serverConnector = builder.build();
 
         registerHttp3(serverConnector, wwwDir, supportedVersions, log);
 
@@ -135,7 +165,8 @@ public class SampleWebServer {
             log.info("Loading Flupke H3 server plugin");
 
             serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolConnectionFactory);
-        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        }
+        catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
             log.error("No H3 protocol: Flupke plugin not found.");
             System.exit(1);
         }
