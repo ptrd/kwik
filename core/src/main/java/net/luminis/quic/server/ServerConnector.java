@@ -54,6 +54,20 @@ public interface ServerConnector {
 
         Builder withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword);
 
+        /**
+         * Adds the given key store to the server connector. The key store should contain the server certificate or
+         * certificate chain and the corresponding private key. The key must be protected by the given password.
+         * The name of the EC-curve can be specified for cases where it cannot be automatically determined from the
+         * server certificate.
+         * @param keyStore
+         * @param certificateAlias
+         * @param privateKeyPassword
+         * @param ecCurve  The name of the EC-curve used by the public key in the certificate. If null, the curve is
+         *                 determined from the certificate (if possible). Valid values are "secp256r1", "secp384r1" and "secp521r1".
+         * @return
+         */
+        Builder withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword, String ecCurve);
+
         Builder withSupportedVersions(List<QuicConnection.QuicVersion> supportedVersions);
 
         Builder withSupportedVersion(QuicConnection.QuicVersion supportedVersion);

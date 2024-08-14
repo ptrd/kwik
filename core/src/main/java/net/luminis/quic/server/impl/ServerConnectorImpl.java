@@ -107,8 +107,8 @@ public class ServerConnectorImpl implements ServerConnector {
         this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, log);
     }
 
-    private ServerConnectorImpl(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword), supportedVersions, configuration, log);
+    private ServerConnectorImpl(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, String ecCurve, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, log);
     }
 
     private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
@@ -351,6 +351,7 @@ public class ServerConnectorImpl implements ServerConnector {
         private KeyStore keyStore;
         private String certificateAlias;
         private char[] privateKeyPassword;
+        private String ecCurve;
 
         @Override
         public ServerConnector.Builder withPort(int port) {
@@ -370,6 +371,7 @@ public class ServerConnectorImpl implements ServerConnector {
          * @param certificateKeyFile
          * @return
          */
+        @Deprecated
         @Override
         public ServerConnector.Builder withCertificate(InputStream certificateFile, InputStream certificateKeyFile) {
             this.certificateFile = Objects.requireNonNull(certificateFile);
@@ -382,6 +384,18 @@ public class ServerConnectorImpl implements ServerConnector {
             this.keyStore = Objects.requireNonNull(keyStore);
             this.certificateAlias = Objects.requireNonNull(certificateAlias);
             this.privateKeyPassword = Objects.requireNonNull(privateKeyPassword);
+            return this;
+        }
+
+        @Override
+        public ServerConnector.Builder withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword, String ecCurve) {
+            this.keyStore = Objects.requireNonNull(keyStore);
+            this.certificateAlias = Objects.requireNonNull(certificateAlias);
+            this.privateKeyPassword = Objects.requireNonNull(privateKeyPassword);
+            if (ecCurve != null && !List.of("secp256r1", "secp384r1", "secp521r1").contains(ecCurve)) {
+                throw new IllegalArgumentException("Invalid EC curve: " + ecCurve);
+            }
+            this.ecCurve = ecCurve;
             return this;
         }
 
@@ -422,7 +436,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 socket = new DatagramSocket(port);
             }
             if (keyStore != null) {
-                return new ServerConnectorImpl(socket, keyStore, certificateAlias, privateKeyPassword, supportedVersions, configuration, log);
+                return new ServerConnectorImpl(socket, keyStore, certificateAlias, privateKeyPassword, ecCurve, supportedVersions, configuration, log);
             }
             else {
                 return new ServerConnectorImpl(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);

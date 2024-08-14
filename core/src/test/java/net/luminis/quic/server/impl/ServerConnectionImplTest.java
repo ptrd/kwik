@@ -721,7 +721,7 @@ class ServerConnectionImplTest {
         private Supplier<TlsProtocolException> exceptionSupplier;
 
         public MockTlsServerEngine(X509Certificate serverCertificate, PrivateKey certificateKey, ServerMessageSender serverMessageSender, TlsStatusEventHandler tlsStatusHandler) {
-            super(serverCertificate, certificateKey, serverMessageSender, tlsStatusHandler, null);
+            super(serverCertificate, certificateKey, Collections.emptyList(), serverMessageSender, tlsStatusHandler, null);
         }
 
         @Override
