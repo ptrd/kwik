@@ -22,7 +22,11 @@ import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.DecryptionException;
+import net.luminis.quic.impl.InvalidPacketException;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 
 import java.nio.ByteBuffer;
@@ -65,7 +69,7 @@ public abstract class PacketParser {
         largestPacketNumber = new long[PnSpace.values().length];
     }
 
-    void parseAndProcessPackets(ByteBuffer data, PacketMetaData metaData) {
+    public void parseAndProcessPackets(ByteBuffer data, PacketMetaData metaData) {
         while (data.remaining() > 0) {
             try {
                 QuicPacket packet = parsePacket(data);

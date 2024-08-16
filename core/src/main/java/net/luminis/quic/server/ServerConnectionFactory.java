@@ -31,6 +31,7 @@ import net.luminis.tls.engine.TlsServerEngineFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
 import static net.luminis.quic.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
@@ -81,7 +82,7 @@ public class ServerConnectionFactory {
         return connection;
     }
 
-    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, PacketMetaData metaData) {
-        return new ServerConnectionThread(connection, initialPacket, metaData);
+    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, ByteBuffer data, PacketMetaData metaData) {
+        return new ServerConnectionThread(connection, initialPacket, data, metaData);
     }
 }

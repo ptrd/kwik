@@ -128,6 +128,28 @@ class ServerConnectionCandidateTest {
         assertThat(createdServerConnection).isNotNull();
     }
 
+    @Test
+    void whenDatagramContainsCoalescedPacketsConnectionProxyShouldReceivedRemainingData() throws Exception {
+        // Given
+        byte[] initialPacketBytes = TestUtils.createValidInitial(Version.getDefault());
+        byte[] scid = new byte[0];
+        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        byte[] datagramData = new byte[1500];  // Simulating a second 300-byte packet in the same datagram.
+        System.arraycopy(initialPacketBytes, 0, datagramData, 0, initialPacketBytes.length);
+        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
+        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), null);
+        testExecutor.check();
+
+        // Then
+        ByteBuffer remainingDatagramData = ((TestServerConnectionFactory) serverConnectionFactory).getRemainingDatagramData();
+        assertThat(remainingDatagramData.position()).isEqualTo(1200);
+        assertThat(remainingDatagramData.remaining()).isEqualTo(1500 - initialPacketBytes.length);
+    }
+
     static ServerConnectionConfig getDefaultConfiguration(int connectionIdLength) {
         return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
@@ -141,6 +163,8 @@ class ServerConnectionCandidateTest {
     }
 
     class TestServerConnectionFactory extends ServerConnectionFactory {
+        private ByteBuffer remainingDatagramData;
+
         public TestServerConnectionFactory(int connectionIdLength, DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory, boolean requireRetry, ApplicationProtocolRegistry applicationProtocolRegistry, int initalRtt, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
             super(serverSocket, tlsServerEngineFactory, getDefaultConfiguration(connectionIdLength), applicationProtocolRegistry, null, closeCallback, log);
         }
@@ -153,8 +177,13 @@ class ServerConnectionCandidateTest {
         }
 
         @Override
-        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, PacketMetaData metaData) {
+        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, ByteBuffer data, PacketMetaData metaData) {
+            remainingDatagramData = data;
             return new ServerConnectionThreadDummy(connection, initialPacket, metaData);
+        }
+
+        public ByteBuffer getRemainingDatagramData() {
+            return remainingDatagramData;
         }
     }
 }

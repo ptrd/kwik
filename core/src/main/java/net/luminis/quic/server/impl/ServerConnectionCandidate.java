@@ -113,10 +113,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
-                data.rewind();
                 createAndRegisterServerConnection(initialPacket, metaData, data);
             }
-        } catch (InvalidPacketException | DecryptionException cannotParsePacket) {
+        }
+        catch (InvalidPacketException | DecryptionException cannotParsePacket) {
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
             log.debug("Dropped invalid initial packet (no connection created)");
             // But still the (now useless) candidate should be removed from the connection registry.
@@ -137,14 +137,15 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
     }
 
-    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer data) {
+    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
         ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
 
         // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
-        ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, metaData);
-        connection.increaseAntiAmplificationLimit(data.remaining());
+        ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, datagramData, metaData);
+        int datagramSize = datagramData.limit();
+        connection.increaseAntiAmplificationLimit(datagramSize);
 
         ServerConnectionProxy wrappedConnection = wrapWithFilters(connectionProxy, connection::increaseAntiAmplificationLimit, connection::datagramProcessed);
 

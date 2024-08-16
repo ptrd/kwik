@@ -40,12 +40,14 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final BlockingQueue<ReceivedDatagram> queue;
     private final Thread connectionReceiverThread;
     private final InitialPacket firstInitialPacket;
+    private final ByteBuffer data;
     private final PacketMetaData firstInitialPacketMetaData;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, PacketMetaData initialPacketMetaData) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData) {
         this.serverConnection = serverConnection;
         this.firstInitialPacket = firstInitialPacket;
+        this.data = remainingDatagramData;
         this.firstInitialPacketMetaData = initialPacketMetaData;
 
         queue = new LinkedBlockingQueue<>();
@@ -79,7 +81,12 @@ public class ServerConnectionThread implements ServerConnectionProxy {
             if (firstInitialPacket != null) {
                 serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
             }
+
             DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
+
+            if (data.hasRemaining()) {
+                datagramProcessingChain.processDatagram(data.slice(), firstInitialPacketMetaData);
+            }
 
             while (! connectionReceiverThread.isInterrupted()) {
                 ReceivedDatagram datagram = queue.take();
