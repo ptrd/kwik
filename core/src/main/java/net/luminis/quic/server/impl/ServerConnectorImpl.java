@@ -168,7 +168,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 process(rawPacket);
             }
             catch (InterruptedException e) {
-                log.error("receiver interrupted (ignoring)");
+                log.error("receiver loop interrupted and terminated");
                 break;
             }
             catch (Exception runtimeError) {
