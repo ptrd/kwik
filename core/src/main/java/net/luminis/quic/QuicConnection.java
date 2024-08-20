@@ -83,6 +83,13 @@ public interface QuicConnection {
      */
     void setDefaultBidirectionalStreamReceiveBufferSize(long size);
 
+    /**
+     * Creates a uni-directional or bidirectional stream. A uni-directional stream can only be used to send data to the peer.
+     * If there are not enough stream credits available to create a stream, the method will block until credits are
+     * available.
+     * @param bidirectional  whether the stream should be bidirectional
+     * @return the created stream
+     */
     QuicStream createStream(boolean bidirectional);
 
     void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
