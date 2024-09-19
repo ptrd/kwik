@@ -21,14 +21,14 @@ package net.luminis.quic.stream;
 import net.luminis.quic.ConnectionConfig;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.common.EncryptionLevel;
-import net.luminis.quic.impl.QuicConnectionImpl;
-import net.luminis.quic.impl.Role;
-import net.luminis.quic.impl.TransportError;
 import net.luminis.quic.frame.MaxDataFrame;
 import net.luminis.quic.frame.MaxStreamsFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.test.FieldReader;
@@ -360,6 +360,39 @@ class StreamManagerTest {
         assertThatThrownBy(() ->
                 // When
                 streamManager.process(new StreamFrame(next * 4 + 1, new byte[0], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(STREAM_LIMIT_ERROR);
+    }
+
+    @Test
+    void whenStreamLimitIsReachedForServerInitiatedUnidirectionalCreateStreamShouldLeadToTransportErrorException() throws Exception {
+        // Given
+        int initial_stream_id_for_type = 3; // server initiated unidirectional stream
+        int acceptedStreamId = 9 * 4 + initial_stream_id_for_type;
+        streamManager.process(new StreamFrame(acceptedStreamId, new byte[0], false));
+
+        int offendingStreamId = 10 * 4 + initial_stream_id_for_type;
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(offendingStreamId, new byte[0], false)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(STREAM_LIMIT_ERROR);
+    }
+
+    @Test
+    void whenStreamLimitIsReachedForClientInitiatedUnidirectionalCreateStreamShouldLeadToTransportErrorException() throws Exception {
+        // Given
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig);
+        int initial_stream_id_for_type = 2; // client initiated unidirectional stream
+        int acceptedStreamId = 9 * 4 + initial_stream_id_for_type;
+        streamManager.process(new StreamFrame(acceptedStreamId, new byte[0], false));
+
+        int offendingStreamId = 10 * 4 + initial_stream_id_for_type;
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(new StreamFrame(offendingStreamId, new byte[0], false)))
                 // Then
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(STREAM_LIMIT_ERROR);
