@@ -144,7 +144,7 @@ public class StreamManager {
             maxStreamId += 2;
         }
         //  | 0x3  | Server-Initiated, Unidirectional |
-        if (peerRole == Role.Client && !bidirectional) {
+        if (peerRole == Role.Server && !bidirectional) {
             maxStreamId += 3;
         }
         return (maxStreamId > 0)? maxStreamId: Integer.MAX_VALUE;  // < 0 means integer overflow, to "limit" to max int.
