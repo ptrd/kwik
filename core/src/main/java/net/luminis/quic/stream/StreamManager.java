@@ -130,23 +130,27 @@ public class StreamManager {
             return 0;
         }
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-4.6
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-controlling-concurrency
         // "Only streams with a stream ID less than (max_stream * 4 + initial_stream_id_for_type) can be opened; "
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-2.1
+        int initialStreamIdForType = Integer.MIN_VALUE;
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-stream-types-and-identifier
         //  | 0x0  | Client-Initiated, Bidirectional  |
-        int maxStreamId = maxStreams * 4;
+        if (peerRole == Role.Client && bidirectional) {
+            initialStreamIdForType = 0;
+        }
         //  | 0x1  | Server-Initiated, Bidirectional  |
         if (peerRole == Role.Server && bidirectional) {
-            maxStreamId += 1;
+            initialStreamIdForType = 1;
         }
         //  | 0x2  | Client-Initiated, Unidirectional |
         if (peerRole == Role.Client && !bidirectional) {
-            maxStreamId += 2;
+            initialStreamIdForType = 2;
         }
         //  | 0x3  | Server-Initiated, Unidirectional |
         if (peerRole == Role.Server && !bidirectional) {
-            maxStreamId += 3;
+            initialStreamIdForType = 3;
         }
+        int maxStreamId = maxStreams * 4 + initialStreamIdForType;
         return (maxStreamId > 0)? maxStreamId: Integer.MAX_VALUE;  // < 0 means integer overflow, to "limit" to max int.
     }
 
