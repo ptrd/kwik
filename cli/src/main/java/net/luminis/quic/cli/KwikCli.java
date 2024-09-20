@@ -28,6 +28,7 @@ import net.luminis.quic.impl.QuicSessionTicketImpl;
 import net.luminis.quic.impl.VersionNegotiationFailure;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.tls.TlsConstants;
 import org.apache.commons.cli.*;
@@ -334,6 +335,9 @@ public class KwikCli {
             if (logArg.contains("D")) {
                 logger.logDebug(true);
             }
+        }
+        else {
+            builder.logger(new NullLogger());
         }
 
         if (cmd.hasOption("T")) {
