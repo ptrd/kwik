@@ -22,14 +22,14 @@ import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.IdleTimer;
-import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.impl.QuicConnectionImpl;
 import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
@@ -54,7 +54,10 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -99,7 +102,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final Thread senderThread;
     private final boolean[] discardedSpaces = new boolean[PnSpace.values().length];
     private ConnectionSecrets connectionSecrets;
-    private final Object condition = new Object();
+    private final ReentrantLock sendLock;
+    private final Condition somethingToSend;
     private boolean signalled;
 
     // Using thread-confinement strategy for concurrency control: only the sender thread created in this class accesses these members
@@ -147,6 +151,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         connection.addAckFrameReceivedListener(recoveryManager);
 
         idleTimer = connection.getIdleTimer();
+
+        sendLock = new ReentrantLock();
+        somethingToSend = sendLock.newCondition();
 
         senderThread = new Thread(() -> sendLoop(), "sender" + (!id.isBlank()? "-" + id: ""));
         senderThread.setDaemon(true);
@@ -309,20 +316,23 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
     }
 
+
     void doLoopIteration() throws IOException {
-        synchronized (condition) {
-            try {
-                if (! signalled) {
-                    long timeout = determineMaximumWaitTime();
-                    if (timeout > 0) {
-                        condition.wait(timeout);
-                    }
+        sendLock.lock();
+        try {
+            if (!signalled) {
+                long timeout = determineMaximumWaitTime();
+                if (timeout > 0) {
+                    somethingToSend.await(timeout, TimeUnit.MILLISECONDS);
                 }
-                signalled = false;
             }
-            catch (InterruptedException e) {
-                log.debug("Sender thread is interrupted; probably shutting down? " + running);
-            }
+            signalled = false;
+        }
+        catch (InterruptedException e) {
+            log.debug("Sender thread is interrupted; probably shutting down? " + running);
+        }
+        finally {
+            sendLock.unlock();
         }
 
         // Determine whether this loop must be ended _before_ composing packets, to avoid race conditions with
@@ -346,9 +356,13 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     private void wakeUpSenderLoop() {
-        synchronized (condition) {
+        sendLock.lock();
+        try {
             signalled = true;
-            condition.notify();
+            somethingToSend.signal();
+        }
+        finally {
+            sendLock.unlock();
         }
     }
 
