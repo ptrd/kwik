@@ -38,8 +38,11 @@ import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
+import java.security.cert.CertificateException;
+import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -111,7 +114,7 @@ public class ServerConnectorImpl implements ServerConnector {
         this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, log);
     }
 
-    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
+    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
@@ -424,7 +427,7 @@ public class ServerConnectorImpl implements ServerConnector {
         }
 
         @Override
-        public ServerConnector build() throws Exception {
+        public ServerConnector build() throws SocketException, CertificateException {
             if (port == 0) {
                 throw new IllegalStateException("port number not set");
             }
@@ -435,11 +438,24 @@ public class ServerConnectorImpl implements ServerConnector {
             if (socket == null) {
                 socket = new DatagramSocket(port);
             }
-            if (keyStore != null) {
-                return new ServerConnectorImpl(socket, keyStore, certificateAlias, privateKeyPassword, ecCurve, supportedVersions, configuration, log);
+
+            try {
+                TlsServerEngineFactory tlsEngineFactory;
+                if (keyStore != null) {
+                    tlsEngineFactory = new TlsServerEngineFactory(keyStore, certificateAlias, privateKeyPassword, ecCurve);
+                }
+                else {
+                    tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
+                }
+                return new ServerConnectorImpl(socket, tlsEngineFactory, supportedVersions, configuration, log);
             }
-            else {
-                return new ServerConnectorImpl(socket, certificateFile, certificateKeyFile, supportedVersions, configuration, log);
+            catch (IOException e) {
+                // Impossible, exception is never thrown by TlsServerEngineFactory constructor.
+                throw new RuntimeException(e);
+            }
+            catch (InvalidKeySpecException e) {
+                // Impossible, exception is never thrown by TlsServerEngineFactory constructor.
+                throw new RuntimeException(e);
             }
         }
     }

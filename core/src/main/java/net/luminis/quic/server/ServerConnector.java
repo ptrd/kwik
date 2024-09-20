@@ -24,7 +24,9 @@ import net.luminis.quic.server.impl.ServerConnectorImpl;
 
 import java.io.InputStream;
 import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.security.KeyStore;
+import java.security.cert.CertificateException;
 import java.util.List;
 import java.util.Set;
 
@@ -76,6 +78,15 @@ public interface ServerConnector {
 
         Builder withLogger(Logger log);
 
-        ServerConnector build() throws Exception;
+        /**
+         * Builds the server connector.
+         * @return
+         * @throws SocketException       if the connector could not create a DatagramSocket or could not bind it to the given port
+         * @throws CertificateException  if the certificate's signature algorithm is not supported, or the EC-curve cannot be determined.
+         * In the latter case, use the
+         * {@link #withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword, String ecCurve)}
+         * method to explicitly specify the EC-curve.
+         */
+        ServerConnector build() throws SocketException, CertificateException;
     }
 }
