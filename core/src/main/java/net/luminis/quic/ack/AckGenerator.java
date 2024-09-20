@@ -18,10 +18,10 @@
  */
 package net.luminis.quic.ack;
 
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.Range;
-import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
@@ -30,6 +30,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 /**
@@ -46,6 +47,7 @@ public class AckGenerator {
     private Instant newPacketsToAcknowlegdeSince;
     private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
     private int acksNotSend = 0;
+    private ReentrantLock lock = new ReentrantLock();
 
     public AckGenerator(PnSpace pnSpace, Sender sender) {
         this(Clock.systemUTC(), pnSpace, sender);
@@ -57,41 +59,59 @@ public class AckGenerator {
         this.sender = sender;
     }
 
-    public synchronized boolean hasAckToSend() {
-        return !rangesToAcknowledge.isEmpty();
+    public boolean hasAckToSend() {
+        lock.lock();
+        try {
+            return !rangesToAcknowledge.isEmpty();
+        }
+        finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized boolean hasNewAckToSend() {
-        return newPacketsToAcknowledge;
+    public boolean hasNewAckToSend() {
+        lock.lock();
+        try {
+            return newPacketsToAcknowledge;
+        }
+        finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized void packetReceived(QuicPacket packet) {
-        if (packet.canBeAcked()) {
-            Range.extendRangeList(rangesToAcknowledge, packet.getPacketNumber());
-            if (packet.isAckEliciting()) {
-                newPacketsToAcknowledge = true;
-                if (newPacketsToAcknowlegdeSince == null) {
-                    newPacketsToAcknowlegdeSince = clock.instant();
-                }
-                if (pnSpace != PnSpace.App) {
-                    sender.sendAck(pnSpace, 0);
-                }
-                else {
-                    // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2.2
-                    // "A receiver SHOULD send an ACK frame after receiving at least two ack-eliciting packets."
-                    int ackFrequency = 2;
-
-                    acksNotSend++;
-                    if (acksNotSend >= ackFrequency) {
+    public void packetReceived(QuicPacket packet) {
+        lock.lock();
+        try {
+            if (packet.canBeAcked()) {
+                Range.extendRangeList(rangesToAcknowledge, packet.getPacketNumber());
+                if (packet.isAckEliciting()) {
+                    newPacketsToAcknowledge = true;
+                    if (newPacketsToAcknowlegdeSince == null) {
+                        newPacketsToAcknowlegdeSince = clock.instant();
+                    }
+                    if (pnSpace != PnSpace.App) {
                         sender.sendAck(pnSpace, 0);
-                        acksNotSend = 0;
                     }
                     else {
-                        // Default max ack delay is 25, use 20 to give some slack for timing issues
-                        sender.sendAck(pnSpace, 20);
+                        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-13.2.2
+                        // "A receiver SHOULD send an ACK frame after receiving at least two ack-eliciting packets."
+                        int ackFrequency = 2;
+
+                        acksNotSend++;
+                        if (acksNotSend >= ackFrequency) {
+                            sender.sendAck(pnSpace, 0);
+                            acksNotSend = 0;
+                        }
+                        else {
+                            // Default max ack delay is 25, use 20 to give some slack for timing issues
+                            sender.sendAck(pnSpace, 20);
+                        }
                     }
                 }
             }
+        }
+        finally {
+            lock.unlock();
         }
     }
 
@@ -101,20 +121,26 @@ public class AckGenerator {
      *
      * @param receivedAck
      */
-    public synchronized void process(QuicFrame receivedAck) {
-        // Find max packet number that had an ack sent with it...
-        Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers()
-                .filter(pn -> ackSentWithPacket.containsKey(pn))
-                .findFirst();
+    public void process(QuicFrame receivedAck) {
+        lock.lock();
+        try {
+            // Find max packet number that had an ack sent with it...
+            Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers()
+                    .filter(pn -> ackSentWithPacket.containsKey(pn))
+                    .findFirst();
 
-        if (largestWithAck.isPresent()) {
-            // ... and for that max pn, all packets that where acked by it don't need to be acked again.
-            AckFrame latestAcknowledgedAck = ackSentWithPacket.get(largestWithAck.get());
-            removeAcknowlegdedRanges(rangesToAcknowledge, latestAcknowledgedAck);
+            if (largestWithAck.isPresent()) {
+                // ... and for that max pn, all packets that where acked by it don't need to be acked again.
+                AckFrame latestAcknowledgedAck = ackSentWithPacket.get(largestWithAck.get());
+                removeAcknowlegdedRanges(rangesToAcknowledge, latestAcknowledgedAck);
 
-            // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
-            // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
-            ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
+                // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
+                // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
+                ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
+            }
+        }
+        finally {
+            lock.unlock();
         }
     }
 
@@ -166,39 +192,57 @@ public class AckGenerator {
      * @param packetNumber
      * @return
      */
-    public synchronized Optional<AckFrame> generateAckForPacket(long packetNumber) {
-        Optional<AckFrame> ackFrame = generateAck();
-        if (ackFrame.isPresent()) {
-            registerAckSendWithPacket(ackFrame.get(), packetNumber);
+    public Optional<AckFrame> generateAckForPacket(long packetNumber) {
+        lock.lock();
+        try {
+            Optional<AckFrame> ackFrame = generateAck();
+            if (ackFrame.isPresent()) {
+                registerAckSendWithPacket(ackFrame.get(), packetNumber);
+            }
+            return ackFrame;
         }
-        return ackFrame;
+        finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized Optional<AckFrame> generateAck() {
-        int delay = 0;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-13.2.1
-        // "An endpoint MUST acknowledge all ack-eliciting Initial and Handshake packets immediately"
-        if (newPacketsToAcknowlegdeSince != null && pnSpace == PnSpace.App) {
-            delay = (int) Duration.between(newPacketsToAcknowlegdeSince, clock.instant()).toMillis();
-            if (delay < 0) {
-                // WTF. This should be impossible, but it sometimes happen in the interop tests. Maybe related to docker?
-                delay = 0;
+    public Optional<AckFrame> generateAck() {
+        lock.lock();
+        try {
+
+            int delay = 0;
+            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-13.2.1
+            // "An endpoint MUST acknowledge all ack-eliciting Initial and Handshake packets immediately"
+            if (newPacketsToAcknowlegdeSince != null && pnSpace == PnSpace.App) {
+                delay = (int) Duration.between(newPacketsToAcknowlegdeSince, clock.instant()).toMillis();
+                if (delay < 0) {
+                    // WTF. This should be impossible, but it sometimes happen in the interop tests. Maybe related to docker?
+                    delay = 0;
+                }
+            }
+            if (!rangesToAcknowledge.isEmpty()) {
+                // Range list must not be modified during frame initialization (guaranteed by this method being sync'd)
+                return Optional.of(new AckFrame(quicVersion, this.rangesToAcknowledge, delay));
+            }
+            else {
+                return Optional.empty();
             }
         }
-        if (!rangesToAcknowledge.isEmpty()) {
-            // Range list must not be modified during frame initialization (guaranteed by this method being sync'd)
-            return Optional.of(new AckFrame(quicVersion, this.rangesToAcknowledge, delay));
-        }
-        else {
-            return Optional.empty();
+        finally {
+            lock.unlock();
         }
     }
 
-    public synchronized void registerAckSendWithPacket(AckFrame ackFrame, long packetNumber) {
-        ackSentWithPacket.put(packetNumber, ackFrame);
-        newPacketsToAcknowledge = false;
-        newPacketsToAcknowlegdeSince = null;
-        acksNotSend = 0;
+    public void registerAckSendWithPacket(AckFrame ackFrame, long packetNumber) {
+        lock.lock();
+        try {
+            ackSentWithPacket.put(packetNumber, ackFrame);
+            newPacketsToAcknowledge = false;
+            newPacketsToAcknowlegdeSince = null;
+            acksNotSend = 0;
+        }
+        finally {
+            lock.unlock();
+        }
     }
 }
-
