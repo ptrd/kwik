@@ -21,8 +21,7 @@ package net.luminis.quic;
 import java.time.Duration;
 import java.util.function.Consumer;
 
-
-public interface QuicConnection {
+public interface QuicConnection extends AutoCloseable {
 
     enum QuicVersion {
         V1,

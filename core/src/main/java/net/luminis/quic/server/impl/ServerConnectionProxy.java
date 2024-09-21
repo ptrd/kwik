@@ -22,7 +22,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-
 public interface ServerConnectionProxy {
 
     byte[] getOriginalDestinationConnectionId();

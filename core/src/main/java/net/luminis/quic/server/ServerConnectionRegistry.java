@@ -20,7 +20,7 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.server.impl.ServerConnectionProxy;
 
-public interface ServerConnectionRegistry {
+public interface ServerConnectionRegistry extends AutoCloseable {
 
     void registerConnection(ServerConnectionProxy connection, byte[] connectionId);
 
