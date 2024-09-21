@@ -33,7 +33,7 @@ import java.util.Set;
 /**
  * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
-public interface ServerConnector {
+public interface ServerConnector extends AutoCloseable {
 
     void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory);
 

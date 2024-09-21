@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -323,12 +324,28 @@ public class ServerConnectorImpl implements ServerConnector {
             }
         }
     }
-
+    
+    @Override
+    public void close() throws InterruptedException {
+        sharedScheduledExecutor.shutdown();
+        sharedExecutor.shutdown();
+        
+        connectionRegistry.close();
+        serverSocket.close();
+        
+        if (!sharedScheduledExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+            sharedScheduledExecutor.shutdownNow();
+        }
+        if (!sharedExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+            sharedExecutor.shutdownNow();
+        }
+    }
+    
     private void closed(ServerConnectionImpl connection) {
         ServerConnectionProxy removedConnection = connectionRegistry.removeConnection(connection);
         removedConnection.dispose();
     }
-
+    
     private class ServerConnectorContext implements Context {
 
         @Override

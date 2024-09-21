@@ -99,7 +99,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     }
 
     /**
-     * Logs the entire connection table. For debugging purposed only.
+     * Logs the entire connection table. For debugging purposes only.
      */
     void logConnectionTable() {
         log.info("Connection table: \n" +
@@ -113,5 +113,12 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
                         .map(e -> e.getKey() + "->" + e.getValue())
                         .collect(Collectors.joining("\n")));
 
+    }
+    
+    @Override
+    public void close() {
+        for (ServerConnectionProxy proxy : currentConnections.values()) {
+            proxy.dispose();
+        }
     }
 }

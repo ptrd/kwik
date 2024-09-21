@@ -133,6 +133,9 @@ public class ConnectionIdManager {
 
             @Override
             public void deregisterConnectionId(byte[] connectionId) {}
+            
+            @Override
+            public void close() {}
         };
     }
 
