@@ -293,6 +293,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+    }
+
+    @Override
     public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
         flowController.process(maxDataFrame);
     }

@@ -75,6 +75,11 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
+    public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+        jsonGenerator.writeStartObject().write("frame_type", "datagram").writeEnd();
+    }
+
+    @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
         jsonGenerator.writeStartObject().write("frame_type", "handshake_done").writeEnd();
     }
