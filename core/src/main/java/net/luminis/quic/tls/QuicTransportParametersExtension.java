@@ -45,6 +45,9 @@ import static net.luminis.quic.impl.Role.Server;
  */
 public class QuicTransportParametersExtension extends Extension {
 
+    // https://www.rfc-editor.org/rfc/rfc9221.html#name-quic-transport-parameter
+    public static final int MAX_DATAGRAM_FRAME_SIZE = 0x20;
+
     private static final int MINIMUM_EXTENSION_LENGTH = 2;
     public static final int CODEPOINT_IETFDRAFT = 0xffa5;
     public static final int CODEPOINT_V1 = 0x39;
@@ -207,6 +210,10 @@ public class QuicTransportParametersExtension extends Extension {
             addTransportParameter(buffer, version_information, data.array());
         }
 
+        if (params.getMaxDatagramFrameSize() > 0) {
+            addTransportParameter(buffer, MAX_DATAGRAM_FRAME_SIZE, params.getMaxDatagramFrameSize());
+        }
+
         int length = buffer.position();
         buffer.limit(length);
 
@@ -350,6 +357,11 @@ public class QuicTransportParametersExtension extends Extension {
                 otherVersions.add(Version.parse(otherVersion));
             }
             params.setVersionInformation(new TransportParameters.VersionInformation(Version.parse(chosenVersion), otherVersions));
+        }
+        else if (parameterId == MAX_DATAGRAM_FRAME_SIZE) {
+            long datagramMaxFrameSize = VariableLengthInteger.parseLong(buffer);
+            log.debug("- max datagram frame size: " + datagramMaxFrameSize);
+            params.setMaxDatagramFrameSize(datagramMaxFrameSize);
         }
         else {
             String extension = "";

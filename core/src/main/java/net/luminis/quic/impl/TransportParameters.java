@@ -45,6 +45,8 @@ public class TransportParameters {
     private int maxUdpPayloadSize;
     private byte[] statelessResetToken;
     private VersionInformation versionInformation;
+    // https://www.rfc-editor.org/rfc/rfc9221.html#name-transport-parameter
+    private long maxDatagramFrameSize;
 
     public TransportParameters() {
         setDefaults();
@@ -73,6 +75,10 @@ public class TransportParameters {
         maxAckDelay = 25;
         // "If this transport parameter is absent, a default of 2 is assumed."
         activeConnectionIdLimit = 2;
+
+        // https://www.rfc-editor.org/rfc/rfc9221.html#name-transport-parameter
+        // "The default for this parameter is 0, which indicates that the endpoint does not support DATAGRAM frames."
+        maxDatagramFrameSize = 0;
     }
 
     public byte[] getOriginalDestinationConnectionId() {
@@ -231,7 +237,8 @@ public class TransportParameters {
                 "\n- disable migration\t\t\t" + disableMigration +
                 "\n- active connection id limit\t\t" + activeConnectionIdLimit +
                 "\n- initial source connection id\t\t" + formatCid(initialSourceConnectionId) +
-                "\n- retry source connection id\t\t" + formatCid(retrySourceConnectionId);
+                "\n- retry source connection id\t\t" + formatCid(retrySourceConnectionId) +
+                "\n- max datagram frame size\t\t" + maxDatagramFrameSize;
     }
 
     private String formatCid(byte[] data) {
@@ -249,6 +256,14 @@ public class TransportParameters {
 
     public void setVersionInformation(VersionInformation versionInfo) {
         versionInformation = versionInfo;
+    }
+
+    public long getMaxDatagramFrameSize() {
+        return maxDatagramFrameSize;
+    }
+
+    public void setMaxDatagramFrameSize(long maxDatagramFrameSize) {
+        this.maxDatagramFrameSize = maxDatagramFrameSize;
     }
 
     public static class PreferredAddress {

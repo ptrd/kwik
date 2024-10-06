@@ -270,4 +270,13 @@ class QuicTransportParametersExtensionTest {
         assertThat(versionInfo.getChosenVersion()).isEqualTo(Version.QUIC_version_1);
         assertThat(versionInfo.getOtherVersions()).containsExactly(Version.QUIC_version_2, Version.QUIC_version_1);
     }
+
+    @Test
+    void parseMaxDatagramFrameSize() throws Exception {
+        //                                           ext size  id sz value
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 04     20 02 45 dc".replaceAll(" ", ""));
+        var transportParametersExtension = new QuicTransportParametersExtension(Version.QUIC_version_1);
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Client, mock(Logger.class));
+        assertThat(transportParametersExtension.getTransportParameters().getMaxDatagramFrameSize()).isEqualTo(1500);
+    }
 }
