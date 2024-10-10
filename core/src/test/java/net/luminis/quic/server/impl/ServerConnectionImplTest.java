@@ -251,6 +251,42 @@ class ServerConnectionImplTest {
         QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
         assertThat(tpExtension.getTransportParameters().getDisableMigration()).isTrue();
     }
+
+    @Test
+    void whenDatagramExtensionIsEnabledTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableDatagramExtension();
+
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledAndClientHasEnabledItTooTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters clientTransportParameters = createDefaultTransportParameters();
+        clientTransportParameters.setMaxDatagramFrameSize(1234);
+
+        // When
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension(clientTransportParameters));
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
     //endregion
 
     //region compatible version negotiation
@@ -694,6 +730,10 @@ class ServerConnectionImplTest {
 
     private QuicTransportParametersExtension createTransportParametersExtension() {
         return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters(), Role.Client);
+    }
+
+    private QuicTransportParametersExtension createTransportParametersExtension(TransportParameters transportParameters) {
+        return new QuicTransportParametersExtension(Version.getDefault(), transportParameters, Role.Client);
     }
 
     private QuicTransportParametersExtension createTransportParametersExtension(TransportParameters.VersionInformation versionInfo) {

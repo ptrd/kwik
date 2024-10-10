@@ -61,6 +61,7 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), testExecutor);
     }
 
+    //region close
     @Test
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
@@ -207,6 +208,83 @@ class QuicConnectionImplTest {
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
     }
+    //endregion
+
+    //region RFC 9221 Datagram Extension
+    @Test
+    void whenDatagramExtensionIsRequiredReceivingTransportParameterShouldEnableIt() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isTrue();
+        assertThat(connection.canReceiveDatagram()).isTrue();
+        assertThat(connection.isDatagramExtensionEnabled()).isTrue();
+    }
+
+    @Test
+    void whenDatagramExtensionIsRequiredNotReceivingTransportParameterShouldNotEnableIt() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isFalse();
+        assertThat(connection.canReceiveDatagram()).isTrue();
+        assertThat(connection.isDatagramExtensionEnabled()).isFalse();
+    }
+
+    @Test
+    void whenDatagramExtensionIsNotRequiredReceivingTransportParameterShouldNotEnableIt() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isFalse();
+        assertThat(connection.canReceiveDatagram()).isFalse();
+        assertThat(connection.isDatagramExtensionEnabled()).isFalse();
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledMaxDatagramFrameSizeShouldHaveNonZeroValue() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledMaxDatagramFrameIsMaximizedTo65535() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(4294967296L);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.getMaxDatagramFrameSize()).isEqualTo(65535);
+    }
+    //endregion
 
     //region helper methods
     private PacketMetaData metaDataForNow() {

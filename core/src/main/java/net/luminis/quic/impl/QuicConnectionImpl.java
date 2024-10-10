@@ -24,9 +24,9 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.Statistics;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.frame.*;
@@ -88,6 +88,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    protected enum DatagramExtensionStatus {
+        Disabled,
+        Enable,
+        Enabled,
+        EnabledReceiveOnly
+    }
+
     public enum VersionNegotiationStatus {
         NotStarted,
         VersionChangeUnconfirmed,
@@ -124,6 +131,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     private RateLimiter closeFramesSendRateLimiter;
     private final ScheduledExecutorService scheduler;
+
+    // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
+    protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
+    private volatile int maxDatagramFrameSize;
 
 
     protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
@@ -237,6 +248,41 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
 
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
+
+        updateDatagramExtensionStatus(peerTransportParams);
+    }
+
+    private void updateDatagramExtensionStatus(TransportParameters peerTransportParams) {
+        if (peerTransportParams.getMaxDatagramFrameSize() > 0) {
+            if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+                datagramExtensionStatus = DatagramExtensionStatus.Enabled;
+                maxDatagramFrameSize = (int) Long.min(65535, peerTransportParams.getMaxDatagramFrameSize());
+            }
+        }
+        else if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+            datagramExtensionStatus = DatagramExtensionStatus.EnabledReceiveOnly;
+        }
+    }
+
+    public boolean canSendDatagram() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
+    }
+
+    public boolean canReceiveDatagram() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled || datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly;
+    }
+
+    /**
+     * Returns whether the datagram extension is enabled for this connection, which means that the peer has indicated
+     * support for the datagram extension and the local endpoint has enabled it ("can send", "can receive").
+     * @return
+     */
+    public boolean isDatagramExtensionEnabled() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
+    }
+
+    public int getMaxDatagramFrameSize() {
+        return maxDatagramFrameSize;
     }
 
     @Override
@@ -743,6 +789,15 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {
         this.recoveryManager = recoveryManager;
+    }
+
+    public void enableDatagramExtension() {
+        if (datagramExtensionStatus != DatagramExtensionStatus.Disabled) {
+            throw new IllegalStateException("Datagram extension can only be disable once and before connection is established.");
+        }
+        if (datagramExtensionStatus == DatagramExtensionStatus.Disabled) {
+            datagramExtensionStatus = DatagramExtensionStatus.Enable;
+        }
     }
 
     protected class CheckDestinationFilter extends BasePacketFilter {

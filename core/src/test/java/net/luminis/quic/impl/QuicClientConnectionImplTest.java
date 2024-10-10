@@ -601,6 +601,18 @@ class QuicClientConnectionImplTest {
         assertThatThrownBy(() -> connection.setDefaultBidirectionalStreamReceiveBufferSize(3_500_000))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void whenDatagramExtensionIsEnabledTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableDatagramExtension();
+
+        // When
+        TransportParameters transportParameters = connection.initTransportParameters();
+
+        // Then
+        assertThat(transportParameters.getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
     //endregion
 
     //region helper methods

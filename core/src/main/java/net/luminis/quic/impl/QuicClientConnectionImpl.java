@@ -320,6 +320,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             throw new IllegalArgumentException("maxUdpPayloadSize must be set");
         }
+
+        if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+            parameters.setMaxDatagramFrameSize(65535);
+        }
+
         return parameters;
     }
 

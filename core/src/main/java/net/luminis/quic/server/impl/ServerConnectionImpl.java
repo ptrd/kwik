@@ -392,6 +392,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         parameters.setInitialMaxData(configuration.maxConnectionBufferSize());
         parameters.setInitialMaxStreamsBidi(configuration.maxOpenPeerInitiatedBidirectionalStreams());
         parameters.setInitialMaxStreamsUni(configuration.maxOpenPeerInitiatedUnidirectionalStreams());
+        if (datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly || datagramExtensionStatus == DatagramExtensionStatus.Enabled) {
+            parameters.setMaxDatagramFrameSize(65535);
+        }
+
         return parameters;
     }
 
