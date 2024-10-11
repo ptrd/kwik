@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.common.EncryptionLevel.App;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class QuicConnectionImplTest {
@@ -284,6 +285,54 @@ class QuicConnectionImplTest {
         // Then
         assertThat(connection.getMaxDatagramFrameSize()).isEqualTo(65535);
     }
+
+    @Test
+    void smallDatagramShouldBeSent() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        // When
+        connection.sendDatagram(new byte[16]);
+
+        // Then
+        verify(sender).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void emptyDatagramShouldBeSent() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        // When
+        connection.sendDatagram(new byte[0]);
+
+        // Then
+        verify(sender).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenDatagramIsLargerThanMaxSendingDatagramShouldBeRejected() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.sendDatagram(new byte[1252]))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenDatagramIsLargerThanMaxAllowedByPeerSendingShouldBeRejected() {
+        // Given
+        datagramExtensionIsEnabled(1000);
+
+        assertThatThrownBy(() ->
+                // When
+                connection.sendDatagram(new byte[1001]))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
     //endregion
 
     //region helper methods
@@ -294,6 +343,17 @@ class QuicConnectionImplTest {
 
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
         return connection.new ClosingOrDrainingFilter(connection, null);
+    }
+
+    private void datagramExtensionIsEnabled() {
+        datagramExtensionIsEnabled(65535);
+    }
+
+    private void datagramExtensionIsEnabled(int maxDatagramFrameSize) {
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(maxDatagramFrameSize);
+        connection.processCommonTransportParameters(transportParameters);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {

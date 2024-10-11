@@ -68,7 +68,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.quic.util.Bytes.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor, PacketFilter {
+public abstract class QuicConnectionImpl implements QuicConnection, DatagramExtension, PacketProcessor, FrameProcessor, PacketFilter {
 
     public enum Status {
         Created,
@@ -193,6 +193,27 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void sendDatagram(byte[] data) {
+        if (canSendDatagram()) {
+            if (data.length > maxDatagramDataSize()) {
+                throw new IllegalArgumentException("Data too large for a single datagram frame");
+            }
+            send(new DatagramFrame(data), f -> {}, true);
+        }
+        else {
+            throw new IllegalStateException("Datagram extension is not enabled" +
+                    (datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly? " for sending.":"."));
+        }
+    }
+
+    @Override
+    public int maxDatagramDataSize() {
+        int maxShortHeaderPacketOverhead = 1 + getDestinationConnectionId().length + 4;
+        int maxEffectiveDatagramFrameSize = Integer.min(maxDatagramFrameSize, getMaxPacketSize() - maxShortHeaderPacketOverhead);
+        return maxEffectiveDatagramFrameSize - DatagramFrame.getMaxMinimalFrameSize();
+    }
+
+    @Override
     public QuicStream createStream(boolean bidirectional) {
         return getStreamManager().createStream(bidirectional);
     }
@@ -264,24 +285,27 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    @Override
     public boolean canSendDatagram() {
         return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
     }
 
+    @Override
     public boolean canReceiveDatagram() {
         return datagramExtensionStatus == DatagramExtensionStatus.Enabled || datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly;
     }
 
-    /**
-     * Returns whether the datagram extension is enabled for this connection, which means that the peer has indicated
-     * support for the datagram extension and the local endpoint has enabled it ("can send", "can receive").
-     * @return
-     */
+    @Override
     public boolean isDatagramExtensionEnabled() {
         return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
     }
 
-    public int getMaxDatagramFrameSize() {
+    /**
+     * Returns the value of the max_datagram_frame_size transport parameter.
+     * Note that this value does not indicate the real maximum size of a datagram frame.
+     * @return
+     */
+    protected int getMaxDatagramFrameSize() {
         return maxDatagramFrameSize;
     }
 
