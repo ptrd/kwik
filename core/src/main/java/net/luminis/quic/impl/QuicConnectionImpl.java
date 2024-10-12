@@ -65,7 +65,7 @@ import static net.luminis.quic.send.Sender.NO_RETRANSMIT;
 import static net.luminis.quic.util.Bytes.bytesToHex;
 
 
-public abstract class QuicConnectionImpl implements QuicConnection, DatagramExtension, PacketProcessor, FrameProcessor, PacketFilter {
+public abstract class QuicConnectionImpl implements QuicConnection, PacketProcessor, FrameProcessor, PacketFilter {
 
     public enum Status {
         Created,

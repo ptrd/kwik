@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.impl;
+package net.luminis.quic;
 
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;

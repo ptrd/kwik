@@ -95,6 +95,7 @@ public class InteractiveShell {
         commands.put("statistics", this::printStatistics);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
+        commands.put("quack", this::quack);
     }
 
     private void repeatLastCommand(String arg) {
@@ -325,11 +326,15 @@ public class InteractiveShell {
 
     private void setClientParameter(String argLine) {
         String[] args = argLine.split("\\s+");
+        String name = args.length >= 1? args[0] : null;
         if (args.length == 2) {
-            String name = args[0];
             String value = args[1];
             setClientParameter(name, value);
-        } else {
+        }
+        else if (args.length == 1 && name.equals("datagram")) {
+            setClientParameter(name, null);
+        }
+        else {
             System.out.println("Incorrect parameters; should be <transport parameter name> <value>.");
             System.out.println("Supported parameters: ");
             printSupportedParameters();
@@ -343,6 +348,7 @@ public class InteractiveShell {
         System.out.println("- maxuni (max peer initiated unidirectional streams)");
         System.out.println("- maxbidi (max peer initiated bidirectional streams)");
         System.out.println("- payload (max udp payload)");
+        System.out.println("- datagram (enable datagram extension RFC 9221)");
     }
 
     private void setClientParameter(String name, String value) {
@@ -377,6 +383,9 @@ public class InteractiveShell {
                     System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));
                 }
                 break;
+            case "datagram":
+                builder.enableDatagramExtension();
+                break;
             default:
                 System.out.println("Parameter must be one of:");
                 printSupportedParameters();
@@ -406,6 +415,16 @@ public class InteractiveShell {
     private void updateKeys(String arg) {
         quicConnection.updateKeys();
         quicConnection.ping();
+    }
+
+    private void quack(String s) {
+        if (quicConnection.isDatagramExtensionEnabled()) {
+            quicConnection.setDatagramHandler(data -> System.out.println("Received datagram: \"" + new String(data) + "\""));
+            quicConnection.sendDatagram("quack".getBytes());
+        }
+        else {
+            System.out.println("Error: datagram extension not enabled");
+        }
     }
 
     private void error(Exception error) {
