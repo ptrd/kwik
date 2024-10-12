@@ -18,14 +18,25 @@
  */
 package net.luminis.quic.impl;
 
+import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
+
 /**
  * Datagram extension as specified by RFC 9221 "An Unreliable Datagram Extension to QUIC".
  * https://www.rfc-editor.org/rfc/rfc9221.html#name-datagram-frame-types
  */
 public interface DatagramExtension {
 
+    /**
+     * Returns whether the local endpoint can send datagrams (which includes whether the peer can receive them).
+     * @return
+     */
     boolean canSendDatagram();
 
+    /**
+     * Returns whether the local endpoint can receive datagrams (irrespective of whether the peer can send them).
+     * @return
+     */
     boolean canReceiveDatagram();
 
     /**
@@ -36,11 +47,31 @@ public interface DatagramExtension {
     boolean isDatagramExtensionEnabled();
 
     /**
+     * Set the handler that will be called when a datagram is received.
+     * The handler is called on a separate thread, but the same thread is used for all handler invocations, so handling
+     * of datagrams is serialized.
+     * @param handler
+     */
+    void setDatagramHandler(Consumer<byte[]> handler);
+
+    /**
+     * Set the handler that will be called when a datagram is received.
+     * The handler is called on the provided executor.
+     * @param handler
+     * @param callbackExecutor
+     */
+    void setDatagramHandler(Consumer<byte[]> handler, ExecutorService callbackExecutor);
+
+    /**
      * The maximum size of the data that can be sent in a single datagram.
      * @return
      */
     int maxDatagramDataSize();
 
+    /**
+     * Send a datagram.
+     * @param data
+     * @throws IllegalArgumentException if the data size exceeds the maximum datagram data size.
+     */
     void sendDatagram(byte[] data);
-
 }

@@ -333,6 +333,21 @@ class QuicConnectionImplTest {
                 // Then
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void whenDatagramIsReceivedTheHandlerShouldBeCalled() throws Exception {
+        // Given
+        Consumer handler = mock(Consumer.class);
+        connection.setDatagramHandler(handler, testExecutor);
+        DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
+
+        // When
+        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+        testExecutor.clockAdvanced();
+
+        // Then
+        verify(handler).accept(datagramFrame.getData());
+    }
     //endregion
 
     //region helper methods

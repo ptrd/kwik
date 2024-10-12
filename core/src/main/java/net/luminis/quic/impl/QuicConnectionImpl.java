@@ -50,11 +50,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.Objects;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -135,6 +132,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, DatagramExte
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
     protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
     private volatile int maxDatagramFrameSize;
+    private volatile Consumer<byte[]> datagramHandler;
+    private volatile ExecutorService datagramHandlerExecutor;
 
 
     protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
@@ -211,6 +210,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, DatagramExte
         int maxShortHeaderPacketOverhead = 1 + getDestinationConnectionId().length + 4;
         int maxEffectiveDatagramFrameSize = Integer.min(maxDatagramFrameSize, getMaxPacketSize() - maxShortHeaderPacketOverhead);
         return maxEffectiveDatagramFrameSize - DatagramFrame.getMaxMinimalFrameSize();
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler) {
+        setDatagramHandler(handler, Executors.newSingleThreadExecutor());
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler, ExecutorService callbackExecutor) {
+        datagramHandlerExecutor = Objects.requireNonNull(callbackExecutor);
+        this.datagramHandler = Objects.requireNonNull(handler);
     }
 
     @Override
@@ -364,6 +374,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, DatagramExte
 
     @Override
     public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+        if (datagramHandler != null) {
+            datagramHandlerExecutor.submit(() -> datagramHandler.accept(datagramFrame.getData()));
+        }
+        else {
+            log.warn("Received datagram frame, but no handler is set");
+        }
     }
 
     @Override
