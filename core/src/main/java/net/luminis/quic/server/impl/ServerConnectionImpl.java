@@ -370,16 +370,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         tlsEngine.setSessionDataVerificationCallback(this::acceptSessionResumption);
     }
 
-    private void configure(ApplicationProtocolSettings alpSettings, String protocol) {
-        if (alpSettings.maxConcurrentPeerInitiatedUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+    private void configure(ApplicationProtocolSettings protocolSettings, String protocol) {
+        if (protocolSettings.maxConcurrentPeerInitiatedUnidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentPeerInitiatedUnidirectionalStreams; this will be required in future versions of Kwik");
         }
-        if (alpSettings.maxConcurrentPeerInitiatedBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
+        if (protocolSettings.maxConcurrentPeerInitiatedBidirectionalStreams() == ApplicationProtocolSettings.NOT_SPECIFIED) {
             log.warn("The ApplicationProtocolConnectionFactory for protocol " + protocol +
                     " does not define (override) maxConcurrentPeerInitiatedBidirectionalStreams; this will be required in future versions of Kwik");
         }
-        configuration = configuration.merge(alpSettings);
+        configuration = configuration.merge(protocolSettings);
         streamManager.initialize(configuration);
     }
 
