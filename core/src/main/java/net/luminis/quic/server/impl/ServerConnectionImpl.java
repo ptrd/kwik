@@ -381,6 +381,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
         configuration = configuration.merge(protocolSettings);
         streamManager.initialize(configuration);
+
+        if (protocolSettings.enableDatagramExtension()) {
+            enableDatagramExtension();
+        }
     }
 
     TransportParameters initTransportParameters() {
