@@ -213,6 +213,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public int maxDatagramDataSize() {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-5
+        // "Note that while the max_datagram_frame_size transport parameter places a limit on the maximum size of
+        //  DATAGRAM frames, that limit can be further reduced by the max_udp_payload_size transport parameter and the
+        //  Maximum Transmission Unit (MTU) of the path between endpoints. DATAGRAM frames cannot be fragmented;
+        //  therefore, application protocols need to handle cases where the maximum datagram size is limited by other
+        //  factors."
         int maxShortHeaderPacketOverhead = 1 + getDestinationConnectionId().length + 4;
         int maxEffectiveDatagramFrameSize = Integer.min(maxDatagramFrameSize, getMaxPacketSize() - maxShortHeaderPacketOverhead);
         return maxEffectiveDatagramFrameSize - DatagramFrame.getMaxMinimalFrameSize();
@@ -291,6 +297,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     private void updateDatagramExtensionStatus(TransportParameters peerTransportParams) {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+        // "The max_datagram_frame_size transport parameter is a unidirectional limit and indication of support of
+        //  DATAGRAM frames. Application protocols that use DATAGRAM frames MAY choose to only negotiate and use them
+        //  in a single direction."
         if (peerTransportParams.getMaxDatagramFrameSize() > 0) {
             if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
                 datagramExtensionStatus = DatagramExtensionStatus.Enabled;
