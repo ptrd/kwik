@@ -214,7 +214,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void setDatagramHandler(Consumer<byte[]> handler) {
-        setDatagramHandler(handler, Executors.newSingleThreadExecutor());
+        DaemonThreadFactory daemonThreadFactory = new DaemonThreadFactory("datagram-frame-handler");
+        setDatagramHandler(handler, Executors.newSingleThreadExecutor(daemonThreadFactory));
     }
 
     @Override
