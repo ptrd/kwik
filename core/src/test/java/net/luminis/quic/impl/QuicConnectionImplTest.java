@@ -337,6 +337,7 @@ class QuicConnectionImplTest {
     @Test
     void whenDatagramIsReceivedTheHandlerShouldBeCalled() throws Exception {
         // Given
+        datagramExtensionIsEnabled(1000);
         Consumer handler = mock(Consumer.class);
         connection.setDatagramHandler(handler, testExecutor);
         DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
@@ -347,6 +348,20 @@ class QuicConnectionImplTest {
 
         // Then
         verify(handler).accept(datagramFrame.getData());
+    }
+
+    @Test
+    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError()  {
+        // Given
+        DatagramFrame datagramFrame = new DatagramFrame(new byte[16]);
+
+        // When
+        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+
+        // Then
+        testClock.fastForward(3 * onePto);
+
+        assertThat(((NonAbstractQuicConnection) connection).terminated).isTrue();
     }
     //endregion
 

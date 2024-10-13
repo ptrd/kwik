@@ -57,6 +57,7 @@ import java.util.function.Function;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static net.luminis.quic.common.EncryptionLevel.App;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.APPLICATION_ERROR;
@@ -102,6 +103,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         QUIC_LAYER_ERROR,
         APPLICATION_ERROR
     }
+
+    // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+    // "For most uses of DATAGRAM frames, it is RECOMMENDED to send a value of 65535 in the max_datagram_frame_size
+    //  transport parameter to indicate that this endpoint will accept any DATAGRAM frame that fits inside a QUIC packet."
+    protected static final int MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE = 65535;
 
     protected final VersionHolder quicVersion;
     private final Role role;
@@ -288,7 +294,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (peerTransportParams.getMaxDatagramFrameSize() > 0) {
             if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
                 datagramExtensionStatus = DatagramExtensionStatus.Enabled;
-                maxDatagramFrameSize = (int) Long.min(65535, peerTransportParams.getMaxDatagramFrameSize());
+                maxDatagramFrameSize = (int) Long.min(65535, peerTransportParams.getMaxDatagramFrameSize());  // Value larger than 65535 is useless
             }
         }
         else if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
@@ -375,6 +381,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+        // "An endpoint that receives a DATAGRAM frame when it has not indicated support via the transport parameter
+        //  MUST terminate the connection with an error of type PROTOCOL_VIOLATION."
+        if (!canReceiveDatagram()) {
+            immediateCloseWithError(packet.getEncryptionLevel(), PROTOCOL_VIOLATION.value, "Datagram frame received, but datagram extension is not enabled");
+            return;
+        }
         if (datagramHandler != null) {
             datagramHandlerExecutor.submit(() -> datagramHandler.accept(datagramFrame.getData()));
         }
@@ -518,7 +531,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * sender) should be performed by the caller.
      *
      * @param level       The level that should be used for sending the connection close frame
-     * @param error       The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
+     * @param error       The error code, see https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
      * @param errorReason
      */
     protected void immediateCloseWithError(EncryptionLevel level, long error, String errorReason) {

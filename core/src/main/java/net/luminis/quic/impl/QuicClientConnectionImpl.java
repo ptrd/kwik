@@ -322,7 +322,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
-            parameters.setMaxDatagramFrameSize(65535);
+            parameters.setMaxDatagramFrameSize(MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE);
         }
 
         return parameters;
