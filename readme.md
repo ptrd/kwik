@@ -52,8 +52,9 @@ and QUIC v2 ([RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)).
 * key update
 * session resumption
 * 0-RTT
-* compatible version negotiation [draft-ietf-quic-version-negotiation-09](https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-09.html)
-* QUIC V2
+* Compatible Version Negotiation [RFC 9368](https://www.rfc-editor.org/rfc/rfc9368.html)
+* QUIC V2 [RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)
+* Unreliable Datagram Extension [RFC 9221](https://www.rfc-editor.org/rfc/rfc9221.html)
   
 Client only:
 
