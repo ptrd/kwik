@@ -760,4 +760,31 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(item).isNotPresent();
     }
     //endregion
+
+    //region datagram extension
+    @Test
+    void maxSizedDatagramFrameCanBeSentInThePresenceOfOptionalAcks() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(10, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(11, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(12, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(15, 20, EncryptionLevel.App));
+        // size of ack frame: 13
+        // since sendRequestQueue.addAckRequest(ackDelay); is not called, the ack is not explicit, but implicit
+
+        // Given
+        // data frame size: 1 + 2 + 1179 = 1182, packet overhead: 18, so total: 1200 (can be send in one packet)
+        sendRequestQueue.addRequest(new DatagramFrame(new byte[1179]), f -> {});
+
+        // When
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 1200, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(item).isPresent();
+        assertThat(item.get().getPacket().getFrames()).hasOnlyElementsOfType(DatagramFrame.class);
+    }
+    //endregion
 }
