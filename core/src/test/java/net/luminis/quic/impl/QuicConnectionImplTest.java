@@ -295,7 +295,7 @@ class QuicConnectionImplTest {
         connection.sendDatagram(new byte[16]);
 
         // Then
-        verify(sender).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+        verify(sender).sendWithPriority(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }
 
     @Test
@@ -307,7 +307,7 @@ class QuicConnectionImplTest {
         connection.sendDatagram(new byte[0]);
 
         // Then
-        verify(sender).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+        verify(sender).sendWithPriority(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }
 
     @Test

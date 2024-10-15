@@ -203,7 +203,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             if (data.length > maxDatagramDataSize()) {
                 throw new IllegalArgumentException("Data too large for a single datagram frame");
             }
-            send(new DatagramFrame(data), f -> {}, true);
+
+            // https://www.rfc-editor.org/rfc/rfc9221.html#section-5
+            // "When an application sends a datagram over a QUIC connection, QUIC will generate a new DATAGRAM frame and
+            //  send it in the first available packet. This frame SHOULD be sent as soon as possible (...)"
+            getSender().sendWithPriority(new DatagramFrame(data), App, f -> {});
         }
         else {
             throw new IllegalStateException("Datagram extension is not enabled" +

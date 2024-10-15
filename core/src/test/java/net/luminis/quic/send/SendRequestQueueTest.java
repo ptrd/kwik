@@ -18,10 +18,12 @@
  */
 package net.luminis.quic.send;
 
-import net.luminis.quic.impl.Version;
 import net.luminis.quic.frame.CryptoFrame;
+import net.luminis.quic.frame.DatagramFrame;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.impl.Version;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -159,6 +161,24 @@ class SendRequestQueueTest {
 
         assertThat(((PathResponseFrame) lastItem.getFrame(1024)).getData()).isNotEqualTo(markerPattern);
         assertThat(pollCount).isEqualTo(maxNrOfPathResponseFrames);
+    }
+    //endregion
+
+    //region priority request
+    @Test
+    void priorityRequestShouldBeConsideredFirst() {
+        sendRequestQueue.addRequest(new StreamFrame(8, new byte[1000], false), f -> {});
+        sendRequestQueue.addPriorityRequest(new DatagramFrame(new byte[1000]), f -> {});
+
+        assertThat(sendRequestQueue.next(1010).get().getFrame(1500)).isInstanceOf(DatagramFrame.class);
+    }
+
+    @Test
+    void whenPriorityRequestDoesNotFitNextInQueueIsUsed() {
+        sendRequestQueue.addRequest(new StreamFrame(8, new byte[1000], false), f -> {});
+        sendRequestQueue.addPriorityRequest(new DatagramFrame(new byte[1010]), f -> {});
+
+        assertThat(sendRequestQueue.next(1010).get().getFrame(1500)).isInstanceOf(StreamFrame.class);
     }
     //endregion
 }

@@ -22,14 +22,14 @@ import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
+import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.MissingKeysException;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.IdleTimer;
-import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.impl.QuicConnectionImpl;
 import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
@@ -170,6 +170,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     @Override
     public void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
         sendRequestQueue[level.ordinal()].addRequest(frameSupplier, minimumSize, lostCallback);
+    }
+
+    public void sendWithPriority(QuicFrame frame, EncryptionLevel level, Consumer<QuicFrame> lostCallback) {
+        sendRequestQueue[level.ordinal()].addPriorityRequest(frame, lostCallback);
+        wakeUpSenderLoop();
     }
 
     public void send(RetryPacket retryPacket) {
