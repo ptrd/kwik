@@ -19,10 +19,10 @@
 package net.luminis.quic.send;
 
 
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.frame.PathResponseFrame;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.common.EncryptionLevel;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -80,6 +80,10 @@ public class SendRequestQueue {
                 nextAckTime = requestedAckTime;
             }
         }
+    }
+
+    public void addPriorityRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
+        requestQueue.addFirst(new FixedFrameSendRequest(fixedFrame, lostCallback));
     }
 
     public void addProbeRequest() {

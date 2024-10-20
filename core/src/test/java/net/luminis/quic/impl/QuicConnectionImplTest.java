@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.common.EncryptionLevel.App;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class QuicConnectionImplTest {
@@ -61,6 +62,7 @@ class QuicConnectionImplTest {
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), testExecutor);
     }
 
+    //region close
     @Test
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
@@ -207,6 +209,161 @@ class QuicConnectionImplTest {
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
     }
+    //endregion
+
+    //region RFC 9221 Datagram Extension
+    @Test
+    void whenDatagramExtensionIsRequiredReceivingTransportParameterShouldEnableIt() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isTrue();
+        assertThat(connection.canReceiveDatagram()).isTrue();
+        assertThat(connection.isDatagramExtensionEnabled()).isTrue();
+    }
+
+    @Test
+    void whenDatagramExtensionIsRequiredNotReceivingTransportParameterShouldNotEnableIt() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isFalse();
+        assertThat(connection.canReceiveDatagram()).isTrue();
+        assertThat(connection.isDatagramExtensionEnabled()).isFalse();
+    }
+
+    @Test
+    void whenDatagramExtensionIsNotRequiredReceivingTransportParameterShouldNotEnableIt() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canSendDatagram()).isFalse();
+        assertThat(connection.canReceiveDatagram()).isFalse();
+        assertThat(connection.isDatagramExtensionEnabled()).isFalse();
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledMaxDatagramFrameSizeShouldHaveNonZeroValue() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(65535);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledMaxDatagramFrameIsMaximizedTo65535() {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(4294967296L);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.getMaxDatagramFrameSize()).isEqualTo(65535);
+    }
+
+    @Test
+    void smallDatagramShouldBeSent() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        // When
+        connection.sendDatagram(new byte[16]);
+
+        // Then
+        verify(sender).sendWithPriority(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void emptyDatagramShouldBeSent() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        // When
+        connection.sendDatagram(new byte[0]);
+
+        // Then
+        verify(sender).sendWithPriority(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenDatagramIsLargerThanMaxSendingDatagramShouldBeRejected() {
+        // Given
+        datagramExtensionIsEnabled();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.sendDatagram(new byte[1252]))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenDatagramIsLargerThanMaxAllowedByPeerSendingShouldBeRejected() {
+        // Given
+        datagramExtensionIsEnabled(1000);
+
+        assertThatThrownBy(() ->
+                // When
+                connection.sendDatagram(new byte[1001]))
+                // Then
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenDatagramIsReceivedTheHandlerShouldBeCalled() throws Exception {
+        // Given
+        datagramExtensionIsEnabled(1000);
+        Consumer handler = mock(Consumer.class);
+        connection.setDatagramHandler(handler, testExecutor);
+        DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
+
+        // When
+        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+        testExecutor.clockAdvanced();
+
+        // Then
+        verify(handler).accept(datagramFrame.getData());
+    }
+
+    @Test
+    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError()  {
+        // Given
+        DatagramFrame datagramFrame = new DatagramFrame(new byte[16]);
+
+        // When
+        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+
+        // Then
+        testClock.fastForward(3 * onePto);
+
+        assertThat(((NonAbstractQuicConnection) connection).terminated).isTrue();
+    }
+    //endregion
 
     //region helper methods
     private PacketMetaData metaDataForNow() {
@@ -216,6 +373,17 @@ class QuicConnectionImplTest {
 
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
         return connection.new ClosingOrDrainingFilter(connection, null);
+    }
+
+    private void datagramExtensionIsEnabled() {
+        datagramExtensionIsEnabled(65535);
+    }
+
+    private void datagramExtensionIsEnabled(int maxDatagramFrameSize) {
+        connection.enableDatagramExtension();
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxDatagramFrameSize(maxDatagramFrameSize);
+        connection.processCommonTransportParameters(transportParameters);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {

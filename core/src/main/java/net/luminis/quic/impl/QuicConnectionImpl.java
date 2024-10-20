@@ -24,9 +24,9 @@ import net.luminis.quic.QuicStream;
 import net.luminis.quic.Statistics;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.frame.*;
@@ -50,16 +50,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.Objects;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
+import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static net.luminis.quic.common.EncryptionLevel.App;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.APPLICATION_ERROR;
@@ -88,6 +86,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    protected enum DatagramExtensionStatus {
+        Disabled,
+        Enable,
+        Enabled,
+        EnabledReceiveOnly
+    }
+
     public enum VersionNegotiationStatus {
         NotStarted,
         VersionChangeUnconfirmed,
@@ -98,6 +103,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         QUIC_LAYER_ERROR,
         APPLICATION_ERROR
     }
+
+    // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+    // "For most uses of DATAGRAM frames, it is RECOMMENDED to send a value of 65535 in the max_datagram_frame_size
+    //  transport parameter to indicate that this endpoint will accept any DATAGRAM frame that fits inside a QUIC packet."
+    protected static final int MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE = 65535;
 
     protected final VersionHolder quicVersion;
     private final Role role;
@@ -124,6 +134,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     private RateLimiter closeFramesSendRateLimiter;
     private final ScheduledExecutorService scheduler;
+
+    // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
+    protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
+    private volatile int maxDatagramFrameSize;
+    private volatile Consumer<byte[]> datagramHandler;
+    private volatile ExecutorService datagramHandlerExecutor;
 
 
     protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
@@ -182,6 +198,49 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void sendDatagram(byte[] data) {
+        if (canSendDatagram()) {
+            if (data.length > maxDatagramDataSize()) {
+                throw new IllegalArgumentException("Data too large for a single datagram frame");
+            }
+
+            // https://www.rfc-editor.org/rfc/rfc9221.html#section-5
+            // "When an application sends a datagram over a QUIC connection, QUIC will generate a new DATAGRAM frame and
+            //  send it in the first available packet. This frame SHOULD be sent as soon as possible (...)"
+            getSender().sendWithPriority(new DatagramFrame(data), App, f -> {});
+        }
+        else {
+            throw new IllegalStateException("Datagram extension is not enabled" +
+                    (datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly? " for sending.":"."));
+        }
+    }
+
+    @Override
+    public int maxDatagramDataSize() {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-5
+        // "Note that while the max_datagram_frame_size transport parameter places a limit on the maximum size of
+        //  DATAGRAM frames, that limit can be further reduced by the max_udp_payload_size transport parameter and the
+        //  Maximum Transmission Unit (MTU) of the path between endpoints. DATAGRAM frames cannot be fragmented;
+        //  therefore, application protocols need to handle cases where the maximum datagram size is limited by other
+        //  factors."
+        int maxShortHeaderPacketOverhead = 1 + getDestinationConnectionId().length + 4;
+        int maxEffectiveDatagramFrameSize = Integer.min(maxDatagramFrameSize, getMaxPacketSize() - maxShortHeaderPacketOverhead);
+        return maxEffectiveDatagramFrameSize - DatagramFrame.getMaxMinimalFrameSize();
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler) {
+        DaemonThreadFactory daemonThreadFactory = new DaemonThreadFactory("datagram-frame-handler");
+        setDatagramHandler(handler, Executors.newSingleThreadExecutor(daemonThreadFactory));
+    }
+
+    @Override
+    public void setDatagramHandler(Consumer<byte[]> handler, ExecutorService callbackExecutor) {
+        datagramHandlerExecutor = Objects.requireNonNull(callbackExecutor);
+        this.datagramHandler = Objects.requireNonNull(handler);
+    }
+
+    @Override
     public QuicStream createStream(boolean bidirectional) {
         return getStreamManager().createStream(bidirectional);
     }
@@ -237,6 +296,48 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
 
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
+
+        updateDatagramExtensionStatus(peerTransportParams);
+    }
+
+    private void updateDatagramExtensionStatus(TransportParameters peerTransportParams) {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+        // "The max_datagram_frame_size transport parameter is a unidirectional limit and indication of support of
+        //  DATAGRAM frames. Application protocols that use DATAGRAM frames MAY choose to only negotiate and use them
+        //  in a single direction."
+        if (peerTransportParams.getMaxDatagramFrameSize() > 0) {
+            if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+                datagramExtensionStatus = DatagramExtensionStatus.Enabled;
+                maxDatagramFrameSize = (int) Long.min(65535, peerTransportParams.getMaxDatagramFrameSize());  // Value larger than 65535 is useless
+            }
+        }
+        else if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+            datagramExtensionStatus = DatagramExtensionStatus.EnabledReceiveOnly;
+        }
+    }
+
+    @Override
+    public boolean canSendDatagram() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
+    }
+
+    @Override
+    public boolean canReceiveDatagram() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled || datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly;
+    }
+
+    @Override
+    public boolean isDatagramExtensionEnabled() {
+        return datagramExtensionStatus == DatagramExtensionStatus.Enabled;
+    }
+
+    /**
+     * Returns the value of the max_datagram_frame_size transport parameter.
+     * Note that this value does not indicate the real maximum size of a datagram frame.
+     * @return
+     */
+    protected int getMaxDatagramFrameSize() {
+        return maxDatagramFrameSize;
     }
 
     @Override
@@ -290,6 +391,23 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     @Override
     public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
         log.warn("Received " + dataBlockedFrame);
+    }
+
+    @Override
+    public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
+        // "An endpoint that receives a DATAGRAM frame when it has not indicated support via the transport parameter
+        //  MUST terminate the connection with an error of type PROTOCOL_VIOLATION."
+        if (!canReceiveDatagram()) {
+            immediateCloseWithError(packet.getEncryptionLevel(), PROTOCOL_VIOLATION.value, "Datagram frame received, but datagram extension is not enabled");
+            return;
+        }
+        if (datagramHandler != null) {
+            datagramHandlerExecutor.submit(() -> datagramHandler.accept(datagramFrame.getData()));
+        }
+        else {
+            log.warn("Received datagram frame, but no handler is set");
+        }
     }
 
     @Override
@@ -427,7 +545,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * sender) should be performed by the caller.
      *
      * @param level       The level that should be used for sending the connection close frame
-     * @param error       The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
+     * @param error       The error code, see https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
      * @param errorReason
      */
     protected void immediateCloseWithError(EncryptionLevel level, long error, String errorReason) {
@@ -739,6 +857,15 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void addAckFrameReceivedListener(FrameReceivedListener<AckFrame> recoveryManager) {
         this.recoveryManager = recoveryManager;
+    }
+
+    public void enableDatagramExtension() {
+        if (datagramExtensionStatus != DatagramExtensionStatus.Disabled) {
+            throw new IllegalStateException("Datagram extension can only be disable once and before connection is established.");
+        }
+        if (datagramExtensionStatus == DatagramExtensionStatus.Disabled) {
+            datagramExtensionStatus = DatagramExtensionStatus.Enable;
+        }
     }
 
     protected class CheckDestinationFilter extends BasePacketFilter {

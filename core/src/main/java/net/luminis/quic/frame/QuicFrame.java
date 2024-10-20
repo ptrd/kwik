@@ -46,6 +46,10 @@ public abstract class QuicFrame {
 
     public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived);
 
+    /**
+     * Returns the length of the frame (in bytes) if it were to be serialized by the serialize method.
+     * @return
+     */
     public abstract int getFrameLength();
 
     public abstract void serialize(ByteBuffer buffer);

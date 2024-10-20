@@ -73,4 +73,10 @@ public interface ApplicationProtocolSettings {
      * @return
      */
     default long maxBidirectionalStreamReceiverBufferSize() { return Long.MAX_VALUE; }
+
+    /**
+     * Whether the application protocol requires the Datagram extension (RFC 9221) to be enabled.
+     * @return
+     */
+    default boolean enableDatagramExtension() { return false; }
 }

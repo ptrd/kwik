@@ -147,9 +147,7 @@ class ServerConnectionImplTest {
     void clientHelloLackingTransportParametersExtensionLeadsToConnectionClose() throws Exception {
         // When
         List<Extension> clientExtensions = List.of(alpn);
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(clientExtensions), Instant.now());
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -160,10 +158,8 @@ class ServerConnectionImplTest {
     @Test
     void clientHelloWithCorrectTransportParametersIsAccepted() throws Exception {
         // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        TransportParameters clientTransportParams = createDefaultTransportParameters();
+        connection.process(createInitialClientPacket(clientTransportParams), Instant.now());
 
         // Then
         List<Extension> serverExtensions = tlsServerEngine.getServerExtensions();
@@ -175,10 +171,7 @@ class ServerConnectionImplTest {
     void whenTransportParametersContainsInvalidValueServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client);
-        List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(transportParametersExtension), Instant.now());
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -191,10 +184,7 @@ class ServerConnectionImplTest {
     void whenTransportParametersContainsInvalidParameterServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtensionTest(tp);
-        List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(transportParametersExtension), Instant.now());
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -208,15 +198,12 @@ class ServerConnectionImplTest {
         StreamManager streamManager = mock(StreamManager.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("streamManager"), streamManager);
 
-        QuicTransportParametersExtension transportParametersExtension = createTransportParametersExtension();
-        transportParametersExtension.getTransportParameters().setInitialMaxStreamsUni(3);
-        transportParametersExtension.getTransportParameters().setInitialMaxStreamsBidi(100);
-        List<Extension> clientExtensions = List.of(alpn, transportParametersExtension);
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        TransportParameters clientTransportParams = createDefaultTransportParameters();
+        clientTransportParams.setInitialMaxStreamsUni(3);
+        clientTransportParams.setInitialMaxStreamsBidi(100);
 
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(clientTransportParams), Instant.now());
 
         // Then
         verify(streamManager).setInitialMaxStreamsUni(longThat(value -> value == 3));
@@ -226,10 +213,7 @@ class ServerConnectionImplTest {
     @Test
     void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
         // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
@@ -240,16 +224,43 @@ class ServerConnectionImplTest {
     @Test
     void serverShouldSendTransportParameterDisableActiveMigration() throws Exception {
         // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
-        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
         assertThat(tlsEngine.getServerExtensions()).hasAtLeastOneElementOfType(QuicTransportParametersExtension.class);
         QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
         assertThat(tpExtension.getTransportParameters().getDisableMigration()).isTrue();
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableDatagramExtension();
+
+        // When
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
+
+    @Test
+    void whenDatagramExtensionIsEnabledAndClientHasEnabledItTooTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableDatagramExtension();
+        TransportParameters clientTransportParameters = createDefaultTransportParameters();
+        clientTransportParameters.setMaxDatagramFrameSize(1234);
+
+        // When
+        connection.process(createInitialClientPacket(clientTransportParameters), Instant.now());
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getMaxDatagramFrameSize()).isGreaterThan(0);
     }
     //endregion
 
@@ -686,6 +697,21 @@ class ServerConnectionImplTest {
         return tlsServerEngineFactory;
     }
 
+    private InitialPacket createInitialClientPacket(TransportParameters clientTransportParameters) {
+        return createInitialClientPacket(createTransportParametersExtension(clientTransportParameters));
+    }
+
+    private InitialPacket createInitialClientPacket(QuicTransportParametersExtension transportParametersExtensionportParameters) {
+        List<Extension> clientExtensions = List.of(alpn, transportParametersExtensionportParameters);
+        return createInitialClientPacket(clientExtensions);
+    }
+
+    private InitialPacket createInitialClientPacket(List<Extension> clientExtensions) {
+        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
+        return new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame);
+    }
+
     private static TransportParameters createDefaultTransportParameters() {
         TransportParameters tp = new TransportParameters();
         tp.setInitialSourceConnectionId(new byte[8]);
@@ -694,6 +720,10 @@ class ServerConnectionImplTest {
 
     private QuicTransportParametersExtension createTransportParametersExtension() {
         return new QuicTransportParametersExtension(Version.getDefault(), createDefaultTransportParameters(), Role.Client);
+    }
+
+    private QuicTransportParametersExtension createTransportParametersExtension(TransportParameters transportParameters) {
+        return new QuicTransportParametersExtension(Version.getDefault(), transportParameters, Role.Client);
     }
 
     private QuicTransportParametersExtension createTransportParametersExtension(TransportParameters.VersionInformation versionInfo) {

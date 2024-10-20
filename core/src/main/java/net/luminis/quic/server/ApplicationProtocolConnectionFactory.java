@@ -25,5 +25,13 @@ import net.luminis.quic.QuicConnection;
  */
 public interface ApplicationProtocolConnectionFactory extends ApplicationProtocolSettings {
 
+    /**
+     * Create a new connection for the given protocol.
+     * If, for some reason, the application protocol connection cannot be created, this method should may return null,
+     * but in that case it _must_ close the underlying QUIC connection.
+     * @param protocol
+     * @param quicConnection
+     * @return
+     */
     ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection);
 }

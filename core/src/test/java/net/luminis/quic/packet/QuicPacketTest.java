@@ -18,9 +18,13 @@
  */
 package net.luminis.quic.packet;
 
+import net.luminis.quic.frame.DatagramFrame;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class QuicPacketTest {
 
@@ -197,5 +201,31 @@ class QuicPacketTest {
 
         // Then
         assertThat(candidatePacketNumber).isEqualTo(0x00000000ffffffffL);
+    }
+
+    @Test
+    void parseDatagramFrameWithoutLengthField() throws Exception {
+        // Given
+        byte[] data = new byte[] { 0x30, 0x71, 0x75, 0x69, 0x63 };
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+
+        // When
+        packet.parseFrames(data, mock(Logger.class));
+
+        // Then
+        assertThat(packet.getFrames()).hasOnlyElementsOfType(DatagramFrame.class);
+    }
+
+    @Test
+    void parseDatagramFrameWithLengthField() throws Exception {
+        // Given
+        byte[] data = new byte[] { 0x31, 0x04, 0x71, 0x75, 0x69, 0x63 };
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+
+        // When
+        packet.parseFrames(data, mock(Logger.class));
+
+        // Then
+        assertThat(packet.getFrames()).hasOnlyElementsOfType(DatagramFrame.class);
     }
 }

@@ -156,6 +156,12 @@ public interface QuicClientConnection extends QuicConnection {
         Builder clientKey(String keyPassword);
 
         Builder socketFactory(DatagramSocketFactory socketFactory);
+
+        /**
+         * Enable the datagram extension (RFC 9221).
+         * @return
+         */
+        Builder enableDatagramExtension();
     }
 
 }

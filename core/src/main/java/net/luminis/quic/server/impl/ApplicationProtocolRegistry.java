@@ -50,7 +50,9 @@ public class ApplicationProtocolRegistry {
      */
     ApplicationProtocolConnection startApplicationProtocolConnection(String protocol, QuicConnection quicConnection) {
         ApplicationProtocolConnection applicationProtocolConnection = registeredFactories.get(protocol).createConnection(protocol, quicConnection);
-        quicConnection.setPeerInitiatedStreamCallback(applicationProtocolConnection::acceptPeerInitiatedStream);
+        if (applicationProtocolConnection != null) {
+            quicConnection.setPeerInitiatedStreamCallback(applicationProtocolConnection::acceptPeerInitiatedStream);
+        }
         return applicationProtocolConnection;
     }
 

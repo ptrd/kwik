@@ -320,6 +320,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             throw new IllegalArgumentException("maxUdpPayloadSize must be set");
         }
+
+        if (datagramExtensionStatus == DatagramExtensionStatus.Enable) {
+            parameters.setMaxDatagramFrameSize(MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE);
+        }
+
         return parameters;
     }
 
@@ -1303,6 +1308,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private KeyStore customTrustStore;
         private KeyStore keyManager;
         private String keyPassword;
+        private boolean enableDatagramExtension;
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
@@ -1349,6 +1355,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             if (quantumReadinessTest != null) {
                 quicConnection.enableQuantumReadinessTest(quantumReadinessTest);
+            }
+
+            if (enableDatagramExtension) {
+                quicConnection.enableDatagramExtension();
             }
 
             return quicConnection;
@@ -1547,6 +1557,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder socketFactory(DatagramSocketFactory socketFactory) {
             this.socketFactory = socketFactory;
+            return this;
+        }
+
+        @Override
+        public Builder enableDatagramExtension() {
+            enableDatagramExtension = true;
             return this;
         }
     }

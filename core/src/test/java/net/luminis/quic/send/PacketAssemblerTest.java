@@ -22,7 +22,10 @@ import net.luminis.quic.ack.AckGenerator;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.frame.*;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.MockPacket;
+import net.luminis.quic.impl.TestUtils;
+import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.packet.HandshakePacket;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -55,7 +58,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
     private AckGenerator handshakeAckGenerator;
     private AckGenerator oneRttAckGenerator;
 
-    
+    //region setup
     @BeforeEach
     void initObjectUnderTest() {
         clock = new TestClock();
@@ -68,7 +71,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
         oneRttAckGenerator = new AckGenerator(clock, PnSpace.App, mock(Sender.class));
         oneRttPacketAssembler = new PacketAssembler(version, EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
     }
+    //endregion
 
+    //region basic test cases
     @Test
     void sendSingleShortPacket() {
         // Given
@@ -193,7 +198,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE)
                 .isEqualTo(MAX_PACKET_SIZE);
     }
+    //endregion
 
+    //region initial packet
     @Test
     void sendInitialPacketWithToken() {
         // Given
@@ -255,7 +262,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.generatePacketBytes(aead).length)
                 .isLessThanOrEqualTo(MAX_PACKET_SIZE);
     }
+    //endregion
 
+    //region generating acks
     @Test
     void whenNothingToSendDelayedAckIsSendAfterDelay() throws Exception {
         // Given
@@ -366,144 +375,6 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Then
         Optional<SendItem> packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]);
         assertThat(packet).isEmpty();
-    }
-
-    @Test
-    void whenCwndReachedNoDataIsSent() {
-        // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
-        int currentCwndRemaining = 16;
-
-        // Then
-        Optional<SendItem> packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]);
-        assertThat(packet).isEmpty();
-    }
-
-    @Test
-    void whenAddingProbeAndRequestListIsEmptyThenPingFrameShouldBeSent() {
-        // When
-        sendRequestQueue.addProbeRequest();
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]).get().getPacket();
-        assertThat(packet).isNotNull();
-        assertThat(packet.getFrames())
-                .hasSize(1)
-                .hasOnlyElementsOfType(PingFrame.class);
-    }
-
-    @Test
-    void whenCwndReachedSendingProbeLeadsToSinglePing() {
-        // When
-        int currentCwndRemaining = 16;
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
-        sendRequestQueue.addProbeRequest();
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]).get().getPacket();
-        assertThat(packet).isNotNull();
-        assertThat(packet.getFrames())
-                .hasSize(1)
-                .hasOnlyElementsOfType(PingFrame.class);
-
-        // And
-        Optional<SendItem> another = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]);
-        assertThat(another).isEmpty();
-    }
-
-    @Test
-    void whenAddingProbeToNonEmptySendQueueAndCwndIsLargeEnoughTheNextPacketIsSent() {
-        // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
-        sendRequestQueue.addProbeRequest();
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(60, 1232, null, new byte[0]).get().getPacket();
-        assertThat(packet).isNotNull();
-        assertThat(packet.getFrames())
-                .hasSize(1)
-                .hasOnlyElementsOfType(MaxDataFrame.class);
-    }
-
-    @Test
-    void whenProbeContainsDataThisIsSendInsteadOfQueuedFrames() {
-        // When
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
-        sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[100])));
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get().getPacket();
-        assertThat(packet).isNotNull();
-        assertThat(packet.getFrames())
-                .hasSize(1)
-                .hasOnlyElementsOfType(CryptoFrame.class);
-    }
-
-    @Test
-    void testFrameCallbacksAreCalledByPacketLostCallback() {
-        // Given
-        Consumer<QuicFrame> callback1 = mock(Consumer.class);
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), callback1);
-        Consumer<QuicFrame> callback2 = mock(Consumer.class);
-        sendRequestQueue.addRequest(new StreamFrame(1, new byte[924], true), callback2);
-
-        // When
-        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get();
-        sendItem.getPacketLostCallback().accept(sendItem.getPacket());
-
-        // Then
-        verify(callback1).accept(argThat(frame -> frame instanceof MaxDataFrame));
-        verify(callback2).accept(argThat(frame -> frame instanceof StreamFrame));
-    }
-
-    @Test
-    void testInPresenceOfAckFrameAllFrameCallbacksAreCalledByPacketLostCallback() {
-        // Given
-        Consumer<QuicFrame> callback1 = mock(Consumer.class);
-        sendRequestQueue.addRequest(new MaxDataFrame(102_000), callback1);
-        Consumer<QuicFrame> callback2 = mock(Consumer.class);
-        sendRequestQueue.addRequest(new StreamFrame(1, new byte[924], true), callback2);
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        sendRequestQueue.addAckRequest(0);
-
-        // When
-        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get();
-        sendItem.getPacketLostCallback().accept(sendItem.getPacket());
-
-        // Then
-        assertThat(sendItem.getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
-        verify(callback1).accept(argThat(frame -> frame instanceof MaxDataFrame));
-        verify(callback2).accept(argThat(frame -> frame instanceof StreamFrame));
-    }
-
-    @Test
-    void createdPacketHasPacketNumberSet() {
-        // Given
-        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l), null);
-
-        // When
-        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
-
-        // Then
-        assertThat(packet.getPacketNumber()).isNotNull();
-        assertThat(packet.getPacketNumber()).isEqualTo(0);
-    }
-
-    @Test
-    void consecutivePacketsHaveIncreasingPacketNumber() {
-        // Given
-        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
-        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
-        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
-
-        // When
-        QuicPacket packet1 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
-        QuicPacket packet2 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
-        QuicPacket packet3 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
-
-        // Then
-        assertThat(packet2.getPacketNumber()).isGreaterThan(packet1.getPacketNumber());
-        assertThat(packet3.getPacketNumber()).isGreaterThan(packet2.getPacketNumber());
     }
 
     @Test
@@ -619,6 +490,189 @@ class PacketAssemblerTest extends AbstractSenderTest {
     }
 
     @Test
+    void whenExplicitAckIsSentImplicitlySendRequestQueueDoesNotContainAckRequestAnymore() throws Exception {
+        // Given
+        // ... there is a delayed ack pending
+        int ackDelay = 20;
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest(ackDelay);  // As test is using mock sender, this call must be done explicitly in the test
+
+        // When
+        // ... it is send together with a ack-eliciting packet
+        sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
+        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+
+        assertThat(firstPacket).isPresent();
+        assertThat(firstPacket.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
+
+        // Then
+        // ... (even) after delay time
+        clock.fastForward(ackDelay);
+        // ... no ack is sent.
+        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
+        assertThat(secondPacket).isEmpty();
+    }
+
+    @Test
+    void whenAckDoesNotFitInPacketItStaysQueued() throws Exception {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest();  // As test is using mock sender, this call must be done explicitly in the test
+
+        // When
+        oneRttPacketAssembler.assemble(6000, 2, null, new byte[0]);
+
+        // Then
+        assertThat(sendRequestQueue.mustSendAck()).isTrue();
+    }
+    //endregion
+
+    //region congestion window and probes
+    @Test
+    void whenCwndReachedNoDataIsSent() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
+        int currentCwndRemaining = 16;
+
+        // Then
+        Optional<SendItem> packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]);
+        assertThat(packet).isEmpty();
+    }
+
+    @Test
+    void whenAddingProbeAndRequestListIsEmptyThenPingFrameShouldBeSent() {
+        // When
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]).get().getPacket();
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(PingFrame.class);
+    }
+
+    @Test
+    void whenCwndReachedSendingProbeLeadsToSinglePing() {
+        // When
+        int currentCwndRemaining = 16;
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]).get().getPacket();
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(PingFrame.class);
+
+        // And
+        Optional<SendItem> another = oneRttPacketAssembler.assemble(currentCwndRemaining, 1232, null, new byte[0]);
+        assertThat(another).isEmpty();
+    }
+
+    @Test
+    void whenAddingProbeToNonEmptySendQueueAndCwndIsLargeEnoughTheNextPacketIsSent() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
+        sendRequestQueue.addProbeRequest();
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(60, 1232, null, new byte[0]).get().getPacket();
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(MaxDataFrame.class);
+    }
+
+    @Test
+    void whenProbeContainsDataThisIsSendInsteadOfQueuedFrames() {
+        // When
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), null);
+        sendRequestQueue.addProbeRequest(List.of(new CryptoFrame(Version.getDefault(), 0, new byte[100])));
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get().getPacket();
+        assertThat(packet).isNotNull();
+        assertThat(packet.getFrames())
+                .hasSize(1)
+                .hasOnlyElementsOfType(CryptoFrame.class);
+    }
+    // endregion
+
+    //region lost callback
+    @Test
+    void testFrameCallbacksAreCalledByPacketLostCallback() {
+        // Given
+        Consumer<QuicFrame> callback1 = mock(Consumer.class);
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), callback1);
+        Consumer<QuicFrame> callback2 = mock(Consumer.class);
+        sendRequestQueue.addRequest(new StreamFrame(1, new byte[924], true), callback2);
+
+        // When
+        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get();
+        sendItem.getPacketLostCallback().accept(sendItem.getPacket());
+
+        // Then
+        verify(callback1).accept(argThat(frame -> frame instanceof MaxDataFrame));
+        verify(callback2).accept(argThat(frame -> frame instanceof StreamFrame));
+    }
+
+    @Test
+    void testInPresenceOfAckFrameAllFrameCallbacksAreCalledByPacketLostCallback() {
+        // Given
+        Consumer<QuicFrame> callback1 = mock(Consumer.class);
+        sendRequestQueue.addRequest(new MaxDataFrame(102_000), callback1);
+        Consumer<QuicFrame> callback2 = mock(Consumer.class);
+        sendRequestQueue.addRequest(new StreamFrame(1, new byte[924], true), callback2);
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        sendRequestQueue.addAckRequest(0);
+
+        // When
+        SendItem sendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get();
+        sendItem.getPacketLostCallback().accept(sendItem.getPacket());
+
+        // Then
+        assertThat(sendItem.getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
+        verify(callback1).accept(argThat(frame -> frame instanceof MaxDataFrame));
+        verify(callback2).accept(argThat(frame -> frame instanceof StreamFrame));
+    }
+    //endregion
+
+    //region packet number
+    @Test
+    void createdPacketHasPacketNumberSet() {
+        // Given
+        sendRequestQueue.addRequest(new MaxStreamDataFrame(0, 0x01000000000000l), null);
+
+        // When
+        QuicPacket packet = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
+
+        // Then
+        assertThat(packet.getPacketNumber()).isNotNull();
+        assertThat(packet.getPacketNumber()).isEqualTo(0);
+    }
+
+    @Test
+    void consecutivePacketsHaveIncreasingPacketNumber() {
+        // Given
+        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
+        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
+        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1160], false), f -> {});
+
+        // When
+        QuicPacket packet1 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
+        QuicPacket packet2 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
+        QuicPacket packet3 = oneRttPacketAssembler.assemble(1200, 1232, new byte[0], new byte[0]).get().getPacket();
+
+        // Then
+        assertThat(packet2.getPacketNumber()).isGreaterThan(packet1.getPacketNumber());
+        assertThat(packet3.getPacketNumber()).isGreaterThan(packet2.getPacketNumber());
+    }
+    //endregion
+
+    //region frame supplier function
+    @Test
     void whenSupplierReturnsNothingAssembleDoesNotReturnFrames() {
         // Given
         sendRequestQueue.addRequest(size -> null, 20, f -> {});
@@ -671,44 +725,9 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Then
         assertThat(optionalSendItem).isEmpty();
     }
+    //endregion
 
-    @Test
-    void whenExplicitAckIsSentImplicitlySendRequestQueueDoesNotContainAckRequestAnymore() throws Exception {
-        // Given
-        // ... there is a delayed ack pending
-        int ackDelay = 20;
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        sendRequestQueue.addAckRequest(ackDelay);  // As test is using mock sender, this call must be done explicitly in the test
-
-        // When
-        // ... it is send together with a ack-eliciting packet
-        sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
-        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
-
-        assertThat(firstPacket).isPresent();
-        assertThat(firstPacket.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
-
-        // Then
-        // ... (even) after delay time
-        clock.fastForward(ackDelay);
-        // ... no ack is sent.
-        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
-        assertThat(secondPacket).isEmpty();
-    }
-
-    @Test
-    void whenAckDoesNotFitInPacketItStaysQueued() throws Exception {
-        // Given
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        sendRequestQueue.addAckRequest();  // As test is using mock sender, this call must be done explicitly in the test
-
-        // When
-        oneRttPacketAssembler.assemble(6000, 2, null, new byte[0]);
-
-        // Then
-        assertThat(sendRequestQueue.mustSendAck()).isTrue();
-    }
-
+    //region packet size
     @Test
     void sizeOfAssembledPacketShouldNotBeGreaterThanMaxRequested() throws Exception {
         // Given
@@ -740,4 +759,32 @@ class PacketAssemblerTest extends AbstractSenderTest {
         Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, maxAvailablePacketSize, new byte[0], new byte[0]);
         assertThat(item).isNotPresent();
     }
+    //endregion
+
+    //region datagram extension
+    @Test
+    void maxSizedDatagramFrameCanBeSentInThePresenceOfOptionalAcks() {
+        // Given
+        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(10, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(11, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(12, 20, EncryptionLevel.App));
+        oneRttAckGenerator.packetReceived(new MockPacket(15, 20, EncryptionLevel.App));
+        // size of ack frame: 13
+        // since sendRequestQueue.addAckRequest(ackDelay); is not called, the ack is not explicit, but implicit
+
+        // Given
+        // data frame size: 1 + 2 + 1179 = 1182, packet overhead: 18, so total: 1200 (can be send in one packet)
+        sendRequestQueue.addRequest(new DatagramFrame(new byte[1179]), f -> {});
+
+        // When
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(6000, 1200, new byte[0], new byte[0]);
+
+        // Then
+        assertThat(item).isPresent();
+        assertThat(item.get().getPacket().getFrames()).hasOnlyElementsOfType(DatagramFrame.class);
+    }
+    //endregion
 }

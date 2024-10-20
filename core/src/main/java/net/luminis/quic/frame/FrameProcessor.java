@@ -17,6 +17,8 @@ public interface FrameProcessor {
 
     void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived);
 
+    void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived);
+
     void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived);
 
     void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived);
