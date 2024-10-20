@@ -29,6 +29,7 @@ import net.luminis.quic.server.ServerConnector;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -119,8 +120,13 @@ public class PushServer {
         public PushProtocolConnection(QuicConnection quicConnection, Logger log) {
             this.log = log;
             System.out.println("New \"push protocol\" connection; will create (server initiated) stream to push messages to client.");
+            try {
             QuicStream quicStream = quicConnection.createStream(false);
             new Thread(() -> generatePushMessages(quicStream), "pusher").start();
+        }
+            catch (IOException e) {
+                // QuicConnection closed before stream could be created; ignore.
+            }
         }
 
         private void generatePushMessages(QuicStream quicStream) {

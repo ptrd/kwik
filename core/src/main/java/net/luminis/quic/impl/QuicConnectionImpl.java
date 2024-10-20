@@ -45,6 +45,7 @@ import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.ErrorAlert;
 import net.luminis.tls.engine.TlsEngine;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -241,7 +242,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public QuicStream createStream(boolean bidirectional) {
+    public QuicStream createStream(boolean bidirectional) throws IOException {
+        if (connectionState != Status.Connected) {
+            throw new IOException("not connected");
+        }
+
         return getStreamManager().createStream(bidirectional);
     }
 

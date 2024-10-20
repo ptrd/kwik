@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.net.URI;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -255,6 +256,31 @@ class QuicClientConnectionImplTest {
 
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
+    }
+
+    @Test
+    void beforeHandshakeIsCompletedCreatingStreamShouldThrow() throws Exception {
+        //  Given
+        simulateHandshaking();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.createStream(true))
+                // Then
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void whenClosedCreatingStreamShouldThrow() throws Exception {
+        // Given
+        simulateSuccessfulConnect();
+        connection.close();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.createStream(true))
+                // Then
+                .isInstanceOf(IOException.class);
     }
     //endregion
 
@@ -646,6 +672,14 @@ class QuicClientConnectionImplTest {
     }
 
     private void simulateSuccessfulConnect() throws Exception {
+        simulateConnect(QuicConnectionImpl.Status.Connected);
+    }
+
+    private void simulateHandshaking() throws Exception {
+        simulateConnect(QuicConnectionImpl.Status.Handshaking);
+    }
+
+    private void simulateConnect(QuicConnectionImpl.Status finalStatus) throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
@@ -659,7 +693,7 @@ class QuicClientConnectionImplTest {
         TransportParameters transportParams = connection.initTransportParameters();
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("transportParams"), transportParams);
 
-        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), finalStatus);
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
