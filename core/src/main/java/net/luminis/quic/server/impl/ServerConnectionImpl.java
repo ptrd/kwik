@@ -74,6 +74,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.quic.impl.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.impl.QuicConnectionImpl.Status.Handshaking;
 import static net.luminis.quic.impl.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 
@@ -451,6 +452,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public ProcessResult process(InitialPacket packet, Instant time) {
         assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
 
+        connectionState = Handshaking;
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
