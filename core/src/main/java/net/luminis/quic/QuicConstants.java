@@ -21,7 +21,7 @@ package net.luminis.quic;
 
 public class QuicConstants {
 
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
+    // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
     public enum TransportParameterId {
         original_destination_connection_id (0),
         max_idle_timeout(1),
@@ -40,7 +40,7 @@ public class QuicConstants {
         active_connection_id_limit(0x0e),
         initial_source_connection_id(0x0f),
         retry_source_connection_id(0x10),
-        // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-05.html#name-quic-transport-parameter
+        // https://www.rfc-editor.org/rfc/rfc9368.html#section-10.1
         version_information(0x11),
         ;
         public final int value;
@@ -50,45 +50,7 @@ public class QuicConstants {
         }
     }
 
-
-    // https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-18
-    public enum TransportParameterIdPreDraft17 {
-        initial_max_stream_data_bidi_local(0),
-        initial_max_data(1),
-        initial_max_bidi_streams(2),
-        idle_timeout(3),
-        preferred_address(4),
-        max_packet_size(5),
-        stateless_reset_token(6),
-        ack_delay_exponent(7),
-        initial_max_uni_streams(8),
-        disable_migration(9),
-        initial_max_stream_data_bidi_remote(10),
-        initial_max_stream_data_uni(11),
-        max_ack_delay(12),
-        original_connection_id(13),
-        // (65535)
-        ;
-        public final short value;
-
-        TransportParameterIdPreDraft17(int value) {
-            this.value = (short) value;
-        }
-    }
-
-    public enum IpVersion {
-        IPv4(4),
-        IPv6(6),
-        // (15)
-        ;
-        public final byte value;
-
-        IpVersion(int value) {
-            this.value = (byte) value;
-        }
-    }
-
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-error-codes
+    // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
     public enum TransportErrorCode {
         NO_ERROR (0x0),
         INTERNAL_ERROR (0x1),
@@ -108,8 +70,8 @@ public class QuicConstants {
         AEAD_LIMIT_REACHED (0xf),
         NO_VIABLE_PATH (0x10),
         CRYPTO_ERROR (0x100),
-        // https://www.ietf.org/archive/id/draft-ietf-quic-version-negotiation-08.html#iana-error
-        VERSION_NEGOTIATION_ERROR(0x53F8),   // !! When this document is approved, it will request permanent allocation of a codepoint in the 0-63 range to replace the provisional codepoint described above.
+        // https://www.rfc-editor.org/rfc/rfc9368.html#section-10.2
+        VERSION_NEGOTIATION_ERROR(0x11),
         ;
 
         public final short value;
