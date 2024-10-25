@@ -18,11 +18,7 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.quic.ConnectionTerminatedEvent;
-import net.luminis.quic.DatagramSocketFactory;
-import net.luminis.quic.QuicClientConnection;
-import net.luminis.quic.QuicSessionTicket;
-import net.luminis.quic.QuicStream;
+import net.luminis.quic.*;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -393,6 +389,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             abortHandshake();
             throw new RuntimeException();  // Should not happen.
         }
+
+        emit(new ConnectionEstablishedEvent(this));
 
         if (!earlyData.isEmpty()) {
             if (earlyDataStatus != Accepted) {

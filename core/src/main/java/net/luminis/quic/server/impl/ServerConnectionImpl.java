@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server.impl;
 
+import net.luminis.quic.ConnectionEstablishedEvent;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -292,6 +293,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 log.debug("Handshake state cannot be set to Confirmed");
             }
         }
+        emit(new ConnectionEstablishedEvent(this));
 
         if (!applicationProtocolStarted) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);

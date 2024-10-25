@@ -688,6 +688,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    protected void emit(ConnectionEstablishedEvent connectionEstablishedEvent) {
+        if (connectionListener != null) {
+            connectionListener.connected(connectionEstablishedEvent);
+        }
+    }
+
     protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {

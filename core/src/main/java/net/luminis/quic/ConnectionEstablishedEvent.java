@@ -21,7 +21,15 @@ package net.luminis.quic;
 /**
  * Event that indicates that the connection is established.
  */
-public interface ConnectionEstablishedEvent {
+public class ConnectionEstablishedEvent {
 
-    QuicConnection connection();
+    private final QuicConnection connection;
+
+    public ConnectionEstablishedEvent(QuicConnection connection) {
+        this.connection = connection;
+    }
+
+    QuicConnection connection() {
+        return connection;
+    }
 }
