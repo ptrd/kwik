@@ -18,6 +18,9 @@
  */
 package net.luminis.quic.impl;
 
+import net.luminis.quic.ConnectionListener;
+import net.luminis.quic.ConnectionTerminatedEvent;
+import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -33,11 +36,14 @@ import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.engine.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.IdleTimeout;
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.ImmediateClose;
 import static net.luminis.quic.common.EncryptionLevel.App;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -208,6 +214,155 @@ class QuicConnectionImplTest {
         verify(sender, atLeast(1)).send(
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
+    }
+    //endregion
+
+    //region close events
+    @Test
+    void whenClosingConnectionItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isFalse();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenClosingDueToIdleTimeoutItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.silentlyCloseConnection(30_000);
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(IdleTimeout);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenClosingWithTransportErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR, "flow control error");
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().hasTransportError()).isTrue();
+        assertThat(eventCaptor.getValue().transportErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR.value);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenClosingWithApplicationErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close(999, "application error induced close");
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isTrue();
+        assertThat(eventCaptor.getValue().applicationErrorCode()).isEqualTo(999);
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenPeerClosedConnectionItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.NO_ERROR.value, null), App);
+
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenPeerClosedWithTransportErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, null), App);
+
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasTransportError()).isTrue();
+        assertThat(eventCaptor.getValue().transportErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenPeerClosedWithApplicationErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 999, false, "application error"), App);
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isTrue();
+        assertThat(eventCaptor.getValue().applicationErrorCode()).isEqualTo(999);
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenCloseIsCalledMultipleTimesListenerShouldOnlyBeCalledOnce() {
+        // Given
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+
+        // When
+        connection.close();
+        connection.close();
+        connection.close();
+
+        // Then
+        verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
     }
     //endregion
 

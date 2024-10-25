@@ -96,6 +96,12 @@ public interface QuicConnection extends DatagramExtension {
 
     void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
 
+    /**
+     * Register a listener that will be called when the connection is established or terminated.
+     * @param connectionListener
+     */
+    void setConnectionListener(ConnectionListener connectionListener);
+
     void close();
 
     /**

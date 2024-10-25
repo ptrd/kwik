@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.impl;
 
+import net.luminis.quic.ConnectionTerminatedEvent;
 import net.luminis.quic.DatagramSocketFactory;
 import net.luminis.quic.QuicClientConnection;
 import net.luminis.quic.QuicSessionTicket;
@@ -248,6 +249,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
         if (checkForStatelessResetToken(data)) {
+            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.StatelessReset, true, null, null));
             if (enterDrainingState()) {
                 log.info("Entering draining state because stateless reset was received");
             }

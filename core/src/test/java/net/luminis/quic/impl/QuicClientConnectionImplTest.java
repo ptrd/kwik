@@ -19,9 +19,12 @@
 package net.luminis.quic.impl;
 
 import net.luminis.quic.ConnectionConfig;
+import net.luminis.quic.ConnectionListener;
+import net.luminis.quic.ConnectionTerminatedEvent;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.crypto.ConnectionSecrets;
@@ -43,6 +46,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.ECPublicKey;
@@ -641,6 +645,45 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region statelessreset
+    @Test
+    void whenStatelessResetIsReceivedConnectionShouldBeClosed() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        assertThat(connection.connectionState).isEqualTo(QuicConnectionImpl.Status.Draining);
+    }
+
+    @Test
+    void whenStatelessResetIsReceivedConnectionListenerIsCalled() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        verify(listener).disconnected(eventCaptor.capture());
+        ConnectionTerminatedEvent connectionTerminatedEvent = eventCaptor.getValue();
+        assertThat(connectionTerminatedEvent.closeReason()).isEqualTo(ConnectionTerminatedEvent.CloseReason.StatelessReset);
+        assertThat(connectionTerminatedEvent.closedByPeer()).isTrue();
+        assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
+    }
+    //endregion
     //region helper methods
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
