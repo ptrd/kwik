@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.cli;
 
+import net.luminis.quic.ConnectionTerminatedEvent;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.impl.TransportParameters;
@@ -160,12 +161,23 @@ public class InteractiveShell {
 
         try {
             builder.connectTimeout(Duration.ofMillis(connectionTimeout));
-            quicConnection = (QuicClientConnectionImpl) builder.build();
+            quicConnection = builder.build();
+            quicConnection.setConnectionListener(this::closed);
+
             quicConnection.connect();
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             System.out.println("\nError: " + e);
         }
+    }
+
+    private void closed(ConnectionTerminatedEvent terminationEvent) {
+        quicConnection = null;
+        System.out.println("Connection terminated" +
+                (terminationEvent.closedByPeer()? " by peer: ": ": ") +
+                terminationEvent.closeReason() +
+                (terminationEvent.hasError()? " (" + terminationEvent.errorDescription() + ")": ""));
     }
 
     private void close(String arg) {

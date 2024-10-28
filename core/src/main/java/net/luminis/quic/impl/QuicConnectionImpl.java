@@ -528,7 +528,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
         getStreamManager().abortAll();
         getSender().stop();
-        log.info("Closing " + this + " after " + idleTime + " ms of inactivity (idle timeout)");
         log.getQLog().emitConnectionClosedEvent(Instant.now());
         terminate();
     }
@@ -640,9 +639,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             if (closing.hasError()) {
                 peerClosedWithError(closing);
             }
-            else {
-                log.info("Peer is closing " + this);
-            }
             getSender().stop();
 
             getStreamManager().abortAll();
@@ -658,7 +654,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void peerClosedWithError(ConnectionCloseFrame closeFrame) {
-        log.info("Peer is closing " + this + " with " + determineClosingErrorMessage(closeFrame));
     }
 
     private void drain() {
@@ -686,6 +681,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (connectionListener != null) {
             connectionListener.disconnected(connectionDisconnectEvent);
         }
+        String logMessage = (connectionDisconnectEvent.closedByPeer()? "Peer is closing ": "Closing ") + this +
+                (connectionDisconnectEvent.hasError()? " with error " + connectionDisconnectEvent.errorDescription(): "") + ".";
+        log.info(logMessage);
     }
 
     protected void emit(ConnectionEstablishedEvent connectionEstablishedEvent) {

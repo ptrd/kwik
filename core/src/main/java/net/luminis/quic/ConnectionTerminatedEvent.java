@@ -18,6 +18,8 @@
  */
 package net.luminis.quic;
 
+import net.luminis.tls.TlsConstants;
+
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 
 /*
@@ -101,4 +103,40 @@ public class ConnectionTerminatedEvent {
     public Long applicationErrorCode() {
         return applicationErrorCode;
     }
+
+    /**
+     * Returns a human-readable description of the error.
+     * @return  a human-readable description of the error.
+     */
+    public String errorDescription() {
+        if (hasTransportError()) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "CRYPTO_ERROR (0x0100-0x01ff): The cryptographic handshake failed. A range of 256 values is reserved for
+            //  carrying error codes specific to the cryptographic handshake that is used."
+            // https://www.rfc-editor.org/rfc/rfc9001.html#section-4.8
+            // "A TLS alert is converted into a QUIC connection error. The AlertDescription value is added to 0x0100 to
+            //  produce a QUIC error code from the range reserved for CRYPTO_ERROR"
+            if (transportErrorCode >= 0x0100 && transportErrorCode <= 0x01ff) {
+                return "Transport error: CRYPTO_ERROR (" + alertFromValue((int) (transportErrorCode - 0x0100)) + ")";
+            }
+            else {
+                return "Transport error: " + QuicConstants.TransportErrorCode.fromValue(transportErrorCode);
+            }
+        }
+        else if (hasApplicationError()) {
+            return "Application error: " + applicationErrorCode;
+        }
+        else {
+            return "No error";
+        }
+    }
+
+    public static TlsConstants.AlertDescription alertFromValue(int value) {
+            for (TlsConstants.AlertDescription alert : TlsConstants.AlertDescription.values()) {
+                if (alert.value == value) {
+                    return alert;
+                }
+            }
+            return null;
+        }
 }

@@ -74,10 +74,19 @@ public class QuicConstants {
         VERSION_NEGOTIATION_ERROR(0x11),
         ;
 
-        public final short value;
+        public final int value;
 
         TransportErrorCode(int value) {
-            this.value = (short) value;
+            this.value = value;
+        }
+
+        public static TransportErrorCode fromValue(Long transportErrorCode) {
+            for (TransportErrorCode code: values()) {
+                if (code.value == transportErrorCode) {
+                    return code;
+                }
+            }
+            return null;
         }
     }
 }

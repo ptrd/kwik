@@ -21,11 +21,16 @@ package net.luminis.quic.util;
 public class Bytes {
 
     public static String bytesToHex(byte[] data) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : data) {
-            sb.append(String.format("%02x", b));
+        if (data != null) {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : data) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
         }
-        return sb.toString();
+        else {
+            return "";
+        }
     }
 
     public static boolean allZero(byte[] data) {
