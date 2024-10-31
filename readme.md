@@ -139,19 +139,19 @@ checking. The builder has a method for this:
 
     builder.noServerCertificateCheck()
 
-The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/QuicClientConnection.java#L77).
+The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/QuicClientConnection.java#L77).
 
-The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/log/Logger.java); Kwik provides two convenient implementations
+The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/log/Logger.java); Kwik provides two convenient implementations
 that you can use: `SysOutLogger` and `FileLogger`. Various log categories can be enabled or disabled by the 
 `logXXX()` methods, e.g. `logger.logInfo(true)`.
 
-Take a look at the samples in the [sample package](https://github.com/ptrd/kwik/tree/master/src/main/java/net/luminis/quic/sample)
+Take a look at the samples in the [sample package](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/net/luminis/quic/sample)
 for more inspiration.
 
 ### Server
 
 Creating a QUIC server with Kwik consist of a few steps. First you need to create an application protocol handler by
-implementing the [ApplicationProtocolConnectionFactory](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolConnectionFactory.java) interface. Its `createConnection` method should return an implementation of [ApplicationProtocolConnection](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolConnection.java) that, as the name suggests,
+implementing the [ApplicationProtocolConnectionFactory](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolConnectionFactory.java) interface. Its `createConnection` method should return an implementation of [ApplicationProtocolConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolConnection.java) that, as the name suggests,
 represents your application protocol connection. It's `acceptPeerInitiatedStream` method is the handler that is called by 
 Kwik when a client initiates a stream for the given protocol. The implementation of this `acceptPeerInitiatedStream` method
 should start a stream handler, but should itself return immediately, as it is called on the thread that handles
@@ -159,7 +159,7 @@ incoming QUIC messages. If, for example, your application protocol follows the r
 reads the request from the QUIC stream, processes it, creates a response, writes the response to the QUIC stream and closes the stream.
 
 To complete the `ApplicationProtocolConnectionFactory` you should at least override the following two methods of the
-[ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/src/main/java/net/luminis/quic/server/ApplicationProtocolSettings.java) 
+[ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolSettings.java) 
 interface:
 
     int maxConcurrentPeerInitiatedUnidirectionalStreams()
@@ -219,7 +219,7 @@ just don't set `maxOpenUnidirectionalStreams` as the default is 0, and provide a
             .build();
 
 That concludes creating a server. You can find working examples in the
-[sample directory](https://github.com/ptrd/kwik/tree/master/src/main/java/net/luminis/quic/sample).
+[sample directory](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/net/luminis/quic/sample).
 
 
 
