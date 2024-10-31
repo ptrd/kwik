@@ -52,6 +52,8 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason;
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.ConnectionLost;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
@@ -522,7 +524,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
-        emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.IdleTimeout, false, null, null));
+        emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
@@ -570,7 +572,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             return;
         }
 
-        emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.ImmediateClose, false,
+        emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
                 errorType == QUIC_LAYER_ERROR? error: null,
                 errorType == APPLICATION_ERROR? error: null));
 
@@ -632,7 +634,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // "The draining state is entered once an endpoint receives a CONNECTION_CLOSE frame, which indicates that its
         //  peer is closing or draining."
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
-            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.ImmediateClose, true,
+            emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, true,
                     closing.hasTransportError()? closing.getErrorCode(): null,
                     closing.hasApplicationProtocolError()? closing.getErrorCode(): null));
 

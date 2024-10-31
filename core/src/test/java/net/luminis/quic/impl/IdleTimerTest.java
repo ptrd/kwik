@@ -31,6 +31,7 @@ import org.mockito.Mockito;
 
 import java.util.concurrent.ScheduledExecutorService;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class IdleTimerTest {
@@ -92,4 +93,29 @@ class IdleTimerTest {
         clock.fastForward(100);
         verify(connection, times(1)).silentlyCloseConnection(anyLong());
     }
+
+    @Test
+    void whenLastActionWasPacketReceivedItIsNotTailLoss() {
+        // Given
+        idleTimer.setIdleTimeout(200);
+        clock.fastForward(150);
+        idleTimer.packetProcessed();
+        clock.fastForward(50);
+
+        // Then
+        assertThat(idleTimer.isTailLoss()).isFalse();
+    }
+
+    @Test
+    void whenLastActionWasPacketSentItIsTailLoss() {
+        // Given
+        idleTimer.setIdleTimeout(200);
+        clock.fastForward(150);
+        idleTimer.packetSent(new ShortHeaderPacket(Version.getDefault(), new byte[0], new PingFrame()), clock.instant());
+        clock.fastForward(50);
+
+        // Then
+        assertThat(idleTimer.isTailLoss()).isTrue();
+    }
+
 }

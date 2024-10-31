@@ -51,6 +51,14 @@ public class ConnectionTerminatedEvent {
         this.applicationErrorCode = applicationErrorCode;
     }
 
+    public ConnectionTerminatedEvent(QuicConnection connection, CloseReason closeReason, boolean closedByPeer) {
+        this.connection = connection;
+        this.closeReason = closeReason;
+        this.closedByPeer = closedByPeer;
+        this.transportErrorCode = null;
+        this.applicationErrorCode = null;
+    }
+
     public QuicConnection connection() {
         return connection;
     }
