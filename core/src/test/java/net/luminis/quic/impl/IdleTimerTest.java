@@ -118,4 +118,20 @@ class IdleTimerTest {
         assertThat(idleTimer.isTailLoss()).isTrue();
     }
 
+    @Test
+    void whenSendingAckElicitingItShouldNotResetTimerWhenNotTheFirst() {
+        // Given
+        idleTimer.setIdleTimeout(200);
+        clock.fastForward(150);
+        idleTimer.packetSent(new ShortHeaderPacket(Version.getDefault(), new byte[0], new PingFrame()), clock.instant());
+        clock.fastForward(150);
+
+        // When
+        idleTimer.packetSent(new ShortHeaderPacket(Version.getDefault(), new byte[0], new PingFrame()), clock.instant());
+        clock.fastForward(150);
+
+        // Then
+        verify(connection).silentlyCloseConnection(anyLong());
+    }
+
 }

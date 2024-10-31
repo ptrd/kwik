@@ -66,6 +66,7 @@ public class IdleTimer {
 
         timer = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("idle-timer"));
         lastActionTime = clock.instant();
+        lastAction = Action.PACKET_RECEIVED;  // Initial state is like a packet was received (no tail loss).
     }
 
     void setIdleTimeout(long idleTimeoutInMillis) {
@@ -120,7 +121,7 @@ public class IdleTimer {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-31#section-10.1
             // "An endpoint also restarts its idle timer when sending an ack-eliciting packet if no other ack-eliciting
             //  packets have been sent since last receiving and processing a packet. "
-            if (packet.isAckEliciting()) {
+            if (packet.isAckEliciting() && lastAction == Action.PACKET_RECEIVED) {
                 lastActionTime = sendTime;
                 lastAction = Action.PACKET_SENT;
             }
