@@ -524,7 +524,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
+        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+            return;
+        }
+
         emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."

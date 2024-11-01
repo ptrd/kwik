@@ -364,6 +364,22 @@ class QuicConnectionImplTest {
         // Then
         verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
     }
+
+
+    @Test
+    void whenClosingIdleTimeoutCloseShouldBeIgnored() {
+        // Given
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+        connection.immediateClose(App);
+
+        // When
+        connection.silentlyCloseConnection(30_000);
+
+        // Then
+        verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
+    }
+
     //endregion
 
     //region RFC 9221 Datagram Extension
