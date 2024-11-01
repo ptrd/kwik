@@ -159,7 +159,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(new TransportParameters());
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -179,7 +179,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(transportParameters);
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -198,7 +198,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(retryPacket.getSourceConnectionId());
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
+        verify(connection, never()).immediateCloseWithError(anyInt(), anyString());
     }
 
     @Test
@@ -224,7 +224,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setOriginalDestinationConnectionId(originalSourceConnectionId);
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
+        verify(connection, never()).immediateCloseWithError(anyInt(), anyString());
     }
 
     @Test
@@ -238,7 +238,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(transportParameters);
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
     //endregion

@@ -23,7 +23,6 @@ import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdInfo;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.client.CertificateSelector;
-import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.crypto.CryptoStream;
 import net.luminis.quic.crypto.MissingKeysException;
@@ -192,7 +191,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         streamManager = new StreamManager(this, Role.Client, log, connectionProperties);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
-            immediateCloseWithError(EncryptionLevel.App, error, reason);
+            immediateCloseWithError(error, reason);
         };
         connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
 
@@ -574,6 +573,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private void hasHandshakeKeys() {
+        currentEncryptionLevel = Handshake;
         synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.HasHandshakeKeys)) {
                 handshakeState = HandshakeState.HasHandshakeKeys;
@@ -597,6 +597,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     public void handshakeFinished() {
             connectionSecrets.computeApplicationSecrets(tlsEngine);
+            currentEncryptionLevel = App;
             synchronized (handshakeStateLock) {
                 if (handshakeState.transitionAllowed(HandshakeState.HasAppKeys)) {
                     handshakeState = HandshakeState.HasAppKeys;
@@ -767,11 +768,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected void immediateCloseWithError(EncryptionLevel level, long error, ErrorType errorType, String errorReason) {
+    protected void immediateCloseWithError(long error, ErrorType errorType, String errorReason) {
         if (keepAliveActor != null) {
             keepAliveActor.shutdown();
         }
-        super.immediateCloseWithError(level, error, errorType, errorReason);
+        super.immediateCloseWithError(error, errorType, errorReason);
     }
 
     @Override
@@ -885,12 +886,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (processedRetryPacket) {
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! connectionIdManager.validateRetrySourceConnectionId(peerTransportParams.getRetrySourceConnectionId())) {
-                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
+                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
             }
         }
         else {
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
-                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
+                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
         }
 
@@ -926,7 +927,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // "clients MUST validate that the server's Chosen Version is equal to the negotiated version; if they do not
             //  match, the client MUST close the connection with a version negotiation error. "
             log.error(String.format("Chosen version is not equal to negotiated version: connection version: %s, version info: %s", quicVersion, versionInformation));
-            immediateCloseWithError(Handshake, VERSION_NEGOTIATION_ERROR.value, "Chosen version does not match packet version");
+            immediateCloseWithError(VERSION_NEGOTIATION_ERROR.value, "Chosen version does not match packet version");
         }
         else {
             versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;
@@ -943,10 +944,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
             log.error("Missing connection id from server transport parameter");
             if (transportParameters.getInitialSourceConnectionId() == null) {
-                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "missing initial_source_connection_id transport parameter");
+                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "missing initial_source_connection_id transport parameter");
             }
             else {
-                immediateCloseWithError(Handshake, TRANSPORT_PARAMETER_ERROR.value, "missing original_destination_connection_id transport parameter");
+                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "missing original_destination_connection_id transport parameter");
             }
             return false;
         }
@@ -957,12 +958,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         //      corresponding Destination or Source Connection ID fields of Initial packets."
         if (! Arrays.equals(connectionIdManager.getCurrentPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
-            immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
+            immediateCloseWithError(PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
             return false;
         }
         if (! Arrays.equals(connectionIdManager.getOriginalDestinationConnectionId(), transportParameters.getOriginalDestinationConnectionId())) {
             log.error("Original destination connection id does not match corresponding transport parameter");
-            immediateCloseWithError(Handshake, PROTOCOL_VIOLATION.value, "original_destination_connection_id transport parameter does not match");
+            immediateCloseWithError(PROTOCOL_VIOLATION.value, "original_destination_connection_id transport parameter does not match");
             return false;
         }
 

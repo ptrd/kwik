@@ -45,6 +45,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.IdleTimeout;
 import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.ImmediateClose;
 import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Handshake;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,7 +74,7 @@ class QuicConnectionImplTest {
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
@@ -87,7 +88,7 @@ class QuicConnectionImplTest {
     void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(Initial);
+        connection.immediateClose();
         connection.runPostProcessingActions();
 
         // When
@@ -102,7 +103,7 @@ class QuicConnectionImplTest {
     void whenClosingNormalPacketLeadsToSendingConnectionClose() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(App);
+        connection.immediateClose();
         clearInvocations(sender);
 
         // When
@@ -118,7 +119,7 @@ class QuicConnectionImplTest {
         // Given
 
         // When
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // Then
         verify(connection.getStreamManager()).abortAll();
@@ -161,7 +162,8 @@ class QuicConnectionImplTest {
     @Test
     void afterThreePtoConnectionIsTerminated() throws Exception {
         // Given
-        connection.immediateClose(App);
+        connectionEncryptionLevel(App);
+        connection.immediateClose();
 
         // When
         testClock.fastForward(11 * onePto / 4);
@@ -191,7 +193,7 @@ class QuicConnectionImplTest {
     @Test
     void inClosingStateNumberOfConnectionClosePacketsSendShouldBeRateLimited() {
         // Given
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // When
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame());
@@ -204,8 +206,9 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void applicationCloseWithErrorSendsConnectionCloseFrame1d() {
+    void applicationCloseWithErrorSendsConnectionCloseFrame1d() throws Exception {
         // Given
+        connectionEncryptionLevel(App);
 
         // When
         connection.close(999, "application error induced close");
@@ -213,6 +216,35 @@ class QuicConnectionImplTest {
         // Then
         verify(sender, atLeast(1)).send(
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
+                any(EncryptionLevel.class) );
+    }
+
+    @Test
+    void whenConnectionIsClosedDuringHandshakeConnectionCloseFrameIsSentOnTwoLevels() throws Exception {
+        connectionEncryptionLevel(Handshake);
+
+        // When
+        connection.close(QuicConstants.TransportErrorCode.INTERNAL_ERROR, "something went wrong");
+
+        // Then
+        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<EncryptionLevel> levelCaptor = ArgumentCaptor.forClass(EncryptionLevel.class);
+        verify(sender, atLeast(2)).send(frameCaptor.capture(), levelCaptor.capture());
+
+        assertThat(frameCaptor.getAllValues()).hasOnlyElementsOfType(ConnectionCloseFrame.class);
+        assertThat(levelCaptor.getAllValues()).containsExactlyInAnyOrder(Handshake, Initial);
+    }
+
+    @Test
+    void whenConnectionIsClosedWithAppErrorDuringHandshakeConnectionCloseFrame1cIsSent() throws Exception {
+        connectionEncryptionLevel(Handshake);
+
+        // When
+        connection.close(999, "application error induced close");
+
+        // Then
+        verify(sender, atLeast(1)).send(
+                argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1c),
                 any(EncryptionLevel.class) );
     }
     //endregion
@@ -371,7 +403,7 @@ class QuicConnectionImplTest {
         // Given
         ConnectionListener listener = mock(ConnectionListener.class);
         connection.setConnectionListener(listener);
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // When
         connection.silentlyCloseConnection(30_000);
@@ -522,8 +554,9 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError()  {
+    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError() throws Exception {
         // Given
+        connectionEncryptionLevel(App);
         DatagramFrame datagramFrame = new DatagramFrame(new byte[16]);
 
         // When
@@ -555,6 +588,10 @@ class QuicConnectionImplTest {
         TransportParameters transportParameters = new TransportParameters();
         transportParameters.setMaxDatagramFrameSize(maxDatagramFrameSize);
         connection.processCommonTransportParameters(transportParameters);
+    }
+
+    private void connectionEncryptionLevel(EncryptionLevel level) throws Exception {
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("currentEncryptionLevel"), level);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {
