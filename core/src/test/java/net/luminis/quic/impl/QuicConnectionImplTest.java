@@ -57,7 +57,8 @@ class QuicConnectionImplTest {
     private QuicConnectionImpl connection;
     private SenderImpl sender;
     private TestClock testClock;
-    private TestScheduledExecutor testExecutor;
+    private TestScheduledExecutor scheduler;
+    private TestScheduledExecutor callbackExecutor;
 
     @BeforeEach
     void createObjectUnderTest() throws Exception {
@@ -65,8 +66,10 @@ class QuicConnectionImplTest {
         when(sender.getPto()).thenReturn(onePto);
         connection = new NonAbstractQuicConnection();
         testClock = new TestClock();
-        testExecutor = new TestScheduledExecutor(testClock);
-        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), testExecutor);
+        scheduler = new TestScheduledExecutor(testClock);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), scheduler);
+        callbackExecutor = new TestScheduledExecutor(testClock);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("callbackThread"), callbackExecutor);
     }
 
     //region close
@@ -276,6 +279,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.close();
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -295,6 +299,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.silentlyCloseConnection(30_000);
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -313,6 +318,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.close(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR, "flow control error");
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -332,6 +338,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.close(999, "application error induced close");
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -351,6 +358,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.NO_ERROR.value, null), App);
+        callbackExecutor.clockAdvanced();
 
         verify(closeCallback).disconnected(eventCaptor.capture());
         assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
@@ -369,6 +377,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, null), App);
+        callbackExecutor.clockAdvanced();
 
         verify(closeCallback).disconnected(eventCaptor.capture());
         assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
@@ -388,6 +397,7 @@ class QuicConnectionImplTest {
 
         // When
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 999, false, "application error"), App);
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -407,8 +417,11 @@ class QuicConnectionImplTest {
 
         // When
         connection.close();
+        callbackExecutor.clockAdvanced();
         connection.close();
+        callbackExecutor.clockAdvanced();
         connection.close();
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
@@ -421,9 +434,11 @@ class QuicConnectionImplTest {
         ConnectionListener listener = mock(ConnectionListener.class);
         connection.setConnectionListener(listener);
         connection.immediateClose();
+        scheduler.clockAdvanced();
 
         // When
         connection.silentlyCloseConnection(30_000);
+        callbackExecutor.clockAdvanced();
 
         // Then
         verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
@@ -559,12 +574,12 @@ class QuicConnectionImplTest {
         // Given
         datagramExtensionIsEnabled(1000);
         Consumer handler = mock(Consumer.class);
-        connection.setDatagramHandler(handler, testExecutor);
+        connection.setDatagramHandler(handler, scheduler);
         DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
 
         // When
         connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
-        testExecutor.clockAdvanced();
+        scheduler.clockAdvanced();
 
         // Then
         verify(handler).accept(datagramFrame.getData());

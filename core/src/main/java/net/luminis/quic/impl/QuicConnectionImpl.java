@@ -136,6 +136,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ConnectionCloseFrame lastConnectionCloseFrameSent;
     private final ScheduledExecutorService scheduler;
     private ConnectionListener connectionListener;
+    private final ExecutorService callbackThread;
 
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
     protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
@@ -156,6 +157,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
+        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callback-executor"));
         currentEncryptionLevel = Initial;
     }
 
@@ -717,7 +719,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     protected void emit(ConnectionTerminatedEvent connectionDisconnectEvent) {
         if (connectionListener != null) {
-            connectionListener.disconnected(connectionDisconnectEvent);
+            callbackThread.submit(() -> connectionListener.disconnected(connectionDisconnectEvent));
         }
         String logMessage = (connectionDisconnectEvent.closedByPeer()? "Peer is closing ": "Closing ") + this +
                 (connectionDisconnectEvent.hasError()? " with error " + connectionDisconnectEvent.errorDescription(): "") + ".";
@@ -726,7 +728,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     protected void emit(ConnectionEstablishedEvent connectionEstablishedEvent) {
         if (connectionListener != null) {
-            connectionListener.connected(connectionEstablishedEvent);
+            callbackThread.submit(() -> connectionListener.connected(connectionEstablishedEvent));
         }
     }
 
