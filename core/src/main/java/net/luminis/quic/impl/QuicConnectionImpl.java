@@ -706,6 +706,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected boolean enterDrainingState() {
         if (!connectionState.closingOrDraining()) {
             getSender().stop();
+            getStreamManager().abortAll();
             drain();
             return true;
         }

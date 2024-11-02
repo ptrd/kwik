@@ -33,6 +33,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.ByteUtils;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -659,6 +660,24 @@ class QuicClientConnectionImplTest {
 
         // Then
         assertThat(connection.connectionState).isEqualTo(QuicConnectionImpl.Status.Draining);
+    }
+
+    @Test
+    void whenStatelessResetIsReceivedAllStreamsAreAborted() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        StreamManager streamManager = mock(StreamManager.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("streamManager"), streamManager);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        verify(streamManager).abortAll();
     }
 
     @Test
