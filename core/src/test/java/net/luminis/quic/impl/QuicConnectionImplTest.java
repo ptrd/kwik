@@ -115,6 +115,23 @@ class QuicConnectionImplTest {
     }
 
     @Test
+    void whenClosingNormalPacketLeadsToSendingConnectionCloseWithSameErrorInfo() {
+        // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
+        connection.immediateCloseWithError(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, "something went wrong");
+        clearInvocations(sender);
+
+        // When
+        ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
+        packetProcessor.processPacket(packet, metaDataForNow());
+
+        // Then
+        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(sender).send(frameCaptor.capture(), any(EncryptionLevel.class), any(Consumer.class));
+        assertThat(((ConnectionCloseFrame) frameCaptor.getValue()).getErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value);
+    }
+
+    @Test
     void whenClosingStreamsAreClosed() {
         // Given
 

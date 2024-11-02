@@ -133,6 +133,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected volatile Status connectionState;
 
     private RateLimiter closeFramesSendRateLimiter;
+    private volatile ConnectionCloseFrame lastConnectionCloseFrameSent;
     private final ScheduledExecutorService scheduler;
     private ConnectionListener connectionListener;
 
@@ -642,22 +643,24 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                     getSender().send(closeFrame, App);
                     break;
             }
+            lastConnectionCloseFrameSent = closeFrame;
         }
     }
 
     protected void handlePacketInClosingState(QuicPacket packet) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
         // "An endpoint MAY enter the draining state from the closing state if it receives a CONNECTION_CLOSE frame,
         //  which indicates that the peer is also closing or draining."
         if (packet.getFrames().stream().filter(frame -> frame instanceof ConnectionCloseFrame).findAny().isPresent()) {
             connectionState = Status.Draining;
         }
         else {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.1
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion.getVersion()), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
+            assert lastConnectionCloseFrameSent != null;
+            closeFramesSendRateLimiter.execute(() -> send(lastConnectionCloseFrameSent, packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
         }
     }
 
