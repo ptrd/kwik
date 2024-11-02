@@ -665,7 +665,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
         // "The draining state is entered once an endpoint receives a CONNECTION_CLOSE frame, which indicates that its
         //  peer is closing or draining."
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
@@ -680,7 +680,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
             getStreamManager().abortAll();
 
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
@@ -695,10 +695,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     private void drain() {
         connectionState = Status.Draining;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
-        // "The closing and draining connection states exist to ensure that connections close cleanly and that
-        //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
-        //  times the current Probe Timeout (PTO) interval"
+        /// https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
+        // "The closing and draining connection states exist to ensure that connections close cleanly and that delayed
+        //  or reordered packets are properly discarded. These states SHOULD persist for at least three times the
+        //  current Probe Timeout (PTO) interval"
         int pto = getSender().getPto();
         schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
     }

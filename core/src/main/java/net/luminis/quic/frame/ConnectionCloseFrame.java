@@ -47,10 +47,9 @@ public class ConnectionCloseFrame extends QuicFrame {
      */
     public ConnectionCloseFrame(Version quicVersion) {
         frameType = 0x1c;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-20
-        // "NO_ERROR (0x0):  An endpoint uses this with CONNECTION_CLOSE to
-        //      signal that the connection is being closed abruptly in the absence
-        //      of any error."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+        // "NO_ERROR (0x0):  An endpoint uses this with CONNECTION_CLOSE to signal that the connection is being closed
+        //  abruptly in the absence of any error."
         errorCode = 0x00;
     }
 
