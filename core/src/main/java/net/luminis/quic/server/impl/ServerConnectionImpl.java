@@ -165,7 +165,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
-        streamManager = new StreamManager(this, Role.Server, log, configuration);
+        streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }

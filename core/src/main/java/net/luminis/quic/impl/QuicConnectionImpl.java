@@ -136,7 +136,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ConnectionCloseFrame lastConnectionCloseFrameSent;
     private final ScheduledExecutorService scheduler;
     private ConnectionListener connectionListener;
-    private final ExecutorService callbackThread;
+    protected final ExecutorService callbackThread;
 
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
     protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;

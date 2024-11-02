@@ -188,7 +188,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
 
-        streamManager = new StreamManager(this, Role.Client, log, connectionProperties);
+        streamManager = new StreamManager(this, Role.Client, log, connectionProperties, callbackThread);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
