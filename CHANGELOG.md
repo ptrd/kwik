@@ -1,5 +1,16 @@
 # Releases
 
+## 0.9 (2024-11-04)
+
+Added support for "Unreliable Datagram Extension", [RFC 9221](https://www.rfc-editor.org/rfc/rfc9221.html)
+
+Other improvements and bug fixes:
+- ServerConnector.build() now throws specific exceptions rather than generic Exception [issue 52](https://github.com/ptrd/kwik/issues/52)
+- fix: bug with max stream id [issue 51](https://github.com/ptrd/kwik/issues/51)
+- fix: packet coalesced with first initial was not parsed / processed (reported by Lars Eggert, QUIC interop)
+- two fixes in (TLS) handshake: corrected the way the server selects the signature algorithm
+  and let client offer all signature algorithms it supports in cryptographic negotiation.
+
 ## 0.8.13 (2024-07-02)
 
 - defined Java modules
