@@ -29,12 +29,14 @@ import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.receive.RawPacket;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionFactory;
+import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.test.ByteUtils;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -279,6 +281,26 @@ class ServerConnectorImplTest {
 
         // Then
         verify(connection, atLeastOnce()).close();
+    }
+
+    @Test
+    @Disabled("till fixed")
+    void receivingHandshakePacketShouldNotLeadToAnyFormOfConnection() throws Exception {
+        // Given
+        ServerConnectionImpl connection = createMockServerConnection();
+        installServerConnectionFactoryReturning(connection);
+
+        // When
+        server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(plausibleHandshakeAsHex()))));
+        testExecutor.check();
+
+        // Then
+        ServerConnectionRegistry connectionRegistry = (ServerConnectionRegistry) new FieldReader(server, server.getClass().getDeclaredField("connectionRegistry")).read();
+        assertThat(connectionRegistry.getAllConnections()).isEmpty();
+    }
+
+    private String plausibleHandshakeAsHex() {
+        return "e000000001088f609080b6d8a632000044d2a83ef8d31f6996534343e3e85cb20cef2df1ba";
     }
 
     private ServerConnectionImpl createMockServerConnection() {
