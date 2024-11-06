@@ -585,13 +585,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
                 errorType == QUIC_LAYER_ERROR? error: null,
                 errorType == APPLICATION_ERROR? error: null));
 
-        if (error == NO_ERROR.value) {
-            log.info("Closing " + this);
-        }
-        else {
-            log.error("Closing " + this + " with error " + error + (errorReason != null? ": " + errorReason:""));
-        }
-
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
