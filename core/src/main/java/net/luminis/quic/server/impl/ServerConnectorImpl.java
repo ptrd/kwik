@@ -234,7 +234,8 @@ public class ServerConnectorImpl implements ServerConnector {
                         synchronized (this) {
                             if (mightStartNewConnection(data, version, dcid) && connectionRegistry.isExistingConnection(clientAddress, dcid).isEmpty()) {
                                 connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
-                            } else if (initialWithUnspportedVersion(data, version)) {
+                            }
+                            else if (initialWithUnspportedVersion(data, version)) {
                                 log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
                                 // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
                                 // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
@@ -327,6 +328,10 @@ public class ServerConnectorImpl implements ServerConnector {
     private void closed(ServerConnectionImpl connection) {
         ServerConnectionProxy removedConnection = connectionRegistry.removeConnection(connection);
         removedConnection.dispose();
+    }
+
+    protected void closeAllConnections() {
+        connectionRegistry.getAllConnections().forEach(ServerConnectionProxy::closeConnection);
     }
 
     private class ServerConnectorContext implements Context {

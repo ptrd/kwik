@@ -75,6 +75,11 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
     }
 
     @Override
+    public void closeConnection() {
+        connection.closeConnection();
+    }
+
+    @Override
     public void dispose() {
         connection.dispose();
     }

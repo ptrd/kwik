@@ -194,17 +194,8 @@ class ServerConnectorImplTest {
     @Test
     void serverReceivingValidInitialShouldCreateNewConnection() throws Exception {
         // Given
-        ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
-        ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
-        when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
-        when(connection.getInitialConnectionId()).thenReturn(new byte[8]);
-        when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
-        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
-                .thenReturn(connection);
-        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(ByteBuffer.class), any(PacketMetaData.class)))
-                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), ((PacketMetaData) i.getArgument(3))));
-
-        FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
+        ServerConnectionImpl connection = createMockServerConnection();
+        ServerConnectionFactory connectionFactory = installServerConnectionFactoryReturning(connection);
 
         // When
         server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()))));
@@ -272,6 +263,41 @@ class ServerConnectorImplTest {
         ServerConnectionRegistryImpl connectionRegistry = (ServerConnectionRegistryImpl) new FieldReader(server, server.getClass().getDeclaredField("connectionRegistry")).read();
         // As the first packet was valid, there must be an entry with the original DCID
         assertThat(connectionRegistry.isExistingConnection(null, ByteUtils.hexToBytes("8f609080b6d8a632"))).isPresent();
+    }
+
+    @Test
+    void closingConnectionsShouldCloseConnections() throws Exception {
+        // Given
+        ServerConnectionImpl connection = createMockServerConnection();
+        installServerConnectionFactoryReturning(connection);
+
+        server.process(createPacket(ByteBuffer.wrap(ByteUtils.hexToBytes(validInitialAsHex()))));
+        testExecutor.check();
+
+        // When
+        server.closeAllConnections();
+
+        // Then
+        verify(connection, atLeastOnce()).close();
+    }
+
+    private ServerConnectionImpl createMockServerConnection() {
+        ServerConnectionImpl connection = mock(ServerConnectionImpl.class);
+        when(connection.getSourceConnectionId()).thenReturn(new byte[8]);
+        when(connection.getInitialConnectionId()).thenReturn(new byte[8]);
+        when(connection.getOriginalDestinationConnectionId()).thenReturn(new byte[8]);
+        return connection;
+    }
+
+    private ServerConnectionFactory installServerConnectionFactoryReturning(ServerConnectionImpl connection) throws Exception {
+        ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
+                .thenReturn(connection);
+        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(ByteBuffer.class), any(PacketMetaData.class)))
+                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), ((PacketMetaData) i.getArgument(3))));
+
+        FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
+        return connectionFactory;
     }
 
     private RawPacket createPacket(ByteBuffer buffer) {

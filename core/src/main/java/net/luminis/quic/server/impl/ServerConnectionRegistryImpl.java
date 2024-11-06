@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
 
@@ -113,5 +114,10 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
                         .map(e -> e.getKey() + "->" + e.getValue())
                         .collect(Collectors.joining("\n")));
 
+    }
+
+    @Override
+    public Stream<ServerConnectionProxy> getAllConnections() {
+        return currentConnections.values().stream().distinct();
     }
 }

@@ -20,6 +20,8 @@ package net.luminis.quic.server;
 
 import net.luminis.quic.server.impl.ServerConnectionProxy;
 
+import java.util.stream.Stream;
+
 public interface ServerConnectionRegistry {
 
     void registerConnection(ServerConnectionProxy connection, byte[] connectionId);
@@ -29,4 +31,6 @@ public interface ServerConnectionRegistry {
     void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId);
 
     void deregisterConnectionId(byte[] connectionId);
+
+    Stream<ServerConnectionProxy> getAllConnections();
 }

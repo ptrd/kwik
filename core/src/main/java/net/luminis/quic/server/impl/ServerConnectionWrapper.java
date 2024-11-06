@@ -54,6 +54,11 @@ public class ServerConnectionWrapper implements ServerConnectionProxy {
     }
 
     @Override
+    public void closeConnection() {
+        connection.closeConnection();
+    }
+
+    @Override
     public void dispose() {
         connection.dispose();
     }
