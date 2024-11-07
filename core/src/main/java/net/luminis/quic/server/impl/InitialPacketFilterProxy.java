@@ -56,7 +56,7 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
         byte flags = data.get();
         data.reset();
         if (LongHeaderPacket.isLongHeaderPacket(flags, version)) {
-            if (InitialPacket.isInitial((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
+            if (InitialPacket.isInitialType((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
                 connection.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
             }
             else {

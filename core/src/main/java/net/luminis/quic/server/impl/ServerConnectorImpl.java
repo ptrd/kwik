@@ -272,7 +272,7 @@ public class ServerConnectorImpl implements ServerConnector {
     private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
         packetBytes.rewind();
         int type = (packetBytes.get() & 0x30) >> 4;
-        if (InitialPacket.isInitial(type, Version.parse(version))) {
+        if (InitialPacket.isInitialType(type, Version.parse(version))) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-14.1
             // "A server MUST discard an Initial packet that is carried in a UDP
             //   datagram with a payload that is smaller than the smallest allowed

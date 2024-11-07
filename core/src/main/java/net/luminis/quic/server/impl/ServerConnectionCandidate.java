@@ -219,7 +219,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         // "The most significant bit (0x80) of byte 0 (the first byte) is set to 1 for long headers."
         // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-17.2.2
         // "An Initial packet uses long headers with a type value of 0x0."
-        if (InitialPacket.isInitial((flags & 0x30) >> 4, quicVersion)) {
+        if (InitialPacket.isInitialType((flags & 0x30) >> 4, quicVersion)) {
             InitialPacket packet = new InitialPacket(quicVersion);
             ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
             byte[] originalDcid = dcid;

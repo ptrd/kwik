@@ -183,7 +183,7 @@ public abstract class PacketParser {
         if (packetVersion.isZero()) {
             return new VersionNegotiationPacket(connectionVersion);
         }
-        else if (InitialPacket.isInitial(type, packetVersion)) {
+        else if (InitialPacket.isInitialType(type, packetVersion)) {
             return new InitialPacket(packetVersion);
         }
         else if (RetryPacket.isRetry(type, packetVersion)) {

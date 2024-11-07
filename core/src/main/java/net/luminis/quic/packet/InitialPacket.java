@@ -52,7 +52,7 @@ public class InitialPacket extends LongHeaderPacket {
      * @param packetVersion  the QUIC version of the long header packet
      * @return
      */
-    public static boolean isInitial(int type, Version packetVersion) {
+    public static boolean isInitialType(int type, Version packetVersion) {
         if (packetVersion.isV2()) {
             return type == V2_type;
         }
