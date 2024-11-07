@@ -50,16 +50,6 @@ class InitialPacketTest {
     }
 
     @Test
-    void checkIsInitial() {
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0xcb }))).isTrue();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1000_0000 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_0000 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_1111 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_1111 }))).isTrue();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_0000 }))).isTrue();
-    }
-
-    @Test
     void parseValidInitial() throws Exception {
         // Sample data: just an AckFrame
         String data = "c1ff00001d08dcd29c5480f39a24000016c5c0fd62ee66cef81ed15b2867db463f62c7ce62e9de";

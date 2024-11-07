@@ -45,13 +45,6 @@ public class InitialPacket extends LongHeaderPacket {
 
     private byte[] token;
 
-    public static boolean isInitial(ByteBuffer data) {
-        data.mark();
-        int flags = data.get();
-        data.rewind();
-        return (flags & 0xf0) == 0b1100_0000;
-    }
-
     /**
      * Determines if the given long header type indicates an Initial packet.
      * WARNING: should only be used for long header packets!
