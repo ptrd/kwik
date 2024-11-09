@@ -19,9 +19,11 @@
 package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.crypto.Aead;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.receive.RawPacket;
 import net.luminis.quic.receive.Receiver;
@@ -374,14 +376,25 @@ public class ServerConnectorImpl implements ServerConnector {
             //  Connection ID of the received packet, ..."
             List<Version> versions = supportedVersions.stream().map(Version::of).collect(Collectors.toList());
             VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(versions, dcid, scid);
-            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null);
-            DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
-            try {
-                serverSocket.send(datagram);
-                log.sent(Instant.now(), versionNegotiationPacket);
-            } catch (IOException e) {
-                log.error("Sending version negotiation packet failed", e);
-            }
+            sendPacket(clientAddress, versionNegotiationPacket, null);
+        }
+    }
+
+    /**
+     * Send packet to client when the intent is not to establish a new connection.
+     * @param clientAddress
+     * @param packet
+     * @param aead
+     */
+    private void sendPacket(InetSocketAddress clientAddress, QuicPacket packet, Aead aead) {
+        byte[] packetBytes = packet.generatePacketBytes(aead);
+        DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
+        try {
+            serverSocket.send(datagram);
+            log.sent(Instant.now(), packet);
+        }
+        catch (IOException e) {
+            log.error("Sending " + packet + " failed", e);
         }
     }
 

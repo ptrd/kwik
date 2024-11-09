@@ -287,6 +287,7 @@ class ServerConnectorImplTest {
         // Then
         verify(connection, atLeastOnce()).close();
     }
+    //endregion
 
     //region handshake packet
     @Test
