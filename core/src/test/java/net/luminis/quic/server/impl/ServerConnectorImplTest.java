@@ -36,7 +36,6 @@ import net.luminis.quic.test.FieldSetter;
 import net.luminis.quic.test.TestClock;
 import net.luminis.quic.test.TestScheduledExecutor;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -50,6 +49,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
+import static net.luminis.quic.server.impl.ServerConnectorImpl.isValidLongHeaderPacket;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
@@ -78,6 +78,7 @@ class ServerConnectorImplTest {
         FieldSetter.setField(server, "context", context);
     }
 
+    //region versions
     @Test
     void unsupportedVersionLeadsToVersionNegotationPacket() throws Exception {
         // Given
@@ -192,7 +193,9 @@ class ServerConnectorImplTest {
         // Then
         verify(serverSocket, never()).send(any(DatagramPacket.class));
     }
+    //endregion
 
+    //region initial packets
     @Test
     void serverReceivingValidInitialShouldCreateNewConnection() throws Exception {
         // Given
@@ -266,7 +269,9 @@ class ServerConnectorImplTest {
         // As the first packet was valid, there must be an entry with the original DCID
         assertThat(connectionRegistry.isExistingConnection(null, ByteUtils.hexToBytes("8f609080b6d8a632"))).isPresent();
     }
+    //endregion
 
+    //region close
     @Test
     void closingConnectionsShouldCloseConnections() throws Exception {
         // Given
@@ -283,8 +288,8 @@ class ServerConnectorImplTest {
         verify(connection, atLeastOnce()).close();
     }
 
+    //region handshake packet
     @Test
-    @Disabled("till fixed")
     void receivingHandshakePacketShouldNotLeadToAnyFormOfConnection() throws Exception {
         // Given
         ServerConnectionImpl connection = createMockServerConnection();
@@ -297,6 +302,24 @@ class ServerConnectorImplTest {
         // Then
         ServerConnectionRegistry connectionRegistry = (ServerConnectionRegistry) new FieldReader(server, server.getClass().getDeclaredField("connectionRegistry")).read();
         assertThat(connectionRegistry.getAllConnections()).isEmpty();
+    }
+    //endregion
+
+    //region RFC-8889
+    @Test
+    void testIsValidLongHeaderPacketAccordingToRFC8889() {
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 08 0102030405060708 0c 0102030405060708090a0b0c cafe babe"))).isTrue();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 08 0102030405060708 08 010203"))).isFalse();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 08 0102030405060708 08"))).isFalse();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 08 0102030405060708"))).isFalse();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 08 01020304050607"))).isFalse();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("c0 00000001 00 00"))).isFalse();
+        assertThat(isValidLongHeaderPacket(toByteBuffer("40 00000001 08 0102030405060708 0c 0102030405060708090a0b0c cafe babe"))).isFalse();
+    }
+    //endregion
+
+    private ByteBuffer toByteBuffer(String hexData) {
+        return ByteBuffer.wrap(ByteUtils.hexToBytes(hexData.replace(" ", "")));
     }
 
     private String plausibleHandshakeAsHex() {

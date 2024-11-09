@@ -50,6 +50,20 @@ class InitialPacketTest {
     }
 
     @Test
+    void testIsInitial() {
+        assertThat(InitialPacket.isInitial(0b1100_0000, Version.QUIC_version_1.getId())).isTrue();
+        assertThat(InitialPacket.isInitial(0b1101_0000, Version.QUIC_version_2.getId())).isTrue();
+        assertThat(InitialPacket.isInitial(0b1101_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1100_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0100_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0101_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1000_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1001_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0000_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0001_0000, Version.QUIC_version_2.getId())).isFalse();
+    }
+
+    @Test
     void parseValidInitial() throws Exception {
         // Sample data: just an AckFrame
         String data = "c1ff00001d08dcd29c5480f39a24000016c5c0fd62ee66cef81ed15b2867db463f62c7ce62e9de";
