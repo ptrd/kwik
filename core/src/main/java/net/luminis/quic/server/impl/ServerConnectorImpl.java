@@ -19,8 +19,15 @@
 package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
+import net.luminis.quic.QuicConstants;
 import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.ConnectionCloseFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
 import net.luminis.quic.packet.QuicPacket;
@@ -56,6 +63,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
+import static net.luminis.quic.common.EncryptionLevel.Initial;
+
 /**
  * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
@@ -76,6 +85,7 @@ public class ServerConnectorImpl implements ServerConnector {
     private final Context context;
     private final ServerConnectionRegistryImpl connectionRegistry;
     private final int connectionIdLength;
+    private volatile boolean acceptingNewConnections;
 
     /**
      * @deprecated use {@link ServerConnector.Builder} instead
@@ -158,11 +168,16 @@ public class ServerConnectorImpl implements ServerConnector {
     }
 
     public void start() {
+        acceptingNewConnections = true;
         receiver.start();
 
         new Thread(this::receiveLoop, "server receive loop").start();
         log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protocols: "
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
+    }
+
+    public void stopAcceptingNewConnections() {
+        acceptingNewConnections = false;
     }
 
     protected void receiveLoop() {
@@ -328,12 +343,34 @@ public class ServerConnectorImpl implements ServerConnector {
     }
 
     private void processInitial(InetSocketAddress clientAddress, ByteBuffer data, int version, byte[] dcid, byte[] scid) {
+        if (acceptingNewConnections) {
         ServerConnectionProxy connection;
         // Check-and-create often requires a lock to avoid race conditions, but in this case this is not necessary
         // because this method is only called from one thread (see receiveLoop)
         connection = connectionRegistry.isExistingConnection(clientAddress, dcid)
                 .orElseGet(() -> createNewConnection(version, clientAddress, scid, dcid));
         connection.parsePackets(0, Instant.now(), data, clientAddress);
+    }
+        else {
+            log.warn("Server not accepting new connections");
+            sendConnectionRefused(version, dcid, scid, clientAddress);
+        }
+    }
+
+    private void sendConnectionRefused(int rawVersion, byte[] dcid, byte[] scid, InetSocketAddress clientAddress) {
+        Version version = Version.parse(rawVersion);
+        QuicFrame connectionClosed = new ConnectionCloseFrame(version, QuicConstants.TransportErrorCode.CONNECTION_REFUSED.value, "");
+        InitialPacket connectionRefusedResponse = new InitialPacket(version, dcid, scid, null, connectionClosed);
+        connectionRefusedResponse.setPacketNumber(0);
+
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(version), Role.Server, null, log);
+        connectionSecrets.computeInitialKeys(dcid);
+        try {
+            sendPacket(clientAddress, connectionRefusedResponse, connectionSecrets.getOwnAead(Initial));
+        }
+        catch (MissingKeysException e) {
+            // Impossible, as we just computed the keys
+        }
     }
 
     private void processShortHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
