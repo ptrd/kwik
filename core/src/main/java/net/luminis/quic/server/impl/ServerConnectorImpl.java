@@ -19,7 +19,6 @@
 package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
@@ -320,7 +319,7 @@ public class ServerConnectorImpl implements ServerConnector {
             // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller
             //  than the smallest allowed maximum datagram size of 1200 bytes. "
             if (data.limit() >= 1200) {
-                log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
+                log.received(Instant.now(), 0, null, dcid, scid);
                 sendVersionNegotiationPacket(clientAddress, data, dcidLength);
             }
         }
