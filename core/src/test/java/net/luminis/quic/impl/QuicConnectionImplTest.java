@@ -267,6 +267,21 @@ class QuicConnectionImplTest {
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1c),
                 any(EncryptionLevel.class) );
     }
+
+    @Test
+    void afterCloseIdleTimerIsShutdown() throws Exception {
+        // Given
+        connectionEncryptionLevel(App);
+        IdleTimer idleTimer = mock(IdleTimer.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("idleTimer"), idleTimer);
+
+        // When
+        connection.close();
+        testClock.fastForward(3 * onePto);
+
+        // Then
+        verify(idleTimer).shutdown();
+    }
     //endregion
 
     //region close events
