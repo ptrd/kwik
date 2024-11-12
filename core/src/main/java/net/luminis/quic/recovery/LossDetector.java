@@ -43,8 +43,8 @@ public class LossDetector {
     private final CongestionController congestionController;
     private final Runnable postProcessLostCallback;
     private final QLog qLog;
-    private float kTimeThreshold = 9f/8f;
-    private int kPacketThreshold = 3;
+    private final float kTimeThreshold = 9f/8f;
+    private final int kPacketThreshold = 3;
     private final Map<Long, PacketStatus> packetSentLog;
     private final AtomicInteger ackElicitingInFlight;
     private volatile long largestAcked = -1;
@@ -131,6 +131,18 @@ public class LossDetector {
         lossTime = null;
         lastAckElicitingSent = null;
         isClosed = true;
+    }
+
+    /**
+     * Reset to initial state.
+     */
+    public synchronized void reset() {
+        packetSentLog.clear();
+        ackElicitingInFlight.set(0);
+        lossTime = null;
+        lastAckElicitingSent = null;
+        largestAcked = -1;
+        lost = 0;
     }
 
     void detectLostPackets() {

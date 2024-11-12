@@ -483,6 +483,30 @@ class LossDetectorTest extends RecoveryTests {
     }
     //endregion
 
+    //region reset
+    @Test
+    void whenResetNoPacketsAreUnacked() {
+        // Given
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        // When
+        lossDetector.reset();
+
+        assertThat(lossDetector.unAcked()).isEmpty();
+    }
+    @Test
+    void whenResetNoAckElicitingAreInFlight() {
+        // Given
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        // When
+        lossDetector.reset();
+
+        // Then
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
+    //endregion
+
     //region helper methods
     // This test was used to reproduce a race condition in the LossDetector. It is of no use to run it in each build.
     // To check the test is actually testing the race condition, insert system.out.print's in reset and onAckReceived methods.

@@ -406,6 +406,14 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
     }
 
+    void resetLossDetectionTimeout() {
+        synchronized (scheduleLock) {
+            lossDetectionFuture.cancel(false);
+            timerExpiration = null;
+            lossDetectionFuture = new NullScheduledFuture();
+        }
+    }
+
     private void runLossDetectionTimeout() {
         try {
             lossDetectionTimeout();
@@ -490,6 +498,12 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
     }
 
+    public void reset(PnSpace pnSpace) {
+        if (!hasBeenStopped) {
+            lossDetectors[pnSpace.ordinal()].reset();
+            resetLossDetectionTimeout();
+        }
+    }
     public long getLost() {
         return Stream.of(lossDetectors).mapToLong(ld -> ld.getLost()).sum();
     }
