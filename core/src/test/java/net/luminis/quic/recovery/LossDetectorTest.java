@@ -494,6 +494,7 @@ class LossDetectorTest extends RecoveryTests {
 
         assertThat(lossDetector.unAcked()).isEmpty();
     }
+
     @Test
     void whenResetNoAckElicitingAreInFlight() {
         // Given
@@ -504,6 +505,18 @@ class LossDetectorTest extends RecoveryTests {
 
         // Then
         assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
+
+    @Test
+    void whenResetCongestionControllerIsUpdated() {
+        // Given
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        // When
+        lossDetector.reset();
+
+        // Then
+        verify(congestionController, times(1)).discard(anyList());
     }
     //endregion
 

@@ -137,6 +137,11 @@ public class LossDetector {
      * Reset to initial state.
      */
     public synchronized void reset() {
+        List<PacketStatus> inflightPackets = packetSentLog.values().stream()
+                .filter(packet -> packet.inFlight())
+                .filter(packetStatus -> packetStatus.setLost())   // Only keep the ones that actually were set to lost
+                .collect(Collectors.toList());
+        congestionController.discard(inflightPackets);
         packetSentLog.clear();
         ackElicitingInFlight.set(0);
         lossTime = null;

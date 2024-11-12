@@ -694,11 +694,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public ProcessResult process(RetryPacket packet, Instant time) {
         if (packet.validateIntegrityTag(connectionIdManager.getOriginalDestinationConnectionId())) {
             if (!processedRetryPacket) {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-18#section-17.2.5
-                // "A client MUST accept and process at most one Retry packet for each
-                //   connection attempt.  After the client has received and processed an
-                //   Initial or Retry packet from the server, it MUST discard any
-                //   subsequent Retry packets that it receives."
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.5
+                // "A client MUST accept and process at most one Retry packet for each connection attempt. After the client
+                //  has received and processed an Initial or Retry packet from the server, it MUST discard any subsequent
+                //  Retry packets that it receives."
                 processedRetryPacket = true;
 
                 token = packet.getRetryToken();
@@ -711,13 +710,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 generateInitialKeys();
                 ((ClientRolePacketParser) parser).setOriginalDestinationConnectionId(peerConnectionId);
 
-                // https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-6.2.1.1
-                // "A Retry or Version Negotiation packet causes a client to send another
-                //   Initial packet, effectively restarting the connection process and
-                //   resetting congestion control..."
-                sender.getCongestionController().reset();
+                // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.3
+                // "Clients that receive a Retry packet reset congestion control and loss recovery state, including
+                //  resetting any pending timers. "
+                // To ensure consistency amongst loss detector and congestion controller, resetting the congestion controller
+                // is done by the loss detector.
+                sender.resetRecovery(PnSpace.Initial);
 
-                // https://www.rfc-editor.org/rfc/rfc9002.html#name-handling-retry-packets
+                // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.3
                 // "Other connection state, in particular cryptographic handshake messages, is retained (...)"
                 CryptoStream cryptoStream = getCryptoStream(Initial);
                 cryptoStream.write(originalClientHello, true);
