@@ -74,6 +74,7 @@ class LossDetectorTest extends RecoveryTests {
         lostPacketHandler = mock(LostPacketHandler.class);
     }
 
+    //region congestion controller
     @Test
     void congestionControllerIsOnlyCalledOncePerAck() {
         List<QuicPacket> packets = createPackets(1, 2, 3);
@@ -105,6 +106,68 @@ class LossDetectorTest extends RecoveryTests {
         verify(congestionController, times(0)).registerLost(anyList());
     }
 
+    @Test
+    void whenCongestionControllerIsClosedAllNonAckedPacketsShouldBeDiscarded() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
+
+        lossDetector.close();
+        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 1, 2)));
+    }
+
+    @Test
+    void whenCongestionControllerIsClosedAllNotLostPacketsShouldBeDiscarded() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(8), Instant.now(), p -> {});
+        lossDetector.packetSent(createPacket(9), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(9), Instant.now());
+
+        lossDetector.close();
+        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 8)));
+    }
+
+    @Test
+    void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
+        setCongestionWindowSize(congestionController, 1240);
+        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
+
+        lossDetector.packetSent(new MockPacket(0, 12, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(1, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(2, 40, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
+
+        // An ack on a non-existent packet, shouldn't change anything.
+        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
+
+        assertThat(congestionController.remainingCwnd()).isLessThan(12 + 1);   // Because the 12 is acked, the cwnd is increased by 12 too.
+    }
+
+    @Test
+    void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
+        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
+        setCongestionWindowSize(congestionController, 1240);
+        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
+
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
+
+        // An ack on a non-existent packet, shouldn't change anything.
+        lossDetector.onAckReceived(new AckFrame(3), Instant.now());
+
+        assertThat(congestionController.remainingCwnd()).isLessThan(1);
+    }
+    //endregion
+
+    //region declare lost
     @Test
     void withoutAcksNothingIsDeclaredLost() {
         int count = 10;
@@ -264,7 +327,9 @@ class LossDetectorTest extends RecoveryTests {
 
         assertThat(lossDetector.getLossTime()).isNull();
     }
+    //endregion
 
+    //region acks
     @Test
     void detectUnacked() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
@@ -302,6 +367,47 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
+    void testNoAckedReceivedWhenNoAckReceived() {
+        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        assertThat(lossDetector.noAckedReceived()).isTrue();
+    }
+
+    @Test
+    void testNoAckedReceivedWhenAckReceived() {
+        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
+        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
+
+        assertThat(lossDetector.noAckedReceived()).isFalse();
+    }
+
+    @Test
+    void testAckElicitingInFlightAcked() {
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(12, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(10), Instant.now());
+        assertThat(lossDetector.ackElicitingInFlight()).isTrue();
+
+        lossDetector.onAckReceived(new AckFrame(12), Instant.now());
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
+
+    @Test
+    void testAckElicitingInFlightLost() {
+        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
+        lossDetector.packetSent(new MockPacket(15, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
+
+        lossDetector.onAckReceived(new AckFrame(15), Instant.now());
+
+        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
+    }
+    //endregion
+
+    //region closed
+    @Test
     void whenClosedNoPacketsAreUnacked() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
         lossDetector.close();
@@ -323,7 +429,7 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void whenCloseNoAckElicitingAreInFlight() {
+    void whenClosedNoAckElicitingAreInFlight() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
 
         assertThat(lossDetector.ackElicitingInFlight()).isTrue();
@@ -331,47 +437,9 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.close();
         assertThat(lossDetector.ackElicitingInFlight()).isFalse();
     }
+    //endregion
 
-    @Test
-    void testNoAckedReceivedWhenNoAckReceived() {
-        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
-
-        assertThat(lossDetector.noAckedReceived()).isTrue();
-    }
-
-    @Test
-    void testNoAckedReceivedWhenAckReceived() {
-        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
-        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
-
-        assertThat(lossDetector.noAckedReceived()).isFalse();
-    }
-
-    @Test
-    void whenCongestionControllerIsClosedAllNonAckedPacketsShouldBeDiscarded() {
-        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
-
-        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
-
-        lossDetector.close();
-        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 1, 2)));
-    }
-
-    @Test
-    void whenCongestionControllerIsClosedAllNotLostPacketsShouldBeDiscarded() {
-        lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(8), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(9), Instant.now(), p -> {});
-
-        lossDetector.onAckReceived(new AckFrame(9), Instant.now());
-
-        lossDetector.close();
-        verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 8)));
-    }
-
+    //region bytes in flight
     @Test
     void packetWithConnectionCloseOnlyDoesNotIncreaseBytesInFlight() {
         lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
@@ -413,66 +481,9 @@ class LossDetectorTest extends RecoveryTests {
 
         verify(congestionController, atLeast(1)).registerLost(any(List.class));
     }
+    //endregion
 
-    @Test
-    void congestionControlStateDoesNotChangeWithUnrelatedAck() throws Exception {
-        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
-        setCongestionWindowSize(congestionController, 1240);
-        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
-
-        lossDetector.packetSent(new MockPacket(0, 12, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(1, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(2, 40, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
-
-        assertThat(congestionController.remainingCwnd()).isLessThan(1);
-
-        // An ack on a non-existent packet, shouldn't change anything.
-        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
-
-        assertThat(congestionController.remainingCwnd()).isLessThan(12 + 1);   // Because the 12 is acked, the cwnd is increased by 12 too.
-    }
-
-    @Test
-    void congestionControlStateDoesNotChangeWithIncorrectAck() throws Exception {
-        congestionController = new NewRenoCongestionController(new NullLogger(), mock(CongestionControlEventListener.class));
-        setCongestionWindowSize(congestionController, 1240);
-        FieldSetter.setField(lossDetector, LossDetector.class.getDeclaredField("congestionController"), congestionController);
-
-        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
-
-        assertThat(congestionController.remainingCwnd()).isLessThan(1);
-
-        // An ack on a non-existent packet, shouldn't change anything.
-        lossDetector.onAckReceived(new AckFrame(3), Instant.now());
-
-        assertThat(congestionController.remainingCwnd()).isLessThan(1);
-    }
-
-    @Test
-    void testAckElicitingInFlightAcked() {
-        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(12, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
-
-        lossDetector.onAckReceived(new AckFrame(10), Instant.now());
-        assertThat(lossDetector.ackElicitingInFlight()).isTrue();
-
-        lossDetector.onAckReceived(new AckFrame(12), Instant.now());
-        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
-    }
-
-    @Test
-    void testAckElicitingInFlightLost() {
-        lossDetector.packetSent(new MockPacket(10, 1200, EncryptionLevel.App, new PingFrame(), "packet 1"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(11, 1200, EncryptionLevel.App, new Padding(10), "packet 2"), Instant.now(), p -> {});
-        lossDetector.packetSent(new MockPacket(15, 1200, EncryptionLevel.App, new PingFrame(), "packet 2"), Instant.now(), p -> {});
-
-        lossDetector.onAckReceived(new AckFrame(15), Instant.now());
-
-        assertThat(lossDetector.ackElicitingInFlight()).isFalse();
-    }
-
+    //region helper methods
     // This test was used to reproduce a race condition in the LossDetector. It is of no use to run it in each build.
     // To check the test is actually testing the race condition, insert system.out.print's in reset and onAckReceived methods.
     // @Test
@@ -524,4 +535,5 @@ class LossDetectorTest extends RecoveryTests {
         }
         return true;
     }
+    //endregion
 }
