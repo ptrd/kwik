@@ -19,14 +19,17 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.cc.CongestionController;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.FrameReceivedListener;
+import net.luminis.quic.impl.HandshakeState;
+import net.luminis.quic.impl.HandshakeStateListener;
+import net.luminis.quic.impl.Role;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
@@ -472,14 +475,14 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             unschedule();
             scheduler.shutdown();
             for (PnSpace pnSpace: PnSpace.values()) {
-                lossDetectors[pnSpace.ordinal()].reset();
+                lossDetectors[pnSpace.ordinal()].close();
             }
         }
     }
 
     public void stopRecovery(PnSpace pnSpace) {
         if (! hasBeenReset) {
-            lossDetectors[pnSpace.ordinal()].reset();
+            lossDetectors[pnSpace.ordinal()].close();
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
             // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
             ptoCount = 0;

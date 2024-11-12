@@ -22,15 +22,15 @@ import net.luminis.quic.cc.CongestionControlEventListener;
 import net.luminis.quic.cc.CongestionController;
 import net.luminis.quic.cc.NewRenoCongestionController;
 import net.luminis.quic.common.EncryptionLevel;
-import net.luminis.quic.impl.MockPacket;
-import net.luminis.quic.impl.MoreArgumentMatchers;
-import net.luminis.quic.impl.PacketMatcherByPacketNumber;
-import net.luminis.quic.impl.Version;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.ConnectionCloseFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.Range;
+import net.luminis.quic.impl.MockPacket;
+import net.luminis.quic.impl.MoreArgumentMatchers;
+import net.luminis.quic.impl.PacketMatcherByPacketNumber;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.NullQLog;
 import net.luminis.quic.packet.PacketInfo;
@@ -302,15 +302,15 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void whenResetNoPacketsAreUnacked() {
+    void whenClosedNoPacketsAreUnacked() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
-        lossDetector.reset();
+        lossDetector.close();
 
         assertThat(lossDetector.unAcked()).isEmpty();
     }
 
     @Test
-    void whenResetLossTimeIsUnset() {
+    void whenClosedLossTimeIsUnset() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(3), Instant.now(), p -> {});
         lossDetector.onAckReceived(new AckFrame(3), Instant.now());
@@ -318,17 +318,17 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.detectLostPackets();
         assertThat(lossDetector.getLossTime()).isNotNull();
 
-        lossDetector.reset();
+        lossDetector.close();
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
     @Test
-    void whenResetNoAckElicitingAreInFlight() {
+    void whenCloseNoAckElicitingAreInFlight() {
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
 
         assertThat(lossDetector.ackElicitingInFlight()).isTrue();
 
-        lossDetector.reset();
+        lossDetector.close();
         assertThat(lossDetector.ackElicitingInFlight()).isFalse();
     }
 
@@ -348,19 +348,19 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void whenCongestionControllerIsResetAllNonAckedPacketsShouldBeDiscarded() {
+    void whenCongestionControllerIsClosedAllNonAckedPacketsShouldBeDiscarded() {
         lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
 
         lossDetector.onAckReceived(new AckFrame(0), Instant.now());
 
-        lossDetector.reset();
+        lossDetector.close();
         verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 1, 2)));
     }
 
     @Test
-    void whenCongestionControllerIsResetAllNotLostPacketsShouldBeDiscarded() {
+    void whenCongestionControllerIsClosedAllNotLostPacketsShouldBeDiscarded() {
         lossDetector.packetSent(createPacket(0), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(1), Instant.now(), p -> {});
         lossDetector.packetSent(createPacket(8), Instant.now(), p -> {});
@@ -368,7 +368,7 @@ class LossDetectorTest extends RecoveryTests {
 
         lossDetector.onAckReceived(new AckFrame(9), Instant.now());
 
-        lossDetector.reset();
+        lossDetector.close();
         verify(congestionController, times(1)).discard(argThat(l -> containsPackets(l, 8)));
     }
 
@@ -489,7 +489,7 @@ class LossDetectorTest extends RecoveryTests {
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException e) {}
-                    lossDetector.reset();
+                    lossDetector.close();
                 }
             });
             Thread onAckReceivedThread = new Thread(() -> {
