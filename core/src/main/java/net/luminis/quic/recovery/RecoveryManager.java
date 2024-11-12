@@ -113,7 +113,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
-    private volatile boolean hasBeenReset = false;
+    private volatile boolean hasBeenStopped = false;
 
     public RecoveryManager(Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
         this(Clock.systemUTC(), role, rttEstimater, congestionController, sender, logger);
@@ -400,7 +400,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
         catch (RejectedExecutionException taskRejected) {
             // Can happen if has been reset concurrently
-            if (!hasBeenReset) {
+            if (!hasBeenStopped) {
                 throw taskRejected;
             }
         }
@@ -437,7 +437,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             if (ptoCount > 0) {
                 // https://datatracker.ietf.org/doc/html/draft-ietf-quic-recovery-34#section-6.2.1
                 // "To protect such a server from repeated client probes, the PTO backoff is not reset at a client that
@@ -453,7 +453,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             if (packet.isInflightPacket()) {
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
                 setLossDetectionTimer();
@@ -470,8 +470,8 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void stopRecovery() {
-        if (! hasBeenReset) {
-            hasBeenReset = true;
+        if (!hasBeenStopped) {
+            hasBeenStopped = true;
             unschedule();
             scheduler.shutdown();
             for (PnSpace pnSpace: PnSpace.values()) {
@@ -481,7 +481,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void stopRecovery(PnSpace pnSpace) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             lossDetectors[pnSpace.ordinal()].close();
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
             // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
@@ -496,7 +496,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
 
     @Override
     public void handshakeStateChangedEvent(HandshakeState newState) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
