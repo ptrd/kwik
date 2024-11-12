@@ -22,6 +22,7 @@ import net.luminis.quic.log.SysOutLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,6 +109,50 @@ class ServerConnectionRegistryImplTest {
         assertThatCode(() -> {
             serverConnectionRegistry.removeConnection(serverConnection);
         }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void waitForAllConnectionsToCloseShouldTimeout() {
+        // Given
+        Duration timeout = Duration.ofMillis(25);
+        registerConnectionWithOriginalAndInitialConnectionId(new byte[] {1, 2, 3}, new byte[] {4, 5, 6});
+
+        // When
+        long startTime = System.currentTimeMillis();
+        serverConnectionRegistry.waitForAllConnectionsToClose(timeout);
+        long elapsedTime = System.currentTimeMillis() - startTime;
+
+        // Then
+        assertThat(elapsedTime).isGreaterThanOrEqualTo(timeout.toMillis());
+    }
+
+    @Test
+    void waitForAllConnectionsToCloseShouldReturnWhenAllConnectionsClosed() {
+        // Given
+        registerConnectionWithOriginalAndInitialConnectionId(new byte[] { 1, 2, 3 }, new byte[] { 4, 5, 6 });
+
+        // When
+        new Thread(() -> {
+            try {
+                Thread.sleep(25); // Simulate some delay before closing the connection
+                serverConnectionRegistry.deregisterConnectionId(new byte[] { 1, 2, 3 });
+                serverConnectionRegistry.deregisterConnectionId(new byte[] { 4, 5, 6 });
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+
+        Duration timeout = Duration.ofMillis(200);
+        long startTime = System.currentTimeMillis();
+        serverConnectionRegistry.waitForAllConnectionsToClose(timeout);
+        long elapsedTime = System.currentTimeMillis() - startTime;
+
+        // Then
+        assertThat(serverConnectionRegistry.isEmpty()).isTrue();
+        assertThat(elapsedTime)
+                .isGreaterThanOrEqualTo(25)
+                .isLessThan(2 * 25);
     }
 
     void registerConnectionWithOriginalAndInitialConnectionId(byte[] originalDcid, byte[] connectionId) {

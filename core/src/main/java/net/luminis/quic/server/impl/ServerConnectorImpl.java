@@ -70,7 +70,7 @@ import static net.luminis.quic.common.EncryptionLevel.Initial;
  */
 public class ServerConnectorImpl implements ServerConnector {
 
-    private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
+    public static int DEFAULT_CLOSE_TIMEOUT_IN_SECONDS = 30;
 
     private final Receiver receiver;
     private final Logger log;
@@ -86,6 +86,8 @@ public class ServerConnectorImpl implements ServerConnector {
     private final ServerConnectionRegistryImpl connectionRegistry;
     private final int connectionIdLength;
     private volatile boolean acceptingNewConnections;
+    private final Thread serverReceiveLoop;
+    private volatile boolean closing;
 
     /**
      * @deprecated use {@link ServerConnector.Builder} instead
@@ -143,6 +145,8 @@ public class ServerConnectorImpl implements ServerConnector {
                 .collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
+
+        serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");
     }
 
     // Intentionally private: for use with deprecated constructors only.
@@ -171,8 +175,8 @@ public class ServerConnectorImpl implements ServerConnector {
         acceptingNewConnections = true;
         receiver.start();
 
-        new Thread(this::receiveLoop, "server receive loop").start();
-        log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protocols: "
+        serverReceiveLoop.start();
+        log.info("Kwik server connector started on port " + serverSocket.getLocalPort() + "; supported application protocols: "
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
     }
 
@@ -187,7 +191,9 @@ public class ServerConnectorImpl implements ServerConnector {
                 process(rawPacket);
             }
             catch (InterruptedException e) {
-                log.error("receiver loop interrupted and terminated");
+                if (! closing) {
+                    log.error("receiver loop interrupted and terminated");
+                }
                 break;
             }
             catch (Exception runtimeError) {
@@ -442,6 +448,32 @@ public class ServerConnectorImpl implements ServerConnector {
 
     protected void closeAllConnections() {
         connectionRegistry.getAllConnections().forEach(ServerConnectionProxy::closeConnection);
+    }
+
+    @Override
+    public void close() {
+        close(Duration.ofSeconds(DEFAULT_CLOSE_TIMEOUT_IN_SECONDS));
+    }
+
+    protected void close(Duration timeout) {
+        log.info("Shutting down " + this);
+        closing = true;
+        stopAcceptingNewConnections();
+        closeAllConnections();
+        connectionRegistry.waitForAllConnectionsToClose(timeout);
+
+        serverReceiveLoop.interrupt();
+        receiver.shutdown();
+        serverSocket.close();
+        tlsEngineFactory.dispose();
+        sharedExecutor.shutdown();
+        sharedScheduledExecutor.shutdown();
+    }
+
+
+    @Override
+    public String toString() {
+        return "ServerConnector[" + serverSocket.getLocalPort() + ":" + applicationProtocolRegistry.getRegisteredApplicationProtocols() + "]";
     }
 
     private class ServerConnectorContext implements Context {

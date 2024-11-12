@@ -23,12 +23,17 @@ import net.luminis.quic.server.ServerConnectionRegistry;
 import net.luminis.quic.util.Bytes;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,10 +41,15 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
 
     private final Logger log;
     private final Map<ConnectionSource, ServerConnectionProxy> currentConnections;
+    private final Lock checkEmptyLock;
+    private final Condition allConnectionsClosed;
 
     ServerConnectionRegistryImpl(Logger log) {
         this.log = log;
         currentConnections = new ConcurrentHashMap<>();
+
+        checkEmptyLock = new ReentrantLock();
+        allConnectionsClosed = checkEmptyLock.newCondition();
     }
 
     @Override
@@ -50,6 +60,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     @Override
     public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {
         currentConnections.remove(new ConnectionSource(connectionId));
+        checkAllConnectionsClosed();
     }
 
     @Override
@@ -66,6 +77,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     @Override
     public void deregisterConnectionId(byte[] connectionId) {
         currentConnections.remove(new ConnectionSource(connectionId));
+        checkAllConnectionsClosed();
     }
 
     Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
@@ -90,6 +102,8 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
         if (! connection.isClosed()) {
             log.error("Removed connection with dcid " + Bytes.bytesToHex(connection.getOriginalDestinationConnectionId()) + " that is not closed.");
         }
+
+        checkAllConnectionsClosed();
 
         // Preferably, return the object registered with one of the active cid's, otherwise the one registered with the original dcid.
         return removedConnections.stream().findAny().orElse(removed);
@@ -119,5 +133,34 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     @Override
     public Stream<ServerConnectionProxy> getAllConnections() {
         return currentConnections.values().stream().distinct();
+    }
+
+    private void checkAllConnectionsClosed() {
+        checkEmptyLock.lock();
+        try {
+            if (isEmpty()) {
+                allConnectionsClosed.signalAll();
+            }
+        }
+        finally {
+            checkEmptyLock.unlock();
+        }
+    }
+
+    public void waitForAllConnectionsToClose(Duration timeout) {
+        checkEmptyLock.lock();
+        try {
+            while (!isEmpty()) {
+                if (!allConnectionsClosed.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                    break; // Timeout expired
+                }
+            }
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        finally {
+            checkEmptyLock.unlock();
+        }
     }
 }
