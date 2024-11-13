@@ -31,7 +31,7 @@ import java.time.Instant;
 
 
 /**
- * A filtering server connection proxy that only allows initial packets to pass the filter.
+ * A filtering server connection proxy that only allows initial and 0-RTT packets to pass the filter.
  */
 public class InitialPacketFilterProxy implements ServerConnectionProxy {
 
