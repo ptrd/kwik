@@ -19,10 +19,18 @@
 package net.luminis.quic.server.impl;
 
 import net.luminis.quic.QuicConnection;
-import net.luminis.quic.common.EncryptionLevel;
+import net.luminis.quic.QuicConstants;
+import net.luminis.quic.crypto.Aead;
+import net.luminis.quic.crypto.ConnectionSecrets;
+import net.luminis.quic.crypto.MissingKeysException;
+import net.luminis.quic.frame.ConnectionCloseFrame;
+import net.luminis.quic.frame.QuicFrame;
+import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.Version;
+import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.InitialPacket;
+import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.packet.VersionNegotiationPacket;
 import net.luminis.quic.receive.RawPacket;
 import net.luminis.quic.receive.Receiver;
@@ -55,12 +63,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
+import static net.luminis.quic.common.EncryptionLevel.Initial;
+
 /**
  * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
 public class ServerConnectorImpl implements ServerConnector {
 
-    private static final int MINIMUM_LONG_HEADER_LENGTH = 1 + 4 + 1 + 0 + 1 + 0;
+    public static int DEFAULT_CLOSE_TIMEOUT_IN_SECONDS = 30;
 
     private final Receiver receiver;
     private final Logger log;
@@ -72,9 +82,12 @@ public class ServerConnectorImpl implements ServerConnector {
     private ApplicationProtocolRegistry applicationProtocolRegistry;
     private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-    private Context context;
-    private ServerConnectionRegistryImpl connectionRegistry;
-    private int connectionIdLength;
+    private final Context context;
+    private final ServerConnectionRegistryImpl connectionRegistry;
+    private final int connectionIdLength;
+    private volatile boolean acceptingNewConnections;
+    private final Thread serverReceiveLoop;
+    private volatile boolean closing;
 
     /**
      * @deprecated use {@link ServerConnector.Builder} instead
@@ -132,6 +145,8 @@ public class ServerConnectorImpl implements ServerConnector {
                 .collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
         context = new ServerConnectorContext();
+
+        serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");
     }
 
     // Intentionally private: for use with deprecated constructors only.
@@ -157,11 +172,16 @@ public class ServerConnectorImpl implements ServerConnector {
     }
 
     public void start() {
+        acceptingNewConnections = true;
         receiver.start();
 
-        new Thread(this::receiveLoop, "server receive loop").start();
-        log.info("Kwik server connector started on port " + serverSocket.getLocalPort()+ "; supported application protocols: "
+        serverReceiveLoop.start();
+        log.info("Kwik server connector started on port " + serverSocket.getLocalPort() + "; supported application protocols: "
                 + applicationProtocolRegistry.getRegisteredApplicationProtocols());
+    }
+
+    public void stopAcceptingNewConnections() {
+        acceptingNewConnections = false;
     }
 
     protected void receiveLoop() {
@@ -171,7 +191,9 @@ public class ServerConnectorImpl implements ServerConnector {
                 process(rawPacket);
             }
             catch (InterruptedException e) {
-                log.error("receiver loop interrupted and terminated");
+                if (! closing) {
+                    log.error("receiver loop interrupted and terminated");
+                }
                 break;
             }
             catch (Exception runtimeError) {
@@ -182,69 +204,178 @@ public class ServerConnectorImpl implements ServerConnector {
 
     protected void process(RawPacket rawPacket) {
         ByteBuffer data = rawPacket.getData();
-        int flags = data.get();
-        data.rewind();
-        if ((flags & 0b1100_0000) == 0b1100_0000) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
-            // "Header Form:  The most significant bit (0x80) of byte 0 (the first byte) is set to 1 for long headers."
+        if (isValidLongHeaderPacket(data)) {
             processLongHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
-        } else if ((flags & 0b1100_0000) == 0b0100_0000) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.3
-            // "Header Form:  The most significant bit (0x80) of byte 0 is set to 0 for the short header.
+        }
+        else if (isValidShortHeaderPacket(data)) {
             processShortHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
-        } else {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.3
-            // "The next bit (0x40) of byte 0 is set to 1. Packets containing a zero value for this bit are not valid
-            //  packets in this version and MUST be discarded."
-            log.warn(String.format("Invalid Quic packet (flags: %02x) is discarded", flags));
+        }
+        else {
+            // There is another reason why a long header packet could be invalid (inconsistent connection ID lengths),
+            // but specification is only explicit about the incorrect fixed bit:
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+            // "Fixed Bit: The next bit (0x40) of byte 0 is set to 1, unless the packet is a Version Negotiation packet.
+            //  Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
+            // "Fixed Bit: The next bit (0x40) of byte 0 is set to 1. Packets containing a zero value for this bit are
+            //  not valid packets in this version and MUST be discarded. "
+            log.warn(String.format("Invalid Quic packet (flags: %02x) is discarded", (int) data.get()));
         }
     }
 
-    private void processLongHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
-        if (data.remaining() >= MINIMUM_LONG_HEADER_LENGTH) {
-            data.position(1);
-            int version = data.getInt();
-
-            data.position(5);
-            int dcidLength = data.get() & 0xff;
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2
-            // "In QUIC version 1, this value MUST NOT exceed 20. Endpoints that receive a version 1 long header with a
-            //  value larger than 20 MUST drop the packet. In order to properly form a Version Negotiation packet,
-            //  servers SHOULD be able to read longer connection IDs from other QUIC versions."
-            if (dcidLength > 20) {
-                if (initialWithUnspportedVersion(data, version)) {
-                    // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
-                    // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
-                    sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+    /**
+     * Returns whether the given data represents a valid long header packet, independent of the QUIC version (RFC 8999).
+     * See https://www.rfc-editor.org/rfc/rfc8999.html#section-5.1
+     * @param data
+     * @return
+     */
+    protected static boolean isValidLongHeaderPacket(ByteBuffer data) {
+        // https://www.rfc-editor.org/rfc/rfc8999.html#section-5.1
+        // "Long Header Packet {
+        //    Header Form (1) = 1,
+        //    Version-Specific Bits (7),
+        //    Version (32),
+        //    Destination Connection ID Length (8),
+        //    Destination Connection ID (0..2040),
+        //    Source Connection ID Length (8),
+        //    Source Connection ID (0..2040),
+        //    Version-Specific Data (..),"
+        // }"
+        // So: flags (1) + version (4) + dcid length (1) + dcid + scid length (1) + scid
+        if (data.remaining() > 1 + 4 + 1 + 1) {
+            int flags = data.get(0);
+            if ((flags & 0x80) == 0x80) {
+                int dcidLength = data.get(5) & 0xff;
+                if (data.remaining() > 5 + 1 + dcidLength) {
+                    int scidLength = data.get(5 + 1 + dcidLength) & 0xff;
+                    if (data.remaining() > 5 + 1 + dcidLength + 1 + scidLength) {
+                        return true;
+                    }
                 }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns whether the given data represents a valid short header packet
+     * given the connection ID length used by this server and the QUIC versions supported by this server.
+     *
+     * @param data
+     * @return
+     */
+    protected boolean isValidShortHeaderPacket(ByteBuffer data) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
+        // "1-RTT Packet {
+        //    Header Form (1) = 0,
+        //    Fixed Bit (1) = 1,
+        //    Spin Bit (1),
+        //    Reserved Bits (2),
+        //    Key Phase (1),
+        //    Packet Number Length (2),
+        //    Destination Connection ID (0..160),
+        //    Packet Number (8..32),
+        //    Packet Payload (8..),
+        //  }"
+        if (data.remaining() > 1 + connectionIdLength + 1 + 1) {
+            int flags = data.get(0);
+            if ((flags & 0xc0) == 0x40) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void processLongHeaderPacket(InetSocketAddress clientAddress, ByteBuffer data) {
+        assert isValidLongHeaderPacket(data);
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+        // "Long Header Packet {
+        //    (...)
+        //    Version (32),
+        //    Destination Connection ID Length (8),
+        //    Destination Connection ID (0..160),
+        //    Source Connection ID Length (8),
+        //    Source Connection ID (0..160),
+        //    Type-Specific Payload (..),
+        //  }"
+        data.mark();
+        int flags = data.get();
+        int version = data.getInt();
+        int dcidLength = data.get() & 0xff;
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+        // "The byte following the version contains the length in bytes of the Destination Connection ID field that
+        //  follows it. This length is encoded as an 8-bit unsigned integer. In QUIC version 1, this value MUST NOT
+        //  exceed 20. Endpoints that receive a version 1 long header with a value larger than 20 MUST drop the packet.
+        //  In order to properly form a Version Negotiation packet, servers SHOULD be able to read longer connection IDs
+        //  from other QUIC versions."
+        if (dcidLength > 20) {
+            if (version == Version.QUIC_version_1.getId() || version == Version.QUIC_version_2.getId()) {
+                // "MUST drop the packet"
                 return;
             }
-            if (data.remaining() >= dcidLength + 1) {  // after dcid at least one byte scid length
-                byte[] dcid = new byte[dcidLength];
-                data.get(dcid);
-                int scidLength = data.get() & 0xff;
-                if (data.remaining() >= scidLength) {
-                    byte[] scid = new byte[scidLength];
-                    data.get(scid);
-                    data.rewind();
+        }
 
-                    Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
-                    if (connection.isEmpty()) {
-                        synchronized (this) {
-                            if (mightStartNewConnection(data, version, dcid) && connectionRegistry.isExistingConnection(clientAddress, dcid).isEmpty()) {
-                                connection = Optional.of(createNewConnection(version, clientAddress, scid, dcid));
-                            } else if (initialWithUnspportedVersion(data, version)) {
-                                log.received(Instant.now(), 0, EncryptionLevel.Initial, dcid, scid);
-                                // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-6
-                                // "A server sends a Version Negotiation packet in response to each packet that might initiate a new connection;"
-                                sendVersionNegotiationPacket(clientAddress, data, dcidLength);
-                            }
-                        }
-                    }
-                    connection.ifPresent(c -> c.parsePackets(0, Instant.now(), data, clientAddress));
-                }
+        byte[] dcid = new byte[dcidLength];
+        data.get(dcid);
+        int scidLength = data.get() & 0xff;
+        byte[] scid = new byte[scidLength];
+        data.get(scid);
+        data.reset();
+
+        if (supportedVersionIds.contains(version)) {
+            if (InitialPacket.isInitial(flags, version)) {
+                processInitial(clientAddress, data, version, dcid, scid);
             }
+            else {
+                connectionRegistry.isExistingConnection(clientAddress, dcid).ifPresentOrElse(
+                        c -> c.parsePackets(0, Instant.now(), data, clientAddress),
+                        () -> log.warn("Discarding packet for non-existent connection " + Bytes.bytesToHex(dcid)));
+            }
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-5.2.2
+            // "If a server receives a packet that indicates an unsupported version and if the packet is large enough to
+            //  initiate a new connection for any supported version, the server SHOULD send a Version Negotiation packet"
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-14.1
+            // "A server MUST discard an Initial packet that is carried in a UDP datagram with a payload that is smaller
+            //  than the smallest allowed maximum datagram size of 1200 bytes. "
+            if (data.limit() >= 1200) {
+                log.received(Instant.now(), 0, null, dcid, scid);
+                sendVersionNegotiationPacket(clientAddress, data, dcidLength);
+            }
+        }
+    }
+
+    private void processInitial(InetSocketAddress clientAddress, ByteBuffer data, int version, byte[] dcid, byte[] scid) {
+        if (acceptingNewConnections) {
+        ServerConnectionProxy connection;
+        // Check-and-create often requires a lock to avoid race conditions, but in this case this is not necessary
+        // because this method is only called from one thread (see receiveLoop)
+        connection = connectionRegistry.isExistingConnection(clientAddress, dcid)
+                .orElseGet(() -> createNewConnection(version, clientAddress, scid, dcid));
+        connection.parsePackets(0, Instant.now(), data, clientAddress);
+    }
+        else {
+            log.warn("Server not accepting new connections");
+            sendConnectionRefused(version, dcid, scid, clientAddress);
+        }
+    }
+
+    private void sendConnectionRefused(int rawVersion, byte[] dcid, byte[] scid, InetSocketAddress clientAddress) {
+        Version version = Version.parse(rawVersion);
+        QuicFrame connectionClosed = new ConnectionCloseFrame(version, QuicConstants.TransportErrorCode.CONNECTION_REFUSED.value, "");
+        InitialPacket connectionRefusedResponse = new InitialPacket(version, dcid, scid, null, connectionClosed);
+        connectionRefusedResponse.setPacketNumber(0);
+
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(VersionHolder.with(version), Role.Server, null, log);
+        connectionSecrets.computeInitialKeys(dcid);
+        try {
+            sendPacket(clientAddress, connectionRefusedResponse, connectionSecrets.getOwnAead(Initial));
+        }
+        catch (MissingKeysException e) {
+            // Impossible, as we just computed the keys
         }
     }
 
@@ -256,31 +387,6 @@ public class ServerConnectorImpl implements ServerConnector {
         Optional<ServerConnectionProxy> connection = connectionRegistry.isExistingConnection(clientAddress, dcid);
         connection.ifPresentOrElse(c -> c.parsePackets(0, Instant.now(), data, clientAddress),
                 () -> log.warn("Discarding short header packet addressing non existent connection " + Bytes.bytesToHex(dcid)));
-    }
-
-    private boolean mightStartNewConnection(ByteBuffer packetBytes, int version, byte[] dcid) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.2
-        // "This Destination Connection ID MUST be at least 8 bytes in length."
-        if (dcid.length >= 8) {
-            return supportedVersionIds.contains(version);
-        } else {
-            return false;
-        }
-    }
-
-    private boolean initialWithUnspportedVersion(ByteBuffer packetBytes, int version) {
-        packetBytes.rewind();
-        int type = (packetBytes.get() & 0x30) >> 4;
-        if (InitialPacket.isInitial(type, Version.parse(version))) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-14.1
-            // "A server MUST discard an Initial packet that is carried in a UDP
-            //   datagram with a payload that is smaller than the smallest allowed
-            //   maximum datagram size of 1200 bytes. "
-            if (packetBytes.limit() >= 1200) {
-                return !supportedVersionIds.contains(version);
-            }
-        }
-        return false;
     }
 
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
@@ -313,20 +419,61 @@ public class ServerConnectorImpl implements ServerConnector {
             //  Connection ID of the received packet, ..."
             List<Version> versions = supportedVersions.stream().map(Version::of).collect(Collectors.toList());
             VersionNegotiationPacket versionNegotiationPacket = new VersionNegotiationPacket(versions, dcid, scid);
-            byte[] packetBytes = versionNegotiationPacket.generatePacketBytes(null);
-            DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
-            try {
-                serverSocket.send(datagram);
-                log.sent(Instant.now(), versionNegotiationPacket);
-            } catch (IOException e) {
-                log.error("Sending version negotiation packet failed", e);
-            }
+            sendPacket(clientAddress, versionNegotiationPacket, null);
+        }
+    }
+
+    /**
+     * Send packet to client when the intent is not to establish a new connection.
+     * @param clientAddress
+     * @param packet
+     * @param aead
+     */
+    private void sendPacket(InetSocketAddress clientAddress, QuicPacket packet, Aead aead) {
+        byte[] packetBytes = packet.generatePacketBytes(aead);
+        DatagramPacket datagram = new DatagramPacket(packetBytes, packetBytes.length, clientAddress.getAddress(), clientAddress.getPort());
+        try {
+            serverSocket.send(datagram);
+            log.sent(Instant.now(), packet);
+        }
+        catch (IOException e) {
+            log.error("Sending " + packet + " failed", e);
         }
     }
 
     private void closed(ServerConnectionImpl connection) {
         ServerConnectionProxy removedConnection = connectionRegistry.removeConnection(connection);
         removedConnection.dispose();
+    }
+
+    protected void closeAllConnections() {
+        connectionRegistry.getAllConnections().forEach(ServerConnectionProxy::closeConnection);
+    }
+
+    @Override
+    public void close() {
+        close(Duration.ofSeconds(DEFAULT_CLOSE_TIMEOUT_IN_SECONDS));
+    }
+
+    protected void close(Duration timeout) {
+        log.info("Shutting down " + this);
+        closing = true;
+        stopAcceptingNewConnections();
+        closeAllConnections();
+        connectionRegistry.waitForAllConnectionsToClose(timeout);
+
+        serverReceiveLoop.interrupt();
+        receiver.shutdown();
+        serverSocket.close();
+        tlsEngineFactory.dispose();
+        sharedExecutor.shutdown();
+        sharedScheduledExecutor.shutdown();
+    }
+
+
+    @Override
+    public String toString() {
+        return "ServerConnector[" + serverSocket.getLocalPort() + ":" + applicationProtocolRegistry.getRegisteredApplicationProtocols() + "]";
     }
 
     private class ServerConnectorContext implements Context {

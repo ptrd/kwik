@@ -104,7 +104,7 @@ public class InteropServer {
             }
         }
 
-        List<QuicConnection.QuicVersion> supportedVersions = List.of(QuicConnection.QuicVersion.V1);
+        List<QuicConnection.QuicVersion> supportedVersions = List.of(QuicConnection.QuicVersion.V1, QuicConnection.QuicVersion.V2);
 
         ServerConnectionConfig serverConnectionConfig = ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)

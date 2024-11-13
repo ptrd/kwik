@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2024 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,21 +16,20 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package net.luminis.quic.server;
+package net.luminis.quic;
 
-import net.luminis.quic.server.impl.ServerConnectionProxy;
+/**
+ * Event that indicates that the connection is established.
+ */
+public class ConnectionEstablishedEvent {
 
-import java.util.stream.Stream;
+    private final QuicConnection connection;
 
-public interface ServerConnectionRegistry {
+    public ConnectionEstablishedEvent(QuicConnection connection) {
+        this.connection = connection;
+    }
 
-    void registerConnection(ServerConnectionProxy connection, byte[] connectionId);
-
-    void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId);
-
-    void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId);
-
-    void deregisterConnectionId(byte[] connectionId);
-
-    Stream<ServerConnectionProxy> getAllConnections();
+    QuicConnection connection() {
+        return connection;
+    }
 }

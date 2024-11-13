@@ -45,11 +45,27 @@ public class InitialPacket extends LongHeaderPacket {
 
     private byte[] token;
 
-    public static boolean isInitial(ByteBuffer data) {
-        data.mark();
-        int flags = data.get();
-        data.rewind();
-        return (flags & 0xf0) == 0b1100_0000;
+    /**
+     * Checks whether the given flags (first byte of a QUIC packet) and version indicate an Initial packet.
+     * @param flags
+     * @param version
+     * @return
+     */
+    public static boolean isInitial(int flags, int version) {
+        return
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.2
+                // "Initial Packet {
+                //    Header Form (1) = 1,
+                //    Fixed Bit (1) = 1,
+                //    Long Packet Type (2) = 0,
+                //    Reserved Bits (2),
+                //    Packet Number Length (2),
+                //    (...)
+                //  }"
+                ((flags & 0b1111_0000) == 0b1100_0000 && version == Version.QUIC_version_1.getId()) ||
+                        // https://www.rfc-editor.org/rfc/rfc9369.html#section-3.2
+                        // "Initial: 0b01"
+                        ((flags & 0b1111_0000) == 0b1101_0000 && version == Version.QUIC_version_2.getId());
     }
 
     /**
@@ -59,7 +75,7 @@ public class InitialPacket extends LongHeaderPacket {
      * @param packetVersion  the QUIC version of the long header packet
      * @return
      */
-    public static boolean isInitial(int type, Version packetVersion) {
+    public static boolean isInitialType(int type, Version packetVersion) {
         if (packetVersion.isV2()) {
             return type == V2_type;
         }

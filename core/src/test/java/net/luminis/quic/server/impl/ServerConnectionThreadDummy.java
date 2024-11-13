@@ -59,6 +59,11 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
     }
 
     @Override
+    public void closeConnection() {
+        connection.close();
+    }
+
+    @Override
     public void dispose() {
     }
 }

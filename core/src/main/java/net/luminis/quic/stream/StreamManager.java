@@ -28,6 +28,7 @@ import net.luminis.quic.log.Logger;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -48,6 +49,7 @@ public class StreamManager {
     private final Map<Integer, QuicStreamImpl> streams;
     private final Version quicVersion;
     private final QuicConnectionImpl connection;
+    private final ExecutorService callbackExecutor;
     private volatile FlowControl flowController;
     private final Role role;
     private final Logger log;
@@ -82,13 +84,9 @@ public class StreamManager {
      * @param role
      * @param log
      * @param config
+     * @param callbackExecutor
      */
-    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, ConnectionConfig config) {
-        this(quicConnection, role, log);
-        initialize(config);
-    }
-
-    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log) {
+    public StreamManager(QuicConnectionImpl quicConnection, Role role, Logger log, ConnectionConfig config, ExecutorService callbackExecutor) {
         this.connection = quicConnection;
         this.role = role;
         this.log = log;
@@ -104,6 +102,9 @@ public class StreamManager {
         nextStreamIdUnidirectional = new AtomicInteger();
 
         initStreamIds();
+
+        this.callbackExecutor = callbackExecutor;
+        initialize(config);
     }
 
     public void initialize(ConnectionConfig config) {
@@ -287,7 +288,7 @@ public class StreamManager {
             for (int streamId = nextStreamId; streamId <= requestedStreamId; streamId += 4) {
                 QuicStreamImpl stream = new QuicStreamImpl(quicVersion, streamId, role, connection, this, flowController, log);
                 streams.put(streamId, stream);
-                peerInitiatedStreamCallback.accept(stream);
+                callbackExecutor.submit(() -> peerInitiatedStreamCallback.accept(stream));
             }
             nextStreamIdUpdate.run();
         }

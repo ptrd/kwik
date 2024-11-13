@@ -19,9 +19,12 @@
 package net.luminis.quic.impl;
 
 import net.luminis.quic.ConnectionConfig;
+import net.luminis.quic.ConnectionListener;
+import net.luminis.quic.ConnectionTerminatedEvent;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.cc.FixedWindowCongestionController;
 import net.luminis.quic.cid.ConnectionIdInfo;
+import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.cid.ConnectionIdStatus;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.crypto.ConnectionSecrets;
@@ -30,6 +33,7 @@ import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.packet.*;
 import net.luminis.quic.send.SenderImpl;
+import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.test.ByteUtils;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.FieldSetter;
@@ -41,7 +45,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.ECPublicKey;
@@ -154,7 +160,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(new TransportParameters());
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -174,7 +180,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(transportParameters);
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
 
@@ -193,7 +199,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setRetrySourceConnectionId(retryPacket.getSourceConnectionId());
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
+        verify(connection, never()).immediateCloseWithError(anyInt(), anyString());
     }
 
     @Test
@@ -219,7 +225,7 @@ class QuicClientConnectionImplTest {
         transportParameters.setOriginalDestinationConnectionId(originalSourceConnectionId);
         connection.setPeerTransportParameters(transportParameters);
 
-        verify(connection, never()).immediateCloseWithError(any(EncryptionLevel.class), anyInt(), anyString());
+        verify(connection, never()).immediateCloseWithError(anyInt(), anyString());
     }
 
     @Test
@@ -233,7 +239,7 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(transportParameters);
 
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(argThat(l -> l == EncryptionLevel.Handshake), errorCaptor.capture(), any(), any());
+        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
     }
     //endregion
@@ -255,6 +261,31 @@ class QuicClientConnectionImplTest {
 
         QuicStream stream2 = connection.createStream(true);
         assertThat(stream2.getStreamId()).isEqualTo(firstStreamId + 4);
+    }
+
+    @Test
+    void beforeHandshakeIsCompletedCreatingStreamShouldThrow() throws Exception {
+        //  Given
+        simulateHandshaking();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.createStream(true))
+                // Then
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void whenClosedCreatingStreamShouldThrow() throws Exception {
+        // Given
+        simulateSuccessfulConnect();
+        connection.close();
+
+        assertThatThrownBy(() ->
+                // When
+                connection.createStream(true))
+                // Then
+                .isInstanceOf(IOException.class);
     }
     //endregion
 
@@ -615,6 +646,63 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region statelessreset
+    @Test
+    void whenStatelessResetIsReceivedConnectionShouldBeClosed() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        assertThat(connection.connectionState).isEqualTo(QuicConnectionImpl.Status.Draining);
+    }
+
+    @Test
+    void whenStatelessResetIsReceivedAllStreamsAreAborted() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        StreamManager streamManager = mock(StreamManager.class);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("streamManager"), streamManager);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        verify(streamManager).abortAll();
+    }
+
+    @Test
+    void whenStatelessResetIsReceivedConnectionListenerIsCalled() throws Exception {
+        // Given
+        ConnectionIdManager connectionIdManager = mock(ConnectionIdManager.class);
+        when(connectionIdManager.isStatelessResetToken(any())).thenReturn(true);
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("connectionIdManager"), connectionIdManager);
+
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+
+        // When
+        ByteBuffer data = ByteBuffer.allocate(60);
+        connection.handleUnprotectPacketFailure(data, null);
+
+        // Then
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        verify(listener).disconnected(eventCaptor.capture());
+        ConnectionTerminatedEvent connectionTerminatedEvent = eventCaptor.getValue();
+        assertThat(connectionTerminatedEvent.closeReason()).isEqualTo(ConnectionTerminatedEvent.CloseReason.StatelessReset);
+        assertThat(connectionTerminatedEvent.closedByPeer()).isTrue();
+        assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
+    }
+    //endregion
     //region helper methods
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
@@ -646,6 +734,14 @@ class QuicClientConnectionImplTest {
     }
 
     private void simulateSuccessfulConnect() throws Exception {
+        simulateConnect(QuicConnectionImpl.Status.Connected);
+    }
+
+    private void simulateHandshaking() throws Exception {
+        simulateConnect(QuicConnectionImpl.Status.Handshaking);
+    }
+
+    private void simulateConnect(QuicConnectionImpl.Status finalStatus) throws Exception {
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
         when(sender.getCongestionController()).thenReturn(new FixedWindowCongestionController(logger));
 
@@ -659,7 +755,7 @@ class QuicClientConnectionImplTest {
         TransportParameters transportParams = connection.initTransportParameters();
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("transportParams"), transportParams);
 
-        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), QuicConnectionImpl.Status.Connected);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), finalStatus);
     }
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {

@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.stream.Stream;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.CONNECTION_ID_LIMIT_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
@@ -133,6 +134,11 @@ public class ConnectionIdManager {
 
             @Override
             public void deregisterConnectionId(byte[] connectionId) {}
+
+            @Override
+            public Stream<ServerConnectionProxy> getAllConnections() {
+                return Stream.empty();
+            }
         };
     }
 

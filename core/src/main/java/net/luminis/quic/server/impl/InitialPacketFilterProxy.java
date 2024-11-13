@@ -31,7 +31,7 @@ import java.time.Instant;
 
 
 /**
- * A filtering server connection proxy that only allows initial packets to pass the filter.
+ * A filtering server connection proxy that only allows initial and 0-RTT packets to pass the filter.
  */
 public class InitialPacketFilterProxy implements ServerConnectionProxy {
 
@@ -56,7 +56,7 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
         byte flags = data.get();
         data.reset();
         if (LongHeaderPacket.isLongHeaderPacket(flags, version)) {
-            if (InitialPacket.isInitial((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
+            if (InitialPacket.isInitialType((flags & 0x30) >> 4, version) || ZeroRttPacket.isZeroRTT((flags & 0x30) >> 4, version)) {
                 connection.parsePackets(datagramNumber, timeReceived, data, sourceAddress);
             }
             else {
@@ -72,6 +72,11 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
     @Override
     public boolean isClosed() {
         return connection.isClosed();
+    }
+
+    @Override
+    public void closeConnection() {
+        connection.closeConnection();
     }
 
     @Override

@@ -48,7 +48,7 @@ public class InitialPacketMinimumSizeFilter extends BaseDatagramFilter {
         data.rewind();
 
         if (LongHeaderPacket.isLongHeaderPacket(flags, longHeaderPacketVersion)
-                && InitialPacket.isInitial((flags & 0x30) >> 4, longHeaderPacketVersion)
+                && InitialPacket.isInitialType((flags & 0x30) >> 4, longHeaderPacketVersion)
                 && datagramLength < 1200) {
             discard(data, metaData, "Initial packet is smaller than minimum size");
         }

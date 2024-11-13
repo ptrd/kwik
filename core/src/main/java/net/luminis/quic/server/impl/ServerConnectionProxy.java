@@ -31,6 +31,8 @@ public interface ServerConnectionProxy {
 
     boolean isClosed();
 
+    void closeConnection();
+
     /**
      * Disposes the resources used to run the connection. When called, the connection is already closed and terminated.
      */

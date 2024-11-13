@@ -18,14 +18,10 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.quic.QuicConnection;
-import net.luminis.quic.QuicConstants;
-import net.luminis.quic.QuicStream;
-import net.luminis.quic.Statistics;
+import net.luminis.quic.*;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
 import net.luminis.quic.common.EncryptionLevel;
-import net.luminis.quic.common.PnSpace;
 import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.crypto.ConnectionSecrets;
 import net.luminis.quic.crypto.CryptoStream;
@@ -45,6 +41,7 @@ import net.luminis.tls.TlsProtocolException;
 import net.luminis.tls.alert.ErrorAlert;
 import net.luminis.tls.engine.TlsEngine;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,10 +52,13 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason;
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.ConnectionLost;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Handshake;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.APPLICATION_ERROR;
 import static net.luminis.quic.impl.QuicConnectionImpl.ErrorType.QUIC_LAYER_ERROR;
@@ -119,6 +119,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected volatile HandshakeState handshakeState = HandshakeState.Initial;
     protected final Object handshakeStateLock = new Object();
     protected List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
+    protected volatile EncryptionLevel currentEncryptionLevel;
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
     protected final List<CryptoStream> cryptoStreams = new ArrayList<>();
@@ -128,12 +129,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected volatile int peerAckDelayExponent = 3;
 
     protected volatile FlowControl flowController;
-    protected long[] largestPacketNumber = new long[PnSpace.values().length];
 
     protected volatile Status connectionState;
 
     private RateLimiter closeFramesSendRateLimiter;
+    private volatile ConnectionCloseFrame lastConnectionCloseFrameSent;
     private final ScheduledExecutorService scheduler;
+    private ConnectionListener connectionListener;
+    protected final ExecutorService callbackThread;
 
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
     protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
@@ -154,6 +157,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
+        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callback-executor"));
+        currentEncryptionLevel = Initial;
     }
 
     public void addHandshakeStateListener(RecoveryManager recoveryManager) {
@@ -241,7 +246,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public QuicStream createStream(boolean bidirectional) {
+    public QuicStream createStream(boolean bidirectional) throws IOException {
+        if (connectionState != Status.Connected) {
+            throw new IOException("not connected");
+        }
+
         return getStreamManager().createStream(bidirectional);
     }
 
@@ -373,11 +382,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
         catch (TlsProtocolException e) {
             cryptoProcessingErrorOcurred(e);
-            immediateCloseWithError(packet.getEncryptionLevel(), quicError(e), e.getMessage());
+            immediateCloseWithError(quicError(e), e.getMessage());
         }
         catch (TransportError e) {
             cryptoProcessingErrorOcurred(e);
-            immediateCloseWithError(packet.getEncryptionLevel(), e.getTransportErrorCode().value, "");
+            immediateCloseWithError(e.getTransportErrorCode().value, "");
         }
     }
 
@@ -399,7 +408,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // "An endpoint that receives a DATAGRAM frame when it has not indicated support via the transport parameter
         //  MUST terminate the connection with an error of type PROTOCOL_VIOLATION."
         if (!canReceiveDatagram()) {
-            immediateCloseWithError(packet.getEncryptionLevel(), PROTOCOL_VIOLATION.value, "Datagram frame received, but datagram extension is not enabled");
+            immediateCloseWithError(PROTOCOL_VIOLATION.value, "Datagram frame received, but datagram extension is not enabled");
             return;
         }
         if (datagramHandler != null) {
@@ -420,7 +429,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         try {
             flowController.process(maxStreamDataFrame);
         } catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+            immediateCloseWithError(transportError.getTransportErrorCode().value, null);
         }
     }
     @Override
@@ -457,7 +466,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             getStreamManager().process(resetStreamFrame);
         }
         catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+            immediateCloseWithError(transportError.getTransportErrorCode().value, null);
         }
     }
 
@@ -472,7 +481,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             getStreamManager().process(streamFrame);
         }
         catch (TransportError transportError) {
-            immediateCloseWithError(EncryptionLevel.App, transportError.getTransportErrorCode().value, null);
+            immediateCloseWithError(transportError.getTransportErrorCode().value, null);
         }
     }
 
@@ -521,20 +530,24 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
+        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+            return;
+        }
+
+        emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
+
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
         // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
         //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
         getStreamManager().abortAll();
         getSender().stop();
-        log.info("Closing " + this + " after " + idleTime + " ms of inactivity (idle timeout)");
         log.getQLog().emitConnectionClosedEvent(Instant.now());
         terminate();
     }
 
-    protected void immediateClose(EncryptionLevel level) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
-        immediateCloseWithError(level, NO_ERROR.value, QUIC_LAYER_ERROR, null);
-        log.getQLog().emitConnectionClosedEvent(Instant.now(), NO_ERROR.value, null);
+    protected void immediateClose() {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
+        immediateCloseWithError(NO_ERROR.value, QUIC_LAYER_ERROR, null);
     }
 
     /**
@@ -544,12 +557,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * If this method is called outside received-message-processing, post-processing actions (including flushing the
      * sender) should be performed by the caller.
      *
-     * @param level       The level that should be used for sending the connection close frame
      * @param error       The error code, see https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
      * @param errorReason
      */
-    protected void immediateCloseWithError(EncryptionLevel level, long error, String errorReason) {
-        immediateCloseWithError(level, error, QUIC_LAYER_ERROR, errorReason);
+    protected void immediateCloseWithError(long error, String errorReason) {
+        immediateCloseWithError(error, QUIC_LAYER_ERROR, errorReason);
     }
     
     /**
@@ -559,38 +571,31 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * If this method is called outside received-message-processing, post-processing actions (including flushing the
      * sender) should be performed by the caller.
      *
-     * @param level       The level that should be used for sending the connection close frame
      * @param error       The error code, see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1.
      * @param errorType   whether the error is at the QUIC layer or an application error
      * @param errorReason
      */
-    protected void immediateCloseWithError(EncryptionLevel level, long error, ErrorType errorType, String errorReason) {
+    protected void immediateCloseWithError(long error, ErrorType errorType, String errorReason) {
         if (connectionState == Status.Closing || connectionState == Status.Draining) {
             log.debug("Immediate close ignored because already closing");
             return;
         }
 
-        if (error == NO_ERROR.value) {
-            log.info("Closing " + this);
-        }
-        else {
-            log.error("Closing " + this + " with error " + error + (errorReason != null? ": " + errorReason:""));
-        }
+        emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
+                errorType == QUIC_LAYER_ERROR? error: null,
+                errorType == APPLICATION_ERROR? error: null));
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
-        getSender().send(new ConnectionCloseFrame(quicVersion.getVersion(), error, errorType == QUIC_LAYER_ERROR, errorReason), level);
+        sendConnectionClose(error, errorType, errorReason);
         // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
         connectionState = Status.Closing;
 
         getStreamManager().abortAll();
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.3
-        // "An endpoint that has not established state, such as a server that detects an error in an Initial packet,
-        //  does not enter the closing state."
-        if (level != Initial) {
-            // https://www.rfc-editor.org/rfc/rfc9000.html#name-immediate-close
+        if (currentEncryptionLevel != Initial) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
             // "The closing and draining connection states exist to ensure that connections close cleanly and that
             //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
             //  times the current PTO interval as defined in [QUIC-RECOVERY]."
@@ -598,7 +603,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
         }
         else {
-            // https://www.rfc-editor.org/rfc/rfc9000.html#name-immediate-close-during-the-
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.3
             // "An endpoint that has not established state, such as a server that detects an error in an Initial packet,
             //  does not enter the closing state."
             postProcessingActions.add(() -> terminate());
@@ -607,38 +612,70 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         log.getQLog().emitConnectionClosedEvent(Instant.now(), error, errorReason);
     }
 
+    private void sendConnectionClose(long error, ErrorType errorType, String errorReason) {
+        if (errorType == APPLICATION_ERROR && currentEncryptionLevel != App) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.3
+            // "Sending a CONNECTION_CLOSE of type 0x1d in an Initial or Handshake packet could expose application state
+            // or be used to alter application state. A CONNECTION_CLOSE of type 0x1d MUST be replaced by a
+            // CONNECTION_CLOSE of type 0x1c when sending the frame in Initial or Handshake packets."
+            sendConnectionClose(QuicConstants.TransportErrorCode.APPLICATION_ERROR.value, QUIC_LAYER_ERROR, "");
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.3
+            // "However, prior to confirming the handshake, it is possible that more advanced packet protection keys are
+            //  not available to the peer, so another CONNECTION_CLOSE frame MAY be sent in a packet that uses a lower
+            //  packet protection level."
+            ConnectionCloseFrame closeFrame = new ConnectionCloseFrame(quicVersion.getVersion(), error, errorType == QUIC_LAYER_ERROR, errorReason);
+            switch (currentEncryptionLevel) {
+                case Initial:
+                    getSender().send(closeFrame, Initial);
+                    break;
+                case Handshake:
+                    getSender().send(closeFrame, Initial);
+                    getSender().send(closeFrame, Handshake);
+                    break;
+                case App:
+                    getSender().send(closeFrame, App);
+                    break;
+            }
+            lastConnectionCloseFrameSent = closeFrame;
+        }
+    }
+
     protected void handlePacketInClosingState(QuicPacket packet) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
         // "An endpoint MAY enter the draining state from the closing state if it receives a CONNECTION_CLOSE frame,
         //  which indicates that the peer is also closing or draining."
         if (packet.getFrames().stream().filter(frame -> frame instanceof ConnectionCloseFrame).findAny().isPresent()) {
             connectionState = Status.Draining;
         }
         else {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.1
             // "An endpoint in the closing state sends a packet containing a CONNECTION_CLOSE frame in response to any
             //  incoming packet that it attributes to the connection."
             // "An endpoint SHOULD limit the rate at which it generates packets in the closing state."
-            closeFramesSendRateLimiter.execute(() -> send(new ConnectionCloseFrame(quicVersion.getVersion()), packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
+            assert lastConnectionCloseFrameSent != null;
+            closeFramesSendRateLimiter.execute(() -> send(lastConnectionCloseFrameSent, packet.getEncryptionLevel(), NO_RETRANSMIT, false));  // No flush necessary, as this method is called while processing a received packet.
         }
     }
 
     protected void handlePeerClosing(ConnectionCloseFrame closing, EncryptionLevel encryptionLevel) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
         // "The draining state is entered once an endpoint receives a CONNECTION_CLOSE frame, which indicates that its
         //  peer is closing or draining."
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
+            emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, true,
+                    closing.hasTransportError()? closing.getErrorCode(): null,
+                    closing.hasApplicationProtocolError()? closing.getErrorCode(): null));
+
             if (closing.hasError()) {
                 peerClosedWithError(closing);
-            }
-            else {
-                log.info("Peer is closing " + this);
             }
             getSender().stop();
 
             getStreamManager().abortAll();
 
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.2
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
             // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a CONNECTION_CLOSE
             //  frame before entering the draining state, using a CONNECTION_CLOSE frame and a NO_ERROR code if appropriate.
             //  An endpoint MUST NOT send further packets."
@@ -649,15 +686,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void peerClosedWithError(ConnectionCloseFrame closeFrame) {
-        log.info("Peer is closing " + this + " with " + determineClosingErrorMessage(closeFrame));
     }
 
     private void drain() {
         connectionState = Status.Draining;
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
-        // "The closing and draining connection states exist to ensure that connections close cleanly and that
-        //  delayed or reordered packets are properly discarded. These states SHOULD persist for at least three
-        //  times the current Probe Timeout (PTO) interval"
+        /// https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
+        // "The closing and draining connection states exist to ensure that connections close cleanly and that delayed
+        //  or reordered packets are properly discarded. These states SHOULD persist for at least three times the
+        //  current Probe Timeout (PTO) interval"
         int pto = getSender().getPto();
         schedule(() -> terminate(), 3 * pto, TimeUnit.MILLISECONDS);
     }
@@ -665,11 +701,27 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected boolean enterDrainingState() {
         if (!connectionState.closingOrDraining()) {
             getSender().stop();
+            getStreamManager().abortAll();
             drain();
             return true;
         }
         else {
             return false;
+        }
+    }
+
+    protected void emit(ConnectionTerminatedEvent connectionDisconnectEvent) {
+        if (connectionListener != null) {
+            callbackThread.submit(() -> connectionListener.disconnected(connectionDisconnectEvent));
+        }
+        String logMessage = (connectionDisconnectEvent.closedByPeer()? "Peer is closing ": "Closing ") + this +
+                (connectionDisconnectEvent.hasError()? " with error " + connectionDisconnectEvent.errorDescription(): "") + ".";
+        log.info(logMessage);
+    }
+
+    protected void emit(ConnectionEstablishedEvent connectionEstablishedEvent) {
+        if (connectionListener != null) {
+            callbackThread.submit(() -> connectionListener.connected(connectionEstablishedEvent));
         }
     }
 
@@ -743,7 +795,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void close() {
-        immediateClose(App);
+        immediateClose();
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
@@ -773,7 +825,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void close(QuicConstants.TransportErrorCode applicationError, String errorReason) {
-        immediateCloseWithError(App, applicationError.value, QUIC_LAYER_ERROR, errorReason);
+        immediateCloseWithError(applicationError.value, QUIC_LAYER_ERROR, errorReason);
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
@@ -781,7 +833,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void close(long applicationError, String errorReason) {
-        immediateCloseWithError(App, applicationError, APPLICATION_ERROR, errorReason);
+        immediateCloseWithError(applicationError, APPLICATION_ERROR, errorReason);
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
@@ -804,6 +856,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     @Override
     public QuicVersion getQuicVersion() {
         return quicVersion.getVersion().toQuicVersion();
+    }
+
+    @Override
+    public void setConnectionListener(ConnectionListener connectionListener) {
+        this.connectionListener = connectionListener;
     }
 
     protected abstract PacketFilter createProcessorChain();

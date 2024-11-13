@@ -50,13 +50,17 @@ class InitialPacketTest {
     }
 
     @Test
-    void checkIsInitial() {
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0xcb }))).isTrue();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1000_0000 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_0000 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b0100_1111 }))).isFalse();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_1111 }))).isTrue();
-        assertThat(InitialPacket.isInitial(ByteBuffer.wrap(new byte[] { (byte) 0b1100_0000 }))).isTrue();
+    void testIsInitial() {
+        assertThat(InitialPacket.isInitial(0b1100_0000, Version.QUIC_version_1.getId())).isTrue();
+        assertThat(InitialPacket.isInitial(0b1101_0000, Version.QUIC_version_2.getId())).isTrue();
+        assertThat(InitialPacket.isInitial(0b1101_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1100_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0100_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0101_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1000_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b1001_0000, Version.QUIC_version_2.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0000_0000, Version.QUIC_version_1.getId())).isFalse();
+        assertThat(InitialPacket.isInitial(0b0001_0000, Version.QUIC_version_2.getId())).isFalse();
     }
 
     @Test

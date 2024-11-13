@@ -206,11 +206,11 @@ public abstract class BaseLogger implements Logger {
         if (logPackets) {
             log(formatTime(timeReceived) + " <- (" + datagram + ") "
                     + "Packet "
-                    + encryptionLevel.name().charAt(0) + "|"
+                    + (encryptionLevel != null? encryptionLevel.name().charAt(0): "?") + "|"
                     + "." + "|"
                     + "L" + "|"
-                    + Bytes.bytesToHex(dcid) + "|"
-                    + Bytes.bytesToHex(scid));
+                    + "dcid:" + Bytes.bytesToHex(dcid) + "|"
+                    + "scid:" + Bytes.bytesToHex(scid));
         }
     }
 

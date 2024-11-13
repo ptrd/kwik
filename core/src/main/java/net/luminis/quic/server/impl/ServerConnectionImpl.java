@@ -18,6 +18,7 @@
  */
 package net.luminis.quic.server.impl;
 
+import net.luminis.quic.ConnectionEstablishedEvent;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -74,6 +75,7 @@ import java.util.function.Consumer;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static net.luminis.quic.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static net.luminis.quic.impl.QuicConnectionImpl.Status.Connected;
+import static net.luminis.quic.impl.QuicConnectionImpl.Status.Handshaking;
 import static net.luminis.quic.impl.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
 
 
@@ -145,10 +147,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         idleTimer.setPtoSupplier(sender::getPto);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
-            immediateCloseWithError(EncryptionLevel.App, error, reason);
+            immediateCloseWithError(error, reason);
         };
         connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
-
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -164,7 +165,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionSecrets.computeInitialKeys(originalDcid);
         sender.start(connectionSecrets);
 
-        streamManager = new StreamManager(this, Role.Server, log, configuration);
+        streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
@@ -262,10 +263,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public void handshakeSecretsKnown() {
         connectionSecrets.computeHandshakeSecrets(tlsEngine, tlsEngine.getSelectedCipher());
+        currentEncryptionLevel = EncryptionLevel.Handshake;
     }
 
     @Override
     public void handshakeFinished() {
+        currentEncryptionLevel = EncryptionLevel.App;
         connectionSecrets.computeApplicationSecrets(tlsEngine);
         sender.enableAppLevel();
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-handshake-keys
@@ -291,6 +294,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 log.debug("Handshake state cannot be set to Confirmed");
             }
         }
+        emit(new ConnectionEstablishedEvent(this));
 
         if (!applicationProtocolStarted) {
             applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
@@ -451,6 +455,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public ProcessResult process(InitialPacket packet, Instant time) {
         assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
 
+        connectionState = Handshaking;
         if (retryRequired) {
             if (packet.getToken() == null) {
                 sendRetry();
@@ -461,7 +466,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
                 // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
                 // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
-                immediateCloseWithError(EncryptionLevel.Initial, INVALID_TOKEN.value, null);
+                immediateCloseWithError(INVALID_TOKEN.value, null);
                 return ProcessResult.Abort;
             }
             else {

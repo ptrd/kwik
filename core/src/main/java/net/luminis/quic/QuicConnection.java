@@ -18,6 +18,7 @@
  */
 package net.luminis.quic;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.function.Consumer;
 
@@ -89,10 +90,17 @@ public interface QuicConnection extends DatagramExtension {
      * available.
      * @param bidirectional  whether the stream should be bidirectional
      * @return the created stream
+     * @throws IOException  when the stream cannot be created because the connection is closed or not yet established
      */
-    QuicStream createStream(boolean bidirectional);
+    QuicStream createStream(boolean bidirectional) throws IOException;
 
     void setPeerInitiatedStreamCallback(Consumer<QuicStream> streamConsumer);
+
+    /**
+     * Register a listener that will be called when the connection is established or terminated.
+     * @param connectionListener
+     */
+    void setConnectionListener(ConnectionListener connectionListener);
 
     void close();
 

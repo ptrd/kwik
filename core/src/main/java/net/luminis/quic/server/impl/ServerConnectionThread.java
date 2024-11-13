@@ -72,6 +72,11 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     }
 
     @Override
+    public void closeConnection() {
+        serverConnection.close();
+    }
+
+    @Override
     public void dispose() {
         connectionReceiverThread.interrupt();
     }

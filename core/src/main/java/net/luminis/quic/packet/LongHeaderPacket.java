@@ -48,7 +48,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     public static Class determineType(byte flags, Version version) {
         int type = (flags & 0x30) >> 4;
-        if (InitialPacket.isInitial(type, version)) {
+        if (InitialPacket.isInitialType(type, version)) {
             return InitialPacket.class;
         }
         else if (HandshakePacket.isHandshake(type, version)) {

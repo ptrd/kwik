@@ -18,6 +18,9 @@
  */
 package net.luminis.quic.impl;
 
+import net.luminis.quic.ConnectionListener;
+import net.luminis.quic.ConnectionTerminatedEvent;
+import net.luminis.quic.QuicConstants;
 import net.luminis.quic.QuicStream;
 import net.luminis.quic.ack.GlobalAckGenerator;
 import net.luminis.quic.cid.ConnectionIdManager;
@@ -33,12 +36,16 @@ import net.luminis.quic.test.TestScheduledExecutor;
 import net.luminis.tls.engine.TlsEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.function.Consumer;
 
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.IdleTimeout;
+import static net.luminis.quic.ConnectionTerminatedEvent.CloseReason.ImmediateClose;
 import static net.luminis.quic.common.EncryptionLevel.App;
+import static net.luminis.quic.common.EncryptionLevel.Handshake;
 import static net.luminis.quic.common.EncryptionLevel.Initial;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,7 +57,8 @@ class QuicConnectionImplTest {
     private QuicConnectionImpl connection;
     private SenderImpl sender;
     private TestClock testClock;
-    private TestScheduledExecutor testExecutor;
+    private TestScheduledExecutor scheduler;
+    private TestScheduledExecutor callbackExecutor;
 
     @BeforeEach
     void createObjectUnderTest() throws Exception {
@@ -58,8 +66,10 @@ class QuicConnectionImplTest {
         when(sender.getPto()).thenReturn(onePto);
         connection = new NonAbstractQuicConnection();
         testClock = new TestClock();
-        testExecutor = new TestScheduledExecutor(testClock);
-        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), testExecutor);
+        scheduler = new TestScheduledExecutor(testClock);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("scheduler"), scheduler);
+        callbackExecutor = new TestScheduledExecutor(testClock);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("callbackThread"), callbackExecutor);
     }
 
     //region close
@@ -67,7 +77,7 @@ class QuicConnectionImplTest {
     void whenClosingNormalPacketsAreNotProcessed() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
@@ -81,7 +91,7 @@ class QuicConnectionImplTest {
     void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(Initial);
+        connection.immediateClose();
         connection.runPostProcessingActions();
 
         // When
@@ -96,7 +106,7 @@ class QuicConnectionImplTest {
     void whenClosingNormalPacketLeadsToSendingConnectionClose() {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.immediateClose(App);
+        connection.immediateClose();
         clearInvocations(sender);
 
         // When
@@ -108,11 +118,28 @@ class QuicConnectionImplTest {
     }
 
     @Test
+    void whenClosingNormalPacketLeadsToSendingConnectionCloseWithSameErrorInfo() {
+        // Given
+        PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
+        connection.immediateCloseWithError(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, "something went wrong");
+        clearInvocations(sender);
+
+        // When
+        ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
+        packetProcessor.processPacket(packet, metaDataForNow());
+
+        // Then
+        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(sender).send(frameCaptor.capture(), any(EncryptionLevel.class), any(Consumer.class));
+        assertThat(((ConnectionCloseFrame) frameCaptor.getValue()).getErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value);
+    }
+
+    @Test
     void whenClosingStreamsAreClosed() {
         // Given
 
         // When
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // Then
         verify(connection.getStreamManager()).abortAll();
@@ -155,7 +182,8 @@ class QuicConnectionImplTest {
     @Test
     void afterThreePtoConnectionIsTerminated() throws Exception {
         // Given
-        connection.immediateClose(App);
+        connectionEncryptionLevel(App);
+        connection.immediateClose();
 
         // When
         testClock.fastForward(11 * onePto / 4);
@@ -185,7 +213,7 @@ class QuicConnectionImplTest {
     @Test
     void inClosingStateNumberOfConnectionClosePacketsSendShouldBeRateLimited() {
         // Given
-        connection.immediateClose(App);
+        connection.immediateClose();
 
         // When
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame());
@@ -198,8 +226,9 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void applicationCloseWithErrorSendsConnectionCloseFrame1d() {
+    void applicationCloseWithErrorSendsConnectionCloseFrame1d() throws Exception {
         // Given
+        connectionEncryptionLevel(App);
 
         // When
         connection.close(999, "application error induced close");
@@ -209,6 +238,227 @@ class QuicConnectionImplTest {
                 argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1d),
                 any(EncryptionLevel.class) );
     }
+
+    @Test
+    void whenConnectionIsClosedDuringHandshakeConnectionCloseFrameIsSentOnTwoLevels() throws Exception {
+        connectionEncryptionLevel(Handshake);
+
+        // When
+        connection.close(QuicConstants.TransportErrorCode.INTERNAL_ERROR, "something went wrong");
+
+        // Then
+        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<EncryptionLevel> levelCaptor = ArgumentCaptor.forClass(EncryptionLevel.class);
+        verify(sender, atLeast(2)).send(frameCaptor.capture(), levelCaptor.capture());
+
+        assertThat(frameCaptor.getAllValues()).hasOnlyElementsOfType(ConnectionCloseFrame.class);
+        assertThat(levelCaptor.getAllValues()).containsExactlyInAnyOrder(Handshake, Initial);
+    }
+
+    @Test
+    void whenConnectionIsClosedWithAppErrorDuringHandshakeConnectionCloseFrame1cIsSent() throws Exception {
+        connectionEncryptionLevel(Handshake);
+
+        // When
+        connection.close(999, "application error induced close");
+
+        // Then
+        verify(sender, atLeast(1)).send(
+                argThat(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getFrameType() == 0x1c),
+                any(EncryptionLevel.class) );
+    }
+
+    @Test
+    void afterCloseIdleTimerIsShutdown() throws Exception {
+        // Given
+        connectionEncryptionLevel(App);
+        IdleTimer idleTimer = mock(IdleTimer.class);
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("idleTimer"), idleTimer);
+
+        // When
+        connection.close();
+        testClock.fastForward(3 * onePto);
+
+        // Then
+        verify(idleTimer).shutdown();
+    }
+    //endregion
+
+    //region close events
+    @Test
+    void whenClosingConnectionItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close();
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isFalse();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenClosingDueToIdleTimeoutItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.silentlyCloseConnection(30_000);
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(IdleTimeout);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenClosingWithTransportErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR, "flow control error");
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().hasTransportError()).isTrue();
+        assertThat(eventCaptor.getValue().transportErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR.value);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenClosingWithApplicationErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.close(999, "application error induced close");
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isTrue();
+        assertThat(eventCaptor.getValue().applicationErrorCode()).isEqualTo(999);
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenPeerClosedConnectionItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.NO_ERROR.value, null), App);
+        callbackExecutor.clockAdvanced();
+
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isFalse();
+    }
+
+    @Test
+    void whenPeerClosedWithTransportErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, null), App);
+        callbackExecutor.clockAdvanced();
+
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasTransportError()).isTrue();
+        assertThat(eventCaptor.getValue().transportErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value);
+        assertThat(eventCaptor.getValue().hasApplicationError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenPeerClosedWithApplicationErrorItShouldFireDisconnectEvent() {
+        // Given
+        ConnectionListener closeCallback = mock(ConnectionListener.class);
+        ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);
+        connection.setConnectionListener(closeCallback);
+
+        // When
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 999, false, "application error"), App);
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(closeCallback).disconnected(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().closeReason()).isEqualTo(ImmediateClose);
+        assertThat(eventCaptor.getValue().closedByPeer()).isTrue();
+        assertThat(eventCaptor.getValue().hasApplicationError()).isTrue();
+        assertThat(eventCaptor.getValue().applicationErrorCode()).isEqualTo(999);
+        assertThat(eventCaptor.getValue().hasTransportError()).isFalse();
+        assertThat(eventCaptor.getValue().hasError()).isTrue();
+    }
+
+    @Test
+    void whenCloseIsCalledMultipleTimesListenerShouldOnlyBeCalledOnce() {
+        // Given
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+
+        // When
+        connection.close();
+        callbackExecutor.clockAdvanced();
+        connection.close();
+        callbackExecutor.clockAdvanced();
+        connection.close();
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
+    }
+
+
+    @Test
+    void whenClosingIdleTimeoutCloseShouldBeIgnored() {
+        // Given
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+        connection.immediateClose();
+        scheduler.clockAdvanced();
+
+        // When
+        connection.silentlyCloseConnection(30_000);
+        callbackExecutor.clockAdvanced();
+
+        // Then
+        verify(listener, times(1)).disconnected(any(ConnectionTerminatedEvent.class));
+    }
+
     //endregion
 
     //region RFC 9221 Datagram Extension
@@ -339,20 +589,21 @@ class QuicConnectionImplTest {
         // Given
         datagramExtensionIsEnabled(1000);
         Consumer handler = mock(Consumer.class);
-        connection.setDatagramHandler(handler, testExecutor);
+        connection.setDatagramHandler(handler, scheduler);
         DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
 
         // When
         connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
-        testExecutor.clockAdvanced();
+        scheduler.clockAdvanced();
 
         // Then
         verify(handler).accept(datagramFrame.getData());
     }
 
     @Test
-    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError()  {
+    void whenReceivingDatagramWhenNotEnabeldConnectionShouldBeTerminatedWithAnError() throws Exception {
         // Given
+        connectionEncryptionLevel(App);
         DatagramFrame datagramFrame = new DatagramFrame(new byte[16]);
 
         // When
@@ -384,6 +635,10 @@ class QuicConnectionImplTest {
         TransportParameters transportParameters = new TransportParameters();
         transportParameters.setMaxDatagramFrameSize(maxDatagramFrameSize);
         connection.processCommonTransportParameters(transportParameters);
+    }
+
+    private void connectionEncryptionLevel(EncryptionLevel level) throws Exception {
+        FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("currentEncryptionLevel"), level);
     }
 
     class NonAbstractQuicConnection extends QuicConnectionImpl {

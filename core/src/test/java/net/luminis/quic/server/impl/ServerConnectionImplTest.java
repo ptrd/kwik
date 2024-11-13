@@ -302,6 +302,33 @@ class ServerConnectionImplTest {
     }
     //endregion
 
+    //region handshake status
+    @Test
+    void afterProcessingFirstInitialPacketConnectionStatusShouldBeHandshaking() throws Exception {
+        // Given
+        FieldReader fieldReader = new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"));
+
+        // When
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+
+        // Then
+        assertThat(fieldReader.read()).isEqualTo(QuicConnectionImpl.Status.Handshaking);
+    }
+
+    @Test
+    void whenHandshakeIsFinishedConnectionStatusShouldBeConnected() throws Exception {
+        // Given
+        FieldReader fieldReader = new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"));
+        simulateHandshakeSuccesfullyFinished();
+
+        // When
+        connection.handshakeFinished();
+
+        // Then
+        assertThat(fieldReader.read()).isEqualTo(QuicConnectionImpl.Status.Connected);
+    }
+    //endregion
+
     //region destination connection id
     @Test
     void newServerConnectionUsesOriginalScidAsDcid() throws Exception {

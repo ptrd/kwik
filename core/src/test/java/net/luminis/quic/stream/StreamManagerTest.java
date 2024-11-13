@@ -32,6 +32,8 @@ import net.luminis.quic.impl.TransportError;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.test.FieldReader;
+import net.luminis.quic.test.TestClock;
+import net.luminis.quic.test.TestScheduledExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +63,7 @@ class StreamManagerTest {
     private StreamManager streamManager;
     private QuicConnectionImpl quicConnection;
     private ConnectionConfig defaultConfig;
+    private TestScheduledExecutor callbackExecutor;
 
     //region setup
     @BeforeEach
@@ -73,7 +76,8 @@ class StreamManagerTest {
                 .maxUnidirectionalStreamBufferSize(10_000)
                 .maxBidirectionalStreamBufferSize(10_000)
                 .build();
-        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), defaultConfig);
+        callbackExecutor = new TestScheduledExecutor(new TestClock());
+        streamManager = new StreamManager(quicConnection, Role.Client, mock(Logger.class), defaultConfig, callbackExecutor);
         streamManager.setFlowController(mock(FlowControl.class));
     }
     //endregion
@@ -82,7 +86,7 @@ class StreamManagerTest {
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
         // Given
-        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), defaultConfig);
+        streamManager = new StreamManager(mock(QuicConnectionImpl.class), Role.Server, mock(Logger.class), defaultConfig, callbackExecutor);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsUni(1);
 
@@ -136,7 +140,7 @@ class StreamManagerTest {
                 .maxConnectionBufferSize(10_000)
                 .maxBidirectionalStreamBufferSize(10_000)
                 .build();
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config);
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), config, callbackExecutor);
         streamManager.setFlowController(mock(FlowControl.class));
         streamManager.setInitialMaxStreamsBidi(1);
         List<QuicStream> openedStreams = new ArrayList<>();
@@ -144,6 +148,7 @@ class StreamManagerTest {
 
         // When
         streamManager.process(new StreamFrame(0, new byte[100], true));
+        callbackExecutor.clockAdvanced();
 
         // Then
         assertThat(openedStreams).hasSize(1);
@@ -153,7 +158,7 @@ class StreamManagerTest {
     @Test
     void numberOfBidirectionalStreamsThatCanBeCreatedShouldBeIdenticalToInitialMaxValue() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig);
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig, callbackExecutor);
         streamManager.setFlowController(mock(FlowControl.class));
         // streamManager.setInitialMaxStreamsBidi(10);
 
@@ -384,7 +389,7 @@ class StreamManagerTest {
     @Test
     void whenStreamLimitIsReachedForClientInitiatedUnidirectionalCreateStreamShouldLeadToTransportErrorException() throws Exception {
         // Given
-        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig);
+        streamManager = new StreamManager(quicConnection, Role.Server, mock(Logger.class), defaultConfig, callbackExecutor);
         int initial_stream_id_for_type = 2; // client initiated unidirectional stream
         int acceptedStreamId = 9 * 4 + initial_stream_id_for_type;
         streamManager.process(new StreamFrame(acceptedStreamId, new byte[0], false));
@@ -658,6 +663,7 @@ class StreamManagerTest {
         });
         streamManager.process(new StreamFrame(3, new byte[5000], false));
         streamManager.process(new StreamFrame(7, new byte[5000], false));
+        callbackExecutor.clockAdvanced();
         for (QuicStream stream : openStreams.values()) {
             stream.getInputStream().read(new byte[5000]);  // Will increase connection flow control limit to 20.000
         }
@@ -870,6 +876,7 @@ class StreamManagerTest {
 
         int streamId = 0x03;
         streamManager.process(new StreamFrame(streamId, new byte[10_000], false));
+        callbackExecutor.clockAdvanced();
         QuicStream stream = openStreams.get(streamId);
         stream.getInputStream().read(new byte[10_000]);
 

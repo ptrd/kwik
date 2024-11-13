@@ -33,13 +33,20 @@ import java.util.Set;
 /**
  * Listens for QUIC connections on a given port. Requires server certificate and corresponding private key.
  */
-public interface ServerConnector {
+public interface ServerConnector extends AutoCloseable {
 
     void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory);
 
     Set<String> getRegisteredApplicationProtocols();
 
     void start();
+
+    /**
+     * Closes the server connector and releases all resources. This includes refusing new connections and
+     * properly closing all existing connections. This method returns after all connections are closed or after
+     * a fixed timeout.
+     */
+    void close();
 
     static Builder builder() {
         return new ServerConnectorImpl.BuilderImpl();
