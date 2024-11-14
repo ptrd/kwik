@@ -1,5 +1,14 @@
 # Releases
 
+## 0.9.1 (2024-11-14)
+
+
+- added `close` method to properly shut down a ServerConnector (including closing all connections and free all resources).
+  [issue 44](https://github.com/ptrd/kwik/issues/44)
+- improved handling of closing the connection while it is still handshaking
+- added ConnectionListener for reacting to connection established / connection terminated events
+  [issue 48](https://github.com/ptrd/kwik/issues/48)
+
 ## 0.9 (2024-11-04)
 
 Added support for "Unreliable Datagram Extension", [RFC 9221](https://www.rfc-editor.org/rfc/rfc9221.html)
