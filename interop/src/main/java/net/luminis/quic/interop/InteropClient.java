@@ -26,6 +26,7 @@ import net.luminis.quic.client.h09.Http09Client;
 import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -149,9 +150,8 @@ public class InteropClient {
     }
 
     private static void testTransfer(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException, URISyntaxException {
-        URL url1 = downloadUrls.get(0);
-        // logger.logPackets(true);
-
+        // Disable logger for testcase transfer, because it has significant impact on performance (and "transfer" is used for performance testing).
+        builder.logger(new NullLogger());
         QuicClientConnection connection = builder.build();
         connection.connect();
 

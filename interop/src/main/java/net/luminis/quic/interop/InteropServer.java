@@ -22,6 +22,7 @@ import net.luminis.quic.KwikVersion;
 import net.luminis.quic.QuicConnection;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.NullLogger;
 import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ApplicationProtocolConnectionFactory;
 import net.luminis.quic.server.ServerConnectionConfig;
@@ -51,6 +52,11 @@ public class InteropServer {
     }
 
     public static void main(String[] rawArgs) throws Exception {
+        String testcase = System.getenv("TESTCASE");
+        if (testcase == null) {
+            testcase = "";
+        }
+
         Options cmdLineOptions = new Options();
         cmdLineOptions.addOption(null, "noRetry", false, "disable always use retry");
 
@@ -71,12 +77,17 @@ public class InteropServer {
 
         Logger log;
         File logDir = new File("/logs");
-        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite()) {
+        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite() && !testcase.equals("transfer")) {
             log = new FileLogger(new File(logDir, "kwikserver.log"));
+        }
+        else if (testcase.equals("transfer")) {
+            // Disable logger for testcase transfer, because it has significant impact on performance (and "transfer" is used for performance testing).
+            log = new NullLogger();
         }
         else {
             log = new SysOutLogger();
         }
+
         log.timeFormat(Logger.TimeFormat.Long);
         log.logWarning(true);
         log.logInfo(true);
