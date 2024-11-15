@@ -103,6 +103,10 @@ public class KwikCli {
 
         String httpRequestPath = processUrlArgs(cmd, connectionBuilder);
 
+        if (cmd.hasOption("preferIPv6")) {
+            connectionBuilder.preferIPv6();
+        }
+
         processCipherArgs(cmd, connectionBuilder);
 
         if (cmd.hasOption("noCertificateCheck")) {
@@ -805,5 +809,6 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "trustStorePassword", true, "password for custom trust store");
         cmdLineOptions.addOption(null, "keyManager", true, "client authentication key manager");
         cmdLineOptions.addOption(null, "keyManagerPassword", true, "password for client authentication key manager and key password");
+        cmdLineOptions.addOption(null, "preferIPv6", false, "use IPv6 address if available");
     }
 }

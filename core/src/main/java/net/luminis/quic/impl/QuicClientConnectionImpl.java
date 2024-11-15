@@ -38,6 +38,7 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.util.Bytes;
+import net.luminis.quic.util.InetTools;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.engine.CertificateWithPrivateKey;
@@ -154,7 +155,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile ClientHello originalClientHello;
 
 
-    private QuicClientConnectionImpl(String host, int port, String applicationProtocol, long connectTimeout,
+    private QuicClientConnectionImpl(String host, int port, InetTools.IPversionOption ipVersionOption, String applicationProtocol, long connectTimeout,
                                      ClientConnectionConfig connectionProperties, QuicSessionTicket sessionTicket,
                                      Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
@@ -170,7 +171,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.preferredVersion = preferredVersion;
         this.host = host;
         this.serverPort = port;
-        serverAddress = InetAddress.getByName(proxyHost != null? proxyHost: host);
+        serverAddress = InetTools.lookupAddress(proxyHost != null? proxyHost: host, ipVersionOption);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
         this.clientCertificate = clientCertificate;
@@ -1293,6 +1294,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         protected ClientConnectionConfig connectionProperties = new ClientConnectionConfig();
         private String host;
         private int port;
+        private InetTools.IPversionOption ipVersionOption;
         private QuicSessionTicket sessionTicket;
         private QuicVersion quicVersion = QuicVersion.V1;
         private QuicVersion preferredVersion;
@@ -1334,7 +1336,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             QuicClientConnectionImpl quicConnection =
-                    new QuicClientConnectionImpl(host, port, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
+                    new QuicClientConnectionImpl(host, port, ipVersionOption, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
                             Version.of(preferredVersion), log, proxyHost, secretsFile, initialRtt, connectionIdLength,
                             cipherSuites, clientCertificate, clientCertificateKey, socketFactory);
 
@@ -1508,6 +1510,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder port(int port) {
             this.port = port;
+            return this;
+        }
+
+        @Override
+        public Builder preferIPv4() {
+            ipVersionOption = InetTools.IPversionOption.PreferIPv4;
+            return this;
+        }
+
+        @Override
+        public Builder preferIPv6() {
+            ipVersionOption = InetTools.IPversionOption.PreferIPv6;
             return this;
         }
 

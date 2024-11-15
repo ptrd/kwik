@@ -125,6 +125,10 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder port(int port);
 
+        Builder preferIPv4();
+
+        Builder preferIPv6();
+
         Builder connectionIdLength(int length);
 
         Builder initialRtt(int initialRtt);
