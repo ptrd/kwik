@@ -121,6 +121,10 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder uri(URI uri);
 
+        Builder host(String host);
+
+        Builder port(int port);
+
         Builder connectionIdLength(int length);
 
         Builder initialRtt(int initialRtt);

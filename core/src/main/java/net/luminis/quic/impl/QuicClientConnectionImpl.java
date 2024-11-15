@@ -1496,6 +1496,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         @Override
+        public Builder host(String host) {
+            this.host = host;
+            if (port == 0) {
+                // Ensure port number is always set (when host or URI is specified)
+                port = 443;
+            }
+            return this;
+        }
+
+        @Override
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
+        @Override
         public Builder connectionIdLength(int length) {
             if (length < 0 || length > 20) {
                 throw new IllegalArgumentException("Connection ID length must between 0 and 20.");
