@@ -30,13 +30,13 @@ public class Statistics {
 
     @SuppressWarnings("NarrowCalculation")
     public float efficiency() {
-        return senderStatistics.bytesSent() > 0? (float) ((senderStatistics.dataBytesSent() * 1000 / senderStatistics.bytesSent()) / 10.0) : 0;
+        return senderStatistics.bytesSent() > 0? (float) ((senderStatistics.dataBytesSent() * 10000 / senderStatistics.bytesSent()) / 100.0) : 0;
     }
 
     @Override
     public String toString() {
         return String.format(
-                "datagrams sent: %d\npackets send: %d\nbytes sent: %d\ndata sent: %d\nefficieny: %.1f\npackets lost: %d" +
+                "datagrams sent: %d\npackets send: %d\nbytes sent: %d\ndata sent: %d\nefficieny: %.2f\npackets lost: %d" +
                 "\nsmoothed RTT: %d\nRTT var: %d\nlatest RTT: %d",
                 senderStatistics.datagramsSent(), senderStatistics.packetsSent(), senderStatistics.bytesSent(),
                 senderStatistics.dataBytesSent(),

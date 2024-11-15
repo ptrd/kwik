@@ -38,14 +38,14 @@ class StatisticsTest {
     }
 
     @Test
-    void whenComputedEfficiencyPercentageHasMultipleDecimalsOnyTheFirstIsReturned() {
+    void whenComputedEfficiencyPercentageHasThreeDecimalsOnyTheFirstTwoAreReturned() {
         // Given
-        SendStatistics sendStatistics = new SendStatistics(0, 0, 10000, 7596, 0, 10, 1, 11);
+        SendStatistics sendStatistics = new SendStatistics(0, 0, 100000, 75968, 0, 10, 1, 11);
 
         // When
         Statistics statistics = new Statistics(sendStatistics);
 
         // Then
-        assertThat(statistics.efficiency()).isEqualTo(75.9f);
+        assertThat(statistics.efficiency()).isEqualTo(75.96f);
     }
 }
