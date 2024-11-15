@@ -570,7 +570,10 @@ public class KwikCli {
                     }
                     catch (InterruptedException e) {}
 
-                    System.out.println("Server returns: \n" + httpResponse.body());
+                    System.out.println("Server returns: \n" +
+                            "Status code " + httpResponse.statusCode() + "\n" +
+                            httpResponse.headers().map() + "\n" +
+                            httpResponse.body());
                 }
                 Duration duration = Duration.between(start, done);
                 String speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
