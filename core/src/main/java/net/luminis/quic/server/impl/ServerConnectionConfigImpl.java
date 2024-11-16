@@ -43,6 +43,7 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
     private long maxBidirectionalStreamBufferSize;
     private ServerConnectionConfig.RetryRequired retryRequired;
     private int connectionIdLength = DEFAULT_CONNECTION_ID_LENGTH;
+    private boolean useStrictSmallestAllowedMaximumDatagramSize;
 
     private ServerConnectionConfigImpl() {
     }
@@ -87,6 +88,11 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         return maxBidirectionalStreamBufferSize;
     }
 
+    @Override
+    public boolean useStrictSmallestAllowedMaximumDatagramSize() {
+        return useStrictSmallestAllowedMaximumDatagramSize;
+    }
+
     public int connectionIdLength() {
         return connectionIdLength;
     }
@@ -127,6 +133,7 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         configBuilder.maxTotalPeerInitiatedBidirectionalStreams(protocol.maxTotalPeerInitiatedBidirectionalStreams());
         configBuilder.retryRequired(this.retryRequired());
         configBuilder.connectionIdLength(this.connectionIdLength());
+        configBuilder.useStrictSmallestAllowedMaximumDatagramSize(this.useStrictSmallestAllowedMaximumDatagramSize());
 
         return configBuilder.build();
     }
@@ -295,6 +302,12 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         @Override
         public Builder maxTotalPeerInitiatedBidirectionalStreams(long max) {
             config.maxTotalBidirectionalStreams = max;
+            return this;
+        }
+
+        @Override
+        public Builder useStrictSmallestAllowedMaximumDatagramSize(boolean value) {
+            config.useStrictSmallestAllowedMaximumDatagramSize = value;
             return this;
         }
     }

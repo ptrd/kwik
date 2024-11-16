@@ -30,6 +30,7 @@ public class ClientConnectionConfig implements ConnectionConfig {
     private long maxBidirectionalStreamBufferSize;
     private int activeConnectionIdLimit;
     private int maxUdpPayloadSize;
+    private boolean useStrictSmallestAllowedMaximumDatagramSize;
 
     @Override
     public int maxIdleTimeout() {
@@ -109,5 +110,14 @@ public class ClientConnectionConfig implements ConnectionConfig {
 
     public void setMaxUdpPayloadSize(int maxSize) {
         maxUdpPayloadSize = maxSize;
+    }
+
+    public void setUseStrictSmallestAllowedMaximumDatagramSize(boolean value) {
+        this.useStrictSmallestAllowedMaximumDatagramSize = value;
+    }
+
+    @Override
+    public boolean useStrictSmallestAllowedMaximumDatagramSize() {
+        return useStrictSmallestAllowedMaximumDatagramSize;
     }
 }

@@ -109,4 +109,9 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     public long maxBidirectionalStreamBufferSize() {
         return maxBidirectionalStreamBufferSize;
     }
+
+    @Override
+    public boolean useStrictSmallestAllowedMaximumDatagramSize() {
+        return false;
+    }
 }

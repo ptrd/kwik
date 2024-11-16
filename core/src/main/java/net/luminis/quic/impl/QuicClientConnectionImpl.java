@@ -163,7 +163,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
-        super(originalVersion, Role.Client, secretsFile, log);
+        super(originalVersion, Role.Client, secretsFile, log, connectionProperties);
         this.applicationProtocol = applicationProtocol;
         this.connectTimeout = connectTimeout;
         this.connectionProperties = connectionProperties;
@@ -1626,6 +1626,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 throw new IllegalArgumentException("Max UDP payload size must be at least " + MIN_MAX_UDP_PAYLOAD_SIZE + ".");
             }
             connectionProperties.setMaxUdpPayloadSize(maxSize);
+        }
+
+        public void useStrictSmallestAllowedMaximumDatagramSize() {
+            connectionProperties.setUseStrictSmallestAllowedMaximumDatagramSize(true);
         }
     }
 }

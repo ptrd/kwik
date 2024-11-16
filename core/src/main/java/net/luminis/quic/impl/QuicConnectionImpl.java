@@ -127,7 +127,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
     protected volatile int peerAckDelayExponent = 3;
-    protected final boolean useStrictSmallestAllowedMaximumDatagramSize = false;
+    protected final boolean useStrictSmallestAllowedMaximumDatagramSize;
 
     protected volatile FlowControl flowController;
 
@@ -146,10 +146,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ExecutorService datagramHandlerExecutor;
 
 
-    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log) {
+    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log, ConnectionConfig settings) {
         this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
+        useStrictSmallestAllowedMaximumDatagramSize = settings != null? settings.useStrictSmallestAllowedMaximumDatagramSize(): false;
 
         processorChain = createProcessorChain();
 

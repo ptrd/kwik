@@ -59,4 +59,9 @@ public interface ConnectionConfig {
      * @return  the maximum buffer size on stream level (per stream) for bidirectional streams.
      */
     long maxBidirectionalStreamBufferSize();
+
+    /**
+     * @return whether to apply the strict interpretation of RFC-9000 with respect to the smallest allowed maximum datagram size.
+     */
+    boolean useStrictSmallestAllowedMaximumDatagramSize();
 }

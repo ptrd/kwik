@@ -63,5 +63,7 @@ public interface ServerConnectionConfig extends ConnectionConfig {
         Builder maxTotalPeerInitiatedUnidirectionalStreams(long max);
 
         Builder maxTotalPeerInitiatedBidirectionalStreams(long max);
+
+        Builder useStrictSmallestAllowedMaximumDatagramSize(boolean value);
     }
 }

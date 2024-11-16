@@ -395,6 +395,9 @@ public class InteractiveShell {
                     System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));
                 }
                 break;
+            case "strict":
+                builder.useStrictSmallestAllowedMaximumDatagramSize();
+                break;
             case "datagram":
                 builder.enableDatagramExtension();
                 break;
