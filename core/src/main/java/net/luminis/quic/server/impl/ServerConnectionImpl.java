@@ -44,6 +44,7 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.util.Bytes;
+import net.luminis.quic.util.InetTools;
 import net.luminis.tls.NewSessionTicket;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.TlsProtocolException;
@@ -86,6 +87,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final SenderImpl sender;
     private final Version originalVersion;
     private final InetSocketAddress initialClientAddress;
+    private final boolean usingIPv4;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
@@ -125,6 +127,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
+        usingIPv4 = InetTools.isIPv4(initialClientAddress.getAddress());
         this.retryRequired = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always;
         this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -189,6 +192,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     public void abortConnection(Throwable error) {
         log.error(this + " aborted due to internal error", error);
         closeCallback.accept(this);
+    }
+
+    @Override
+    protected boolean usingIPv4() {
+        return usingIPv4;
     }
 
     @Override

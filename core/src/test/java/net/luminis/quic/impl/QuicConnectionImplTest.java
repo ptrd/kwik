@@ -790,6 +790,11 @@ class QuicConnectionImplTest {
         }
 
         @Override
+        protected boolean usingIPv4() {
+            return true;
+        }
+
+        @Override
         protected SenderImpl getSender() {
             return sender;
         }

@@ -119,6 +119,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     private final String host;
     private final int serverPort;
+    private final boolean usingIPv4;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
     private final DatagramSocket socket;
@@ -172,6 +173,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.host = host;
         this.serverPort = port;
         serverAddress = InetTools.lookupAddress(proxyHost != null? proxyHost: host, ipVersionOption);
+        usingIPv4 = InetTools.isIPv4(serverAddress);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
         this.clientCertificate = clientCertificate;
@@ -1033,6 +1035,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void retireDestinationConnectionId(Integer sequenceNumber) {
         connectionIdManager.retireConnectionId(sequenceNumber);
+    }
+
+    @Override
+    protected boolean usingIPv4() {
+        return usingIPv4;
     }
 
     @Override

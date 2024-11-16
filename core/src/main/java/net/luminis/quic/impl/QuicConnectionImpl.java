@@ -127,6 +127,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "If this value is absent, a default value of 3 is assumed (indicating a multiplier of 8)."
     protected volatile int peerAckDelayExponent = 3;
+    protected final boolean useStrictSmallestAllowedMaximumDatagramSize = false;
 
     protected volatile FlowControl flowController;
 
@@ -780,17 +781,39 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      */
     public abstract void abortConnection(Throwable error);
 
-    public static int getMaxPacketSize() {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-14.1:
-        // "An endpoint SHOULD use Datagram Packetization Layer PMTU Discovery
-        //   ([DPLPMTUD]) or implement Path MTU Discovery (PMTUD) [RFC1191]
-        //   [RFC8201] ..."
-        // "In the absence of these mechanisms, QUIC endpoints SHOULD NOT send IP
-        //   packets larger than 1280 bytes.  Assuming the minimum IP header size,
-        //   this results in a QUIC maximum packet size of 1232 bytes for IPv6 and
-        //   1252 bytes for IPv4."
-        // As it is not know (yet) whether running over IP4 or IP6, take the smallest of the two:
-        return 1232;
+    public int getMaxPacketSize() {
+        if (useStrictSmallestAllowedMaximumDatagramSize) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-14.2
+            // "An endpoint SHOULD use DPLPMTUD (Section 14.3) or PMTUD (Section 14.2.1) to determine whether the path
+            //  to a destination will support a desired maximum datagram size without fragmentation. In the absence of
+            //  these mechanisms, QUIC endpoints SHOULD NOT send datagrams larger than the smallest allowed maximum
+            //  datagram size."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1, https://www.rfc-editor.org/rfc/rfc9000.html#section-14
+            // "... the smallest allowed maximum datagram size of 1200 bytes"
+            return 1200;
+        }
+        else {
+            // Draft versions of the QUIC specification (e.g. https://datatracker.ietf.org/doc/html/draft-ietf-quic-transport-28)
+            // allowed a minimum of 1252 bytes for IPv4 and 1232 bytes for IPv6
+            // https://datatracker.ietf.org/doc/html/draft-ietf-quic-transport-28#section-14.1
+            // "In the absence of these mechanisms, QUIC endpoints SHOULD NOT send IP packets larger than 1280 bytes.
+            //  Assuming the minimum IP header size, this results in a QUIC maximum packet size of 1232 bytes for IPv6
+            //  and 1252 bytes for IPv4."
+            // and this is what several implementations still use.
+            // The RFC still mentions this maximum minimum size in the context of path MTU discovery:
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-14
+            // "QUIC assumes a minimum IP packet size of at least 1280 bytes. This is the IPv6 minimum size [IPv6] and is
+            //  also supported by most modern IPv4 networks. Assuming the minimum IP header size of 40 bytes for IPv6 and
+            //  20 bytes for IPv4 and a UDP header size of 8 bytes, this results in a maximum datagram size of 1232 bytes
+            //  for IPv6 and 1252 bytes for IPv4. Thus, modern IPv4 and all IPv6 network paths are expected to be able
+            //  to support QUIC."
+            if (usingIPv4()) {
+                return 1252;
+            }
+            else {
+                return 1232;
+            }
+        }
     }
 
     @Override
@@ -862,6 +885,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     public void setConnectionListener(ConnectionListener connectionListener) {
         this.connectionListener = connectionListener;
     }
+
+    protected abstract boolean usingIPv4();
 
     protected abstract PacketFilter createProcessorChain();
     
