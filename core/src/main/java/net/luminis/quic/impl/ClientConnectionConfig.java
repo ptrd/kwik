@@ -31,6 +31,7 @@ public class ClientConnectionConfig implements ConnectionConfig {
     private int activeConnectionIdLimit;
     private int maxUdpPayloadSize;
     private boolean useStrictSmallestAllowedMaximumDatagramSize;
+    private boolean enforceMaxUdpPayloadSize;
 
     @Override
     public int maxIdleTimeout() {
@@ -119,5 +120,13 @@ public class ClientConnectionConfig implements ConnectionConfig {
     @Override
     public boolean useStrictSmallestAllowedMaximumDatagramSize() {
         return useStrictSmallestAllowedMaximumDatagramSize;
+    }
+
+    public boolean getEnforceMaxUdpPayloadSize() {
+        return enforceMaxUdpPayloadSize;
+    }
+
+    public void setEnforceMaxUdpPayloadSize(boolean enforceMaxUdpPayloadSize) {
+        this.enforceMaxUdpPayloadSize = enforceMaxUdpPayloadSize;
     }
 }

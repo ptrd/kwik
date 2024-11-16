@@ -390,6 +390,7 @@ public class InteractiveShell {
                 break;
             case "payload":
                 builder.maxUdpPayloadSize(toInt(value));
+                builder.enforceMaxUdpPayloadSize(true);
                 params.maxUdpPayloadSize = toInt(value);
                 if (toInt(value) > Receiver.MAX_DATAGRAM_SIZE) {
                     System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));

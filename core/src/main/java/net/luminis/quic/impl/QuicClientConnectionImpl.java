@@ -486,6 +486,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             while (! currentThread.isInterrupted()) {
                 RawPacket rawPacket = receiver.get(15);
                 if (rawPacket != null) {
+                    if (connectionProperties.getEnforceMaxUdpPayloadSize() && rawPacket.getLength() > connectionProperties.getMaxUdpPayloadSize()) {
+                        log.error("Dropping UDP packet with size " + rawPacket.getLength() + ", which is larger than the maximum allowed UDP payload size of " + connectionProperties.getMaxUdpPayloadSize());
+                        continue;
+                    }
                     Duration processDelay = Duration.between(rawPacket.getTimeReceived(), Instant.now());
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
@@ -1621,15 +1625,34 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             return this;
         }
 
+        /**
+         * Set the max upd payload size as advertised in the transport parameters. This is the maximum size of a UDP
+         * packet that the client is willing to receive.
+         * See https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+         * @param maxSize
+         */
         public void maxUdpPayloadSize(int maxSize) {
             if (maxSize < MIN_MAX_UDP_PAYLOAD_SIZE) {
                 throw new IllegalArgumentException("Max UDP payload size must be at least " + MIN_MAX_UDP_PAYLOAD_SIZE + ".");
+            }
+            if (maxSize > Receiver.MAX_DATAGRAM_SIZE) {
+                throw new IllegalArgumentException("Max UDP payload size cannot be larger than " + Receiver.MAX_DATAGRAM_SIZE + ".");
             }
             connectionProperties.setMaxUdpPayloadSize(maxSize);
         }
 
         public void useStrictSmallestAllowedMaximumDatagramSize() {
             connectionProperties.setUseStrictSmallestAllowedMaximumDatagramSize(true);
+        }
+
+        /**
+         * Set that the max (receive) udp payload size should be enforced. If the server sends a packet that is larger
+         * than the max udp payload size, the packet will be dropped.
+         * The default is not to enforce this limit.
+         * @param enforce
+         */
+        public void enforceMaxUdpPayloadSize(boolean enforce) {
+            connectionProperties.setEnforceMaxUdpPayloadSize(enforce);
         }
     }
 }
