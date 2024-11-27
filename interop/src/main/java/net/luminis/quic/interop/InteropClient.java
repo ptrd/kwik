@@ -120,7 +120,7 @@ public class InteropClient {
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
-            builder.connectTimeout(Duration.ofSeconds(5));
+            builder.connectTimeout(Duration.ofSeconds(30));
             String keylogfileEnvVar = System.getenv("SSLKEYLOGFILE");
             if (keylogfileEnvVar != null && ! keylogfileEnvVar.isBlank()) {
                 System.out.println("Writing keys to " + keylogfileEnvVar);
