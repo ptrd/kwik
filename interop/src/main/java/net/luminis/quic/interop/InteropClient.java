@@ -217,9 +217,9 @@ public class InteropClient {
 
         for (URL download : downloadUrls) {
             try {
-                logger.info("Setting up connection for downloading " + download + " at " + timeNow());
-
                 QuicClientConnection connection = builder.build();
+                logger.info("Setting up connection for downloading " + download + " at " + timeNow() + " on " + connection);
+
                 connection.connect();
 
                 logger.info("Starting downloading " + download + " at " + timeNow() + " on " + connection);
