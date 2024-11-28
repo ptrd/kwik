@@ -44,4 +44,8 @@ public class TransportError extends QuicError {
         return transportErrorCode;
     }
 
+    @Override
+    public String toString() {
+        return "TransportError (" + transportErrorCode + ")";
+    }
 }
