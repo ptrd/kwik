@@ -338,6 +338,7 @@ public class StreamManager {
             if (frame.getUpToOffset() > receivingStreamMaxOffset) {
                 long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
                 if (cumulativeReceiveOffset + increment > flowControlMax) {
+                    log.error("Flow control error on stream: " + frame.getStreamId() + ":" + cumulativeReceiveOffset + " + " + increment + " > " + flowControlMax);
                     throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
                 }
             }

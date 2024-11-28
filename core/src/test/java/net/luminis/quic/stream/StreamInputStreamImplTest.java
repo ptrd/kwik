@@ -18,9 +18,10 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.impl.QuicConnectionImpl;
 import net.luminis.quic.impl.Role;
-import net.luminis.quic.frame.StreamFrame;
+import net.luminis.quic.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +37,7 @@ class StreamInputStreamImplTest {
         StreamManager streamManager = mock(StreamManager.class);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
-        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L);
+        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, mock(Logger.class));
     }
 
     @Test
