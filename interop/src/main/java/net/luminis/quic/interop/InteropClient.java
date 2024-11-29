@@ -216,8 +216,9 @@ public class InteropClient {
         logger.logPackets(true);
 
         for (URL download : downloadUrls) {
+            QuicClientConnection connection = null;
             try {
-                QuicClientConnection connection = builder.build();
+                connection = builder.build();
                 logger.info("Setting up connection for downloading " + download + " at " + timeNow() + " on " + connection);
 
                 connection.connect();
@@ -231,7 +232,7 @@ public class InteropClient {
                 connection.close();
             }
             catch (IOException ioError) {
-                logger.error(timeNow() + " Error in client: " + ioError);
+                logger.error(timeNow() + " Error in client: " + ioError + " for " + connection);
             }
         }
     }
