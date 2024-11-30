@@ -33,7 +33,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public class ConnectionSecrets {
 
@@ -62,32 +65,39 @@ public class ConnectionSecrets {
 
     private final VersionHolder quicVersion;
     private final Role ownRole;
-    private Logger log;
-    private byte[] clientRandom;
-    private Aead[] clientSecrets = new Aead[EncryptionLevel.values().length];
-    private Aead[] serverSecrets = new Aead[EncryptionLevel.values().length];
-    private Aead originalClientInitialSecret;
-    private boolean writeSecretsToFile;
-    private Path wiresharkSecretsFile;
-    private byte[] originalDestinationConnectionId;
-    private boolean[] discarded = new boolean[EncryptionLevel.values().length];
+    private final Logger log;
+    private volatile byte[] clientRandom;
+    private final AtomicReferenceArray<Aead> clientSecrets = new AtomicReferenceArray<>(EncryptionLevel.values().length);
+    private final AtomicReferenceArray<Aead> serverSecrets = new AtomicReferenceArray<>(EncryptionLevel.values().length);
+    private volatile Aead originalClientInitialSecret;
+    private final boolean writeSecretsToFile;
+    private final Path wiresharkSecretsFile;
+    private volatile byte[] originalDestinationConnectionId;
+    private final AtomicBoolean[] discarded = new AtomicBoolean[EncryptionLevel.values().length];
 
 
     public ConnectionSecrets(VersionHolder quicVersion, Role role, Path wiresharksecrets, Logger log) {
         this.quicVersion = quicVersion;
         this.ownRole = role;
         this.log = log;
+        Arrays.fill(discarded, new AtomicBoolean(false));
 
+        boolean mustWriteSecretsToFile = false;
         if (wiresharksecrets != null) {
             wiresharkSecretsFile = wiresharksecrets;
             try {
                 Files.deleteIfExists(wiresharkSecretsFile);
                 Files.createFile(wiresharkSecretsFile);
-                writeSecretsToFile = true;
-            } catch (IOException e) {
+                mustWriteSecretsToFile = true;
+            }
+            catch (IOException e) {
                 log.error("Initializing (creating/truncating) secrets file '" + wiresharkSecretsFile + "' failed", e);
             }
         }
+        else {
+            wiresharkSecretsFile = null;
+        }
+        writeSecretsToFile = mustWriteSecretsToFile;
     }
 
     /**
@@ -95,7 +105,7 @@ public class ConnectionSecrets {
      *
      * @param destConnectionId
      */
-    public synchronized void computeInitialKeys(byte[] destConnectionId) {
+    public void computeInitialKeys(byte[] destConnectionId) {
         this.originalDestinationConnectionId = destConnectionId;
         Version actualVersion = quicVersion.getVersion();
 
@@ -105,8 +115,8 @@ public class ConnectionSecrets {
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
         // "Initial packets use AEAD_AES_128_GCM with keys derived from the Destination Connection ID field of the first
         //  Initial packet sent by the client; "
-        clientSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Client, log);
-        serverSecrets[EncryptionLevel.Initial.ordinal()] = new Aes128Gcm(actualVersion, initialSecret, Role.Server, log);
+        clientSecrets.set(EncryptionLevel.Initial.ordinal(), new Aes128Gcm(actualVersion, initialSecret, Role.Client, log));
+        serverSecrets.set(EncryptionLevel.Initial.ordinal(), new Aes128Gcm(actualVersion, initialSecret, Role.Server, log));
     }
 
     /**
@@ -117,8 +127,8 @@ public class ConnectionSecrets {
      * (retry) token (which can happen if the retry is lost or otherwise not received in time by the client).
      * @param destConnectionId
      */
-    public synchronized void recomputeInitialKeys(byte[] destConnectionId) {
-        originalClientInitialSecret = clientSecrets[EncryptionLevel.Initial.ordinal()];
+    public void recomputeInitialKeys(byte[] destConnectionId) {
+        originalClientInitialSecret = clientSecrets.get(EncryptionLevel.Initial.ordinal());
         this.originalDestinationConnectionId = destConnectionId;
         computeInitialKeys(destConnectionId);
     }
@@ -146,12 +156,12 @@ public class ConnectionSecrets {
         computeInitialKeys(originalDestinationConnectionId);
     }
 
-    public synchronized void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
+    public void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
         // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
         createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion);
 
         byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
-        clientSecrets[EncryptionLevel.ZeroRTT.ordinal()].computeKeys(earlySecret);
+        clientSecrets.get(EncryptionLevel.ZeroRTT.ordinal()).computeKeys(earlySecret);
     }
 
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
@@ -173,9 +183,9 @@ public class ConnectionSecrets {
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
         }
-        clientSecrets[level.ordinal()] = clientHandshakeSecrets;
+        clientSecrets.set(level.ordinal(), clientHandshakeSecrets);
         if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
-            serverSecrets[level.ordinal()] = serverHandshakeSecrets;
+            serverSecrets.set(level.ordinal(), serverHandshakeSecrets);
         }
 
         // Keys for peer and keys for self must be able to signal each other of a key update.
@@ -183,33 +193,33 @@ public class ConnectionSecrets {
         serverHandshakeSecrets.setPeerAead(clientHandshakeSecrets);
     }
 
-    public synchronized void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
+    public void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
         this.selectedCipherSuite = selectedCipherSuite;
         createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion());
 
         byte[] clientHandshakeTrafficSecret = secrets.getClientHandshakeTrafficSecret();
         log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
-        clientSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(clientHandshakeTrafficSecret);
+        clientSecrets.get(EncryptionLevel.Handshake.ordinal()).computeKeys(clientHandshakeTrafficSecret);
 
         byte[] serverHandshakeTrafficSecret = secrets.getServerHandshakeTrafficSecret();
         log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
-        serverSecrets[EncryptionLevel.Handshake.ordinal()].computeKeys(serverHandshakeTrafficSecret);
+        serverSecrets.get(EncryptionLevel.Handshake.ordinal()).computeKeys(serverHandshakeTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
         }
     }
 
-    public synchronized void computeApplicationSecrets(TrafficSecrets secrets) {
+    public void computeApplicationSecrets(TrafficSecrets secrets) {
         createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion());
 
         byte[] clientApplicationTrafficSecret = secrets.getClientApplicationTrafficSecret();
         log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
-        clientSecrets[EncryptionLevel.App.ordinal()].computeKeys(clientApplicationTrafficSecret);
+        clientSecrets.get(EncryptionLevel.App.ordinal()).computeKeys(clientApplicationTrafficSecret);
 
         byte[] serverApplicationTrafficSecret = secrets.getServerApplicationTrafficSecret();
         log.secret("ServerApplicationTrafficSecret: ", serverApplicationTrafficSecret);
-        serverSecrets[EncryptionLevel.App.ordinal()].computeKeys(serverApplicationTrafficSecret);
+        serverSecrets.get(EncryptionLevel.App.ordinal()).computeKeys(serverApplicationTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
@@ -220,16 +230,16 @@ public class ConnectionSecrets {
         List<String> content = new ArrayList<>();
         content.add("CLIENT_" + label + " "
                 + Bytes.bytesToHex(clientRandom) + " "
-                + Bytes.bytesToHex(clientSecrets[level.ordinal()].getTrafficSecret()));
+                + Bytes.bytesToHex(clientSecrets.get(level.ordinal()).getTrafficSecret()));
         content.add("SERVER_" + label + " "
                 + Bytes.bytesToHex(clientRandom) + " "
-                + Bytes.bytesToHex(serverSecrets[level.ordinal()].getTrafficSecret()));
+                + Bytes.bytesToHex(serverSecrets.get(level.ordinal()).getTrafficSecret()));
 
         try {
             Files.write(wiresharkSecretsFile, content, StandardOpenOption.APPEND);
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             log.error("Writing secrets to file '" + wiresharkSecretsFile + "' failed", e);
-            writeSecretsToFile = false;
         }
     }
 
@@ -237,21 +247,23 @@ public class ConnectionSecrets {
         this.clientRandom = clientRandom;
     }
 
-    public synchronized Aead getClientAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
-        return checkNotNull(clientSecrets[encryptionLevel.ordinal()], encryptionLevel);
+    public Aead getClientAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        return checkNotNull(clientSecrets.get(encryptionLevel.ordinal()), encryptionLevel);
     }
 
-    public synchronized Aead getServerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
-        return checkNotNull(serverSecrets[encryptionLevel.ordinal()], encryptionLevel);
+    public Aead getServerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        return checkNotNull(serverSecrets.get(encryptionLevel.ordinal()), encryptionLevel);
     }
 
-    public synchronized Aead getPeerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
-        Aead aead = (ownRole == Role.Client) ? serverSecrets[encryptionLevel.ordinal()] : clientSecrets[encryptionLevel.ordinal()];
+    public Aead getPeerAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        int index = encryptionLevel.ordinal();
+        Aead aead = (ownRole == Role.Client) ? serverSecrets.get(index) : clientSecrets.get(index);
         return checkNotNull(aead, encryptionLevel);
     }
 
-    public synchronized Aead getOwnAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
-        Aead aead = (ownRole == Role.Client) ? clientSecrets[encryptionLevel.ordinal()] : serverSecrets[encryptionLevel.ordinal()];
+    public Aead getOwnAead(EncryptionLevel encryptionLevel) throws MissingKeysException {
+        int index = encryptionLevel.ordinal();
+        Aead aead = (ownRole == Role.Client) ? clientSecrets.get(index) : serverSecrets.get(index);
         return checkNotNull(aead, encryptionLevel);
     }
 
@@ -261,18 +273,18 @@ public class ConnectionSecrets {
      * The original (client) initial keys must be used for decoding client packets without the
      * (retry) token (which can happen if the retry is lost or otherwise not received in time by the client).
      */
-    public synchronized Aead getOriginalClientInitialAead() {
+    public Aead getOriginalClientInitialAead() {
         if (originalClientInitialSecret != null) {
             return originalClientInitialSecret;
         }
         else {
-            return clientSecrets[EncryptionLevel.Initial.ordinal()];
+            return clientSecrets.get(EncryptionLevel.Initial.ordinal());
         }
     }
 
     private Aead checkNotNull(Aead aead, EncryptionLevel encryptionLevel) throws MissingKeysException {
         if (aead == null) {
-            throw new MissingKeysException(encryptionLevel, discarded[encryptionLevel.ordinal()]);
+            throw new MissingKeysException(encryptionLevel, discarded[encryptionLevel.ordinal()].get());
         }
         else {
             return aead;
@@ -280,8 +292,8 @@ public class ConnectionSecrets {
     }
 
     public void discardKeys(EncryptionLevel encryptionLevel) {
-        discarded[encryptionLevel.ordinal()] = true;
-        clientSecrets[encryptionLevel.ordinal()] = null;
-        serverSecrets[encryptionLevel.ordinal()] = null;
+        discarded[encryptionLevel.ordinal()].set(true);
+        clientSecrets.set(encryptionLevel.ordinal(), null);
+        serverSecrets.set(encryptionLevel.ordinal(), null);
     }
 }
