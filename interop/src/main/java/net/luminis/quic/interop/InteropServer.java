@@ -40,14 +40,14 @@ import java.security.KeyStore;
 import java.util.List;
 
 /**
- * Demo server that provides both QUIC v1, as well as some older IETF draft versions, all with "HTTP 0.9", a.k.a. hq-interop.
+ * Server that provides QUIC v1 and v2, with "HTTP 0.9", a.k.a. hq-interop, used for interoperability testing.
  * The "hq-interop" protocol is used in the interoperability tests, see https://interop.seemann.io/.
  * If the flupke-plugin is on the classpath, HTTP3 protocol is also provided with the same QUIC versions.
  */
 public class InteropServer {
 
     private static void usageAndExit() {
-        System.err.println("Usage: [--noRetry] cert file, cert key file, port number [www dir]");
+        System.err.println("Usage: [--noRetry] keystore-file cert-alias keystore-password, key-password, port-number [www dir]");
         System.exit(1);
     }
 
@@ -103,6 +103,10 @@ public class InteropServer {
         String keyPassword = args.get(3);
 
         KeyStore keyStore = KeyStore.getInstance(keyStoreFile, keyStorePassword.toCharArray());
+        if (keyStore.getCertificateChain(certificateAlias) == null) {
+            System.err.println("Certificate alias '" + certificateAlias + "' not found in keystore");
+            System.exit(1);
+        }
 
         int port = Integer.parseInt(args.get(4));
 
