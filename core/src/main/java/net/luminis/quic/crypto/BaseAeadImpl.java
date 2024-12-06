@@ -53,19 +53,12 @@ public abstract class BaseAeadImpl implements Aead {
     private final Version quicVersion;
 
     private byte[] trafficSecret;
-    private byte[] newApplicationTrafficSecret;
     protected byte[] writeKey;
-    protected byte[] newKey;
     protected byte[] writeIV;
-    protected byte[] newIV;
     protected byte[] hp;
     protected Cipher hpCipher;
     protected SecretKeySpec writeKeySpec;
-    protected SecretKeySpec newWriteKeySpec;
     protected Cipher writeCipher;
-    private int keyUpdateCounter = 0;
-    protected boolean possibleKeyUpdateInProgresss = false;
-    private volatile Aead peerAead;
 
     public BaseAeadImpl(Version quicVersion, Role nodeRole, Logger log) {
         this.nodeRole = nodeRole;
@@ -81,7 +74,7 @@ public abstract class BaseAeadImpl implements Aead {
         byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) getHashLength());
         log.secret(nodeRole + " initial secret", initialNodeSecret);
 
-        computeKeys(initialNodeSecret, true, true);
+        computeKeys(initialNodeSecret, true);
     }
 
     protected abstract short getKeyLength();
@@ -93,104 +86,35 @@ public abstract class BaseAeadImpl implements Aead {
     @Override
     public synchronized void computeKeys(byte[] trafficSecret) {
         this.trafficSecret = trafficSecret;
-        computeKeys(trafficSecret, true, true);
+        computeKeys(trafficSecret, true);
     }
 
-    /**
-     * Compute new keys. Note that depending on the role of this Keys object, computing new keys concerns updating
-     * the write secrets (role that initiates the key update) or the read secrets (role that responds to the key update).
-     * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
-     */
     @Override
-    public synchronized void computeKeyUpdate(boolean selfInitiated) {
+    public void computeKeys(byte[] trafficSecret, byte[] knownHp) {
+        this.trafficSecret = trafficSecret;
+        hp = knownHp;
+        computeKeys(trafficSecret, false);
+    }
+
+    @Override
+    public byte[] computeNextApplicationTrafficSecret() {
         String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
-        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
-        log.secret("Updated ApplicationTrafficSecret (" + (selfInitiated? "self":"peer") + "): ", newApplicationTrafficSecret);
-        computeKeys(newApplicationTrafficSecret, false, selfInitiated);
-        if (selfInitiated) {
-            // If updating this Keys object was self initiated, the new keys can be installed immediately.
-            trafficSecret = newApplicationTrafficSecret;
-            keyUpdateCounter++;
-            newApplicationTrafficSecret = null;
-        }
-        // Else, updating this Keys object was initiated by receiving a packet with different key phase, and the new keys
-        // can only be installed permanently if the decryption of the packet (that introduced the new key phase) has succeeded.
+        byte[] newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
+        log.secret("Computed updated (next) ApplicationTrafficSecret (" + (nodeRole == Role.Client? "client":"server") + "): ", newApplicationTrafficSecret);
+        return newApplicationTrafficSecret;
     }
 
-    /**
-     * Confirm that, if a key update was in progress, it has been successful and thus the new keys can (and should) be
-     * used for decrypting all incoming packets.
-     */
-    @Override
-    public synchronized void confirmKeyUpdateIfInProgress() {
-        if (possibleKeyUpdateInProgresss) {
-            log.info("Installing updated keys (initiated by peer)");
-            trafficSecret = newApplicationTrafficSecret;
-            writeKey = newKey;
-            writeKeySpec = null;
-            writeIV = newIV;
-            keyUpdateCounter++;
-            newApplicationTrafficSecret = null;
-            possibleKeyUpdateInProgresss = false;
-            newKey = null;
-            newIV = null;
-            checkPeerKeys();
-        }
-    }
-
-    @Override
-    public int getKeyUpdateCounter() {
-        return keyUpdateCounter;
-    }
-
-    /**
-     * In case keys are updated, check if the peer keys are already updated too (which depends on who initiated the
-     * key update).
-     */
-    private void checkPeerKeys() {
-        if (peerAead.getKeyUpdateCounter() < keyUpdateCounter) {
-            log.debug("Keys out of sync; updating keys for peer");
-            peerAead.computeKeyUpdate(true);
-        }
-    }
-
-    /**
-     * Confirm that, if a key update was in progress, it has been unsuccessful and thus the new keys should not be
-     * used for decrypting all incoming packets.
-     */
-    @Override
-    public synchronized void cancelKeyUpdateIfInProgress() {
-        if (possibleKeyUpdateInProgresss) {
-            log.info("Discarding updated keys (initiated by peer)");
-            newApplicationTrafficSecret = null;
-            possibleKeyUpdateInProgresss = false;
-            newKey = null;
-            newIV = null;
-        }
-    }
-
-    private void computeKeys(byte[] secret, boolean includeHP, boolean replaceKeys) {
+    private void computeKeys(byte[] secret, boolean includeHP) {
         String labelPrefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
         byte[] key = hkdfExpandLabel(quicVersion, secret, labelPrefix + "key", "", getKeyLength());
-        if (replaceKeys) {
-            writeKey = key;
-            writeKeySpec = null;
-        }
-        else {
-            newKey = key;
-            newWriteKeySpec = null;
-        }
+        writeKey = key;
+        writeKeySpec = null;
         log.secret(nodeRole + " key", key);
 
         byte[] iv = hkdfExpandLabel(quicVersion, secret, labelPrefix + "iv", "", (short) 12);
-        if (replaceKeys) {
-            writeIV = iv;
-        }
-        else {
-            newIV = iv;
-        }
+        writeIV = iv;
         log.secret(nodeRole + " iv", iv);
 
         if (includeHP) {
@@ -224,12 +148,10 @@ public abstract class BaseAeadImpl implements Aead {
 
     @Override
     public byte[] getWriteIV() {
-        if (possibleKeyUpdateInProgresss) {
-            return newIV;
-        }
         return writeIV;
     }
 
+    @Override
     public byte[] getHp() {
         return hp;
     }
@@ -239,32 +161,4 @@ public abstract class BaseAeadImpl implements Aead {
     public abstract SecretKeySpec getWriteKeySpec();
 
     public abstract Cipher getWriteCipher();
-
-    public short getKeyPhase() {
-        return (short) (keyUpdateCounter % 2);
-    }
-
-    /**
-     * Check whether the key phase carried by a received packet still matches the current key phase; if not, compute
-     * new keys (to be used for decryption). Note that the changed key phase can also be caused by packet corruption,
-     * so it is not yet sure whether a key update is really in progress (this will be sure when decryption of the packet
-     * failed or succeeded).
-     * @param keyPhaseBit
-     */
-    public void checkKeyPhase(short keyPhaseBit) {
-        if ((keyUpdateCounter % 2) != keyPhaseBit) {
-            if (newKey == null) {
-                computeKeyUpdate(false);
-                log.secret("Computed new (updated) key", newKey);
-                log.secret("Computed new (updated) iv", newIV);
-            }
-            log.info("Received key phase does not match current => possible key update in progress");
-            possibleKeyUpdateInProgresss = true;
-        }
-    }
-
-    @Override
-    public void setPeerAead(Aead peerAead) {
-        this.peerAead = peerAead;
-    }
 }

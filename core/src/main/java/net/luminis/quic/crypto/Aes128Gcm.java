@@ -84,18 +84,10 @@ public class Aes128Gcm extends BaseAeadImpl {
 
     @Override
     public SecretKeySpec getWriteKeySpec() {
-        if (possibleKeyUpdateInProgresss) {
-            if (newWriteKeySpec == null) {
-                newWriteKeySpec = new SecretKeySpec(newKey, "AES");
-            }
-            return newWriteKeySpec;
+        if (writeKeySpec == null) {
+            writeKeySpec = new SecretKeySpec(writeKey, "AES");
         }
-        else {
-            if (writeKeySpec == null) {
-                writeKeySpec = new SecretKeySpec(writeKey, "AES");
-            }
-            return writeKeySpec;
-        }
+        return writeKeySpec;
     }
 
     @Override

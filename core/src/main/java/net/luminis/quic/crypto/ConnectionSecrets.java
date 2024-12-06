@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.function.Function;
 
 public class ConnectionSecrets {
 
@@ -165,32 +166,38 @@ public class ConnectionSecrets {
     }
 
     private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
-        Aead clientHandshakeSecrets;
-        Aead serverHandshakeSecrets;
+        Aead clientAead;
+        Aead serverAead;
+        Function<Role, Aead> aeadFactory;
 
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            clientHandshakeSecrets = new Aes128Gcm(version, Role.Client, log);
-            serverHandshakeSecrets = new Aes128Gcm(version, Role.Server, log);
+            aeadFactory = (role) -> new Aes128Gcm(version, role, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384) {
-            clientHandshakeSecrets = new Aes256Gcm(version, Role.Client, log);
-            serverHandshakeSecrets = new Aes256Gcm(version, Role.Server, log);
+            aeadFactory = (role) -> new Aes256Gcm(version, role, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            clientHandshakeSecrets = new ChaCha20(version, Role.Client, log);
-            serverHandshakeSecrets = new ChaCha20(version, Role.Server, log);
+            aeadFactory = (role) -> new ChaCha20(version, role, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
         }
-        clientSecrets.set(level.ordinal(), clientHandshakeSecrets);
-        if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
-            serverSecrets.set(level.ordinal(), serverHandshakeSecrets);
+        clientAead = aeadFactory.apply(Role.Client);
+        serverAead = aeadFactory.apply(Role.Server);
+
+        if (level == EncryptionLevel.App) {
+            // Wrap Aead with KeyUpdateSupport to support key updates (only allowed on 1-RTT/App level)
+            clientAead = new KeyUpdateSupport(clientAead, Role.Client, aeadFactory, log);
+            serverAead = new KeyUpdateSupport(serverAead, Role.Server, aeadFactory, log);
+            // Keys for peer and keys for self must be able to signal each other of a key update.
+            clientAead.setPeerAead(serverAead);
+            serverAead.setPeerAead(clientAead);
         }
 
-        // Keys for peer and keys for self must be able to signal each other of a key update.
-        clientHandshakeSecrets.setPeerAead(serverHandshakeSecrets);
-        serverHandshakeSecrets.setPeerAead(clientHandshakeSecrets);
+        clientSecrets.set(level.ordinal(), clientAead);
+        if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
+            serverSecrets.set(level.ordinal(), serverAead);
+        }
     }
 
     public void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
