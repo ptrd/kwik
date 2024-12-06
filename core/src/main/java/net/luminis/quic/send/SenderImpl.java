@@ -534,5 +534,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             maxPacketSize = maxUdpPayloadSize;
         }
     }
+
+    public void resetRecovery(PnSpace pnSpace) {
+        recoveryManager.reset(pnSpace);
+    }
 }
 

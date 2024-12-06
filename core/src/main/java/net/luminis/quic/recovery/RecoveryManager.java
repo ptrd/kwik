@@ -19,14 +19,17 @@
 package net.luminis.quic.recovery;
 
 import net.luminis.quic.cc.CongestionController;
-import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.common.PnSpace;
+import net.luminis.quic.concurrent.DaemonThreadFactory;
 import net.luminis.quic.frame.AckFrame;
 import net.luminis.quic.frame.Padding;
 import net.luminis.quic.frame.PingFrame;
 import net.luminis.quic.frame.QuicFrame;
-import net.luminis.quic.impl.*;
+import net.luminis.quic.impl.FrameReceivedListener;
+import net.luminis.quic.impl.HandshakeState;
+import net.luminis.quic.impl.HandshakeStateListener;
+import net.luminis.quic.impl.Role;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.packet.QuicPacket;
 import net.luminis.quic.send.Sender;
@@ -110,7 +113,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private volatile int ptoCount;
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
-    private volatile boolean hasBeenReset = false;
+    private volatile boolean hasBeenStopped = false;
 
     public RecoveryManager(Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
         this(Clock.systemUTC(), role, rttEstimater, congestionController, sender, logger);
@@ -397,9 +400,17 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
         catch (RejectedExecutionException taskRejected) {
             // Can happen if has been reset concurrently
-            if (!hasBeenReset) {
+            if (!hasBeenStopped) {
                 throw taskRejected;
             }
+        }
+    }
+
+    void resetLossDetectionTimeout() {
+        synchronized (scheduleLock) {
+            lossDetectionFuture.cancel(false);
+            timerExpiration = null;
+            lossDetectionFuture = new NullScheduledFuture();
         }
     }
 
@@ -434,7 +445,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             if (ptoCount > 0) {
                 // https://datatracker.ietf.org/doc/html/draft-ietf-quic-recovery-34#section-6.2.1
                 // "To protect such a server from repeated client probes, the PTO backoff is not reset at a client that
@@ -450,7 +461,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             if (packet.isInflightPacket()) {
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
                 setLossDetectionTimer();
@@ -467,19 +478,19 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public void stopRecovery() {
-        if (! hasBeenReset) {
-            hasBeenReset = true;
+        if (!hasBeenStopped) {
+            hasBeenStopped = true;
             unschedule();
             scheduler.shutdown();
             for (PnSpace pnSpace: PnSpace.values()) {
-                lossDetectors[pnSpace.ordinal()].reset();
+                lossDetectors[pnSpace.ordinal()].close();
             }
         }
     }
 
     public void stopRecovery(PnSpace pnSpace) {
-        if (! hasBeenReset) {
-            lossDetectors[pnSpace.ordinal()].reset();
+        if (!hasBeenStopped) {
+            lossDetectors[pnSpace.ordinal()].close();
             // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-6.2.2
             // "When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset"
             ptoCount = 0;
@@ -487,13 +498,19 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
     }
 
+    public void reset(PnSpace pnSpace) {
+        if (!hasBeenStopped) {
+            lossDetectors[pnSpace.ordinal()].reset();
+            resetLossDetectionTimeout();
+        }
+    }
     public long getLost() {
         return Stream.of(lossDetectors).mapToLong(ld -> ld.getLost()).sum();
     }
 
     @Override
     public void handshakeStateChangedEvent(HandshakeState newState) {
-        if (! hasBeenReset) {
+        if (!hasBeenStopped) {
             HandshakeState oldState = handshakeState;
             handshakeState = newState;
             if (newState == HandshakeState.Confirmed && oldState != HandshakeState.Confirmed) {
