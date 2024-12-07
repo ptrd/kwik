@@ -26,12 +26,8 @@ import java.security.NoSuchAlgorithmException;
  */
 public class Aes128Gcm extends BaseAeadImpl {
 
-    public Aes128Gcm(Version quicVersion, Role nodeRole, Logger log) {
-        super(quicVersion, nodeRole, log);
-    }
-
-    public Aes128Gcm(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
-        super(quicVersion, initialSecret, nodeRole, log);
+    public Aes128Gcm(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
+        super(quicVersion, nodeRole, initial, secret, hp, log);
     }
 
     @Override

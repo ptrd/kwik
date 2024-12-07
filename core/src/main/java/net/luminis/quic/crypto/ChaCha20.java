@@ -48,8 +48,8 @@ import java.util.Arrays;
  */
 public class ChaCha20 extends BaseAeadImpl {
 
-    public ChaCha20(Version quicVersion, Role server, Logger log) {
-        super(quicVersion, server, log);
+    public ChaCha20(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
+        super(quicVersion, nodeRole, initial, secret, hp, log);
     }
 
     @Override

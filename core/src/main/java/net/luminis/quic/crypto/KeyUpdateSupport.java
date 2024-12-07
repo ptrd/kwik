@@ -21,8 +21,7 @@ package net.luminis.quic.crypto;
 import net.luminis.quic.impl.DecryptionException;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.log.Logger;
-
-import java.util.function.Function;
+import net.luminis.quic.util.TriFunction;
 
 /**
  * This class is a wrapper around an Aead object that supports key updates.
@@ -33,7 +32,7 @@ import java.util.function.Function;
 public class KeyUpdateSupport implements Aead {
 
     private final Role role;
-    private final Function<Role, Aead> aeadFactory;
+    private final TriFunction<Role, byte[], byte[], Aead> aeadFactory;
     private final Logger log;
     private volatile Aead aead;
     private volatile Aead updatedAead;
@@ -41,21 +40,11 @@ public class KeyUpdateSupport implements Aead {
     private volatile boolean possibleKeyUpdateInProgresss;
     private volatile Aead peerAead;
 
-    public KeyUpdateSupport(Aead aead, Role role, Function<Role, Aead> aeadFactory, Logger log) {
+    public KeyUpdateSupport(Aead aead, Role role, TriFunction<Role, byte[], byte[], Aead> aeadFactory, Logger log) {
         this.aead = aead;
         this.role = role;
         this.aeadFactory = aeadFactory;
         this.log = log;
-    }
-
-    @Override
-    public void computeKeys(byte[] trafficSecret) {
-        aead.computeKeys(trafficSecret);
-    }
-
-    @Override
-    public void computeKeys(byte[] trafficSecret, byte[] knownHp) {
-        aead.computeKeys(trafficSecret, knownHp);
     }
 
     @Override
@@ -111,8 +100,7 @@ public class KeyUpdateSupport implements Aead {
         byte[] newApplicationTrafficSecret = aead.computeNextApplicationTrafficSecret();
         boolean selfInitiated = false;
         log.secret("Updated ApplicationTrafficSecret (" + (selfInitiated? "self":"peer") + "): ", newApplicationTrafficSecret);
-        updatedAead = aeadFactory.apply(role);
-        updatedAead.computeKeys(newApplicationTrafficSecret, ((BaseAeadImpl) aead).getHp());
+        updatedAead = aeadFactory.apply(role, newApplicationTrafficSecret, aead.getHp());
     }
 
     /**

@@ -27,10 +27,6 @@ import net.luminis.quic.impl.DecryptionException;
  */
 public interface Aead {
 
-    void computeKeys(byte[] trafficSecret);
-
-    void computeKeys(byte[] trafficSecret, byte[] knownHp);
-
     byte[] createHeaderProtectionMask(byte[] sample);
 
     byte[] getWriteIV();

@@ -60,21 +60,37 @@ public abstract class BaseAeadImpl implements Aead {
     protected SecretKeySpec writeKeySpec;
     protected Cipher writeCipher;
 
-    public BaseAeadImpl(Version quicVersion, Role nodeRole, Logger log) {
-        this.nodeRole = nodeRole;
-        this.log = log;
-        this.quicVersion = quicVersion;
-    }
-
-    public BaseAeadImpl(Version quicVersion, byte[] initialSecret, Role nodeRole, Logger log) {
+    public BaseAeadImpl(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
         this.nodeRole = nodeRole;
         this.log = log;
         this.quicVersion = quicVersion;
 
-        byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, initialSecret, nodeRole == Client? "client in": "server in", "", (short) getHashLength());
-        log.secret(nodeRole + " initial secret", initialNodeSecret);
-
-        computeKeys(initialNodeSecret, true);
+        if (initial) {
+            // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.2
+            // "This produces an intermediate pseudorandom key (PRK) that is used to derive two separate secrets for
+            //  sending and receiving. The secret used by clients to construct Initial packets uses the PRK and the
+            //  label "client in" as input to the HKDF-Expand-Label function from TLS [TLS13] to produce a 32-byte secret.
+            //  Packets constructed by the server use the same process with the label "server in". "
+            byte[] initialNodeSecret = hkdfExpandLabel(quicVersion, secret, nodeRole == Client? "client in": "server in", "", (short) getHashLength());
+            this.trafficSecret = initialNodeSecret;
+            log.secret(nodeRole + " initial secret", initialNodeSecret);
+            computeKeys(initialNodeSecret, true);
+        }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.1
+            // "Each encryption level has separate secret values for protection of packets sent in each direction. These
+            //  traffic secrets are derived by TLS (see Section 7.1 of [TLS13]) and are used by QUIC for all encryption
+            //  levels except the Initial encryption level. "
+            //
+            trafficSecret = secret;
+            if (hp != null) {
+                this.hp = hp;
+                computeKeys(secret, false);
+            }
+            else {
+                computeKeys(secret, true);
+            }
+        }
     }
 
     protected abstract short getKeyLength();
@@ -84,27 +100,32 @@ public abstract class BaseAeadImpl implements Aead {
     protected abstract HKDF getHKDF();
 
     @Override
-    public synchronized void computeKeys(byte[] trafficSecret) {
-        this.trafficSecret = trafficSecret;
-        computeKeys(trafficSecret, true);
-    }
-
-    @Override
-    public void computeKeys(byte[] trafficSecret, byte[] knownHp) {
-        this.trafficSecret = trafficSecret;
-        hp = knownHp;
-        computeKeys(trafficSecret, false);
-    }
-
-    @Override
     public byte[] computeNextApplicationTrafficSecret() {
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-6.1
+        // "The endpoint creates a new write secret from the existing write secret as performed in Section 7.2 of [TLS13].
+        //  This uses the KDF function provided by TLS with a label of "quic ku". The corresponding key and IV are created
+        //  from that secret as defined in Section 5.1. The header protection key is not updated."
+        // https://www.rfc-editor.org/rfc/rfc9369.html#section-3.3.2
+        // "The labels used in [QUIC-TLS] to derive packet protection keys (Section 5.1), header protection keys (Section 5.4),
+        //  Retry Integrity Tag keys (Section 5.8), and key updates (Section 6.1) change from "quic key" to "quicv2 key",
+        //  from "quic iv" to "quicv2 iv", from "quic hp" to "quicv2 hp", and from "quic ku" to "quicv2 ku" "
         String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
+
+        // https://datatracker.ietf.org/doc/html/rfc8446#section-7.2
+        // "The next-generation application_traffic_secret is computed as:
+        //  application_traffic_secret_N+1 = HKDF-Expand-Label(application_traffic_secret_N, "traffic upd", "", Hash.length)"
         byte[] newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
-        log.secret("Computed updated (next) ApplicationTrafficSecret (" + (nodeRole == Role.Client? "client":"server") + "): ", newApplicationTrafficSecret);
+        log.secret("Computed updated (next) ApplicationTrafficSecret (" + nodeRole.toString().toLowerCase() + "): ", newApplicationTrafficSecret);
         return newApplicationTrafficSecret;
     }
 
     private void computeKeys(byte[] secret, boolean includeHP) {
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.1
+        // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
+        // "The current encryption level secret and the label "quic key" are input to the KDF to produce the AEAD key;
+        //  the label "quic iv" is used to derive the Initialization Vector (IV); see Section 5.3. The header protection
+        //  key uses the "quic hp" label; "
+        // "All uses of HKDF-Expand-Label in QUIC use a zero-length Context."
         String labelPrefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
@@ -120,13 +141,13 @@ public abstract class BaseAeadImpl implements Aead {
         if (includeHP) {
             // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.1
             // "The header protection key uses the "quic hp" label"
-            hp = hkdfExpandLabel(quicVersion, secret, labelPrefix + "hp", "", getKeyLength());
+            hp = hkdfExpandLabel(quicVersion, encryptionLevelSecret, labelPrefix + "hp", "", getKeyLength());
             log.secret(nodeRole + " hp", hp);
         }
     }
 
     // See https://tools.ietf.org/html/rfc8446#section-7.1 for definition of HKDF-Expand-Label.
-    byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
+    protected byte[] hkdfExpandLabel(Version quicVersion, byte[] secret, String label, String context, short length) {
 
         byte[] prefix = "tls13 ".getBytes(ISO_8859_1);
 

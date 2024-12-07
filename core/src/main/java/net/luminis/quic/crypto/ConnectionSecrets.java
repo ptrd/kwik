@@ -25,6 +25,7 @@ import net.luminis.quic.impl.Version;
 import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.util.Bytes;
+import net.luminis.quic.util.TriFunction;
 import net.luminis.tls.TlsConstants;
 import net.luminis.tls.engine.TrafficSecrets;
 
@@ -37,7 +38,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.function.Function;
 
 public class ConnectionSecrets {
 
@@ -102,7 +102,7 @@ public class ConnectionSecrets {
     }
 
     /**
-     * Generate the initial secrets
+     * Generate the initial secrets and configure AEAD algorithm accordingly.
      *
      * @param destConnectionId
      */
@@ -113,11 +113,10 @@ public class ConnectionSecrets {
         byte[] initialSecret = computeInitialSecret(actualVersion);
         log.secret("Initial secret", initialSecret);
 
-        // https://www.rfc-editor.org/rfc/rfc9001.html#name-aead-usage
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5
         // "Initial packets use AEAD_AES_128_GCM with keys derived from the Destination Connection ID field of the first
         //  Initial packet sent by the client; "
-        clientSecrets.set(EncryptionLevel.Initial.ordinal(), new Aes128Gcm(actualVersion, initialSecret, Role.Client, log));
-        serverSecrets.set(EncryptionLevel.Initial.ordinal(), new Aes128Gcm(actualVersion, initialSecret, Role.Server, log));
+        createKeys(EncryptionLevel.Initial, TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256, actualVersion, true, initialSecret, initialSecret);
     }
 
     /**
@@ -141,11 +140,15 @@ public class ConnectionSecrets {
      * @return
      */
     public Aead getInitialPeerSecretsForVersion(Version version) {
-        return new Aes128Gcm(version, computeInitialSecret(version), ownRole.other(), log);
+        return new Aes128Gcm(version, ownRole.other(), true, computeInitialSecret(version), null, log);
     }
 
     private byte[] computeInitialSecret(Version actualVersion) {
-        // https://www.rfc-editor.org/rfc/rfc9001.html#name-initial-secrets
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.2
+        // "This secret is determined by using HKDF-Extract (see Section 2.2 of [HKDF]) with a salt of
+        //  0x38762cf7f55934b34d179ae6a4c80cadccbb7f0a and the input keying material (IKM) of the Destination Connection ID
+        //  field. This produces an intermediate pseudorandom key (PRK) that is used to derive two separate secrets for
+        //  sending and receiving."
         // "The hash function for HKDF when deriving initial secrets and keys is SHA-256"
         HKDF hkdf = HKDF.fromHmacSha256();
 
@@ -159,33 +162,38 @@ public class ConnectionSecrets {
 
     public void computeEarlySecrets(TrafficSecrets secrets, TlsConstants.CipherSuite cipherSuite, Version originalVersion) {
         // Note: for server role, at this point, the current version may be different from the original version (when a different version than the original has been negotiated)
-        createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion);
-
         byte[] earlySecret = secrets.getClientEarlyTrafficSecret();
-        clientSecrets.get(EncryptionLevel.ZeroRTT.ordinal()).computeKeys(earlySecret);
+        createKeys(EncryptionLevel.ZeroRTT, cipherSuite, originalVersion, false, earlySecret, null);
     }
 
-    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version) {
-        Aead clientAead;
-        Aead serverAead;
-        Function<Role, Aead> aeadFactory;
+    private void createKeys(EncryptionLevel level, TlsConstants.CipherSuite selectedCipherSuite, Version version,
+                            boolean initial, byte[] clientHandshakeTrafficSecret, byte[] serverHandshakeTrafficSecret) {
+        TriFunction<Role, byte[], byte[], Aead> aeadFactory;
 
         if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256) {
-            aeadFactory = (role) -> new Aes128Gcm(version, role, log);
+            aeadFactory = (role, secret, hp) -> new Aes128Gcm(version, role, initial, secret, hp, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384) {
-            aeadFactory = (role) -> new Aes256Gcm(version, role, log);
+            aeadFactory = (role, secret, hp) -> new Aes256Gcm(version, role, initial, secret, hp, log);
         }
         else if (selectedCipherSuite == TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256) {
-            aeadFactory = (role) -> new ChaCha20(version, role, log);
+            aeadFactory = (role, secret, hp) -> new ChaCha20(version, role, initial, secret, hp, log);
         }
         else {
             throw new IllegalStateException("unsupported cipher suite " + selectedCipherSuite);
         }
-        clientAead = aeadFactory.apply(Role.Client);
-        serverAead = aeadFactory.apply(Role.Server);
+
+        Aead clientAead = null;
+        Aead serverAead = null;
+        if (clientHandshakeTrafficSecret != null) {
+            clientAead = aeadFactory.apply(Role.Client, clientHandshakeTrafficSecret, null);
+        }
+        if (serverHandshakeTrafficSecret != null) {
+            serverAead = aeadFactory.apply(Role.Server, serverHandshakeTrafficSecret, null);
+        }
 
         if (level == EncryptionLevel.App) {
+            assert (clientAead != null) && (serverAead != null);
             // Wrap Aead with KeyUpdateSupport to support key updates (only allowed on 1-RTT/App level)
             clientAead = new KeyUpdateSupport(clientAead, Role.Client, aeadFactory, log);
             serverAead = new KeyUpdateSupport(serverAead, Role.Server, aeadFactory, log);
@@ -195,22 +203,18 @@ public class ConnectionSecrets {
         }
 
         clientSecrets.set(level.ordinal(), clientAead);
-        if (level != EncryptionLevel.ZeroRTT) {  // Server does not use write keys for 0-RTT
-            serverSecrets.set(level.ordinal(), serverAead);
-        }
+        serverSecrets.set(level.ordinal(), serverAead);
     }
 
-    public void computeHandshakeSecrets(TrafficSecrets secrets, TlsConstants.CipherSuite selectedCipherSuite) {
+    public void computeHandshakeSecrets(TrafficSecrets tlsTrafficSecrets, TlsConstants.CipherSuite selectedCipherSuite) {
         this.selectedCipherSuite = selectedCipherSuite;
-        createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion());
 
-        byte[] clientHandshakeTrafficSecret = secrets.getClientHandshakeTrafficSecret();
+        byte[] clientHandshakeTrafficSecret = tlsTrafficSecrets.getClientHandshakeTrafficSecret();
         log.secret("ClientHandshakeTrafficSecret: ", clientHandshakeTrafficSecret);
-        clientSecrets.get(EncryptionLevel.Handshake.ordinal()).computeKeys(clientHandshakeTrafficSecret);
-
-        byte[] serverHandshakeTrafficSecret = secrets.getServerHandshakeTrafficSecret();
+        byte[] serverHandshakeTrafficSecret = tlsTrafficSecrets.getServerHandshakeTrafficSecret();
         log.secret("ServerHandshakeTrafficSecret: ", serverHandshakeTrafficSecret);
-        serverSecrets.get(EncryptionLevel.Handshake.ordinal()).computeKeys(serverHandshakeTrafficSecret);
+
+        createKeys(EncryptionLevel.Handshake, selectedCipherSuite, quicVersion.getVersion(), false, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("HANDSHAKE_TRAFFIC_SECRET", EncryptionLevel.Handshake);
@@ -218,15 +222,12 @@ public class ConnectionSecrets {
     }
 
     public void computeApplicationSecrets(TrafficSecrets secrets) {
-        createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion());
-
         byte[] clientApplicationTrafficSecret = secrets.getClientApplicationTrafficSecret();
         log.secret("ClientApplicationTrafficSecret: ", clientApplicationTrafficSecret);
-        clientSecrets.get(EncryptionLevel.App.ordinal()).computeKeys(clientApplicationTrafficSecret);
-
         byte[] serverApplicationTrafficSecret = secrets.getServerApplicationTrafficSecret();
         log.secret("ServerApplicationTrafficSecret: ", serverApplicationTrafficSecret);
-        serverSecrets.get(EncryptionLevel.App.ordinal()).computeKeys(serverApplicationTrafficSecret);
+
+        createKeys(EncryptionLevel.App, selectedCipherSuite, quicVersion.getVersion(), false, clientApplicationTrafficSecret, serverApplicationTrafficSecret);
 
         if (writeSecretsToFile) {
             appendToFile("TRAFFIC_SECRET_0", EncryptionLevel.App);
