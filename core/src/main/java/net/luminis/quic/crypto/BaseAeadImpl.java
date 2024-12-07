@@ -104,7 +104,7 @@ public abstract class BaseAeadImpl implements Aead {
     @Override
     public synchronized void computeKeyUpdate(boolean selfInitiated) {
         String prefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
-        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", (short) 32);
+        newApplicationTrafficSecret = hkdfExpandLabel(quicVersion, trafficSecret, prefix + "ku", "", getHashLength());
         log.secret("Updated ApplicationTrafficSecret (" + (selfInitiated? "self":"peer") + "): ", newApplicationTrafficSecret);
         computeKeys(newApplicationTrafficSecret, false, selfInitiated);
         if (selfInitiated) {
