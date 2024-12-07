@@ -116,6 +116,10 @@ public class InteractiveShell {
             running = true;
             while (running) {
                 String cmdLine = in.readLine();
+                if (cmdLine == null) {
+                    // ^D => EOF => quit
+                    break;
+                }
                 if (! cmdLine.isBlank()) {
                     String cmd = cmdLine.split(" ")[0];
                     List<String> matchingCommands = commands.keySet().stream().filter(command -> command.startsWith(cmd)).collect(Collectors.toList());
@@ -128,10 +132,12 @@ public class InteractiveShell {
                             if (!matchingCommand.startsWith("!")) {
                                 history.put(matchingCommand, commandArgs);
                             }
-                        } catch (Exception error) {
+                        }
+                        catch (Exception error) {
                             error(error);
                         }
-                    } else {
+                    }
+                    else {
                         unknown(cmd);
                     }
                 }
@@ -139,7 +145,8 @@ public class InteractiveShell {
                     prompt();
                 }
             }
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             System.out.println("Error: " + e);
         }
     }
