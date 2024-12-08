@@ -159,7 +159,14 @@ public class InteropClient {
         try {
             myPool.submit(() ->
                     downloadUrls.parallelStream()
-                            .forEach(url -> http09Request(connection, url, outputDir)))
+                            .forEach(url -> {
+                                try {
+                                    http09Request(connection, url, outputDir);
+                                }
+                                catch (IOException e) {
+                                    logger.error("downloading " + url + " failed", e);
+                                }
+                            }))
                     .get(5, TimeUnit.MINUTES);
             logger.info("Downloaded " + downloadUrls);
         } catch (InterruptedException e) {
@@ -311,14 +318,14 @@ public class InteropClient {
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
     }
 
-    private static void http09Request(QuicClientConnection connection, URL url, File outputDir) {
+    private static void http09Request(QuicClientConnection connection, URL url, File outputDir) throws IOException {
         try {
             HttpClient httpClient = new Http09Client(connection, false);
             HttpRequest request = HttpRequest.newBuilder().uri(url.toURI()).build();
             String fileName = new File(url.getFile()).getName();
             httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputDir.getAbsolutePath(), fileName)));
         }
-        catch (IOException | URISyntaxException | InterruptedException e) {
+        catch (URISyntaxException | InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
