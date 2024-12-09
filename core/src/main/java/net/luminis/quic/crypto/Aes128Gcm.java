@@ -79,33 +79,33 @@ public class Aes128Gcm extends BaseAeadImpl {
     }
 
     @Override
-    public SecretKeySpec getWriteKeySpec() {
-        if (writeKeySpec == null) {
-            writeKeySpec = new SecretKeySpec(writeKey, "AES");
+    public SecretKeySpec getKeySpec() {
+        if (keySpec == null) {
+            keySpec = new SecretKeySpec(key, "AES");
         }
-        return writeKeySpec;
+        return keySpec;
     }
 
     @Override
-    public Cipher getWriteCipher() {
-        if (writeCipher == null) {
+    public Cipher getCipher() {
+        if (cipher == null) {
             try {
                 // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
                 // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
                 String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
-                writeCipher = Cipher.getInstance(AES_GCM_NOPADDING);
+                cipher = Cipher.getInstance(AES_GCM_NOPADDING);
             } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
                 // Inappropriate runtime environment
                 throw new QuicRuntimeException(e);
             }
         }
-        return writeCipher;
+        return cipher;
     }
 
     @Override
     public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
-        Cipher aeadCipher = getWriteCipher();
-        SecretKeySpec secretKey = getWriteKeySpec();
+        Cipher aeadCipher = getCipher();
+        SecretKeySpec secretKey = getKeySpec();
         try {
             GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
@@ -125,8 +125,8 @@ public class Aes128Gcm extends BaseAeadImpl {
             // "These cipher suites have a 16-byte authentication tag and produce an output 16 bytes larger than their input."
             throw new DecryptionException("ciphertext must be longer than 16 bytes");
         }
-        SecretKeySpec secretKey = getWriteKeySpec();
-        Cipher aeadCipher = getWriteCipher();
+        SecretKeySpec secretKey = getKeySpec();
+        Cipher aeadCipher = getCipher();
         try {
             GCMParameterSpec parameterSpec = new GCMParameterSpec(128, nonce);   // https://tools.ietf.org/html/rfc5116#section-5.3: "the tag length t is 16"
             aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);

@@ -53,12 +53,12 @@ public abstract class BaseAeadImpl implements Aead {
     private final Version quicVersion;
 
     private byte[] trafficSecret;
-    protected byte[] writeKey;
-    protected byte[] writeIV;
+    protected byte[] key;
+    protected byte[] iv;
     protected byte[] hp;
     protected Cipher hpCipher;
-    protected SecretKeySpec writeKeySpec;
-    protected Cipher writeCipher;
+    protected SecretKeySpec keySpec;
+    protected Cipher cipher;
 
     public BaseAeadImpl(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
         this.nodeRole = nodeRole;
@@ -119,7 +119,7 @@ public abstract class BaseAeadImpl implements Aead {
         return newApplicationTrafficSecret;
     }
 
-    private void computeKeys(byte[] secret, boolean includeHP) {
+    private void computeKeys(byte[] encryptionLevelSecret, boolean includeHP) {
         // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.1
         // "The keys used for packet protection are computed from the TLS secrets using the KDF provided by TLS."
         // "The current encryption level secret and the label "quic key" are input to the KDF to produce the AEAD key;
@@ -129,13 +129,11 @@ public abstract class BaseAeadImpl implements Aead {
         String labelPrefix = quicVersion.isV2()? QUIC_V2_KDF_LABEL_PREFIX: QUIC_V1_KDF_LABEL_PREFIX;
 
         // https://tools.ietf.org/html/rfc8446#section-7.3
-        byte[] key = hkdfExpandLabel(quicVersion, secret, labelPrefix + "key", "", getKeyLength());
-        writeKey = key;
-        writeKeySpec = null;
+        key = hkdfExpandLabel(quicVersion, encryptionLevelSecret, labelPrefix + "key", "", getKeyLength());
+        keySpec = null;
         log.secret(nodeRole + " key", key);
 
-        byte[] iv = hkdfExpandLabel(quicVersion, secret, labelPrefix + "iv", "", (short) 12);
-        writeIV = iv;
+        iv = hkdfExpandLabel(quicVersion, encryptionLevelSecret, labelPrefix + "iv", "", (short) 12);
         log.secret(nodeRole + " iv", iv);
 
         if (includeHP) {
@@ -168,8 +166,8 @@ public abstract class BaseAeadImpl implements Aead {
     }
 
     @Override
-    public byte[] getWriteIV() {
-        return writeIV;
+    public byte[] getIv() {
+        return iv;
     }
 
     @Override
@@ -179,7 +177,7 @@ public abstract class BaseAeadImpl implements Aead {
 
     public abstract Cipher getHeaderProtectionCipher();
 
-    public abstract SecretKeySpec getWriteKeySpec();
+    public abstract SecretKeySpec getKeySpec();
 
-    public abstract Cipher getWriteCipher();
+    public abstract Cipher getCipher();
 }

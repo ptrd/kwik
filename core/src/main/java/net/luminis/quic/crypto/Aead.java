@@ -29,7 +29,7 @@ public interface Aead {
 
     byte[] createHeaderProtectionMask(byte[] sample);
 
-    byte[] getWriteIV();
+    byte[] getIv();
 
     byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce);
 

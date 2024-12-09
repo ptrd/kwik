@@ -53,12 +53,12 @@ public class KeyUpdateSupport implements Aead {
     }
 
     @Override
-    public byte[] getWriteIV() {
+    public byte[] getIv() {
         if (possibleKeyUpdateInProgresss) {
-            return updatedAead.getWriteIV();
+            return updatedAead.getIv();
         }
         else {
-            return aead.getWriteIV();
+            return aead.getIv();
         }
     }
 
@@ -89,7 +89,7 @@ public class KeyUpdateSupport implements Aead {
         if ((keyUpdateCounter % 2) != keyPhaseBit) {
             if (updatedAead == null) {
                 createNewAead();
-                log.secret("Computed new (updated) iv", updatedAead.getWriteIV());
+                log.secret("Computed new (updated) iv", updatedAead.getIv());
             }
             log.info("Received key phase does not match current => possible key update in progress");
             possibleKeyUpdateInProgresss = true;
