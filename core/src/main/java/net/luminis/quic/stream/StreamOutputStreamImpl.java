@@ -78,7 +78,10 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     public void write(byte[] data, int off, int len) throws IOException {
         checkState();
         try {
-            if (len > maxBufferSize) {
+            if (len <= maxBufferSize) {
+                sendBuffer.write(data, off, len);
+            }
+            else {
                 // Buffering all would break the contract (because this method copies _all_ data) but splitting and
                 // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
                 int halfBuffersize = maxBufferSize / 2;
@@ -95,9 +98,6 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                     write(data, off + times * halfBuffersize, rest);
                 }
                 return;
-            }
-            else {
-                sendBuffer.write(data, off, len);
             }
         }
         catch (InterruptedException e) {
