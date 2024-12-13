@@ -41,6 +41,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     private final SendBuffer sendBuffer;
     private final int maxBufferSize;
+    private final RetransmitBuffer retransmitBuffer;
     // Current offset is the offset of the next byte in the stream that will be sent.
     // Thread safety: only used by sender thread, so no synchronization needed.
     private long currentOffset;
@@ -63,7 +64,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         flowController = flowControl;
         sendBuffer = new SendBuffer(sendBufferSize);
         maxBufferSize = sendBuffer.getMaxSize();
-
+        retransmitBuffer = new RetransmitBuffer();
         flowController.streamOpened(quicStream);
 
         flowController.register(quicStream, this);
@@ -157,7 +158,13 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
             sendRequestQueued = false;
         }
 
-        if (!sendBuffer.isEmpty()) {
+        StreamFrame streamFrame = null;
+        if (retransmitBuffer.hasDataToRetransmit()) {
+            streamFrame = retransmitBuffer.getFrameToRetransmit(maxFrameSize);
+            quicStream.log.recovery("Retransmitted lost stream frame " + streamFrame);
+            assert (streamFrame != null);
+        }
+        else if (sendBuffer.hasData()) {
             long flowControlLimit = flowController.getFlowControlLimit(quicStream);
             assert (flowControlLimit >= currentOffset);
 
@@ -168,28 +175,17 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                 int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(quicStream, currentOffset + maxBytesToSend) - currentOffset);
                 maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
-                StreamFrame streamFrame = sendBuffer.getStreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, maxBytesToSend);
-                if (streamFrame == null) {
-                    // Nothing to send
-                    return null;
-                }
-                currentOffset += streamFrame.getLength();
-
-                if (!sendBuffer.isEmpty()) {
-                    synchronized (lock) {
-                        sendRequestQueued = true;
-                    }
-                    // There is more to send, so queue a new send request.
-                    quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
+                streamFrame = sendBuffer.getStreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, maxBytesToSend);
+                if (streamFrame != null) {
+                    currentOffset += streamFrame.getLength();
                 }
 
-                if (streamFrame.isFinal()) {
+                if (streamFrame != null && streamFrame.isFinal()) {
                     finalFrameSent();
                 }
-                return streamFrame;
             }
             else {
-                // So flowControlLimit <= currentOffset
+                // So flowControlLimit <= currentOffset, i.e. no flow control credits left.
                 // Check if this condition hasn't been handled before
                 if (currentOffset != blockedOffset) {
                     // Not handled before, remember this offset, so this isn't executed twice for the same offset
@@ -199,10 +195,20 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                     // "A sender SHOULD send a STREAM_DATA_BLOCKED or DATA_BLOCKED frame to indicate to the receiver
                     //  that it has data to write but is blocked by flow control limits."
                     quicStream.connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(quicStream.streamId), App, this::retransmitSendBlockReason, true);
+                    // As the stream is blocked, no need to queue a new send request.
+                    return null;
                 }
             }
         }
-        return null;
+        if (sendBuffer.hasData() || retransmitBuffer.hasDataToRetransmit()) {
+            synchronized (lock) {
+                sendRequestQueued = true;
+            }
+            // There is more to send, so queue a new send request.
+            quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
+        }
+
+        return streamFrame;
     }
 
     protected void finalFrameSent() {
@@ -249,8 +255,8 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private void retransmitStreamFrame(QuicFrame frame) {
         assert (frame instanceof StreamFrame);
         if (!reset) {
-            quicStream.connection.send(frame, this::retransmitStreamFrame);
-            quicStream.log.recovery("Retransmitted lost stream frame " + frame);
+            retransmitBuffer.add((StreamFrame) frame);
+            quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
         }
     }
 

@@ -165,4 +165,8 @@ public class SendBuffer {
     public int getMaxSize() {
         return maxBufferSize;
     }
+
+    public boolean hasData() {
+        return !sendQueue.isEmpty();
+    }
 }

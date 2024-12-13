@@ -19,16 +19,16 @@
 package net.luminis.quic.stream;
 
 import net.luminis.quic.common.EncryptionLevel;
-import net.luminis.quic.impl.QuicConnectionImpl;
-import net.luminis.quic.impl.Role;
-import net.luminis.quic.impl.TransportError;
-import net.luminis.quic.impl.Version;
 import net.luminis.quic.frame.MaxStreamDataFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StopSendingFrame;
 import net.luminis.quic.frame.StreamFrame;
 import net.luminis.quic.generic.InvalidIntegerEncodingException;
+import net.luminis.quic.impl.QuicConnectionImpl;
+import net.luminis.quic.impl.Role;
+import net.luminis.quic.impl.TransportError;
+import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.test.FieldReader;
 import org.junit.jupiter.api.AfterEach;
@@ -1284,12 +1284,11 @@ class QuicStreamImplTest {
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
         lostFrameCallback.accept(lostFrame);
 
-        ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>>  retransmitFunction= ArgumentCaptor.forClass(Function.class);
 
-        verify(connection, atLeastOnce()).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+        verify(connection, atLeastOnce()).send(retransmitFunction.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
 
-        QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
+        QuicFrame retransmittedFrame = retransmitFunction.getValue().apply(1500);
 
         assertThat(retransmittedFrame).isInstanceOf(StreamFrame.class);
         assertThat(retransmittedFrame).isEqualTo(lostFrame);
@@ -1358,12 +1357,11 @@ class QuicStreamImplTest {
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
         lostFrameCallback.accept(frameThatWillBecomeLost);
 
-        ArgumentCaptor<QuicFrame> retransmittedFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        ArgumentCaptor<Consumer> lostRetransmittedFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>>  retransmitFunction= ArgumentCaptor.forClass(Function.class);
 
-        verify(connection, times(1)).send(retransmittedFrameCaptor.capture(), lostRetransmittedFrameCallbackCaptor.capture());
+        verify(connection, atLeastOnce()).send(retransmitFunction.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
 
-        QuicFrame retransmittedFrame = retransmittedFrameCaptor.getValue();
+        QuicFrame retransmittedFrame = retransmitFunction.getValue().apply(1500);
 
         assertThat(retransmittedFrame).isInstanceOf(StreamFrame.class);
         assertThat(((StreamFrame) retransmittedFrame).isFinal()).isTrue();
