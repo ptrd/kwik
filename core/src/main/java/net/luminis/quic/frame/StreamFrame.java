@@ -173,6 +173,10 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         return offset;
     }
 
+    /**
+     * Returns length of the data carried by this frame.
+     * @return  data length
+     */
     public int getLength() {
         return length;
     }

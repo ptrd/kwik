@@ -18,22 +18,15 @@
  */
 package net.luminis.quic.stream;
 
+import net.luminis.quic.common.EncryptionLevel;
 import net.luminis.quic.frame.DataBlockedFrame;
 import net.luminis.quic.frame.QuicFrame;
 import net.luminis.quic.frame.ResetStreamFrame;
 import net.luminis.quic.frame.StreamDataBlockedFrame;
 import net.luminis.quic.frame.StreamFrame;
-import net.luminis.quic.common.EncryptionLevel;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static net.luminis.quic.common.EncryptionLevel.App;
 
@@ -44,15 +37,10 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private static final int MIN_FRAME_SIZE = 1 + 8 + 8 + 2 + 1;
 
     private final QuicStreamImpl quicStream;
-    private final ByteBuffer END_OF_STREAM_MARKER = ByteBuffer.allocate(0);
     private final Object lock = new Object();
 
-    // Send queue contains stream bytes to send in order. The position of the first byte buffer in the queue determines the next byte(s) to send.
-    private Queue<ByteBuffer> sendQueue = new ConcurrentLinkedDeque<>();
+    private final SendBuffer sendBuffer;
     private final int maxBufferSize;
-    private final AtomicInteger bufferedBytes;
-    private final ReentrantLock bufferLock;
-    private final Condition notFull;
     // Current offset is the offset of the next byte in the stream that will be sent.
     // Thread safety: only used by sender thread, so no synchronization needed.
     private long currentOffset;
@@ -67,22 +55,14 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private volatile long resetErrorCode;
     // Stream offset at which the stream was last blocked, for detecting the first time stream is blocked at a certain offset.
     private long blockedOffset;
-    private volatile Thread blockingWriterThread;
     protected final FlowControl flowController;
     private volatile boolean aborted;
-
 
     StreamOutputStreamImpl(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl) {
         this.quicStream = quicStream;
         flowController = flowControl;
-        bufferedBytes = new AtomicInteger();
-        bufferLock = new ReentrantLock();
-        notFull = bufferLock.newCondition();
-        if (sendBufferSize != null && sendBufferSize > 0) {
-            maxBufferSize = sendBufferSize;
-        } else {
-            maxBufferSize = 50 * 1024;
-        }
+        sendBuffer = new SendBuffer(sendBufferSize);
+        maxBufferSize = sendBuffer.getMaxSize();
 
         flowController.streamOpened(quicStream);
 
@@ -97,49 +77,34 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     @Override
     public void write(byte[] data, int off, int len) throws IOException {
         checkState();
-        if (len > maxBufferSize) {
-            // Buffering all would break the contract (because this method copies _all_ data) but splitting and
-            // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
-            int halfBuffersize = maxBufferSize / 2;
-            int times = len / halfBuffersize;
-            for (int i = 0; i < times; i++) {
-                // Each individual write will probably block, but by splitting the writes in half buffer sizes
-                // avoids that the buffer needs to be emptied completely before a new block can be added (which
-                // could have severed negative impact on performance as the sender might have to wait for the caller
-                // to fill the buffer again).
-                write(data, off + i * halfBuffersize, halfBuffersize);
-            }
-            int rest = len % halfBuffersize;
-            if (rest > 0) {
-                write(data, off + times * halfBuffersize, rest);
-            }
-            return;
-        }
-
-        int availableBufferSpace = maxBufferSize - bufferedBytes.get();
-        if (len > availableBufferSpace) {
-            // Wait for enough buffer space to become available
-            bufferLock.lock();
-            blockingWriterThread = Thread.currentThread();
-            try {
-                while (maxBufferSize - bufferedBytes.get() < len) {
-                    checkState();
-                    try {
-                        notFull.await();
-                    }
-                    catch (InterruptedException e) {
-                        String msg = "write failed because stream was " + (closed? "closed" : (reset? "reset" : "aborted"));
-                        throw new InterruptedIOException(msg);
-                    }
+        try {
+            if (len > maxBufferSize) {
+                // Buffering all would break the contract (because this method copies _all_ data) but splitting and
+                // writing smaller chunks (and waiting for each individual chunk to be buffered successfully) does not.
+                int halfBuffersize = maxBufferSize / 2;
+                int times = len / halfBuffersize;
+                for (int i = 0; i < times; i++) {
+                    // Each individual write will probably block, but by splitting the writes in half buffer sizes
+                    // avoids that the buffer needs to be emptied completely before a new block can be added (which
+                    // could have severed negative impact on performance as the sender might have to wait for the caller
+                    // to fill the buffer again).
+                    write(data, off + i * halfBuffersize, halfBuffersize);
                 }
-            } finally {
-                blockingWriterThread = null;
-                bufferLock.unlock();
+                int rest = len % halfBuffersize;
+                if (rest > 0) {
+                    write(data, off + times * halfBuffersize, rest);
+                }
+                return;
+            }
+            else {
+                sendBuffer.write(data, off, len);
             }
         }
+        catch (InterruptedException e) {
+            String msg = "write failed because stream was " + (closed? "closed" : (reset? "reset" : "aborted"));
+            throw new InterruptedIOException(msg);
+        }
 
-        sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
-        bufferedBytes.getAndAdd(len);
         synchronized (lock) {
             if (!sendRequestQueued) {
                 sendRequestQueued = true;
@@ -164,7 +129,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     @Override
     public void close() throws IOException {
         if (!closed && !aborted && !reset) {
-            sendQueue.add(END_OF_STREAM_MARKER);
+            sendBuffer.close();
             closed = true;
             synchronized (lock) {
                 if (!sendRequestQueued) {
@@ -192,59 +157,25 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
             sendRequestQueued = false;
         }
 
-        if (!sendQueue.isEmpty()) {
+        if (!sendBuffer.isEmpty()) {
             long flowControlLimit = flowController.getFlowControlLimit(quicStream);
             assert (flowControlLimit >= currentOffset);
 
-            int maxBytesToSend = bufferedBytes.get();
+            int maxBytesToSend = sendBuffer.getAvailableBytes();
             if (flowControlLimit > currentOffset || maxBytesToSend == 0) {
-                int nrOfBytes = 0;
                 StreamFrame dummy = new StreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, new byte[0], false);
                 maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getFrameLength() - 1);  // Take one byte extra for length field var int
                 int maxAllowedByFlowControl = (int) (flowController.increaseFlowControlLimit(quicStream, currentOffset + maxBytesToSend) - currentOffset);
                 maxBytesToSend = Integer.min(maxAllowedByFlowControl, maxBytesToSend);
 
-                byte[] dataToSend = new byte[maxBytesToSend];
-                boolean finalFrame = false;
-                while (nrOfBytes < maxBytesToSend && !sendQueue.isEmpty()) {
-                    ByteBuffer buffer = sendQueue.peek();
-                    int position = nrOfBytes;
-                    if (buffer.remaining() <= maxBytesToSend - nrOfBytes) {
-                        // All bytes remaining in buffer will fit in stream frame
-                        nrOfBytes += buffer.remaining();
-                        buffer.get(dataToSend, position, buffer.remaining());
-                        sendQueue.poll();
-                    } else {
-                        // Just part of the buffer will fit in (and will fill up) the stream frame
-                        buffer.get(dataToSend, position, maxBytesToSend - nrOfBytes);
-                        nrOfBytes = maxBytesToSend;  // Short form of: nrOfBytes += (maxBytesToSend - nrOfBytes)
-                    }
-                }
-                if (!sendQueue.isEmpty() && sendQueue.peek() == END_OF_STREAM_MARKER) {
-                    finalFrame = true;
-                    sendQueue.poll();
-                }
-                if (nrOfBytes == 0 && !finalFrame) {
-                    // Nothing to send really
+                StreamFrame streamFrame = sendBuffer.getStreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, maxBytesToSend);
+                if (streamFrame == null) {
+                    // Nothing to send
                     return null;
                 }
+                currentOffset += streamFrame.getLength();
 
-                bufferedBytes.getAndAdd(-1 * nrOfBytes);
-                bufferLock.lock();
-                try {
-                    notFull.signal();
-                } finally {
-                    bufferLock.unlock();
-                }
-
-                if (nrOfBytes < maxBytesToSend) {
-                    // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
-                    dataToSend = Arrays.copyOfRange(dataToSend, 0, nrOfBytes);
-                }
-                StreamFrame streamFrame = new StreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, dataToSend, finalFrame);
-                currentOffset += nrOfBytes;
-
-                if (!sendQueue.isEmpty()) {
+                if (!sendBuffer.isEmpty()) {
                     synchronized (lock) {
                         sendRequestQueued = true;
                     }
@@ -256,7 +187,8 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                     finalFrameSent();
                 }
                 return streamFrame;
-            } else {
+            }
+            else {
                 // So flowControlLimit <= currentOffset
                 // Check if this condition hasn't been handled before
                 if (currentOffset != blockedOffset) {
@@ -286,10 +218,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     void interruptBlockingThread() {
-        Thread blocking = blockingWriterThread;
-        if (blocking != null) {
-            blocking.interrupt();
-        }
+        sendBuffer.interruptBlockedWriter();
     }
 
     /**
@@ -337,7 +266,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     private void restart() {
         currentOffset = 0;
-        sendQueue.clear();
+        sendBuffer.clear();
         sendRequestQueued = false;
     }
 
@@ -361,8 +290,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     private void discardAllData() {
-        sendQueue.clear();
-        bufferedBytes.set(0);
+        sendBuffer.clear();
     }
 
     private QuicFrame createResetFrame(int maxFrameSize) {
