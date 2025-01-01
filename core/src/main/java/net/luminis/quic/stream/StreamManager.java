@@ -333,7 +333,7 @@ public class StreamManager {
     }
 
     private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
-        if (receivingStream != null || isNew(frame.getStreamId())) {
+        if (receivingStream != null || isNewPeerInitiated(frame.getStreamId())) {
             long receivingStreamMaxOffset = receivingStream != null ? receivingStream.getReceivedMaxOffset() : 0;
             if (frame.getUpToOffset() > receivingStreamMaxOffset) {
                 long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
@@ -345,9 +345,10 @@ public class StreamManager {
         // else: (receivingStream is null because) stream already closed, so ignore!
     }
 
-    private boolean isNew(int streamId) {
-        return isUni(streamId) && streamId >= nextPeerInitiatedUnidirectionalStreamId
-                || isBidi(streamId) && streamId >= nextPeerInitiatedBidirectionalStreamId;
+    private boolean isNewPeerInitiated(int streamId) {
+        return isPeerInitiated(streamId) &&
+                (isUni(streamId) && streamId >= nextPeerInitiatedUnidirectionalStreamId
+                        || isBidi(streamId) && streamId >= nextPeerInitiatedBidirectionalStreamId);
     }
 
     void streamClosed(int streamId) {
