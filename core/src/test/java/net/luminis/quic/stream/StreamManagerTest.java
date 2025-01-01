@@ -30,6 +30,7 @@ import net.luminis.quic.impl.QuicConnectionImpl;
 import net.luminis.quic.impl.Role;
 import net.luminis.quic.impl.TransportError;
 import net.luminis.quic.log.Logger;
+import net.luminis.quic.log.SysOutLogger;
 import net.luminis.quic.server.ServerConnectionConfig;
 import net.luminis.quic.test.FieldReader;
 import net.luminis.quic.test.TestClock;
@@ -728,6 +729,33 @@ class StreamManagerTest {
                 // Then
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
+
+    @Test
+    void recevingRetransmittedStreamFrameOnClosedOnSelfInitiatedStreamShouldNotLeadToFlowControlError() throws Exception {
+        // Given
+        streamManager.setInitialMaxStreamsBidi(2);
+        streamManager.setInitialMaxStreamsUni(2);
+        QuicStream dummyStream = streamManager.createStream(true);  // Create a stream to make sure the stream id is not 0
+        QuicStream stream = streamManager.createStream(true);
+        stream.resetStream(9);  // Close output so reading all input will close stream.
+
+        long streamOffset = 0;
+        for (int i = 0; i < 16; i++) {  // Read a lot of data to make sure connection flow control limit is increased
+            streamManager.process(new StreamFrame(stream.getStreamId(), streamOffset, new byte[1024], false));
+            streamOffset += 1024;
+            stream.getInputStream().read(new byte[1024]);
+        }
+
+        streamManager.process(new StreamFrame(stream.getStreamId(), streamOffset, new byte[0], true));  // Final frame
+        stream.getInputStream().read(new byte[1024]);  // Close stream, will cause stream to be removed from stream manager
+
+        // When
+        // Retransmitted stream frame is received with a high offset (close to the flow control limit)
+        long streamFinalSize = streamOffset;
+        assertThatCode(() ->
+                streamManager.process(new StreamFrame(stream.getStreamId(), streamFinalSize - 5 * 1024, new byte[1024], false))
+        ).doesNotThrowAnyException();
     }
     //endregion
 
