@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020. 2021, 2022, 2023, 2024 Peter Doornbosch
+ * Copyright © 2020. 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
