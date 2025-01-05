@@ -39,20 +39,20 @@ import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.tls.QuicTransportParametersExtension;
 import net.luminis.quic.util.Bytes;
 import net.luminis.quic.util.InetTools;
-import net.luminis.tls.NewSessionTicket;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.engine.CertificateWithPrivateKey;
-import net.luminis.tls.engine.ClientMessageSender;
-import net.luminis.tls.engine.TlsClientEngine;
-import net.luminis.tls.engine.TlsClientEngineFactory;
-import net.luminis.tls.engine.TlsStatusEventHandler;
-import net.luminis.tls.extension.ApplicationLayerProtocolNegotiationExtension;
-import net.luminis.tls.extension.EarlyDataExtension;
-import net.luminis.tls.extension.Extension;
-import net.luminis.tls.handshake.CertificateMessage;
-import net.luminis.tls.handshake.CertificateVerifyMessage;
-import net.luminis.tls.handshake.ClientHello;
-import net.luminis.tls.handshake.FinishedMessage;
+import tech.kwik.agent15.NewSessionTicket;
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.CertificateWithPrivateKey;
+import tech.kwik.agent15.engine.ClientMessageSender;
+import tech.kwik.agent15.engine.TlsClientEngine;
+import tech.kwik.agent15.engine.TlsClientEngineFactory;
+import tech.kwik.agent15.engine.TlsStatusEventHandler;
+import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
+import tech.kwik.agent15.extension.EarlyDataExtension;
+import tech.kwik.agent15.extension.Extension;
+import tech.kwik.agent15.handshake.CertificateMessage;
+import tech.kwik.agent15.handshake.CertificateVerifyMessage;
+import tech.kwik.agent15.handshake.ClientHello;
+import tech.kwik.agent15.handshake.FinishedMessage;
 
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -85,7 +85,7 @@ import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Acc
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.None;
 import static net.luminis.quic.impl.QuicClientConnectionImpl.EarlyDataStatus.Requested;
 import static net.luminis.quic.util.Bytes.bytesToHex;
-import static net.luminis.tls.TlsConstants.SignatureScheme.*;
+import static tech.kwik.agent15.TlsConstants.SignatureScheme.*;
 
 
 /**

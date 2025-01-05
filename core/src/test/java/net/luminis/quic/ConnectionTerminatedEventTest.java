@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.TlsConstants;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;

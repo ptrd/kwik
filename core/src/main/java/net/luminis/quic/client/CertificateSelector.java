@@ -19,7 +19,7 @@
 package net.luminis.quic.client;
 
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.engine.CertificateWithPrivateKey;
+import tech.kwik.agent15.engine.CertificateWithPrivateKey;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;

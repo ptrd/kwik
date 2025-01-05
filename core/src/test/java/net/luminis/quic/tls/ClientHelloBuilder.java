@@ -19,11 +19,11 @@
 package net.luminis.quic.tls;
 
 import net.luminis.quic.test.ByteUtils;
-import net.luminis.tls.ProtectionKeysType;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.engine.MessageProcessor;
-import net.luminis.tls.engine.TlsMessageParser;
-import net.luminis.tls.handshake.HandshakeMessage;
+import tech.kwik.agent15.ProtectionKeysType;
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.MessageProcessor;
+import tech.kwik.agent15.engine.TlsMessageParser;
+import tech.kwik.agent15.handshake.HandshakeMessage;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

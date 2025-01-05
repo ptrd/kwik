@@ -29,8 +29,8 @@ import net.luminis.quic.impl.Version;
 import net.luminis.quic.impl.VersionHolder;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.test.ByteUtils;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.engine.TlsClientEngine;
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.TlsClientEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

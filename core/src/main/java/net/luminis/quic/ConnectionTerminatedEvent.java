@@ -18,7 +18,7 @@
  */
 package net.luminis.quic;
 
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.TlsConstants;
 
 import static net.luminis.quic.QuicConstants.TransportErrorCode.NO_ERROR;
 

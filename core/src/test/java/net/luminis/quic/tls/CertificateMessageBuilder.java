@@ -18,7 +18,7 @@
  */
 package net.luminis.quic.tls;
 
-import net.luminis.tls.handshake.CertificateMessage;
+import tech.kwik.agent15.handshake.CertificateMessage;
 
 import java.io.ByteArrayInputStream;
 import java.security.cert.Certificate;

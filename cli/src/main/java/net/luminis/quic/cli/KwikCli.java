@@ -29,7 +29,7 @@ import net.luminis.quic.impl.VersionNegotiationFailure;
 import net.luminis.quic.log.FileLogger;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.log.SysOutLogger;
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.TlsConstants;
 import org.apache.commons.cli.*;
 
 import java.io.ByteArrayInputStream;

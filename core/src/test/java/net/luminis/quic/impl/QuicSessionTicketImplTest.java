@@ -18,9 +18,9 @@
  */
 package net.luminis.quic.impl;
 
-import net.luminis.tls.NewSessionTicket;
-import net.luminis.tls.TlsConstants;
-import net.luminis.tls.handshake.NewSessionTicketMessage;
+import tech.kwik.agent15.NewSessionTicket;
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.handshake.NewSessionTicketMessage;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

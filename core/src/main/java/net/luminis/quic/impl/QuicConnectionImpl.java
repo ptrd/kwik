@@ -37,9 +37,9 @@ import net.luminis.quic.stream.FlowControl;
 import net.luminis.quic.stream.StreamManager;
 import net.luminis.quic.util.ProgressivelyIncreasingRateLimiter;
 import net.luminis.quic.util.RateLimiter;
-import net.luminis.tls.TlsProtocolException;
-import net.luminis.tls.alert.ErrorAlert;
-import net.luminis.tls.engine.TlsEngine;
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.alert.ErrorAlert;
+import tech.kwik.agent15.engine.TlsEngine;
 
 import java.io.IOException;
 import java.nio.file.Path;

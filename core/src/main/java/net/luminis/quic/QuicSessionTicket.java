@@ -19,8 +19,8 @@
 package net.luminis.quic;
 
 import net.luminis.quic.impl.TransportParameters;
-import net.luminis.tls.NewSessionTicket;
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.NewSessionTicket;
+import tech.kwik.agent15.TlsConstants;
 
 public interface QuicSessionTicket {
 

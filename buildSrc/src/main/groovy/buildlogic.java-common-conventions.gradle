@@ -22,10 +22,10 @@ javadoc {
 }
 
 repositories {
-    mavenCentral() 
+    mavenCentral()
 }
 
-ext.agent15_version = '2.3'
+ext.agent15_version = '3.0'
 
 dependencies {
     testImplementation('org.junit.jupiter:junit-jupiter:5.10.2')

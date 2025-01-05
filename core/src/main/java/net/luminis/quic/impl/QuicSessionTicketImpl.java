@@ -19,8 +19,8 @@
 package net.luminis.quic.impl;
 
 import net.luminis.quic.QuicSessionTicket;
-import net.luminis.tls.NewSessionTicket;
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.NewSessionTicket;
+import tech.kwik.agent15.TlsConstants;
 
 import java.nio.ByteBuffer;
 

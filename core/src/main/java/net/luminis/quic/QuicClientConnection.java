@@ -20,7 +20,7 @@ package net.luminis.quic;
 
 import net.luminis.quic.impl.QuicClientConnectionImpl;
 import net.luminis.quic.log.Logger;
-import net.luminis.tls.TlsConstants;
+import tech.kwik.agent15.TlsConstants;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

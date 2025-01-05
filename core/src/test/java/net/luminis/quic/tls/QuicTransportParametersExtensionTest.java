@@ -24,7 +24,7 @@ import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.test.ByteUtils;
-import net.luminis.tls.alert.DecodeErrorException;
+import tech.kwik.agent15.alert.DecodeErrorException;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;

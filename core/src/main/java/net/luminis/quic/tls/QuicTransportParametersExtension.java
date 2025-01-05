@@ -27,8 +27,8 @@ import net.luminis.quic.impl.TransportParameters;
 import net.luminis.quic.impl.Version;
 import net.luminis.quic.log.Logger;
 import net.luminis.quic.util.Bytes;
-import net.luminis.tls.alert.DecodeErrorException;
-import net.luminis.tls.extension.Extension;
+import tech.kwik.agent15.alert.DecodeErrorException;
+import tech.kwik.agent15.extension.Extension;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
