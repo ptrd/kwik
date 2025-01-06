@@ -13,7 +13,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'net.luminis.quic.cli.KwikCli'
+    mainClass = 'tech.kwik.cli.KwikCli'
 }
 
 publishing {

@@ -14,7 +14,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'net.luminis.quic.interop.InteropRunner'
+    mainClass = 'tech.kwik.interop.InteropRunner'
     applicationDefaultJvmArgs = ['-Duser.language=en', '-Duser.country=US', '-ea']
 }
 

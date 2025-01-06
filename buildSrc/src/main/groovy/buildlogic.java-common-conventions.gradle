@@ -97,7 +97,7 @@ ext.pomContent = {
         developer {
             id = 'peterd'
             name = 'Peter Doornbosch'
-            email = 'peter.doornbosch@luminis.eu'
+            email = 'peter.doornbosch@gmail.com'
         }
     }
 

@@ -12,7 +12,7 @@ dependencies {
 
 task includeVersion {
     doLast {
-        ext.versionDir = new File("${buildDir}", "generated/net/luminis/quic")
+        ext.versionDir = new File("${buildDir}", "generated/tech/kwik/core")
         versionDir.mkdirs()
 
         new File(versionDir, "version.properties").text = project.version
