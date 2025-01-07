@@ -1,7 +1,40 @@
 # Releases
 
-## 0.9.1 (2024-11-14)
+## 0.10 (2025-01-10)
 
+**Note: this release has a breaking change (which is, however, easy to fix)**
+
+Changed package structure: all packages now start with `tech.kwik`.
+
+**Upgrade instructions:** if your project is only using the `tech.kwik.core` module (`kwik.jar`), which will usually be the case, upgrading is as simple as performing a global find-and-replace to replace the string `net.luminis.quic` by `tech.kwik.core`.
+Only in case your project is also using other kwik dependencies, read on, because then you should do other replacements first.
+
+If your project is using other kwik modules besides kwik core:
+
+- if using `kwik-cli`: replace `net.luminis.quic.cli` by `tech.kwik.cli`
+- if using `kwik-qlog`: replace `net.luminis.quic.qlog` by `tech.kwik.qlog`
+- if using `kwik-samples`; replace `net.luminis.quic.sample` by `tech.kwik.sample`
+- if using `kwik-interop`: replace `net.luminis.quic.interop` by `tech.kwik.interop`
+- if using `kwik-h09`:
+  - replace: `net.luminis.quic.client.h09` by `tech.kwik.h09.client`
+  - replace: `net.luminis.quic.server.h09` by `tech.kwik.h09.server`
+  - replace: `net.luminis.quic.io` by `tech.kwik.h09.io`
+- and finally replace `net.luminis.quic` by `tech.kwik.core`.
+
+Because in this release also the agent15 version is upgraded to 3.0, you might need to also do a find-and-replace to
+replace `net.luminis.tls` by `tech.kwik.agent15`, for example when setting a specific cipher using the `Builder.cipherSuite` method
+
+Other (minor) changes:
+- fix: bug in connection flow control check
+- introduced retransmit buffer to ensure stream data can always be retransmitted, even when packets get smaller
+- fix: key update with aes256gcm
+- fix: inconsistent congestion control state with retry 
+- added option to enforce the max (receive) udp payload size
+- added option to enforce strict smallest allowed maximum package size (i.e. 1200 bytes)
+- let max packet size depend on IP version
+- option to set IP version preference
+
+## 0.9.1 (2024-11-14)
 
 - added `close` method to properly shut down a ServerConnector (including closing all connections and free all resources).
   [issue 44](https://github.com/ptrd/kwik/issues/44)
