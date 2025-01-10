@@ -5,6 +5,9 @@
 Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in (100%) Java. 
 Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
+**If you are upgrading from a version prior to 0.10, read the [CHANGELOG](https://github.com/ptrd/kwik/blob/master/CHANGELOG.md)
+for upgrade instructions.**
+
 QUIC is a brand-new transport protocol developed by the IETF, and is the transport layer for the (also new) HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
 "next generation TCP". It has similar properties as TCP, e.g. provide a reliable ordered stream, but is better in many ways:
@@ -94,7 +97,7 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>kwik</artifactId>
-        <version>0.8.13</version>
+        <version>0.10</version>
     </dependency>
 
 ### Java Module System

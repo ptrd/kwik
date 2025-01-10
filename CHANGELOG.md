@@ -22,7 +22,7 @@ If your project is using other kwik modules besides kwik core:
 - and finally replace `net.luminis.quic` by `tech.kwik.core`.
 
 Because in this release also the agent15 version is upgraded to 3.0, you might need to also do a find-and-replace to
-replace `net.luminis.tls` by `tech.kwik.agent15`, for example when setting a specific cipher using the `Builder.cipherSuite` method
+replace `net.luminis.tls` by `tech.kwik.agent15`, for example when setting a specific cipher using the `Builder.cipherSuite` method.
 
 Other (minor) changes:
 - fix: bug in connection flow control check
