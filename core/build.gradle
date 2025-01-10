@@ -2,12 +2,13 @@ plugins {
     id 'buildlogic.java-common-conventions'
 }
 
-
 dependencies {
     implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
     implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
+
+    implementation group: 'io.whitfin', name: 'siphash', version: '2.0.0-auto-module'
 }
 
 task includeVersion {

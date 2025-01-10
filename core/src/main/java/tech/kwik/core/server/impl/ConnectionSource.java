@@ -19,20 +19,23 @@
 package tech.kwik.core.server.impl;
 
 import tech.kwik.core.util.Bytes;
+import tech.kwik.core.util.SecureHash;
 
 import java.util.Arrays;
 
 public class ConnectionSource {
 
     private final byte[] dcid;
+    private final int hashCode;
 
-    public ConnectionSource(byte[] dcid) {
+    public ConnectionSource(byte[] dcid, SecureHash secureHash) {
         this.dcid = dcid;
+        hashCode = secureHash.generateHashCode(dcid);
     }
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(dcid);
+        return hashCode;
     }
 
     @Override

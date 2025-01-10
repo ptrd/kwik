@@ -22,6 +22,9 @@ javadoc {
 }
 
 repositories {
+    flatDir {
+        dirs "$rootDir/localdeps"
+    }
     mavenCentral()
 }
 
