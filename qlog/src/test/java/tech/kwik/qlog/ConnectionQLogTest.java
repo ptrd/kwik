@@ -4,12 +4,12 @@ import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.impl.MockPacket;
 import tech.kwik.qlog.event.ConnectionCreatedEvent;
 import tech.kwik.qlog.event.PacketLostEvent;
 import tech.kwik.qlog.event.PacketSentEvent;
-import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -30,7 +30,7 @@ class ConnectionQLogTest {
 
     @Test
     void processPacketSentEvent() throws IOException {
-        var packetSentEvent = new PacketSentEvent(new byte[8], new MockPacket(16, 123, EncryptionLevel.App), Instant.now());
+        var packetSentEvent = new PacketSentEvent(1L, new byte[8], new MockPacket(16, 123, EncryptionLevel.App), Instant.now());
         JsonObject qlogResult = createQlogWith(qlog -> qlog.process(packetSentEvent));
 
         var sentQlogEvent = getFirstEvent(qlogResult);
@@ -43,7 +43,7 @@ class ConnectionQLogTest {
 
     @Test
     void processPacketLost() throws IOException {
-        var packetLostEvent = new PacketLostEvent(new byte[8], new MockPacket(16, 123, EncryptionLevel.App), Instant.now());
+        var packetLostEvent = new PacketLostEvent(1L, new byte[8], new MockPacket(16, 123, EncryptionLevel.App), Instant.now());
         JsonObject qlogResult = createQlogWith(qlog -> qlog.process(packetLostEvent));
 
         var lostQlogEvent = getFirstEvent(qlogResult);
@@ -56,7 +56,7 @@ class ConnectionQLogTest {
 
     private JsonObject createQlogWith(Consumer<ConnectionQLog> testCase) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream(1024);
-        ConnectionQLog qLog = new ConnectionQLog(new ConnectionCreatedEvent(new byte[8], Instant.now()), output);
+        ConnectionQLog qLog = new ConnectionQLog(new ConnectionCreatedEvent(1L, new byte[8], Instant.now()), output);
         testCase.accept(qLog);
         qLog.close();
 

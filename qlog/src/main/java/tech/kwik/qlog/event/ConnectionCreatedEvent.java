@@ -24,8 +24,8 @@ import java.time.Instant;
 
 public class ConnectionCreatedEvent extends QLogEvent {
 
-    public ConnectionCreatedEvent(byte[] originalDcid, Instant connectionCreatedTime) {
-        super(originalDcid, connectionCreatedTime);
+    public ConnectionCreatedEvent(long connectionHandle, byte[] originalDcid, Instant connectionCreatedTime) {
+        super(connectionHandle, originalDcid, connectionCreatedTime);
     }
 
     @Override

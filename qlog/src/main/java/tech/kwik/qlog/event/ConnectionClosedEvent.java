@@ -43,15 +43,15 @@ public class ConnectionClosedEvent extends QLogEvent {
         }
     }
 
-    public ConnectionClosedEvent(byte[] cid, Instant time, Trigger trigger) {
-        super(cid, time);
+    public ConnectionClosedEvent(long connectionHandle, byte[] cid, Instant time, Trigger trigger) {
+        super(connectionHandle, cid, time);
         this.trigger = trigger;
         errorCode = null;
         errorReason = null;
     }
 
-    public ConnectionClosedEvent(byte[] cid, Instant time, Trigger trigger, long errorCode, String errorReason) {
-        super(cid, time);
+    public ConnectionClosedEvent(long connectionHandle, byte[] cid, Instant time, Trigger trigger, long errorCode, String errorReason) {
+        super(connectionHandle, cid, time);
         this.trigger = trigger;
         this.errorCode = errorCode;
         this.errorReason = errorReason;

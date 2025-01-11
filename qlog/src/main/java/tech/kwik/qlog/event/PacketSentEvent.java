@@ -24,8 +24,8 @@ import java.time.Instant;
 
 public class PacketSentEvent extends PacketEvent {
 
-    public PacketSentEvent(byte[] cid, QuicPacket packet, Instant time) {
-        super(cid, packet, time);
+    public PacketSentEvent(long connectionHandle, byte[] cid, QuicPacket packet, Instant time) {
+        super(connectionHandle, cid, packet, time);
     }
 
     public void accept(QLogEventProcessor processor) {

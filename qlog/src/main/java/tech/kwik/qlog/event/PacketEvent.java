@@ -27,8 +27,8 @@ public abstract class PacketEvent extends QLogEvent {
 
     private final QuicPacket packet;
 
-    public PacketEvent(byte[] cid, QuicPacket packet, Instant time) {
-        super(cid, time);
+    public PacketEvent(long connectionHandle, byte[] cid, QuicPacket packet, Instant time) {
+        super(connectionHandle, cid, time);
         this.packet = packet;
     }
 

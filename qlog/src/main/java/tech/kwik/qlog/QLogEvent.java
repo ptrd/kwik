@@ -27,15 +27,16 @@ public abstract class QLogEvent {
 
     private final byte[] cid;
     private final Instant time;
+    private final long connectionHandle;
 
-
-    public QLogEvent(byte[] cid, Instant time) {
+    public QLogEvent(long connectionHandle, byte[] cid, Instant time) {
         if (cid == null) {
             throw new IllegalArgumentException();
         }
         if (time == null) {
             throw new IllegalArgumentException();
         }
+        this.connectionHandle = connectionHandle;
         this.cid = cid;
         this.time = time;
     }
@@ -48,5 +49,9 @@ public abstract class QLogEvent {
 
     public Instant getTime() {
         return time;
+    }
+
+    public long getConnectionHandle() {
+        return connectionHandle;
     }
 }
