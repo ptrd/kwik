@@ -20,7 +20,7 @@ Although necessary for HTTP3, QUIC is more than just the transport protocol for 
 If you want to know more about QUIC and are able to understand the dutch language, check out
 my [presentation on Luminis DevCon 2019](https://youtu.be/eR2tPOLQRws). 
 
-If you're looking for a Java HTTP3 client or server, check out [Flupke](https://bitbucket.org/pjtr/flupke), which is built on top of Kwik.
+If you're looking for a Java HTTP3 client or server, check out [Flupke](https://github.com/ptrd/flupke), which is built on top of Kwik.
 
 Kwik is created and maintained by Peter Doornbosch. 
 The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik)
@@ -37,9 +37,9 @@ Due to the fact that most implementations are still in active development, and t
 (specifically testing behaviour in the context of packet loss and packet corruption) are non-deterministic, the results of the automatic
 interoperability test vary with each run, but usually, Kwik is amongst the best w.r.t. the number of successful testcases.  
 
-Kwik is still in active development, see [git history](https://bitbucket.org/pjtr/kwik/commits/). 
+Kwik is still in active development, see [git history](https://github.com/ptrd/kwik/commits/master/). 
 
-HTTP3 on top of Kwik is supported by [Flupke, the pure Java HTTP3 implementation](https://bitbucket.org/pjtr/flupke).
+HTTP3 on top of Kwik is supported by [Flupke, the pure Java HTTP3 implementation](https://github.com/ptrd/flupke).
 
 Kwik supports QUIC v1 ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000.html))
 and QUIC v2 ([RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)).
@@ -142,19 +142,19 @@ checking. The builder has a method for this:
 
     builder.noServerCertificateCheck()
 
-The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/QuicClientConnection.java#L77).
+The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/QuicClientConnection.java#L77).
 
-The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/log/Logger.java); Kwik provides two convenient implementations
+The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/log/Logger.java); Kwik provides two convenient implementations
 that you can use: `SysOutLogger` and `FileLogger`. Various log categories can be enabled or disabled by the 
 `logXXX()` methods, e.g. `logger.logInfo(true)`.
 
-Take a look at the samples in the [sample package](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/net/luminis/quic/sample)
+Take a look at the samples in the [sample package](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/tech/kwik/sample)
 for more inspiration.
 
 ### Server
 
 Creating a QUIC server with Kwik consist of a few steps. First you need to create an application protocol handler by
-implementing the [ApplicationProtocolConnectionFactory](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolConnectionFactory.java) interface. Its `createConnection` method should return an implementation of [ApplicationProtocolConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolConnection.java) that, as the name suggests,
+implementing the [ApplicationProtocolConnectionFactory](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/server/ApplicationProtocolConnectionFactory.java) interface. Its `createConnection` method should return an implementation of [ApplicationProtocolConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/server/ApplicationProtocolConnection.java) that, as the name suggests,
 represents your application protocol connection. It's `acceptPeerInitiatedStream` method is the handler that is called by 
 Kwik when a client initiates a stream for the given protocol. The implementation of this `acceptPeerInitiatedStream` method
 should start a stream handler, but should itself return immediately, as it is called on the thread that handles
@@ -162,7 +162,7 @@ incoming QUIC messages. If, for example, your application protocol follows the r
 reads the request from the QUIC stream, processes it, creates a response, writes the response to the QUIC stream and closes the stream.
 
 To complete the `ApplicationProtocolConnectionFactory` you should at least override the following two methods of the
-[ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/core/src/main/java/net/luminis/quic/server/ApplicationProtocolSettings.java) 
+[ApplicationProtocolSettings](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/server/ApplicationProtocolSettings.java) 
 interface:
 
     int maxConcurrentPeerInitiatedUnidirectionalStreams()
@@ -222,7 +222,7 @@ just don't set `maxOpenUnidirectionalStreams` as the default is 0, and provide a
             .build();
 
 That concludes creating a server. You can find working examples in the
-[sample directory](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/net/luminis/quic/sample).
+[sample directory](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/tech/kwik/sample).
 
 
 
@@ -298,7 +298,7 @@ HTTP request.
 
 ### Sample Server
 
-To run the demo web server, execute `net.luminis.quic.sample.SampleWebServer` with the following arguments:
+To run the demo web server, execute `tech.kwik.sample.SampleWebServer` with the following arguments:
 - certificate file
 - private key file
 - port number
@@ -309,7 +309,7 @@ or
 - port number
 - www directory to serve
 
-This will start the server in retry-mode (see https://quicwg.org/base-drafts/rfc9000.html#name-address-validation-using-re).
+This will start the server in retry-mode (see https://www.rfc-editor.org/rfc/rfc9000.html#name-address-validation-using-re).
 To run without retry-mode, add the `--noRetry` flag as first argument.
 
 
