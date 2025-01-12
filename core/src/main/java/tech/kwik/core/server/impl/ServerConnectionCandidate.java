@@ -21,11 +21,8 @@ package tech.kwik.core.server.impl;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
-import tech.kwik.core.impl.DecryptionException;
-import tech.kwik.core.impl.InvalidPacketException;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.DatagramFilter;
@@ -139,6 +136,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             int datagramNumber = metaData.datagramNumber();
             Instant timeReceived = metaData.timeReceived();
             InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
+            check(initialPacket);
 
             log.received(timeReceived, datagramNumber, initialPacket);
             log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
@@ -148,7 +146,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 createAndRegisterServerConnection(initialPacket, metaData, data);
             }
         }
-        catch (InvalidPacketException | DecryptionException cannotParsePacket) {
+        catch (InvalidPacketException | DecryptionException | IncompletePacketException unacceptablePacket) {
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
             log.debug("Dropped invalid initial packet (no connection created)");
             // But still the (now useless) candidate should be removed from the connection registry.
@@ -164,8 +162,15 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                         }
                     },
                     30, TimeUnit.SECONDS);
-        } catch (Exception error) {
+        }
+        catch (Exception error) {
             log.error("error while parsing or processing initial packet", error);
+        }
+    }
+
+    private void check(InitialPacket initialPacket) throws IncompletePacketException {
+        if (initialPacket.getFrames().stream().noneMatch(frame -> frame instanceof CryptoFrame)) {
+            throw new IncompletePacketException();
         }
     }
 

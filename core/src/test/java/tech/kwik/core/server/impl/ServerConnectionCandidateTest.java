@@ -18,8 +18,18 @@
  */
 package tech.kwik.core.server.impl;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import tech.kwik.agent15.engine.TlsServerEngineFactory;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.crypto.ConnectionSecrets;
+import tech.kwik.core.frame.Padding;
+import tech.kwik.core.frame.PingFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TestUtils;
 import tech.kwik.core.impl.Version;
+import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
@@ -30,9 +40,6 @@ import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
-import tech.kwik.agent15.engine.TlsServerEngineFactory;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.net.DatagramSocket;
@@ -40,6 +47,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,6 +156,33 @@ class ServerConnectionCandidateTest {
         ByteBuffer remainingDatagramData = ((TestServerConnectionFactory) serverConnectionFactory).getRemainingDatagramData();
         assertThat(remainingDatagramData.position()).isEqualTo(1200);
         assertThat(remainingDatagramData.remaining()).isEqualTo(1500 - initialPacketBytes.length);
+    }
+
+    @Test
+    void firstInitialPacketWithoutCryptoFrameShouldNotCreateConnection() throws Exception {
+        // Given
+        byte[] scid = new byte[0];
+        byte[] odcid = new byte[8];
+        List<QuicFrame> frames = List.of(new PingFrame(), new Padding(1164));
+        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
+        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), null);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
+        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, odcid, null, frames);
+        initialPacket.setPacketNumber(0);
+        ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(Version.getDefault()), Role.Client, null, mock(Logger.class));
+        secrets.computeInitialKeys(odcid);
+        return initialPacket.generatePacketBytes(secrets.getOwnAead(EncryptionLevel.Initial));
     }
 
     static ServerConnectionConfig getDefaultConfiguration(int connectionIdLength) {
