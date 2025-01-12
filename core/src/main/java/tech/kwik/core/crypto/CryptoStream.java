@@ -57,7 +57,6 @@ public class CryptoStream {
     private final VersionHolder quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ProtectionKeysType tlsProtectionType;
-    private final ConnectionSecrets connectionSecrets;
     private final Role peerRole;
     private final TlsEngine tlsEngine;
     private final Logger log;
@@ -76,10 +75,9 @@ public class CryptoStream {
     private byte msgType;
     private int readOffset;
 
-    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
-        this.connectionSecrets = connectionSecrets;
         peerRole = role.other();
         this.tlsEngine = tlsEngine;
         this.log = log;

@@ -18,17 +18,11 @@
  */
 package tech.kwik.core.crypto;
 
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.TransportError;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.impl.VersionHolder;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.send.Sender;
-import tech.kwik.core.tls.CertificateMessageBuilder;
-import tech.kwik.core.tls.ClientHelloBuilder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import tech.kwik.agent15.ProtectionKeysType;
 import tech.kwik.agent15.TlsConstants;
 import tech.kwik.agent15.TlsProtocolException;
@@ -42,11 +36,17 @@ import tech.kwik.agent15.handshake.CertificateMessage;
 import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.agent15.handshake.FinishedMessage;
 import tech.kwik.agent15.handshake.HandshakeMessage;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.send.Sender;
+import tech.kwik.core.tls.CertificateMessageBuilder;
+import tech.kwik.core.tls.ClientHelloBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -58,13 +58,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static tech.kwik.core.test.FieldSetter.setField;
-import static tech.kwik.agent15.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static tech.kwik.agent15.TlsConstants.HandshakeType.certificate_request;
+import static tech.kwik.core.test.FieldSetter.setField;
 
 class CryptoStreamTest {
 
@@ -77,7 +77,7 @@ class CryptoStreamTest {
     @BeforeEach
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
                 Role.Client, new TlsClientEngineImpl(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
@@ -306,7 +306,7 @@ class CryptoStreamTest {
     @Test
     void veryLargeClientHelloIsRefused() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 3000;
         String fakeExtensionType = "fa7e";
@@ -331,7 +331,7 @@ class CryptoStreamTest {
     @Test
     void largeNumberOfOutOfOrderCryptoFramesIsRefused() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 4000;
         String fakeExtensionType = "fa7e";
@@ -358,7 +358,7 @@ class CryptoStreamTest {
     @Test
     void largeStreamOffsetIsAcceptedWhenMaximumMessageSizeIsNotExceeded() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 2828;
         String fakeExtensionType = "fa7e";
@@ -390,7 +390,7 @@ class CryptoStreamTest {
     @Test
     void clientHelloWithNormalSizeIsAccepted() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 1100;
         String fakeExtensionType = "fa7e";
@@ -414,7 +414,7 @@ class CryptoStreamTest {
 
     @Test
     void veryLargeCertificateMessageIsAccepted() throws Exception {
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
                 Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
 
         byte[] cm = new CertificateMessageBuilder()
@@ -439,7 +439,7 @@ class CryptoStreamTest {
     @Test
     void normalFinishedMessageIsAccepted() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
                 Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         byte[] normalFinishedMessage = new FinishedMessage(new byte[384 / 8]).getBytes();
 
