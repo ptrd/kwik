@@ -74,6 +74,7 @@ class CryptoStreamTest {
     private TlsMessageParser messageParser;
     private Sender sender;
 
+    //region test setup
     @BeforeEach
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
@@ -92,7 +93,9 @@ class CryptoStreamTest {
             return new MockTlsMessage(type, new String(stringBytes));
         });
     }
+    //endregion
 
+    //region parsing messages
     @Test
     void parseSingleMessageInSingleFrame() throws Exception {
         cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(13, "first crypto frame")));
@@ -213,7 +216,9 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("abcde"));
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("12345"));
     }
+    //endregion
 
+    //region writing to stream
     @Test
     void writingDataToStreamLeadsToCallingSenderWithSendFrameCallback() {
         // Given
@@ -302,7 +307,9 @@ class CryptoStreamTest {
 
         assertThat(dataReceived.array()).isEqualTo(dataToSend);
     }
+    //endregion
 
+    //region limit resource (memory) usage
     @Test
     void veryLargeClientHelloIsRefused() throws Exception {
         // Given
@@ -450,7 +457,9 @@ class CryptoStreamTest {
                 // Then
         ).doesNotThrowAnyException();
     }
+    //endregion
 
+    //region helper methods
     private List<byte[]> splitMessage(byte[] message, int maxFrameSize) {
         int numberOfFrames = (int) Math.ceil((double) message.length / maxFrameSize);
         return Arrays.stream(new int[numberOfFrames]).mapToObj(i -> {
@@ -536,5 +545,5 @@ class CryptoStreamTest {
             return new byte[0];
         }
     }
-
+    //endregion
 }
