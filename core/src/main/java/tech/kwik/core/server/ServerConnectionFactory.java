@@ -33,6 +33,7 @@ import tech.kwik.core.util.Bytes;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.function.Consumer;
 
 import static tech.kwik.core.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
@@ -67,9 +68,10 @@ public class ServerConnectionFactory {
 
     /**
      * Creates new server connection.
-     * @param version  quic version used
-     * @param clientAddress  the address of the client
-     * @param scid  the source connection id used by the client
+     *
+     * @param version       quic version used
+     * @param clientAddress the address of the client
+     * @param scid          the source connection id used by the client
      * @param originalDcid  the original destination id used by the client
      * @param cryptoStream  stream containing crypto data already received on encryption level Initial
      * @return
@@ -84,7 +86,7 @@ public class ServerConnectionFactory {
         return connection;
     }
 
-    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, ByteBuffer data, PacketMetaData metaData) {
-        return new ServerConnectionThread(connection, initialPacket, data, metaData);
+    public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, List<InitialPacket> initialPackets, ByteBuffer data, PacketMetaData metaData) {
+        return new ServerConnectionThread(connection, initialPackets, data, metaData);
     }
 }

@@ -403,8 +403,8 @@ class ServerConnectorImplTest {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
         when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any()))
                 .thenReturn(connection);
-        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(ByteBuffer.class), any(PacketMetaData.class)))
-                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), ((PacketMetaData) i.getArgument(3))));
+        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(List.class), any(ByteBuffer.class), any(PacketMetaData.class)))
+                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), (InitialPacket) ((List) i.getArgument(1)).get(0), ((PacketMetaData) i.getArgument(3))));
 
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
         return connectionFactory;

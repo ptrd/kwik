@@ -18,10 +18,15 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.handshake.ClientHello;
+import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
+import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.crypto.MissingKeysException;
 import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
@@ -36,6 +41,8 @@ import tech.kwik.core.util.Bytes;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -89,6 +96,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduledExecutor;
     private volatile boolean closed;
+    private final CryptoStream cryptoBuffer;
+    private final List<InitialPacket> bufferedInitialPackets = new ArrayList<>();
 
 
     public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
@@ -104,6 +113,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
         filterChain = new InitialPacketMinimumSizeFilter(log, this);
         registrationLock = new ReentrantLock();
+
+        cryptoBuffer = new CryptoStream(VersionHolder.with(quicVersion), EncryptionLevel.Initial, Role.Server, log);
+        cryptoBuffer.setBufferMode();
     }
 
     @Override
@@ -136,10 +148,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             int datagramNumber = metaData.datagramNumber();
             Instant timeReceived = metaData.timeReceived();
             InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
-            check(initialPacket);
-
             log.received(timeReceived, datagramNumber, initialPacket);
             log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+
+            check(initialPacket);
+            bufferedInitialPackets.add(initialPacket);
+            if (! checkClientHelloComplete(initialPacket)) {
+                return;
+            }
 
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
@@ -163,8 +179,34 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                     },
                     30, TimeUnit.SECONDS);
         }
-        catch (Exception error) {
-            log.error("error while parsing or processing initial packet", error);
+        catch (TlsProtocolException | TransportError invalidTlsMesssage) {
+            // Trying to start a connection with data that is not a valid ClientHello message, but be a delibrate action
+            log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
+        }
+    }
+
+    /**
+     * Check whether received (including buffered) crypto data already contains a complete ClientHello message.
+     * @param initialPacket
+     * @return
+     * @throws TlsProtocolException when the first message is not a ClientHello
+     */
+    private boolean checkClientHelloComplete(InitialPacket initialPacket) throws TlsProtocolException, TransportError {
+        for (QuicFrame frame: initialPacket.getFrames()) {
+            if (frame instanceof CryptoFrame) {
+                cryptoBuffer.add((CryptoFrame) frame);
+            }
+        }
+
+        if (cryptoBuffer.getBufferedMessagesCount() > 0) {
+            if (cryptoBuffer.getBufferedMessages().get(0) instanceof ClientHello) {
+                return true;
+            } else {
+                throw new TlsProtocolException("Unexpected message received: " + cryptoBuffer.getBufferedMessages().get(0));
+            }
+        }
+        else {
+            return false;
         }
     }
 
@@ -184,7 +226,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid, null);
 
                 // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
-                ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, datagramData, metaData);
+                ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, bufferedInitialPackets, datagramData, metaData);
                 int datagramSize = datagramData.limit();
                 connection.increaseAntiAmplificationLimit(datagramSize);
 

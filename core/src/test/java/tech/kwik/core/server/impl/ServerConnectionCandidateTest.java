@@ -24,6 +24,7 @@ import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.CryptoStream;
+import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
@@ -41,6 +42,7 @@ import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
+import tech.kwik.core.tls.ClientHelloBuilder;
 
 import java.io.InputStream;
 import java.net.DatagramSocket;
@@ -178,6 +180,59 @@ class ServerConnectionCandidateTest {
         assertThat(createdServerConnection).isNull();
     }
 
+    @Test
+    void firstInitialPacketWithoutCompleteClientHelloShouldNotCreateConnection() throws Exception {
+        // Given
+        byte[] firstHalfOfClientHello = new byte[1165];
+        ByteBuffer.wrap(firstHalfOfClientHello).putInt(0x010007d0); // 0x01 = handshake, 0x0007d0 = length (2000 bytes)
+        CryptoFrame firstCryptoFrame = new CryptoFrame(Version.getDefault(), firstHalfOfClientHello);
+        List<QuicFrame> frames = List.of(firstCryptoFrame);
+        byte[] scid = new byte[0];
+        byte[] odcid = new byte[8];
+        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
+        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        assertThat(data.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), null);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void whenClientHelloIsSplitOverTwoPacketsThenLastPacketShouldCreateConnection()  throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        int firstHalfLength = validClientHelloBytes.length / 2;
+
+        CryptoFrame frame1 = new CryptoFrame(Version.getDefault(), 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(Version.getDefault(), firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+
+        byte[] scid = new byte[0];
+        byte[] odcid = new byte[8];
+        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
+        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), null);
+        testExecutor.check();
+        assertThat(createdServerConnection).isNull();
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
+        assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), null);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNotNull();
+    }
+
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, odcid, null, frames);
         initialPacket.setPacketNumber(0);
@@ -213,9 +268,9 @@ class ServerConnectionCandidateTest {
         }
 
         @Override
-        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, InitialPacket initialPacket, ByteBuffer data, PacketMetaData metaData) {
+        public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, List<InitialPacket> initialPackets, ByteBuffer data, PacketMetaData metaData) {
             remainingDatagramData = data;
-            return new ServerConnectionThreadDummy(connection, initialPacket, metaData);
+            return new ServerConnectionThreadDummy(connection, initialPackets.get(0), metaData);
         }
 
         public ByteBuffer getRemainingDatagramData() {

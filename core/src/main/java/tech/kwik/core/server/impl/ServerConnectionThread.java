@@ -26,6 +26,7 @@ import tech.kwik.core.util.Bytes;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -39,14 +40,14 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final ServerConnectionImpl serverConnection;
     private final BlockingQueue<ReceivedDatagram> queue;
     private final Thread connectionReceiverThread;
-    private final InitialPacket firstInitialPacket;
+    private final List<InitialPacket> firstInitialPackets;
     private final ByteBuffer data;
     private final PacketMetaData firstInitialPacketMetaData;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, InitialPacket firstInitialPacket, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, List<InitialPacket> firstInitialPackets, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData) {
         this.serverConnection = serverConnection;
-        this.firstInitialPacket = firstInitialPacket;
+        this.firstInitialPackets = firstInitialPackets != null? firstInitialPackets: List.of();
         this.data = remainingDatagramData;
         this.firstInitialPacketMetaData = initialPacketMetaData;
 
@@ -83,9 +84,8 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     private void process() {
         try {
-            if (firstInitialPacket != null) {
-                serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
-            }
+            firstInitialPackets.forEach(firstInitialPacket ->
+                    serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData));
 
             DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
 
