@@ -83,4 +83,9 @@ public class InitialPacketFilterProxy implements ServerConnectionProxy {
     public void dispose() {
         connection.dispose();
     }
+
+    @Override
+    public String toString() {
+        return "InitialPacketFilterProxy[" + connection + "]";
+    }
 }

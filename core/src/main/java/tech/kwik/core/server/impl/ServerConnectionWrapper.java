@@ -62,4 +62,9 @@ public class ServerConnectionWrapper implements ServerConnectionProxy {
     public void dispose() {
         connection.dispose();
     }
+
+    @Override
+    public String toString() {
+        return connection.toString();
+    }
 }

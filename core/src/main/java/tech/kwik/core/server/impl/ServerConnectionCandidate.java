@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -92,6 +93,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     private final Logger log;
     private final DatagramFilter filterChain;
     private final ReentrantLock registrationLock;
+    private final ScheduledFuture<?> cleanupTask;
     private volatile ServerConnectionProxy registeredConnection;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduledExecutor;
@@ -116,6 +118,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
         cryptoBuffer = new CryptoStream(VersionHolder.with(quicVersion), EncryptionLevel.Initial, Role.Server, log);
         cryptoBuffer.setBufferMode();
+
+        // The cleanup delay should be longer then the maximum connect timeout clients (are likely to) use.
+        // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
+        cleanupTask = scheduledExecutor.schedule(this::removeFromConnectionRegistry, 30, TimeUnit.SECONDS);
     }
 
     @Override
@@ -160,28 +166,19 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
                 createAndRegisterServerConnection(initialPacket, metaData, data);
+                cleanupTask.cancel(true);
             }
         }
-        catch (InvalidPacketException | DecryptionException | IncompletePacketException unacceptablePacket) {
+        catch (InvalidPacketException | DecryptionException unacceptablePacket) {
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
             log.debug("Dropped invalid initial packet (no connection created)");
-            // But still the (now useless) candidate should be removed from the connection registry.
-            // To avoid race conditions with incoming duplicated first packets (possibly leading to scheduling
-            // a task for this candidate while it is not registered anymore), the removal of the candidate is
-            // delayed until connection setup is over.
-            // The delay should be longer then the maximum connection timeout clients (are likely to) use.
-            // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
-            scheduledExecutor.schedule(() -> {
-                        // But only if no connection is created in the meantime (which will do the cleanup)
-                        if (registeredConnection == null) {
-                            connectionRegistry.deregisterConnection(this, dcid);
-                        }
-                    },
-                    30, TimeUnit.SECONDS);
         }
-        catch (TlsProtocolException | TransportError invalidTlsMesssage) {
-            // Trying to start a connection with data that is not a valid ClientHello message, but be a delibrate action
+        catch (TlsProtocolException | TransportError | IncompletePacketException invalidTlsMesssage) {
+            // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
             log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
+            // Clean up faster
+            cleanupTask.cancel(true);
+            scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
         }
     }
 
@@ -309,6 +306,18 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             }
         }
         throw new InvalidPacketException();
+    }
+
+    private void removeFromConnectionRegistry() {
+        // If no connection is created in the meantime, remove the candidate from the registry.
+        registrationLock.lock();
+        try {
+            if (registeredConnection == null) {
+                connectionRegistry.deregisterConnection(this, dcid);
+            }
+        } finally {
+            registrationLock.unlock();
+        }
     }
 
     @Override

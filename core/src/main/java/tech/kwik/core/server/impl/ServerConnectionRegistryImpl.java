@@ -118,7 +118,9 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
      */
     void logConnectionTable() {
         log.info("Connection table: \n" +
-                currentConnections.entrySet().stream()
+                (currentConnections.isEmpty()?
+                        "    <none>":
+                        currentConnections.entrySet().stream()
                         .sorted(new Comparator<Map.Entry<ConnectionSource, ServerConnectionProxy>>() {
                             @Override
                             public int compare(Map.Entry<ConnectionSource, ServerConnectionProxy> o1, Map.Entry<ConnectionSource, ServerConnectionProxy> o2) {
@@ -126,8 +128,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
                             }
                         })
                         .map(e -> e.getKey() + "->" + e.getValue())
-                        .collect(Collectors.joining("\n")));
-
+                        .collect(Collectors.joining("\n"))));
     }
 
     @Override
