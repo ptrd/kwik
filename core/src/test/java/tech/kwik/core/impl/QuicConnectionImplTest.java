@@ -47,9 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 import static tech.kwik.core.ConnectionTerminatedEvent.CloseReason.IdleTimeout;
 import static tech.kwik.core.ConnectionTerminatedEvent.CloseReason.ImmediateClose;
-import static tech.kwik.core.common.EncryptionLevel.App;
-import static tech.kwik.core.common.EncryptionLevel.Handshake;
-import static tech.kwik.core.common.EncryptionLevel.Initial;
+import static tech.kwik.core.common.EncryptionLevel.*;
 
 class QuicConnectionImplTest {
 
@@ -71,6 +69,19 @@ class QuicConnectionImplTest {
         callbackExecutor = new TestScheduledExecutor(testClock);
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("callbackThread"), callbackExecutor);
     }
+
+    //region init
+    @Test
+    void cryptoStreamsLazilyAddedInAnyOrderShouldResultInConsistentState() {
+        // When
+        connection.getCryptoStream(ZeroRTT);
+        connection.getCryptoStream(Initial);
+
+        // Then
+        assertThat(connection.getCryptoStream(Initial).getEncryptionLevel()).isEqualTo(Initial);
+        assertThat(connection.getCryptoStream(ZeroRTT).getEncryptionLevel()).isEqualTo(ZeroRTT);
+    }
+    //endregion
 
     //region close
     @Test

@@ -18,17 +18,6 @@
  */
 package tech.kwik.core.crypto;
 
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.TransportError;
-import tech.kwik.core.impl.VersionHolder;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.send.Sender;
-import tech.kwik.core.stream.ReceiveBuffer;
-import tech.kwik.core.stream.ReceiveBufferImpl;
-import tech.kwik.core.tls.QuicTransportParametersExtension;
 import tech.kwik.agent15.ProtectionKeysType;
 import tech.kwik.agent15.TlsConstants;
 import tech.kwik.agent15.TlsProtocolException;
@@ -37,6 +26,17 @@ import tech.kwik.agent15.engine.TlsEngine;
 import tech.kwik.agent15.engine.TlsMessageParser;
 import tech.kwik.agent15.extension.Extension;
 import tech.kwik.agent15.handshake.HandshakeMessage;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.send.Sender;
+import tech.kwik.core.stream.ReceiveBuffer;
+import tech.kwik.core.stream.ReceiveBufferImpl;
+import tech.kwik.core.tls.QuicTransportParametersExtension;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -275,5 +275,9 @@ public class CryptoStream {
         dataToSendOffset = 0;
         sendStreamSize = 0;
         dataToSend.clear();
+    }
+
+    public EncryptionLevel getEncryptionLevel() {
+        return encryptionLevel;
     }
 }

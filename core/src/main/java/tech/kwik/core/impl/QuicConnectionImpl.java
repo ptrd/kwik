@@ -498,13 +498,14 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected CryptoStream getCryptoStream(EncryptionLevel encryptionLevel) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-19.6
-        // "There is a separate flow of cryptographic handshake data in each
-        //   encryption level"
-        if (cryptoStreams.size() <= encryptionLevel.ordinal()) {
-            for (int i = encryptionLevel.ordinal() - cryptoStreams.size(); i >= 0; i--) {
-                cryptoStreams.add(new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, role, getTlsEngine(), log, getSender()));
-            }
+        // Ensure the list is long enough to set the crypto stream at the correct index.
+        while (cryptoStreams.size() <= encryptionLevel.ordinal()) {
+            cryptoStreams.add(null);
+        }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.6
+        // "There is a separate flow of cryptographic handshake data in each encryption level"
+        if (cryptoStreams.get(encryptionLevel.ordinal()) == null) {
+            cryptoStreams.set(encryptionLevel.ordinal(), new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, role, getTlsEngine(), log, getSender()));
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
     }
