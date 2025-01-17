@@ -24,6 +24,7 @@ import tech.kwik.agent15.TlsProtocolException;
 import tech.kwik.agent15.alert.InternalErrorAlert;
 import tech.kwik.agent15.engine.TlsEngine;
 import tech.kwik.agent15.engine.TlsMessageParser;
+import tech.kwik.agent15.engine.TlsServerEngine;
 import tech.kwik.agent15.extension.Extension;
 import tech.kwik.agent15.handshake.*;
 import tech.kwik.core.common.EncryptionLevel;
@@ -34,6 +35,7 @@ import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.send.Sender;
+import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.ReceiveBuffer;
 import tech.kwik.core.stream.ReceiveBufferImpl;
 import tech.kwik.core.tls.QuicTransportParametersExtension;
@@ -58,9 +60,9 @@ public class CryptoStream {
     private final EncryptionLevel encryptionLevel;
     private final ProtectionKeysType tlsProtectionType;
     private final Role peerRole;
-    private final TlsEngine tlsEngine;
+    private volatile TlsEngine tlsEngine;
+    private volatile Sender sender;
     private final Logger log;
-    private final Sender sender;
     private final ReceiveBuffer receiveBuffer;
     private final List<HandshakeMessage> messagesReceived;
     private final List<HandshakeMessage> messagesSent;
@@ -95,6 +97,10 @@ public class CryptoStream {
         dataToSend = new ArrayList<>();
         maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
         receiveBuffer = new ReceiveBufferImpl();
+    }
+
+    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, Logger log) {
+        this(quicVersion, encryptionLevel, role, null, log, null);
     }
 
     public void add(CryptoFrame cryptoFrame) throws TlsProtocolException, TransportError {
@@ -168,6 +174,10 @@ public class CryptoStream {
         return bufferedMessages.size();
     }
 
+    public List<HandshakeMessage> getBufferedMessages() {
+        return bufferedMessages;
+    }
+
     /**
      * Process all buffered messages. Resets the stream to normal mode.
      * @throws TlsProtocolException
@@ -176,12 +186,12 @@ public class CryptoStream {
     public void processBufferedMessages() throws TlsProtocolException {
         buffering = false;
         try {
-        for (HandshakeMessage msg : bufferedMessages) {
-            sendTo(msg, tlsEngine);
-            messagesReceived.add(msg);
+            for (HandshakeMessage msg : bufferedMessages) {
+                sendTo(msg, tlsEngine);
+                messagesReceived.add(msg);
+            }
+            bufferedMessages.clear();
         }
-        bufferedMessages.clear();
-    }
         catch (IOException e) {
             // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
             throw new RuntimeException();
@@ -397,5 +407,13 @@ public class CryptoStream {
             public void received(CertificateRequestMessage certificateRequestMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
             }
         };
+    }
+
+    public void setTlsEngine(TlsServerEngine tlsEngine) {
+        this.tlsEngine = tlsEngine;
+    }
+
+    public void setSender(SenderImpl sender) {
+        this.sender = sender;
     }
 }

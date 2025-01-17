@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
+import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
@@ -205,8 +206,8 @@ class ServerConnectionCandidateTest {
         }
 
         @Override
-        public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid) {
-            ServerConnectionImpl newConnection = super.createNewConnection(version, clientAddress, originalScid, originalDcid);
+        public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid, CryptoStream cryptoStream) {
+            ServerConnectionImpl newConnection = super.createNewConnection(version, clientAddress, originalScid, originalDcid, cryptoStream);
             createdServerConnection = newConnection;
             return newConnection;
         }

@@ -18,6 +18,8 @@
  */
 package tech.kwik.core.server;
 
+import tech.kwik.agent15.engine.TlsServerEngineFactory;
+import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.InitialPacket;
@@ -27,7 +29,6 @@ import tech.kwik.core.server.impl.ServerConnectionImpl;
 import tech.kwik.core.server.impl.ServerConnectionProxy;
 import tech.kwik.core.server.impl.ServerConnectionThread;
 import tech.kwik.core.util.Bytes;
-import tech.kwik.agent15.engine.TlsServerEngineFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -70,10 +71,11 @@ public class ServerConnectionFactory {
      * @param clientAddress  the address of the client
      * @param scid  the source connection id used by the client
      * @param originalDcid  the original destination id used by the client
+     * @param cryptoStream  stream containing crypto data already received on encryption level Initial
      * @return
      */
-    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
-        ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid,
+    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid, CryptoStream cryptoStream) {
+        ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, cryptoStream,
                 tlsServerEngineFactory, configuration, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
 
         log.info("Creating new connection with version " + version + " for odcid " + Bytes.bytesToHex(originalDcid)

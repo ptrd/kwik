@@ -181,7 +181,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         registrationLock.lock();
         try {
             if (!closed) {
-                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
+                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid, null);
 
                 // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
                 ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, datagramData, metaData);
