@@ -113,7 +113,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         this.connectionRegistry = connectionRegistry;
         this.log = log;
 
-        filterChain = new InitialPacketMinimumSizeFilter(log, this);
+        filterChain =
+                new ClientAddressFilter(clientAddress, log,
+                        new InitialPacketMinimumSizeFilter(log, this));
         registrationLock = new ReentrantLock();
 
         cryptoBuffer = new CryptoStream(VersionHolder.with(quicVersion), EncryptionLevel.Initial, Role.Server, log);
@@ -244,12 +246,12 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
         // The wrapper takes care of propagating other (non-filter) methods to the connection proxy.
         return new ServerConnectionWrapper(connection, log,
-                        // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
-                        new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
-                                new ClientAddressFilter(clientAddress, log,
-                                        new InitialPacketMinimumSizeFilter(log,
-                                                new DatagramPostProcessingFilter(postProcessingFunction, log,
-                                                        adapter)))));
+                // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
+                new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
+                        new ClientAddressFilter(clientAddress, log,
+                                new InitialPacketMinimumSizeFilter(log,
+                                        new DatagramPostProcessingFilter(postProcessingFunction, log,
+                                                adapter)))));
     }
 
     @Override

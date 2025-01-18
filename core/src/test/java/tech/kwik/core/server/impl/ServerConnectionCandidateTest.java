@@ -92,7 +92,7 @@ class ServerConnectionCandidateTest {
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), address);
         testExecutor.check();
 
         // Then
@@ -111,7 +111,7 @@ class ServerConnectionCandidateTest {
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), address);
         testExecutor.check();
 
         // Then
@@ -132,7 +132,7 @@ class ServerConnectionCandidateTest {
         ByteBuffer datagramBytes = ByteBuffer.allocate(1200);
         datagramBytes.put(initialPacketBytes);
         datagramBytes.rewind();
-        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes, null);
+        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes, address);
         testExecutor.check();
 
         // Then
@@ -152,7 +152,7 @@ class ServerConnectionCandidateTest {
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), address);
         testExecutor.check();
 
         // Then
@@ -173,7 +173,7 @@ class ServerConnectionCandidateTest {
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), address);
         testExecutor.check();
 
         // Then
@@ -196,7 +196,7 @@ class ServerConnectionCandidateTest {
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
         assertThat(data.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), address);
         testExecutor.check();
 
         // Then
@@ -221,16 +221,47 @@ class ServerConnectionCandidateTest {
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
         assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), address);
         testExecutor.check();
         assertThat(createdServerConnection).isNull();
         byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
         assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), null);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), address);
         testExecutor.check();
 
         // Then
         assertThat(createdServerConnection).isNotNull();
+    }
+
+    @Test
+    void whenInitialPacketsHaveDifferentSourceAddressAllButTheFirstShouldBeIgnored()  throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        int firstHalfLength = validClientHelloBytes.length / 2;
+
+        CryptoFrame frame1 = new CryptoFrame(Version.getDefault(), 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(Version.getDefault(), firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+
+        byte[] scid = new byte[0];
+        byte[] odcid = new byte[8];
+        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
+        InetSocketAddress address1 = new InetSocketAddress("localhost", 55333);
+        InetSocketAddress address2 = new InetSocketAddress("localhost", 41975);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address1, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), address1);
+        testExecutor.check();
+        assertThat(createdServerConnection).isNull();
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
+        assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), address2);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
     }
 
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
