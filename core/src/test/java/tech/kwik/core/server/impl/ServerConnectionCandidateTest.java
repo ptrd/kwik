@@ -65,6 +65,11 @@ class ServerConnectionCandidateTest {
     private ServerConnectionFactory serverConnectionFactory;
     private Context context;
     private TestScheduledExecutor testExecutor;
+    private ServerConnectionRegistry connectionRegistry;
+    private InetSocketAddress clientAddress;
+    private byte[] scid;
+    private byte[] odcid;
+    private Version version = Version.getDefault();
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -79,20 +84,21 @@ class ServerConnectionCandidateTest {
         testExecutor = new TestScheduledExecutor(clock);
         when(context.getSharedServerExecutor()).thenReturn(testExecutor);
         when(context.getSharedScheduledExecutor()).thenReturn(testExecutor);
+        connectionRegistry = mock(ServerConnectionRegistry.class);
+        clientAddress = new InetSocketAddress("localhost", 55333);
+        scid = new byte[0];
+        odcid = new byte[8];
     }
 
     @Test
     void firstInitialPacketShouldSetAntiAmplificationLimit() throws Exception {
         // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitial(Version.getDefault());
-        byte[] scid = new byte[0];
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        byte[] initialPacketBytes = TestUtils.createValidInitial(version);
+        odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), clientAddress);
         testExecutor.check();
 
         // Then
@@ -103,15 +109,12 @@ class ServerConnectionCandidateTest {
 
     @Test
     void firstInitialCarriedInSmallDatagramShouldBeDiscarded() throws Exception {
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] scid = new byte[0];
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
+        odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), clientAddress);
         testExecutor.check();
 
         // Then
@@ -121,18 +124,15 @@ class ServerConnectionCandidateTest {
 
     @Test
     void firstInitialWithPaddingInDatagramShouldCreateConnection() throws Exception {
-        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(Version.getDefault());
-        byte[] scid = new byte[0];
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
+        odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         ByteBuffer datagramBytes = ByteBuffer.allocate(1200);
         datagramBytes.put(initialPacketBytes);
         datagramBytes.rewind();
-        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes, address);
+        connectionCandidate.parsePackets(0, Instant.now(), datagramBytes, clientAddress);
         testExecutor.check();
 
         // Then
@@ -142,17 +142,14 @@ class ServerConnectionCandidateTest {
     @Test
     void whenDatagramContainsCoalescedPacketsConnectionProxyShouldReceivedRemainingData() throws Exception {
         // Given
-        byte[] initialPacketBytes = TestUtils.createValidInitial(Version.getDefault());
-        byte[] scid = new byte[0];
-        byte[] odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        byte[] initialPacketBytes = TestUtils.createValidInitial(version);
+        odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         byte[] datagramData = new byte[1500];  // Simulating a second 300-byte packet in the same datagram.
         System.arraycopy(initialPacketBytes, 0, datagramData, 0, initialPacketBytes.length);
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), clientAddress);
         testExecutor.check();
 
         // Then
@@ -164,16 +161,12 @@ class ServerConnectionCandidateTest {
     @Test
     void firstInitialPacketWithoutCryptoFrameShouldNotCreateConnection() throws Exception {
         // Given
-        byte[] scid = new byte[0];
-        byte[] odcid = new byte[8];
         List<QuicFrame> frames = List.of(new PingFrame(), new Padding(1164));
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
         testExecutor.check();
 
         // Then
@@ -185,18 +178,14 @@ class ServerConnectionCandidateTest {
         // Given
         byte[] firstHalfOfClientHello = new byte[1165];
         ByteBuffer.wrap(firstHalfOfClientHello).putInt(0x010007d0); // 0x01 = handshake, 0x0007d0 = length (2000 bytes)
-        CryptoFrame firstCryptoFrame = new CryptoFrame(Version.getDefault(), firstHalfOfClientHello);
+        CryptoFrame firstCryptoFrame = new CryptoFrame(version, firstHalfOfClientHello);
         List<QuicFrame> frames = List.of(firstCryptoFrame);
-        byte[] scid = new byte[0];
-        byte[] odcid = new byte[8];
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
         assertThat(data.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
         testExecutor.check();
 
         // Then
@@ -209,24 +198,20 @@ class ServerConnectionCandidateTest {
         byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
         int firstHalfLength = validClientHelloBytes.length / 2;
 
-        CryptoFrame frame1 = new CryptoFrame(Version.getDefault(), 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
-        CryptoFrame frame2 = new CryptoFrame(Version.getDefault(), firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
 
-        byte[] scid = new byte[0];
-        byte[] odcid = new byte[8];
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
-        InetSocketAddress address = new InetSocketAddress("localhost", 55333);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
         assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
         testExecutor.check();
         assertThat(createdServerConnection).isNull();
         byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
         assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
-        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), address);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
         testExecutor.check();
 
         // Then
@@ -239,15 +224,12 @@ class ServerConnectionCandidateTest {
         byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
         int firstHalfLength = validClientHelloBytes.length / 2;
 
-        CryptoFrame frame1 = new CryptoFrame(Version.getDefault(), 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
-        CryptoFrame frame2 = new CryptoFrame(Version.getDefault(), firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
 
-        byte[] scid = new byte[0];
-        byte[] odcid = new byte[8];
-        ServerConnectionRegistry connectionRegistry = mock(ServerConnectionRegistry.class);
         InetSocketAddress address1 = new InetSocketAddress("localhost", 55333);
         InetSocketAddress address2 = new InetSocketAddress("localhost", 41975);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, Version.getDefault(), address1, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, address1, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
@@ -265,9 +247,9 @@ class ServerConnectionCandidateTest {
     }
 
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), scid, odcid, null, frames);
+        InitialPacket initialPacket = new InitialPacket(version, scid, odcid, null, frames);
         initialPacket.setPacketNumber(0);
-        ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(Version.getDefault()), Role.Client, null, mock(Logger.class));
+        ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(version), Role.Client, null, mock(Logger.class));
         secrets.computeInitialKeys(odcid);
         return initialPacket.generatePacketBytes(secrets.getOwnAead(EncryptionLevel.Initial));
     }
