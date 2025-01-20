@@ -18,19 +18,19 @@
  */
 package tech.kwik.cli;
 
+import org.apache.commons.cli.*;
+import tech.kwik.agent15.TlsConstants;
 import tech.kwik.core.KwikVersion;
 import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicSessionTicket;
-import tech.kwik.h09.client.Http09Client;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.impl.QuicSessionTicketImpl;
 import tech.kwik.core.impl.VersionNegotiationFailure;
 import tech.kwik.core.log.FileLogger;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
-import tech.kwik.agent15.TlsConstants;
-import org.apache.commons.cli.*;
+import tech.kwik.h09.client.Http09Client;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -614,7 +614,7 @@ public class KwikCli {
 
     private static boolean loadHttp3ClientClass() {
         try {
-            KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+            getHttp3ClientClass();
             return true;
         }
         catch (ClassNotFoundException e) {
@@ -625,7 +625,7 @@ public class KwikCli {
     static HttpClient createHttpClient(HttpVersion httpVersion, QuicClientConnection quicConnection, boolean useZeroRtt) {
         if (httpVersion == HttpVersion.HTTP3) {
             try {
-                Class http3ClientClass = KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+                Class http3ClientClass = getHttp3ClientClass();
                 Constructor constructor = http3ClientClass.getConstructor(QuicConnection.class, Duration.class, Long.class);
                 // Connection timeout and receive buffer size are not used when client is using an existing quic connection
 
@@ -641,6 +641,17 @@ public class KwikCli {
         else {
             return new Http09Client(quicConnection, useZeroRtt);
         }
+    }
+
+    private static Class getHttp3ClientClass() throws ClassNotFoundException {
+        Class http3ClientClass;
+        try {
+            http3ClientClass = KwikCli.class.getClassLoader().loadClass("net.luminis.http3.Http3SingleConnectionClient");
+        }
+        catch (ClassNotFoundException e) {
+            http3ClientClass = KwikCli.class.getClassLoader().loadClass("tech.kwik.flupke.Http3SingleConnectionClient");
+        }
+        return http3ClientClass;
     }
 
     private static PrivateKey readKey(String clientKey) throws IOException, InvalidKeySpecException {

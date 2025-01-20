@@ -18,6 +18,11 @@
  */
 package tech.kwik.interop;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import tech.kwik.core.KwikVersion;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.log.FileLogger;
@@ -28,11 +33,6 @@ import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnector;
 import tech.kwik.h09.server.Http09ApplicationProtocolFactory;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -154,11 +154,14 @@ public class InteropServer {
 
         try {
             // If flupke server plugin is on classpath, load the http3 connection factory class.
-            Class<?> http3FactoryClass = InteropServer.class.getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
-            http3ApplicationProtocolConnectionFactory = (ApplicationProtocolConnectionFactory)
-                    http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
+            http3ApplicationProtocolConnectionFactory = http3FlupkeOld(wwwDir);
+            if (http3ApplicationProtocolConnectionFactory == null) {
+                http3ApplicationProtocolConnectionFactory = http3FlupkeNew(wwwDir);
+            }
             log.info("Loading Flupke H3 server plugin");
-        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        }
+        catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            log.info("No Flupke H3 server plugin." + e.getMessage());
         }
 
         Http09ApplicationProtocolFactory http09ApplicationProtocolFactory = new Http09ApplicationProtocolFactory(wwwDir);
@@ -171,5 +174,23 @@ public class InteropServer {
             String h3Protocol = protocol.replace("hq-interop", "h3");
             serverConnector.registerApplicationProtocol(h3Protocol, http3ApplicationProtocolFactory);
         }
+    }
+
+    private static ApplicationProtocolConnectionFactory http3FlupkeOld(File wwwDir) {
+        try {
+            Class<?> http3FactoryClass = InteropServer.class.getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
+            return (ApplicationProtocolConnectionFactory)
+                    http3FactoryClass.getDeclaredConstructor(new Class[]{File.class}).newInstance(wwwDir);
+        }
+        catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            System.out.println("Old Flupke plugin not found");
+            return null;
+        }
+    }
+
+    private static ApplicationProtocolConnectionFactory http3FlupkeNew(File wwwDir) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Class<?> http3FactoryClass = InteropServer.class.getClassLoader().loadClass("tech.kwik.flupke.sample.kwik.Http3SimpleFileServerApplicationProtocolConnectionFactory");
+        return (ApplicationProtocolConnectionFactory)
+                http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
     }
 }

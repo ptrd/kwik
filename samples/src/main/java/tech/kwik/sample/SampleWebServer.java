@@ -159,9 +159,10 @@ public class SampleWebServer {
 
         try {
             // If flupke server plugin is on classpath, load the http3 connection factory class.
-            Class<?> http3FactoryClass = SampleWebServer.class.getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
-            http3ApplicationProtocolConnectionFactory = (ApplicationProtocolConnectionFactory)
-                    http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
+            http3ApplicationProtocolConnectionFactory = http3FlupkeOld(wwwDir);
+            if (http3ApplicationProtocolConnectionFactory == null) {
+                http3ApplicationProtocolConnectionFactory = http3FlupkeNew(wwwDir);
+            }
             log.info("Loading Flupke H3 server plugin");
 
             serverConnector.registerApplicationProtocol("h3", http3ApplicationProtocolConnectionFactory);
@@ -170,5 +171,23 @@ public class SampleWebServer {
             log.error("No H3 protocol: Flupke plugin not found.");
             System.exit(1);
         }
+    }
+
+    private static ApplicationProtocolConnectionFactory http3FlupkeOld(File wwwDir) {
+        try {
+            Class<?> http3FactoryClass = SampleWebServer.class.getClassLoader().loadClass("net.luminis.http3.server.Http3ApplicationProtocolFactory");
+            return (ApplicationProtocolConnectionFactory)
+                    http3FactoryClass.getDeclaredConstructor(new Class[]{File.class}).newInstance(wwwDir);
+        }
+        catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            System.out.println("Old Flupke plugin not found");
+            return null;
+        }
+    }
+
+    private static ApplicationProtocolConnectionFactory http3FlupkeNew(File wwwDir) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Class<?> http3FactoryClass = SampleWebServer.class.getClassLoader().loadClass("tech.kwik.flupke.sample.kwik.Http3SimpleFileServerApplicationProtocolConnectionFactory");
+        return (ApplicationProtocolConnectionFactory)
+                http3FactoryClass.getDeclaredConstructor(new Class[]{ File.class }).newInstance(wwwDir);
     }
 }
