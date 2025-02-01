@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
@@ -365,9 +366,9 @@ abstract public class QuicPacket {
                             frames.add(new StreamFrame().parse(buffer, log));
                         }
                         else {
-                            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
+                            // https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4
                             // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
-                            throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
+                            throw new ProtocolError("connection error FRAME_ENCODING_ERROR", new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR));
                         }
                 }
             }

@@ -386,7 +386,9 @@ class QuicClientConnectionImplTest {
 
         verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class));
     }
+    //endregion
 
+    //region connection id
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
@@ -401,9 +403,7 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
         verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
-    //endregion
 
-    //region connection id
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
@@ -710,6 +710,7 @@ class QuicClientConnectionImplTest {
         assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
     }
     //endregion
+
     //region helper methods
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();

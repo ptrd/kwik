@@ -587,6 +587,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 
+    /**
+     * Trivial (do nothing else) override to make method accessible in this package.
+     * @param cause
+     */
+    @Override
+    protected void connectionError(TransportError cause) {
+        super.connectionError(cause);
+    }
+
     @Override
     protected void terminate() {
         super.terminate(() -> {

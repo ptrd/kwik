@@ -648,6 +648,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    /**
+     * Handle connection error that did not occur during processing of a received packet.
+     * @param cause
+     */
+    protected void connectionError(TransportError cause) {
+        immediateCloseWithError(cause.getTransportErrorCode().value, cause.getMessage());
+        getSender().flush();
+        runPostProcessingActions();
+    }
+
     protected void handlePacketInClosingState(QuicPacket packet) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
         // "An endpoint MAY enter the draining state from the closing state if it receives a CONNECTION_CLOSE frame,

@@ -18,6 +18,9 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.core.QuicConstants;
+import tech.kwik.core.impl.ProtocolError;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.util.Bytes;
@@ -106,8 +109,16 @@ public class ServerConnectionThread implements ServerConnectionProxy {
                 datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
+        catch (ProtocolError error) {
+            if (error.getCause() instanceof TransportError) {
+                serverConnection.connectionError((TransportError) error.getCause());
+            }
+            else {
+                serverConnection.connectionError(new TransportError(QuicConstants.TransportErrorCode.INTERNAL_ERROR));
+            }
+        }
         catch (InterruptedException e) {
-            // Terminate process and thread, see terminate() method
+            // Terminate process and thread, see dispose() method
         }
         catch (Throwable error) {
             // Of course, this should never happen. But if it does, there is no point in going on with this connection.
