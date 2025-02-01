@@ -18,8 +18,10 @@
  */
 package tech.kwik.cli;
 
+import tech.kwik.agent15.util.ByteUtils;
 import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.cid.ConnectionIdStatus;
+import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.receive.Receiver;
@@ -35,6 +37,7 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -94,6 +97,7 @@ public class InteractiveShell {
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
+        commands.put("raw", this::sendRaw);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
         commands.put("quack", this::quack);
@@ -428,6 +432,47 @@ public class InteractiveShell {
     private void printStatistics(String arg) {
         if (quicConnection != null) {
             System.out.println(quicConnection.getStats());
+        }
+    }
+
+    private void sendRaw(String arguments) {
+        arguments += " ";
+        String firstArg = arguments.substring(0, arguments.indexOf(" ")).toLowerCase();
+        if (! firstArg.equals("frame")) {
+            System.err.println("Command syntax: raw frame <data>, where <data> is a mix of hex bytes and 'varint <decimal number>'");
+            System.err.println("For example: \"raw frame 0e 0000 varint 4 cafebabe\" sends a stream frame with stream id 0, offset 0, length 4 and data cafebabe");
+            return;
+        }
+
+        ByteBuffer rawData = ByteBuffer.allocate(2000);
+        String restArguments = arguments.substring(arguments.indexOf(" ")).trim();
+        convertRawArgsToBytes(restArguments, rawData);
+        rawData.limit(rawData.position());
+        rawData.rewind();
+        byte[] rawDataBytes = new byte[rawData.limit()];
+        rawData.get(rawDataBytes);
+        RawFrame rawFrame = new RawFrame(rawDataBytes);
+        quicConnection.send(rawFrame, f -> {}, true);
+    }
+
+    private void convertRawArgsToBytes(String argumentLine, ByteBuffer buffer) {
+        String[] args = argumentLine.split(" ");
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("varint")) {
+                if (i + 1 < args.length) {
+                    String integer = args[i+1];
+                    i += 1;
+                    if (integer.matches("\\d+")) {
+                        VariableLengthInteger.encode(Integer.parseInt(integer), buffer);
+                    }
+                    else {
+                        System.err.println("varint argument must be a (decimal) integer");
+                    }
+                }
+            }
+            else {
+                buffer.put(ByteUtils.hexToBytes(args[i]));
+            }
         }
     }
 
