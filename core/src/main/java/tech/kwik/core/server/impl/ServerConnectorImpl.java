@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.crypto.Aead;
@@ -39,7 +40,6 @@ import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionFactory;
 import tech.kwik.core.server.ServerConnector;
 import tech.kwik.core.util.Bytes;
-import tech.kwik.agent15.engine.TlsServerEngineFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -350,13 +350,13 @@ public class ServerConnectorImpl implements ServerConnector {
 
     private void processInitial(InetSocketAddress clientAddress, ByteBuffer data, int version, byte[] dcid, byte[] scid) {
         if (acceptingNewConnections) {
-        ServerConnectionProxy connection;
-        // Check-and-create often requires a lock to avoid race conditions, but in this case this is not necessary
-        // because this method is only called from one thread (see receiveLoop)
-        connection = connectionRegistry.isExistingConnection(clientAddress, dcid)
-                .orElseGet(() -> createNewConnection(version, clientAddress, scid, dcid));
-        connection.parsePackets(0, Instant.now(), data, clientAddress);
-    }
+            ServerConnectionProxy connection;
+            // Check-and-create often requires a lock to avoid race conditions, but in this case this is not necessary
+            // because this method is only called from one thread (see receiveLoop)
+            connection = connectionRegistry.isExistingConnection(clientAddress, dcid)
+                    .orElseGet(() -> createNewConnection(version, clientAddress, scid, dcid));
+            connection.parsePackets(0, Instant.now(), data, clientAddress);
+        }
         else {
             log.warn("Server not accepting new connections");
             sendConnectionRefused(version, dcid, scid, clientAddress);
