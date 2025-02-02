@@ -100,6 +100,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     private volatile boolean closed;
     private final CryptoStream cryptoBuffer;
     private final List<InitialPacket> bufferedInitialPackets = new ArrayList<>();
+    private int bufferedDatagramDataSize;
 
 
     public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
@@ -161,13 +162,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
             check(initialPacket);
             bufferedInitialPackets.add(initialPacket);
+            bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
                 return;
             }
 
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
-                createAndRegisterServerConnection(initialPacket, metaData, data);
+                createAndRegisterServerConnection(initialPacket, metaData, data, bufferedDatagramDataSize);
                 cleanupTask.cancel(true);
             }
         }
@@ -215,7 +217,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
     }
 
-    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData) {
+    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData, int receivedDataSize) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
 
@@ -226,8 +228,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
                 // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
                 ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, bufferedInitialPackets, datagramData, metaData);
-                int datagramSize = datagramData.limit();
-                connection.increaseAntiAmplificationLimit(datagramSize);
+                connection.increaseAntiAmplificationLimit(receivedDataSize);
 
                 ServerConnectionProxy wrappedConnection = wrapWithFilters(connectionProxy, connection::increaseAntiAmplificationLimit, connection::datagramProcessed);
 

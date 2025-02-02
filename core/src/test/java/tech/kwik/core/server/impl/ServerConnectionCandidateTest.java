@@ -108,6 +108,25 @@ class ServerConnectionCandidateTest {
     }
 
     @Test
+    void whenClientHelloIsSplitOverMultiplePacketsAllShouldContributeToAntiAmplificationLimit() throws Exception {
+        // Given
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
+        testExecutor.check();
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
+        testExecutor.check();
+
+        // Then
+        Integer antiAmplificationLimit = (Integer) new FieldReader(createdServerConnection.getSender(), SenderImpl.class.getDeclaredField("antiAmplificationLimit")).read();
+        assertThat(antiAmplificationLimit).isGreaterThan(3 * 2 * 1200);
+    }
+
+    @Test
     void firstInitialCarriedInSmallDatagramShouldBeDiscarded() throws Exception {
         byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
