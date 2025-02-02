@@ -354,8 +354,11 @@ class ServerConnectionCandidateTest {
     }
 
     private CryptoFrame[] createSplitClientHelloCryptoFrames() {
-        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
-        int firstHalfLength = validClientHelloBytes.length / 2;
+        int extensionLength = 1125;  // without this extension, the client hello would be around 175 bytes
+        String fakeExtensionType = "fa7e";
+        String veryLargeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
+        byte[] validClientHelloBytes = new ClientHelloBuilder().withExtension(veryLargeExtension).buildBinary();
+        int firstHalfLength = 1100;
         CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
         CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
         return new CryptoFrame[] {frame1, frame2};
