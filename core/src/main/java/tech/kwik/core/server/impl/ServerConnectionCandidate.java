@@ -103,6 +103,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     private final CryptoStream cryptoBuffer;
     private final List<InitialPacket> bufferedInitialPackets = new ArrayList<>();
     private int bufferedDatagramDataSize;
+    private volatile boolean inError;
 
 
     public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
@@ -136,6 +137,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
+        if (inError) {
+            return;
+        }
         // Execute packet parsing on separate thread, to make this method return a.s.a.p.
         executor.submit(() -> {
             // Serialize processing (per connection candidate): duplicate initial packets might arrive faster than they are processed.
@@ -182,6 +186,12 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         catch (TlsProtocolException | TransportError | IncompletePacketException invalidTlsMesssage) {
             // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
             log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
+            // Further processing is not necessary and unwanted, as these errors can not occur accidentally.
+            // This seems to create an attack vector for on-path attackers when the Client Hello does not fit in one
+            // initial packet (if the attacker is able to send a second packet that arrives before the second packet
+            // from the original sender), but such an attack would be possible anyway (by injecting some data in the
+            // crypto stream). So, switching to error state doesn't make it worse.
+            inError = true;
             // Clean up faster
             cleanupTask.cancel(true);
             scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
