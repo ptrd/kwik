@@ -287,6 +287,27 @@ class ServerConnectionCandidateTest {
     }
 
     @Test
+    void whenClientHelloIsSplitOverTwoPacketsWithSmallCryptoFramesThenNoConnectionShouldBeCreated()  throws Exception {
+        // Given
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames(650);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
+        assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
+        testExecutor.check();
+        assertThat(createdServerConnection).isNull();
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
+        assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
     void whenClientHelloIsSplitOverMultiplePacketsConnectionProxyShouldReceiveCoalescedPacketsInLastDatagram() throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
@@ -354,11 +375,15 @@ class ServerConnectionCandidateTest {
     }
 
     private CryptoFrame[] createSplitClientHelloCryptoFrames() {
+        return createSplitClientHelloCryptoFrames(1100);
+    }
+
+    private CryptoFrame[] createSplitClientHelloCryptoFrames(int firstCryptoLength) {
         int extensionLength = 1125;  // without this extension, the client hello would be around 175 bytes
         String fakeExtensionType = "fa7e";
         String veryLargeExtension = fakeExtensionType + String.format("%04x", extensionLength) + "00".repeat(extensionLength);
         byte[] validClientHelloBytes = new ClientHelloBuilder().withExtension(veryLargeExtension).buildBinary();
-        int firstHalfLength = 1100;
+        int firstHalfLength = firstCryptoLength;
         CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
         CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
         return new CryptoFrame[] {frame1, frame2};

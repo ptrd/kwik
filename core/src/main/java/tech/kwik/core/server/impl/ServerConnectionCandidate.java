@@ -87,6 +87,9 @@ import java.util.function.Consumer;
  */
 public class ServerConnectionCandidate implements ServerConnectionProxy, DatagramFilter {
 
+    // Minimum length for initial crypto frames, except for the last one (which of course is allowed to be shorter)
+    public static final int MINIMUM_NON_FINAL_CRYPTO_LENGTH = 1000;
+
     private final Version quicVersion;
     private final InetSocketAddress clientAddress;
     private final byte[] dcid;
@@ -170,6 +173,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             bufferedInitialPackets.add(initialPacket);
             bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
+                if (initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
+                    throw new UnacceptablePacketException();
+                }
                 return;
             }
 
@@ -183,7 +189,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
             log.debug("Dropped invalid initial packet (no connection created)");
         }
-        catch (TlsProtocolException | TransportError | IncompletePacketException invalidTlsMesssage) {
+        catch (TlsProtocolException | TransportError | UnacceptablePacketException invalidTlsMesssage) {
             // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
             log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
             // Further processing is not necessary and unwanted, as these errors can not occur accidentally.
@@ -227,9 +233,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
      * Check whether an initial packet makes sense as a first flight, to avoid building up state for malicious
      * connection creation attempts.
      * @param initialPacket
-     * @throws IncompletePacketException
+     * @throws UnacceptablePacketException
      */
-    private void checkGenuineFirstFlight(InitialPacket initialPacket) throws IncompletePacketException {
+    private void checkGenuineFirstFlight(InitialPacket initialPacket) throws UnacceptablePacketException {
         List<QuicFrame> frames = initialPacket.getFrames();
         // According to https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4, initial packets may contain: PADDING,
         // PING, ACK, CRYPTO, CONNECTION_CLOSE. However, in the first flight, ACK and CONNECTION_CLOSE do not make sense,
@@ -237,7 +243,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         boolean acceptableFrames = (frames.stream().allMatch(f -> f instanceof CryptoFrame || f instanceof PingFrame || f instanceof Padding));
         int nrOfPingFrames = (int) frames.stream().filter(f -> f instanceof PingFrame).count();
         if (!acceptableFrames || nrOfPingFrames > 1) {
-            throw new IncompletePacketException();
+            throw new UnacceptablePacketException();
         }
     }
 
