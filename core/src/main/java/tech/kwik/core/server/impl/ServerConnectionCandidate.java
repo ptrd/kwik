@@ -26,6 +26,8 @@ import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.crypto.MissingKeysException;
 import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.Padding;
+import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
@@ -160,7 +162,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             log.received(timeReceived, datagramNumber, initialPacket);
             log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
 
-            check(initialPacket);
+            checkGenuineFirstFlight(initialPacket);
             bufferedInitialPackets.add(initialPacket);
             bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
@@ -211,8 +213,20 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
     }
 
-    private void check(InitialPacket initialPacket) throws IncompletePacketException {
-        if (initialPacket.getFrames().stream().noneMatch(frame -> frame instanceof CryptoFrame)) {
+    /**
+     * Check whether an initial packet makes sense as a first flight, to avoid building up state for malicious
+     * connection creation attempts.
+     * @param initialPacket
+     * @throws IncompletePacketException
+     */
+    private void checkGenuineFirstFlight(InitialPacket initialPacket) throws IncompletePacketException {
+        List<QuicFrame> frames = initialPacket.getFrames();
+        // According to https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4, initial packets may contain: PADDING,
+        // PING, ACK, CRYPTO, CONNECTION_CLOSE. However, in the first flight, ACK and CONNECTION_CLOSE do not make sense,
+        // neither do multiple PING frames (even one doesn't make much sense, but won't harm).
+        boolean acceptableFrames = (frames.stream().allMatch(f -> f instanceof CryptoFrame || f instanceof PingFrame || f instanceof Padding));
+        int nrOfPingFrames = (int) frames.stream().filter(f -> f instanceof PingFrame).count();
+        if (!acceptableFrames || nrOfPingFrames > 1) {
             throw new IncompletePacketException();
         }
     }

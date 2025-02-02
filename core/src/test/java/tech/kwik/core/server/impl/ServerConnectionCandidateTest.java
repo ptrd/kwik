@@ -24,10 +24,7 @@ import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.CryptoStream;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.Padding;
-import tech.kwik.core.frame.PingFrame;
-import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TestUtils;
 import tech.kwik.core.impl.Version;
@@ -185,6 +182,63 @@ class ServerConnectionCandidateTest {
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void firstInitialPacketWithCryptoAndAckFrameShouldNotCreateConnection() throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
+        AckFrame ackFrame = new AckFrame(0);
+        List<QuicFrame> frames = List.of(firstCryptoFrame, ackFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - ackFrame.getFrameLength()));
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        assertThat(data.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void firstInitialPacketWithCryptoAndConnectionCloseFrameShouldNotCreateConnection() throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
+        ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault());
+        List<QuicFrame> frames = List.of(firstCryptoFrame, ccFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - ccFrame.getFrameLength()));
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        assertThat(data.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void firstInitialPacketWithCryptoAndPathChallengeFrameShouldNotCreateConnection() throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
+        PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(Version.getDefault(), new byte[8]);
+        List<QuicFrame> frames = List.of(firstCryptoFrame, pathChallengeFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - pathChallengeFrame.getFrameLength()));
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte data[] = createInitialPacketBytes(scid, odcid, frames);
+        assertThat(data.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(data), clientAddress);
         testExecutor.check();
 
