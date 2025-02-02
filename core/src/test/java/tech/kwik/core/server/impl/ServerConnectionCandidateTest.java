@@ -195,21 +195,16 @@ class ServerConnectionCandidateTest {
     @Test
     void whenClientHelloIsSplitOverTwoPacketsThenLastPacketShouldCreateConnection()  throws Exception {
         // Given
-        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
-        int firstHalfLength = validClientHelloBytes.length / 2;
-
-        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
-        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
-
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
         assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
         testExecutor.check();
         assertThat(createdServerConnection).isNull();
-        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
         assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
         testExecutor.check();
@@ -221,22 +216,18 @@ class ServerConnectionCandidateTest {
     @Test
     void whenClientHelloIsSplitOverMultiplePacketsConnectionProxyShouldReceiveCoalescedPacketsInLastDatagram() throws Exception {
         // Given
-        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
-        int firstHalfLength = validClientHelloBytes.length / 2;
-
-        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
-        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
 
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        byte[] datagram1 = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        byte[] datagram1 = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
         assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
         testExecutor.check();
         assertThat(createdServerConnection).isNull();
 
-        byte[] initial2 = createInitialPacketBytes(scid, odcid, List.of(frame2));
+        byte[] initial2 = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[1]));
         byte[] coalesced = new byte[1200 - initial2.length];
         for (int i = 0; i < coalesced.length; i++) {
             coalesced[i] = (byte) i;
@@ -260,23 +251,19 @@ class ServerConnectionCandidateTest {
     @Test
     void whenInitialPacketsHaveDifferentSourceAddressAllButTheFirstShouldBeIgnored()  throws Exception {
         // Given
-        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
-        int firstHalfLength = validClientHelloBytes.length / 2;
-
-        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
-        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
 
         InetSocketAddress address1 = new InetSocketAddress("localhost", 55333);
         InetSocketAddress address2 = new InetSocketAddress("localhost", 41975);
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, address1, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
-        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
         assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), address1);
         testExecutor.check();
         assertThat(createdServerConnection).isNull();
-        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(frame2, new Padding(1200 - frame2.getFrameLength())));
+        byte datagram2[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
         assertThat(datagram2.length).isGreaterThanOrEqualTo(1200);
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), address2);
         testExecutor.check();
@@ -291,6 +278,14 @@ class ServerConnectionCandidateTest {
         ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(version), Role.Client, null, mock(Logger.class));
         secrets.computeInitialKeys(odcid);
         return initialPacket.generatePacketBytes(secrets.getOwnAead(EncryptionLevel.Initial));
+    }
+
+    private CryptoFrame[] createSplitClientHelloCryptoFrames() {
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        int firstHalfLength = validClientHelloBytes.length / 2;
+        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+        return new CryptoFrame[] {frame1, frame2};
     }
 
     static ServerConnectionConfig getDefaultConfiguration(int connectionIdLength) {
