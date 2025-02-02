@@ -308,6 +308,26 @@ class ServerConnectionCandidateTest {
     }
 
     @Test
+    void whenClientHelloIsSplitOverTwoPacketsWithDifferentVersionsThenNoConnectionShouldBeCreated()  throws Exception {
+        // Given
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
+        testExecutor.check();
+
+        Version differentVersion = new Version(0x3343cafe);
+        byte datagram2[] = createInitialPacketBytes(differentVersion, scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
     void whenClientHelloIsSplitOverMultiplePacketsConnectionProxyShouldReceiveCoalescedPacketsInLastDatagram() throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
@@ -365,8 +385,11 @@ class ServerConnectionCandidateTest {
         // Then
         assertThat(createdServerConnection).isNull();
     }
-
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
+        return createInitialPacketBytes(version, scid, odcid, frames);
+    }
+
+    byte[] createInitialPacketBytes(Version version, byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
         InitialPacket initialPacket = new InitialPacket(version, scid, odcid, null, frames);
         initialPacket.setPacketNumber(0);
         ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(version), Role.Client, null, mock(Logger.class));

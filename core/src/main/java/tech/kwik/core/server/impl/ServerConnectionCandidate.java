@@ -311,12 +311,18 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException {
         // Note that the caller already has extracted connection id's from the raw data, so checking for minimal length is not necessary here.
         int flags = data.get();
+        int packetVersion = data.getInt();
         data.rewind();
 
         if ((flags & 0x40) != 0x40) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-17.2
             // "Fixed Bit:  The next bit (0x40) of byte 0 is set to 1, unless the packet is a Version Negotiation packet.
             //  Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
+            throw new InvalidPacketException();
+        }
+
+        if (packetVersion != quicVersion.getId()) {
+            // As the server did not yet respond to the client, the client must still use the same version.
             throw new InvalidPacketException();
         }
 
