@@ -219,6 +219,45 @@ class ServerConnectionCandidateTest {
     }
 
     @Test
+    void whenClientHelloIsSplitOverMultiplePacketsConnectionProxyShouldReceiveCoalescedPacketsInLastDatagram() throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        int firstHalfLength = validClientHelloBytes.length / 2;
+
+        CryptoFrame frame1 = new CryptoFrame(version, 0, Arrays.copyOfRange(validClientHelloBytes, 0, firstHalfLength));
+        CryptoFrame frame2 = new CryptoFrame(version, firstHalfLength, Arrays.copyOfRange(validClientHelloBytes, firstHalfLength, validClientHelloBytes.length));
+
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte[] datagram1 = createInitialPacketBytes(scid, odcid, List.of(frame1, new Padding(1200 - frame1.getFrameLength())));
+        assertThat(datagram1.length).isGreaterThanOrEqualTo(1200);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
+        testExecutor.check();
+        assertThat(createdServerConnection).isNull();
+
+        byte[] initial2 = createInitialPacketBytes(scid, odcid, List.of(frame2));
+        byte[] coalesced = new byte[1200 - initial2.length];
+        for (int i = 0; i < coalesced.length; i++) {
+            coalesced[i] = (byte) i;
+        }
+        byte[] datagram2 = new byte[1200];
+        System.arraycopy(initial2, 0, datagram2, 0, initial2.length);
+        System.arraycopy(coalesced, 0, datagram2, initial2.length, coalesced.length);
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
+        testExecutor.check();
+
+        // Then
+        ByteBuffer remainingDatagramData = ((TestServerConnectionFactory) serverConnectionFactory).getRemainingDatagramData();
+        assertThat(remainingDatagramData.position()).isEqualTo(initial2.length);
+        assertThat(remainingDatagramData.remaining()).isEqualTo(1200 - initial2.length);
+        assertThat(remainingDatagramData.get()).isEqualTo((byte) 0);
+        assertThat(remainingDatagramData.get()).isEqualTo((byte) 1);
+        assertThat(remainingDatagramData.get()).isEqualTo((byte) 2);
+        assertThat(remainingDatagramData.get()).isEqualTo((byte) 3);
+    }
+
+    @Test
     void whenInitialPacketsHaveDifferentSourceAddressAllButTheFirstShouldBeIgnored()  throws Exception {
         // Given
         byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
