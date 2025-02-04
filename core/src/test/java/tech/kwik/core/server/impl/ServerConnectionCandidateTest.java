@@ -92,6 +92,7 @@ class ServerConnectionCandidateTest {
         // Given
         byte[] initialPacketBytes = TestUtils.createValidInitial(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
@@ -127,6 +128,7 @@ class ServerConnectionCandidateTest {
     void firstInitialCarriedInSmallDatagramShouldBeDiscarded() throws Exception {
         byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
@@ -142,6 +144,7 @@ class ServerConnectionCandidateTest {
     void firstInitialWithPaddingInDatagramShouldCreateConnection() throws Exception {
         byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
 
         // When
@@ -160,6 +163,7 @@ class ServerConnectionCandidateTest {
         // Given
         byte[] initialPacketBytes = TestUtils.createValidInitial(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
+        scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
         byte[] datagramData = new byte[1500];  // Simulating a second 300-byte packet in the same datagram.
         System.arraycopy(initialPacketBytes, 0, datagramData, 0, initialPacketBytes.length);
         ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
@@ -320,6 +324,26 @@ class ServerConnectionCandidateTest {
 
         Version differentVersion = new Version(0x3343cafe);
         byte datagram2[] = createInitialPacketBytes(differentVersion, scid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void whenClientHelloIsSplitOverTwoPacketsWithDifferentScidsThenNoConnectionShouldBeCreated()  throws Exception {
+        // Given
+        CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram1), clientAddress);
+        testExecutor.check();
+
+        byte[] differentScid = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        byte datagram2[] = createInitialPacketBytes(differentScid, odcid, List.of(cryptoFrames[1], new Padding(1200 - cryptoFrames[1].getFrameLength())));
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagram2), clientAddress);
         testExecutor.check();
 

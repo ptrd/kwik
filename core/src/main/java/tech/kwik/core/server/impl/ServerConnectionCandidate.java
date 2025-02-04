@@ -92,6 +92,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     private final Version quicVersion;
     private final InetSocketAddress clientAddress;
+    private final byte[] scid;
     private final byte[] dcid;
     private final ServerConnectionFactory serverConnectionFactory;
     private final ServerConnectionRegistry connectionRegistry;
@@ -115,6 +116,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         this.scheduledExecutor = context.getSharedScheduledExecutor();
         this.quicVersion = version;
         this.clientAddress = clientAddress;
+        this.scid = scid;
         this.dcid = dcid;
         this.serverConnectionFactory = serverConnectionFactory;
         this.connectionRegistry = connectionRegistry;
@@ -122,7 +124,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
         filterChain =
                 new ClientAddressFilter(clientAddress, log,
-                        new InitialPacketMinimumSizeFilter(log, this));
+                        new ClientInitialScidFilter(scid, log,
+                                new InitialPacketMinimumSizeFilter(log, this)));
         registrationLock = new ReentrantLock();
 
         cryptoBuffer = new CryptoStream(VersionHolder.with(quicVersion), EncryptionLevel.Initial, Role.Server, log);
@@ -280,9 +283,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
                 new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
                         new ClientAddressFilter(clientAddress, log,
-                                new InitialPacketMinimumSizeFilter(log,
-                                        new DatagramPostProcessingFilter(postProcessingFunction, log,
-                                                adapter)))));
+                                new ClientInitialScidFilter(scid, log,
+                                        new InitialPacketMinimumSizeFilter(log,
+                                                new DatagramPostProcessingFilter(postProcessingFunction, log,
+                                                        adapter))))));
     }
 
     @Override
