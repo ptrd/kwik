@@ -245,7 +245,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         // neither do multiple PING frames (even one doesn't make much sense, but won't harm).
         boolean acceptableFrames = (frames.stream().allMatch(f -> f instanceof CryptoFrame || f instanceof PingFrame || f instanceof Padding));
         int nrOfPingFrames = (int) frames.stream().filter(f -> f instanceof PingFrame).count();
-        if (!acceptableFrames || nrOfPingFrames > 1) {
+        if (!acceptableFrames || nrOfPingFrames > 12) {  // Chrome often sends multiple PING frames in the first flight
             throw new UnacceptablePacketException();
         }
     }
