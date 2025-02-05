@@ -60,7 +60,7 @@ class ServerConnectionThreadTest {
     }
 
     @Test
-    void testIncomingPacketsShouldBeParsed() throws InterruptedException {
+    void testIncomingPacketsShouldBeParsed() throws Exception {
         // Given
         PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
         serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), metaData, mock(Logger.class));
@@ -74,7 +74,7 @@ class ServerConnectionThreadTest {
     }
 
     @Test
-    void testRemainingDatagramDataShouldBeParsed() throws InterruptedException {
+    void testRemainingDatagramDataShouldBeParsed() throws Exception {
         // Given
         PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
         ByteBuffer remainingData = ByteBuffer.allocate(1173);

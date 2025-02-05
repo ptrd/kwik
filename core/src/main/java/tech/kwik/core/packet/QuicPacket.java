@@ -105,7 +105,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException, TransportError {
         if (buffer.remaining() < remainingLength) {
             throw new InvalidPacketException();
         }
@@ -284,7 +284,7 @@ abstract public class QuicPacket {
         return candidatePn;
     }
 
-    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidPacketException {
+    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidPacketException, TransportError {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         int frameType = -1;
@@ -368,7 +368,7 @@ abstract public class QuicPacket {
                         else {
                             // https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4
                             // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
-                            throw new ProtocolError("connection error FRAME_ENCODING_ERROR", new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR));
+                            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
                         }
                 }
             }
@@ -516,7 +516,7 @@ abstract public class QuicPacket {
 
     public abstract byte[] generatePacketBytes(Aead aead);
 
-    public abstract void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
+    public abstract void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError;
 
     public List<QuicFrame> getFrames() {
         return frames;

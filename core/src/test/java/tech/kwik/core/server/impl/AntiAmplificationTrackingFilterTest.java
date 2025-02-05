@@ -18,9 +18,9 @@
  */
 package tech.kwik.core.server.impl;
 
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.packet.DatagramFilter;
 import tech.kwik.core.packet.PacketMetaData;
-import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.verify;
 class AntiAmplificationTrackingFilterTest {
 
     @Test
-    void allReceivedBytesShouldBeCounted() {
+    void allReceivedBytesShouldBeCounted() throws Exception {
         // Given
         DatagramFilter sink = mock(DatagramFilter.class);
         Consumer<Integer> counterFunction = mock(Consumer.class);

@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
@@ -37,7 +38,7 @@ public class DatagramPostProcessingFilter extends BaseDatagramFilter {
     }
 
     @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
+    public void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         next(data, metaData);
         postProcessingFunction.run();
     }

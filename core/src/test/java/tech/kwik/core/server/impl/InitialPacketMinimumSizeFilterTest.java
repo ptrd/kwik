@@ -17,13 +17,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */package tech.kwik.core.server.impl;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.impl.TestUtils;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.DatagramFilter;
 import tech.kwik.core.packet.PacketMetaData;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
@@ -74,7 +74,7 @@ class InitialPacketMinimumSizeFilterTest {
     }
 
     @Test
-    void nonInitialPacketShouldPassFilter() {
+    void nonInitialPacketShouldPassFilter() throws Exception {
         // Given
         byte handshakePacketFlags = (byte) 0b1110_0000;
         byte[] packetBytes = new byte[] { handshakePacketFlags, 0, 0, 0, 0 };
@@ -84,7 +84,7 @@ class InitialPacketMinimumSizeFilterTest {
     }
 
     @Test
-    void oneRttPacketShouldPassFilter() {
+    void oneRttPacketShouldPassFilter() throws Exception {
         // Given
         byte oneRttPacketFlags = (byte) 0b0100_0000;
         byte[] packetBytes = new byte[] { oneRttPacketFlags, 0, 0, 0, 0 };

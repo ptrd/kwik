@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.packet.DatagramParserFilter;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
@@ -50,7 +51,11 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
         PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
-        datagramProcessingChain.processDatagram(data, metaData);
+        try {
+            datagramProcessingChain.processDatagram(data, metaData);
+        } catch (TransportError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

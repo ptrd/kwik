@@ -25,6 +25,7 @@ import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.DecryptionException;
 import tech.kwik.core.impl.InvalidPacketException;
 import tech.kwik.core.impl.PacketProcessor;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
@@ -62,7 +63,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.remaining() < 1 + sourceConnectionIdLength) {
             throw new InvalidPacketException();

@@ -43,6 +43,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -155,8 +156,18 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                     return;
                 }
 
-                PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
-                filterChain.processDatagram(data, metaData);
+                try {
+                    PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+                    filterChain.processDatagram(data, metaData);
+                }
+                catch (TransportError e) {
+                    // Won't happen (yet), because the only filter the actually throws is the parser, which is not yet used here!
+                    log.warn("Dropped initial packet due to transport error: " + e.getMessage());
+                    inError = true;
+                    // Clean up faster
+                    cleanupTask.cancel(true);
+                    scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
+                }
             }
         });
     }
@@ -294,7 +305,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     public void dispose() {
     }
 
-    InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException {
+    InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException, TransportError {
         // Note that the caller already has extracted connection id's from the raw data, so checking for minimal length is not necessary here.
         int flags = data.get();
         int packetVersion = data.getInt();

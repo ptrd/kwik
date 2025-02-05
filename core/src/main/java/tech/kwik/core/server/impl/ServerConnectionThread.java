@@ -18,8 +18,6 @@
  */
 package tech.kwik.core.server.impl;
 
-import tech.kwik.core.QuicConstants;
-import tech.kwik.core.impl.ProtocolError;
 import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.*;
@@ -109,13 +107,16 @@ public class ServerConnectionThread implements ServerConnectionProxy {
                 datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
-        catch (ProtocolError error) {
-            if (error.getCause() instanceof TransportError) {
-                serverConnection.connectionError((TransportError) error.getCause());
-            }
-            else {
-                serverConnection.connectionError(new TransportError(QuicConstants.TransportErrorCode.INTERNAL_ERROR));
-            }
+        catch (TransportError error) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-11.1
+            // "Connection Errors
+            //  Errors that result in the connection being unusable, such as an obvious violation of protocol semantics
+            //  or corruption of state that affects an entire connection, MUST be signaled using a CONNECTION_CLOSE frame"
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "Transport Error Codes
+            //  This section lists the defined QUIC transport error codes that can be used in a CONNECTION_CLOSE frame
+            //  with a type of 0x1c. These errors apply to the entire connection."
+            serverConnection.connectionError(error);
         }
         catch (InterruptedException e) {
             // Terminate process and thread, see dispose() method

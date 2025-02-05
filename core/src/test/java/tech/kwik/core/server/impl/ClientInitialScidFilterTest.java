@@ -33,7 +33,7 @@ import static org.mockito.Mockito.verify;
 class ClientInitialScidFilterTest {
 
     @Test
-    void filterShouldNotChangePositionInBuffer() {
+    void filterShouldNotChangePositionInBuffer() throws Exception {
         byte[] originalSourceConnectionId = new byte[8];
         ClientInitialScidFilter filter = new ClientInitialScidFilter(originalSourceConnectionId, null, mock(DatagramFilter.class));
         byte[] data = ByteUtils.hexToBytes("ffaa6600c800000001080102030405060708080102030405060708");
@@ -46,7 +46,7 @@ class ClientInitialScidFilterTest {
     }
 
     @Test
-    void testExtractSourceConnectionId() {
+    void testExtractSourceConnectionId() throws Exception {
         byte[] originalSourceConnectionId = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
         ClientInitialScidFilter filter = new ClientInitialScidFilter(originalSourceConnectionId, null, mock(DatagramFilter.class));
         byte[] data = ByteUtils.hexToBytes("c800000001070102030405060709010203040506070809");
@@ -56,7 +56,7 @@ class ClientInitialScidFilterTest {
     }
 
     @Test
-    void shortHeaderPacketShouldPassFilter() {
+    void shortHeaderPacketShouldPassFilter() throws Exception {
         byte[] originalSourceConnectionId = new byte[8];
         DatagramFilter next = mock(DatagramFilter.class);
         ClientInitialScidFilter filter = new ClientInitialScidFilter(originalSourceConnectionId, null, next);
@@ -69,7 +69,7 @@ class ClientInitialScidFilterTest {
     }
 
     @Test
-    void version2InitialWithIncorrectScidShouldNotPassFilter() {
+    void version2InitialWithIncorrectScidShouldNotPassFilter() throws Exception {
         byte[] originalSourceConnectionId = new byte[8];
         DatagramFilter next = mock(DatagramFilter.class);
         ClientInitialScidFilter filter = new ClientInitialScidFilter(originalSourceConnectionId, null, next);

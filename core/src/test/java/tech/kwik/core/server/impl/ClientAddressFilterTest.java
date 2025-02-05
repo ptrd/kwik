@@ -18,10 +18,10 @@
  */
 package tech.kwik.core.server.impl;
 
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.DatagramFilter;
 import tech.kwik.core.packet.PacketMetaData;
-import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 class ClientAddressFilterTest {
 
     @Test
-    void filterAllowsPacketsFromInitialClientAddress() {
+    void filterAllowsPacketsFromInitialClientAddress() throws Exception {
         // Given
         DatagramFilter sink = mock(DatagramFilter.class);
         InetSocketAddress initialClientAddress = new InetSocketAddress("www.example.com", 5839);
@@ -49,7 +49,7 @@ class ClientAddressFilterTest {
     }
 
     @Test
-    void filterDropsPacketsNotFromInitialClientAddress() {
+    void filterDropsPacketsNotFromInitialClientAddress() throws Exception {
         // Given
         DatagramFilter sink = mock(DatagramFilter.class);
         InetSocketAddress initialClientAddress = new InetSocketAddress("www.example.com", 5839);

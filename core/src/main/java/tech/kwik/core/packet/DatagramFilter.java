@@ -18,6 +18,8 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
+
 import java.nio.ByteBuffer;
 
 public interface DatagramFilter {
@@ -30,5 +32,5 @@ public interface DatagramFilter {
      * @param data
      * @param metaData
      */
-    void processDatagram(ByteBuffer data, PacketMetaData metaData);
+    void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError;
 }

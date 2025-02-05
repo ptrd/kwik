@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 
@@ -43,7 +44,7 @@ public abstract class BaseDatagramFilter implements DatagramFilter {
         this.log = next.logger();
     }
 
-    public void next(ByteBuffer data, PacketMetaData metaData) {
+    public void next(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         next.processDatagram(data, metaData);
     }
 

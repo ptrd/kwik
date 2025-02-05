@@ -25,6 +25,7 @@ import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.DecryptionException;
 import tech.kwik.core.impl.InvalidPacketException;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 
@@ -195,7 +196,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.position() != 0) {
             // parsePacketNumberAndPayload method requires packet to start at 0.
