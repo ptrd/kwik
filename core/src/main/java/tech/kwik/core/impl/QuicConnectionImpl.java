@@ -380,6 +380,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
         try {
             getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
+            postProcessCrypto(cryptoFrame, packet, timeReceived);
             log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toStringReceived());
         }
         catch (TlsProtocolException e) {
@@ -391,6 +392,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             immediateCloseWithError(e.getTransportErrorCode().value, "");
         }
     }
+
+    protected void postProcessCrypto(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) throws TlsProtocolException {}
 
     protected abstract void cryptoProcessingErrorOcurred(Exception exception);
 
@@ -505,7 +508,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.6
         // "There is a separate flow of cryptographic handshake data in each encryption level"
         if (cryptoStreams.get(encryptionLevel.ordinal()) == null) {
-            cryptoStreams.set(encryptionLevel.ordinal(), new CryptoStream(quicVersion, encryptionLevel, connectionSecrets, role, getTlsEngine(), log, getSender()));
+            cryptoStreams.set(encryptionLevel.ordinal(), new CryptoStream(quicVersion, encryptionLevel, role, getTlsEngine(), log, getSender()));
         }
         return cryptoStreams.get(encryptionLevel.ordinal());
     }

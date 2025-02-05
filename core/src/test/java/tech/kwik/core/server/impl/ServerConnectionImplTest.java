@@ -41,6 +41,7 @@ import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
+import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.frame.ConnectionCloseFrame;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.FrameProcessor;
@@ -538,6 +539,25 @@ class ServerConnectionImplTest {
 
     //region initial packet validation
     @Test
+    void bufferedCryptoShouldBeProcess() throws Exception {
+        // Given
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        CryptoStream cryptoStream = new CryptoStream(VersionHolder.with(Version.getDefault()), EncryptionLevel.Initial, Role.Server, mock(Logger.class));
+        cryptoStream.setBufferMode();
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+
+        ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, clientExtensions);
+        cryptoStream.add(new CryptoFrame(Version.getDefault(), ch.getBytes()));
+        connection = createServerConnection(tlsServerEngineFactory, false, new byte[8], odcid, cid -> {}, cryptoStream);
+
+        // When
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame()), Instant.now());
+
+        // Then
+        assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(0);
+    }
+
+    @Test
     void retransmittedInitialPacketShouldBeAccepted() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         connection = createServerConnection(tlsServerEngineFactory, false, odcid);
@@ -681,17 +701,20 @@ class ServerConnectionImplTest {
         }
         return createServerConnection(tlsServerEngineFactory, retryRequired, new byte[8], odcid, cid -> {});
     }
-
     private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
+        return createServerConnection(tlsServerEngineFactory, retryRequired, clientCid, odcid, closeCallback, null);
+    }
+
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback, CryptoStream cryptoStream) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         ApplicationProtocolConnectionFactory applicationProtocolConnectionFactory = mock(ApplicationProtocolConnectionFactory.class);
         when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(Mockito.mock(ApplicationProtocolConnection.class));
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", applicationProtocolConnectionFactory);
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
-                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid,
-                tlsServerEngineFactory, getDefaultConfiguration(retryRequired), applicationProtocolRegistry,
-                Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid, cryptoStream,
+                tlsServerEngineFactory, getDefaultConfiguration(retryRequired),
+                applicationProtocolRegistry, Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

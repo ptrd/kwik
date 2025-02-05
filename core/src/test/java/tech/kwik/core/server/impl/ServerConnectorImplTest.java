@@ -18,6 +18,10 @@
  */
 package tech.kwik.core.server.impl;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.common.EncryptionLevel;
@@ -41,10 +45,6 @@ import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.io.InputStream;
 import java.net.DatagramPacket;
@@ -58,10 +58,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static tech.kwik.core.server.impl.ServerConnectorImpl.isValidLongHeaderPacket;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
+import static tech.kwik.core.server.impl.ServerConnectorImpl.isValidLongHeaderPacket;
 
 
 class ServerConnectorImplTest {
@@ -222,7 +222,7 @@ class ServerConnectorImplTest {
         testExecutor.check();
 
         // Then
-        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
         verify(connection).processPacket(any(QuicPacket.class), any(PacketMetaData.class));
     }
 
@@ -242,12 +242,12 @@ class ServerConnectorImplTest {
         server.process(createPacket(buffer));
         testExecutor.check();
 
-        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
         clearInvocations(connectionFactory);
 
         // When
         server.process(createPacket(buffer));
-        verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class));
+        verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
     }
 
     @Test
@@ -401,10 +401,10 @@ class ServerConnectorImplTest {
 
     private ServerConnectionFactory installServerConnectionFactoryReturning(ServerConnectionImpl connection) throws Exception {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
-        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class)))
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any()))
                 .thenReturn(connection);
-        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(InitialPacket.class), any(ByteBuffer.class), any(PacketMetaData.class)))
-                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), i.getArgument(1), ((PacketMetaData) i.getArgument(3))));
+        when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(List.class), any(ByteBuffer.class), any(PacketMetaData.class)))
+                .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), (InitialPacket) ((List) i.getArgument(1)).get(0), ((PacketMetaData) i.getArgument(3))));
 
         FieldSetter.setField(server, server.getClass().getDeclaredField("serverConnectionFactory"), connectionFactory);
         return connectionFactory;

@@ -44,6 +44,8 @@ import tech.kwik.core.stream.StreamManager;
 import tech.kwik.core.test.ByteUtils;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
+import tech.kwik.core.test.TestClock;
+import tech.kwik.core.test.TestScheduledExecutor;
 
 import java.io.IOException;
 import java.net.URI;
@@ -76,6 +78,7 @@ class QuicClientConnectionImplTest {
     private byte[] originalDestinationId;
     private SenderImpl sender;
     private TlsClientEngine tlsClientEngine;
+    private TestScheduledExecutor testScheduledExecutor;
 
     //region setup
     @BeforeAll
@@ -95,6 +98,9 @@ class QuicClientConnectionImplTest {
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
+
+        testScheduledExecutor = new TestScheduledExecutor(new TestClock());
+        FieldSetter.setField(connection, QuicConnectionImpl.class, "callbackThread", testScheduledExecutor);
     }
     //endregion
 
@@ -693,6 +699,7 @@ class QuicClientConnectionImplTest {
         // When
         ByteBuffer data = ByteBuffer.allocate(60);
         connection.handleUnprotectPacketFailure(data, null);
+        testScheduledExecutor.check();
 
         // Then
         ArgumentCaptor<ConnectionTerminatedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionTerminatedEvent.class);

@@ -18,16 +18,16 @@
  */
 package tech.kwik.core.server.impl;
 
-import tech.kwik.core.packet.InitialPacket;
-import tech.kwik.core.packet.PacketFilter;
-import tech.kwik.core.packet.PacketMetaData;
-import tech.kwik.core.packet.ServerRolePacketParser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.packet.PacketFilter;
+import tech.kwik.core.packet.PacketMetaData;
+import tech.kwik.core.packet.ServerRolePacketParser;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -60,7 +60,7 @@ class ServerConnectionThreadTest {
     @Test
     void testIncomingPacketsShouldBeParsed() throws InterruptedException {
         // Given
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(InitialPacket.class), ByteBuffer.allocate(0), mock(PacketMetaData.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), mock(PacketMetaData.class));
 
         // When
         serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), null);
@@ -77,7 +77,7 @@ class ServerConnectionThreadTest {
         remainingData.position(1100);
 
         // When
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(InitialPacket.class), remainingData, mock(PacketMetaData.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, mock(PacketMetaData.class));
         Thread.sleep(10);
 
         // Then

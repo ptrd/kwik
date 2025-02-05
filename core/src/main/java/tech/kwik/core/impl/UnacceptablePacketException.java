@@ -18,5 +18,5 @@
  */
 package tech.kwik.core.impl;
 
-public class IncompletePacketException extends Exception {
+public class UnacceptablePacketException extends Exception {
 }

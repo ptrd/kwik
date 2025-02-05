@@ -18,35 +18,32 @@
  */
 package tech.kwik.core.crypto;
 
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.TransportError;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.impl.VersionHolder;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.send.Sender;
-import tech.kwik.core.tls.CertificateMessageBuilder;
-import tech.kwik.core.tls.ClientHelloBuilder;
-import tech.kwik.agent15.ProtectionKeysType;
-import tech.kwik.agent15.TlsConstants;
-import tech.kwik.agent15.TlsProtocolException;
-import tech.kwik.agent15.engine.ClientMessageSender;
-import tech.kwik.agent15.engine.TlsClientEngine;
-import tech.kwik.agent15.engine.TlsMessageParser;
-import tech.kwik.agent15.engine.TlsServerEngine;
-import tech.kwik.agent15.engine.TlsStatusEventHandler;
-import tech.kwik.agent15.engine.impl.TlsClientEngineImpl;
-import tech.kwik.agent15.handshake.CertificateMessage;
-import tech.kwik.agent15.handshake.ClientHello;
-import tech.kwik.agent15.handshake.FinishedMessage;
-import tech.kwik.agent15.handshake.HandshakeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import tech.kwik.agent15.ProtectionKeysType;
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.engine.TlsEngine;
+import tech.kwik.agent15.engine.TlsMessageParser;
+import tech.kwik.agent15.engine.TlsServerEngine;
+import tech.kwik.agent15.handshake.CertificateMessage;
+import tech.kwik.agent15.handshake.ClientHello;
+import tech.kwik.agent15.handshake.FinishedMessage;
+import tech.kwik.agent15.handshake.HandshakeMessage;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.send.Sender;
+import tech.kwik.core.tls.CertificateMessageBuilder;
+import tech.kwik.core.tls.ClientHelloBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -58,13 +55,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static tech.kwik.core.test.FieldSetter.setField;
-import static tech.kwik.agent15.TlsConstants.HandshakeType.certificate_request;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static tech.kwik.agent15.TlsConstants.HandshakeType.certificate_request;
+import static tech.kwik.core.test.FieldSetter.setField;
 
 class CryptoStreamTest {
 
@@ -74,11 +71,12 @@ class CryptoStreamTest {
     private TlsMessageParser messageParser;
     private Sender sender;
 
+    //region test setup
     @BeforeEach
     void prepareObjectUnderTest() throws Exception {
         sender = mock(Sender.class);
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
-                Role.Client, new TlsClientEngineImpl(mock(ClientMessageSender.class), mock(TlsStatusEventHandler.class)), mock(Logger.class), sender);
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
+                Role.Client, mock(TlsEngine.class), mock(Logger.class), sender);
         messageParser = mock(TlsMessageParser.class);
         setField(cryptoStream, cryptoStream.getClass().getDeclaredField("tlsMessageParser"), messageParser);
 
@@ -89,10 +87,17 @@ class CryptoStreamTest {
             int length = buffer.getInt() & 0x00ffffff;
             byte[] stringBytes = new byte[length];
             buffer.get(stringBytes);
-            return new MockTlsMessage(type, new String(stringBytes));
+            if (type == 1) {
+                return mock(ClientHello.class);
+            }
+            else {
+                return new MockTlsMessage(type, new String(stringBytes));
+            }
         });
     }
+    //endregion
 
+    //region parsing messages
     @Test
     void parseSingleMessageInSingleFrame() throws Exception {
         cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(13, "first crypto frame")));
@@ -213,7 +218,9 @@ class CryptoStreamTest {
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("abcde"));
         assertThat(cryptoStream.getTlsMessages()).contains(new MockTlsMessage("12345"));
     }
+    //endregion
 
+    //region writing to stream
     @Test
     void writingDataToStreamLeadsToCallingSenderWithSendFrameCallback() {
         // Given
@@ -302,11 +309,13 @@ class CryptoStreamTest {
 
         assertThat(dataReceived.array()).isEqualTo(dataToSend);
     }
+    //endregion
 
+    //region limit resource (memory) usage
     @Test
     void veryLargeClientHelloIsRefused() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 3000;
         String fakeExtensionType = "fa7e";
@@ -331,7 +340,7 @@ class CryptoStreamTest {
     @Test
     void largeNumberOfOutOfOrderCryptoFramesIsRefused() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 4000;
         String fakeExtensionType = "fa7e";
@@ -358,7 +367,7 @@ class CryptoStreamTest {
     @Test
     void largeStreamOffsetIsAcceptedWhenMaximumMessageSizeIsNotExceeded() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 2828;
         String fakeExtensionType = "fa7e";
@@ -390,7 +399,7 @@ class CryptoStreamTest {
     @Test
     void clientHelloWithNormalSizeIsAccepted() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Initial,
                 Role.Server, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         int extensionLength = 1100;
         String fakeExtensionType = "fa7e";
@@ -414,7 +423,7 @@ class CryptoStreamTest {
 
     @Test
     void veryLargeCertificateMessageIsAccepted() throws Exception {
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
                 Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
 
         byte[] cm = new CertificateMessageBuilder()
@@ -439,7 +448,7 @@ class CryptoStreamTest {
     @Test
     void normalFinishedMessageIsAccepted() throws Exception {
         // Given
-        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake, null,
+        cryptoStream = new CryptoStream(new VersionHolder(QUIC_VERSION), EncryptionLevel.Handshake,
                 Role.Client, mock(TlsServerEngine.class), mock(Logger.class), mock(Sender.class));
         byte[] normalFinishedMessage = new FinishedMessage(new byte[384 / 8]).getBytes();
 
@@ -450,7 +459,67 @@ class CryptoStreamTest {
                 // Then
         ).doesNotThrowAnyException();
     }
+    //endregion
 
+    //region buffering crypto
+    @Test
+    void whenMessageIsReceivedInBufferModeItShouldBeBuffered() throws Exception {
+        // Given
+        cryptoStream.setBufferMode();
+
+        // When
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(13, "first crypto frame")));
+
+        // Then
+        assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(1);
+    }
+
+    @Test
+    void onlyWhenCompleteMessageIsReceivedBufferShouldContainMessage() throws Exception {
+        // Given
+        cryptoStream.setBufferMode();
+        byte[] rawMessageBytes = convertToMsgBytes("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        byte[] part1 = Arrays.copyOfRange(rawMessageBytes, 0, 50);
+        byte[] part2 = Arrays.copyOfRange(rawMessageBytes, 50, rawMessageBytes.length);
+
+        // When
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, 0, part1));
+        assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(0);
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, 50, part2));
+
+        // Then
+        assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(1);
+    }
+
+    @Test
+    void whenNonEmptyBufferIsPussedItShouldBeEmpty() throws Exception {
+        // Given
+        cryptoStream.setBufferMode();
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(1, "first crypto frame")));
+
+        // When
+        cryptoStream.processBufferedMessages();
+
+        // Then
+        assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(0);
+    }
+
+    @Test
+    void onlyAfterProcessingBufferedMessagesShouldBeReceived() throws Exception {
+        // Given
+        cryptoStream.setBufferMode();
+        cryptoStream.add(new CryptoFrame(QUIC_VERSION, convertToMsgBytes(1, "first crypto frame")));
+
+        // When
+        assertThat(cryptoStream.getTlsMessages()).isEmpty();
+        cryptoStream.processBufferedMessages();
+
+        // Then
+        assertThat(cryptoStream.getTlsMessages()).isNotEmpty();
+    }
+    //endregion
+
+    //region helper methods
     private List<byte[]> splitMessage(byte[] message, int maxFrameSize) {
         int numberOfFrames = (int) Math.ceil((double) message.length / maxFrameSize);
         return Arrays.stream(new int[numberOfFrames]).mapToObj(i -> {
@@ -471,7 +540,7 @@ class CryptoStreamTest {
     }
 
     private void setParseFunction(Function<ByteBuffer, HandshakeMessage> parseFunction) throws Exception {
-        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsClientEngine.class), any(ProtectionKeysType.class))).thenAnswer(new Answer<HandshakeMessage>() {
+        when(messageParser.parseAndProcessHandshakeMessage(any(ByteBuffer.class), any(TlsEngine.class), any(ProtectionKeysType.class))).thenAnswer(new Answer<HandshakeMessage>() {
             @Override
             public HandshakeMessage answer(InvocationOnMock invocation) throws Throwable {
                 ByteBuffer buffer = invocation.getArgument(0);
@@ -536,5 +605,5 @@ class CryptoStreamTest {
             return new byte[0];
         }
     }
-
+    //endregion
 }

@@ -24,8 +24,9 @@ import tech.kwik.agent15.TlsProtocolException;
 import tech.kwik.agent15.alert.InternalErrorAlert;
 import tech.kwik.agent15.engine.TlsEngine;
 import tech.kwik.agent15.engine.TlsMessageParser;
+import tech.kwik.agent15.engine.TlsServerEngine;
 import tech.kwik.agent15.extension.Extension;
-import tech.kwik.agent15.handshake.HandshakeMessage;
+import tech.kwik.agent15.handshake.*;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.QuicFrame;
@@ -34,6 +35,7 @@ import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.send.Sender;
+import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.ReceiveBuffer;
 import tech.kwik.core.stream.ReceiveBufferImpl;
 import tech.kwik.core.tls.QuicTransportParametersExtension;
@@ -57,29 +59,28 @@ public class CryptoStream {
     private final VersionHolder quicVersion;
     private final EncryptionLevel encryptionLevel;
     private final ProtectionKeysType tlsProtectionType;
-    private final ConnectionSecrets connectionSecrets;
     private final Role peerRole;
-    private final TlsEngine tlsEngine;
+    private volatile TlsEngine tlsEngine;
+    private volatile Sender sender;
     private final Logger log;
-    private final Sender sender;
     private final ReceiveBuffer receiveBuffer;
     private final List<HandshakeMessage> messagesReceived;
     private final List<HandshakeMessage> messagesSent;
+    private final List<HandshakeMessage> bufferedMessages;
     private final TlsMessageParser tlsMessageParser;
     private final List<ByteBuffer> dataToSend;
     private final int maxMessageSize;
     private volatile int dataToSendOffset;
     private volatile int sendStreamSize;
-    // Only used by add method; thread confinement concurrency control (assuming one receiver thread)
-    private boolean msgSizeRead = false;
-    private int msgSize;
-    private byte msgType;
-    private int readOffset;
+    private volatile boolean msgSizeRead = false;
+    private volatile int msgSize;
+    private volatile byte msgType;
+    private volatile int readOffset;
+    private volatile boolean buffering;
 
-    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, ConnectionSecrets connectionSecrets, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
+    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, TlsEngine tlsEngine, Logger log, Sender sender) {
         this.quicVersion = quicVersion;
         this.encryptionLevel = encryptionLevel;
-        this.connectionSecrets = connectionSecrets;
         peerRole = role.other();
         this.tlsEngine = tlsEngine;
         this.log = log;
@@ -91,10 +92,15 @@ public class CryptoStream {
                                 ProtectionKeysType.None;
         messagesReceived = new ArrayList<>();
         messagesSent = new ArrayList<>();
+        bufferedMessages = new ArrayList<>();
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
         maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
         receiveBuffer = new ReceiveBufferImpl();
+    }
+
+    public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, Logger log) {
+        this(quicVersion, encryptionLevel, role, null, log, null);
     }
 
     public void add(CryptoFrame cryptoFrame) throws TlsProtocolException, TransportError {
@@ -139,12 +145,11 @@ public class CryptoStream {
                         msgSizeRead = false;
 
                         msgBuffer.flip();
-                        HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, tlsEngine, tlsProtectionType);
+                        processMessage(msgBuffer);
 
                         if (msgBuffer.hasRemaining()) {
                             throw new RuntimeException();  // Must be programming error
                         }
-                        messagesReceived.add(tlsMessage);
                     }
                 }
             }
@@ -155,6 +160,54 @@ public class CryptoStream {
         catch (IOException e) {
             // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
             throw new RuntimeException();
+        }
+    }
+
+    /**
+     * Set the stream to buffer mode. In this mode, messages are not processed immediately, but stored in a buffer.
+     */
+    public void setBufferMode() {
+        buffering = true;
+    }
+
+    public int getBufferedMessagesCount() {
+        return bufferedMessages.size();
+    }
+
+    public List<HandshakeMessage> getBufferedMessages() {
+        return bufferedMessages;
+    }
+
+    /**
+     * Process all buffered messages. Resets the stream to normal mode.
+     * @throws TlsProtocolException
+     * @throws IOException
+     */
+    public void processBufferedMessages() throws TlsProtocolException {
+        buffering = false;
+        try {
+            for (HandshakeMessage msg : bufferedMessages) {
+                sendTo(msg, tlsEngine);
+                messagesReceived.add(msg);
+            }
+            bufferedMessages.clear();
+        }
+        catch (IOException e) {
+            // Impossible, because the kwik implementation of the ClientMessageSender does not throw IOException.
+            throw new RuntimeException();
+        }
+    }
+
+    private void processMessage(ByteBuffer msgBuffer) throws TlsProtocolException, IOException {
+        if (!buffering) {
+            HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, tlsEngine, tlsProtectionType);
+            messagesReceived.add(tlsMessage);
+        }
+        else {
+            TlsEngine stub = getTlsEngineStub();
+            // This solution is a stub, until TlsMessageParser provides a method that just parses the message.
+            HandshakeMessage tlsMessage = tlsMessageParser.parseAndProcessHandshakeMessage(msgBuffer, stub, tlsProtectionType);
+            bufferedMessages.add(tlsMessage);
         }
     }
 
@@ -279,5 +332,88 @@ public class CryptoStream {
 
     public EncryptionLevel getEncryptionLevel() {
         return encryptionLevel;
+    }
+
+    private void sendTo(HandshakeMessage msg, TlsEngine tlsEngine) throws TlsProtocolException, IOException {
+        if (msg instanceof ClientHello) tlsEngine.received((ClientHello) msg, tlsProtectionType);
+        else if (msg instanceof ServerHello) tlsEngine.received((ServerHello) msg, tlsProtectionType);
+        else if (msg instanceof EncryptedExtensions) tlsEngine.received((EncryptedExtensions) msg, tlsProtectionType);
+        else if (msg instanceof CertificateMessage) tlsEngine.received((CertificateMessage) msg, tlsProtectionType);
+        else if (msg instanceof CertificateVerifyMessage) tlsEngine.received((CertificateVerifyMessage) msg, tlsProtectionType);
+        else if (msg instanceof FinishedMessage) tlsEngine.received((FinishedMessage) msg, tlsProtectionType);
+        else if (msg instanceof NewSessionTicketMessage) tlsEngine.received((NewSessionTicketMessage) msg, tlsProtectionType);
+        else if (msg instanceof CertificateRequestMessage) tlsEngine.received((CertificateRequestMessage) msg, tlsProtectionType);
+        else {
+            throw new RuntimeException("Unknown message type: " + msg.getClass().getSimpleName());
+        }
+    }
+
+    private static TlsEngine getTlsEngineStub() {
+        return new TlsEngine() {
+            @Override
+            public byte[] getClientEarlyTrafficSecret() {
+                return new byte[0];
+            }
+
+            @Override
+            public byte[] getClientHandshakeTrafficSecret() {
+                return new byte[0];
+            }
+
+            @Override
+            public byte[] getServerHandshakeTrafficSecret() {
+                return new byte[0];
+            }
+
+            @Override
+            public byte[] getClientApplicationTrafficSecret() {
+                return new byte[0];
+            }
+
+            @Override
+            public byte[] getServerApplicationTrafficSecret() {
+                return new byte[0];
+            }
+
+            @Override
+            public void received(ClientHello clientHello, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(ServerHello serverHello, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(EncryptedExtensions encryptedExtensions, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(CertificateMessage certificateMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(CertificateVerifyMessage certificateVerifyMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(FinishedMessage finishedMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(NewSessionTicketMessage newSessionTicketMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+
+            @Override
+            public void received(CertificateRequestMessage certificateRequestMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
+            }
+        };
+    }
+
+    public void setTlsEngine(TlsServerEngine tlsEngine) {
+        this.tlsEngine = tlsEngine;
+    }
+
+    public void setSender(SenderImpl sender) {
+        this.sender = sender;
     }
 }

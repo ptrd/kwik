@@ -18,10 +18,17 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.handshake.ClientHello;
+import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
+import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.crypto.MissingKeysException;
 import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.Padding;
+import tech.kwik.core.frame.PingFrame;
+import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
@@ -36,8 +43,11 @@ import tech.kwik.core.util.Bytes;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -77,18 +87,27 @@ import java.util.function.Consumer;
  */
 public class ServerConnectionCandidate implements ServerConnectionProxy, DatagramFilter {
 
+    // Minimum length for initial crypto frames, except for the last one (which of course is allowed to be shorter)
+    public static final int MINIMUM_NON_FINAL_CRYPTO_LENGTH = 1000;
+
     private final Version quicVersion;
     private final InetSocketAddress clientAddress;
+    private final byte[] scid;
     private final byte[] dcid;
     private final ServerConnectionFactory serverConnectionFactory;
     private final ServerConnectionRegistry connectionRegistry;
     private final Logger log;
     private final DatagramFilter filterChain;
     private final ReentrantLock registrationLock;
+    private final ScheduledFuture<?> cleanupTask;
     private volatile ServerConnectionProxy registeredConnection;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduledExecutor;
     private volatile boolean closed;
+    private final CryptoStream cryptoBuffer;
+    private final List<InitialPacket> bufferedInitialPackets = new ArrayList<>();
+    private int bufferedDatagramDataSize;
+    private volatile boolean inError;
 
 
     public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
@@ -97,13 +116,24 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         this.scheduledExecutor = context.getSharedScheduledExecutor();
         this.quicVersion = version;
         this.clientAddress = clientAddress;
+        this.scid = scid;
         this.dcid = dcid;
         this.serverConnectionFactory = serverConnectionFactory;
         this.connectionRegistry = connectionRegistry;
         this.log = log;
 
-        filterChain = new InitialPacketMinimumSizeFilter(log, this);
+        filterChain =
+                new ClientAddressFilter(clientAddress, log,
+                        new ClientInitialScidFilter(scid, log,
+                                new InitialPacketMinimumSizeFilter(log, this)));
         registrationLock = new ReentrantLock();
+
+        cryptoBuffer = new CryptoStream(VersionHolder.with(quicVersion), EncryptionLevel.Initial, Role.Server, log);
+        cryptoBuffer.setBufferMode();
+
+        // The cleanup delay should be longer then the maximum connect timeout clients (are likely to) use.
+        // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
+        cleanupTask = scheduledExecutor.schedule(this::removeFromConnectionRegistry, 30, TimeUnit.SECONDS);
     }
 
     @Override
@@ -113,6 +143,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
+        if (inError) {
+            return;
+        }
         // Execute packet parsing on separate thread, to make this method return a.s.a.p.
         executor.submit(() -> {
             // Serialize processing (per connection candidate): duplicate initial packets might arrive faster than they are processed.
@@ -136,57 +169,99 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             int datagramNumber = metaData.datagramNumber();
             Instant timeReceived = metaData.timeReceived();
             InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
-            check(initialPacket);
-
             log.received(timeReceived, datagramNumber, initialPacket);
             log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
 
+            checkGenuineFirstFlight(initialPacket);
+            bufferedInitialPackets.add(initialPacket);
+            bufferedDatagramDataSize += data.limit();
+            if (! checkClientHelloComplete(initialPacket)) {
+                if (initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
+                    throw new UnacceptablePacketException();
+                }
+                return;
+            }
+
             // Packet is valid. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
-                createAndRegisterServerConnection(initialPacket, metaData, data);
+                createAndRegisterServerConnection(initialPacket, metaData, data, bufferedDatagramDataSize);
+                cleanupTask.cancel(true);
             }
         }
-        catch (InvalidPacketException | DecryptionException | IncompletePacketException unacceptablePacket) {
+        catch (InvalidPacketException | DecryptionException unacceptablePacket) {
             // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
             log.debug("Dropped invalid initial packet (no connection created)");
-            // But still the (now useless) candidate should be removed from the connection registry.
-            // To avoid race conditions with incoming duplicated first packets (possibly leading to scheduling
-            // a task for this candidate while it is not registered anymore), the removal of the candidate is
-            // delayed until connection setup is over.
-            // The delay should be longer then the maximum connection timeout clients (are likely to) use.
-            // It can be fairly large because the removal is only needed to avoid unused connection candidates pile up.
-            scheduledExecutor.schedule(() -> {
-                        // But only if no connection is created in the meantime (which will do the cleanup)
-                        if (registeredConnection == null) {
-                            connectionRegistry.deregisterConnection(this, dcid);
-                        }
-                    },
-                    30, TimeUnit.SECONDS);
         }
-        catch (Exception error) {
-            log.error("error while parsing or processing initial packet", error);
+        catch (TlsProtocolException | TransportError | UnacceptablePacketException invalidTlsMesssage) {
+            // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
+            log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
+            // Further processing is not necessary and unwanted, as these errors can not occur accidentally.
+            // This seems to create an attack vector for on-path attackers when the Client Hello does not fit in one
+            // initial packet (if the attacker is able to send a second packet that arrives before the second packet
+            // from the original sender), but such an attack would be possible anyway (by injecting some data in the
+            // crypto stream). So, switching to error state doesn't make it worse.
+            inError = true;
+            // Clean up faster
+            cleanupTask.cancel(true);
+            scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
         }
     }
 
-    private void check(InitialPacket initialPacket) throws IncompletePacketException {
-        if (initialPacket.getFrames().stream().noneMatch(frame -> frame instanceof CryptoFrame)) {
-            throw new IncompletePacketException();
+    /**
+     * Check whether received (including buffered) crypto data already contains a complete ClientHello message.
+     * @param initialPacket
+     * @return
+     * @throws TlsProtocolException when the first message is not a ClientHello
+     */
+    private boolean checkClientHelloComplete(InitialPacket initialPacket) throws TlsProtocolException, TransportError {
+        for (QuicFrame frame: initialPacket.getFrames()) {
+            if (frame instanceof CryptoFrame) {
+                cryptoBuffer.add((CryptoFrame) frame);
+            }
+        }
+
+        if (cryptoBuffer.getBufferedMessagesCount() > 0) {
+            if (cryptoBuffer.getBufferedMessages().get(0) instanceof ClientHello) {
+                return true;
+            } else {
+                throw new TlsProtocolException("Unexpected message received: " + cryptoBuffer.getBufferedMessages().get(0));
+            }
+        }
+        else {
+            return false;
         }
     }
 
-    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData) {
+    /**
+     * Check whether an initial packet makes sense as a first flight, to avoid building up state for malicious
+     * connection creation attempts.
+     * @param initialPacket
+     * @throws UnacceptablePacketException
+     */
+    private void checkGenuineFirstFlight(InitialPacket initialPacket) throws UnacceptablePacketException {
+        List<QuicFrame> frames = initialPacket.getFrames();
+        // According to https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4, initial packets may contain: PADDING,
+        // PING, ACK, CRYPTO, CONNECTION_CLOSE. However, in the first flight, ACK and CONNECTION_CLOSE do not make sense,
+        // neither do multiple PING frames (even one doesn't make much sense, but won't harm).
+        boolean acceptableFrames = (frames.stream().allMatch(f -> f instanceof CryptoFrame || f instanceof PingFrame || f instanceof Padding));
+        int nrOfPingFrames = (int) frames.stream().filter(f -> f instanceof PingFrame).count();
+        if (!acceptableFrames || nrOfPingFrames > 12) {  // Chrome often sends multiple PING frames in the first flight
+            throw new UnacceptablePacketException();
+        }
+    }
+
+    private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData, int receivedDataSize) {
         Version quicVersion = initialPacket.getVersion();
         byte[] originalDcid = initialPacket.getDestinationConnectionId();
 
         registrationLock.lock();
         try {
             if (!closed) {
-                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid);
+                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid, null);
 
                 // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
-                ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, initialPacket, datagramData, metaData);
-                int datagramSize = datagramData.limit();
-                connection.increaseAntiAmplificationLimit(datagramSize);
+                ServerConnectionProxy connectionProxy = serverConnectionFactory.createServerConnectionProxy(connection, bufferedInitialPackets, datagramData, metaData);
+                connection.increaseAntiAmplificationLimit(receivedDataSize);
 
                 ServerConnectionProxy wrappedConnection = wrapWithFilters(connectionProxy, connection::increaseAntiAmplificationLimit, connection::datagramProcessed);
 
@@ -205,12 +280,13 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
         // The wrapper takes care of propagating other (non-filter) methods to the connection proxy.
         return new ServerConnectionWrapper(connection, log,
-                        // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
-                        new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
-                                new ClientAddressFilter(clientAddress, log,
+                // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
+                new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
+                        new ClientAddressFilter(clientAddress, log,
+                                new ClientInitialScidFilter(scid, log,
                                         new InitialPacketMinimumSizeFilter(log,
                                                 new DatagramPostProcessingFilter(postProcessingFunction, log,
-                                                        adapter)))));
+                                                        adapter))))));
     }
 
     @Override
@@ -239,12 +315,18 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException {
         // Note that the caller already has extracted connection id's from the raw data, so checking for minimal length is not necessary here.
         int flags = data.get();
+        int packetVersion = data.getInt();
         data.rewind();
 
         if ((flags & 0x40) != 0x40) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-17.2
             // "Fixed Bit:  The next bit (0x40) of byte 0 is set to 1, unless the packet is a Version Negotiation packet.
             //  Packets containing a zero value for this bit are not valid packets in this version and MUST be discarded."
+            throw new InvalidPacketException();
+        }
+
+        if (packetVersion != quicVersion.getId()) {
+            // As the server did not yet respond to the client, the client must still use the same version.
             throw new InvalidPacketException();
         }
 
@@ -267,6 +349,18 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             }
         }
         throw new InvalidPacketException();
+    }
+
+    private void removeFromConnectionRegistry() {
+        // If no connection is created in the meantime, remove the candidate from the registry.
+        registrationLock.lock();
+        try {
+            if (registeredConnection == null) {
+                connectionRegistry.deregisterConnection(this, dcid);
+            }
+        } finally {
+            registrationLock.unlock();
+        }
     }
 
     @Override

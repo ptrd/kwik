@@ -38,11 +38,7 @@ import tech.kwik.core.cid.ConnectionIdManager;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.CryptoStream;
-import tech.kwik.core.frame.HandshakeDoneFrame;
-import tech.kwik.core.frame.NewConnectionIdFrame;
-import tech.kwik.core.frame.NewTokenFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.RetireConnectionIdFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.LogProxy;
 import tech.kwik.core.log.Logger;
@@ -75,6 +71,7 @@ import java.util.function.Consumer;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static tech.kwik.core.common.EncryptionLevel.Initial;
 import static tech.kwik.core.impl.QuicConnectionImpl.Status.Connected;
 import static tech.kwik.core.impl.QuicConnectionImpl.Status.Handshaking;
 import static tech.kwik.core.impl.QuicConnectionImpl.VersionNegotiationStatus.VersionChangeUnconfirmed;
@@ -88,6 +85,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final Version originalVersion;
     private final InetSocketAddress initialClientAddress;
     private final boolean usingIPv4;
+    private final CryptoStream bufferedInitialCrypto;
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
@@ -113,6 +111,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param initialClientAddress        the initial client address (after handshake, clients can move to different address)
      * @param peerCid                     the connection id of the client
      * @param originalDcid                the original destination connection id used by the client
+     * @param cryptoStream                stream containing already received crypto data for encryption level Initial
      * @param tlsServerEngineFactory      factory for creating tls engine
      * @param configuration               connection configuration settings
      * @param applicationProtocolRegistry the registry for application protocols this server supports
@@ -121,13 +120,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param log                         logger
      */
     public ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                byte[] peerCid, byte[] originalDcid, TlsServerEngineFactory tlsServerEngineFactory,
+                                byte[] peerCid, byte[] originalDcid, CryptoStream cryptoStream, TlsServerEngineFactory tlsServerEngineFactory,
                                 ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
                                 ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, new LogProxy(log, originalDcid), configuration);
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
         usingIPv4 = InetTools.isIPv4(initialClientAddress.getAddress());
+        this.bufferedInitialCrypto = cryptoStream;
         this.retryRequired = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always;
         this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
@@ -148,6 +148,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             sender.setAntiAmplificationLimit(0);
         }
         idleTimer.setPtoSupplier(sender::getPto);
+
+        if (bufferedInitialCrypto != null) {
+            bufferedInitialCrypto.setTlsEngine(tlsEngine);
+            bufferedInitialCrypto.setSender(sender);
+            assert(cryptoStreams.size() == 0);
+            cryptoStreams.add(bufferedInitialCrypto);
+        }
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
@@ -492,6 +499,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
     }
 
+    @Override
+    protected void postProcessCrypto(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) throws TlsProtocolException {
+        if (packet.getEncryptionLevel() == Initial && bufferedInitialCrypto != null) {
+            if (bufferedInitialCrypto.getBufferedMessagesCount() > 0) {
+                bufferedInitialCrypto.processBufferedMessages();
+            }
+        }
+    }
+
     private void sendRetry() {
         RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
         sender.send(retry);
@@ -526,7 +542,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         processFrames(packet, time);
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-initial-keys
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
-        connectionSecrets.discardKeys(EncryptionLevel.Initial);
+        connectionSecrets.discardKeys(Initial);
 
         return ProcessResult.Continue;
     }
@@ -647,7 +663,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private class TlsMessageSender implements ServerMessageSender {
         @Override
         public void send(ServerHello sh) {
-            CryptoStream cryptoStream = getCryptoStream(EncryptionLevel.Initial);
+            CryptoStream cryptoStream = getCryptoStream(Initial);
             cryptoStream.write(sh, false);
             log.sentPacketInfo(cryptoStream.toStringSent());
         }
