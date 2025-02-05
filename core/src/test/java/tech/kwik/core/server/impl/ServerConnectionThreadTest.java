@@ -21,10 +21,12 @@ package tech.kwik.core.server.impl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketFilter;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.ServerRolePacketParser;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -60,10 +62,11 @@ class ServerConnectionThreadTest {
     @Test
     void testIncomingPacketsShouldBeParsed() throws InterruptedException {
         // Given
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), mock(PacketMetaData.class));
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), metaData, mock(Logger.class));
 
         // When
-        serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), null);
+        serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), new InetSocketAddress(54221));
         Thread.sleep(10);
 
         // Then
@@ -73,11 +76,12 @@ class ServerConnectionThreadTest {
     @Test
     void testRemainingDatagramDataShouldBeParsed() throws InterruptedException {
         // Given
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
         ByteBuffer remainingData = ByteBuffer.allocate(1173);
         remainingData.position(1100);
 
         // When
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, mock(PacketMetaData.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, metaData, mock(Logger.class));
         Thread.sleep(10);
 
         // Then

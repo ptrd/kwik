@@ -18,9 +18,8 @@
  */
 package tech.kwik.core.server.impl;
 
-import tech.kwik.core.packet.DatagramParserFilter;
-import tech.kwik.core.packet.InitialPacket;
-import tech.kwik.core.packet.PacketMetaData;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.*;
 import tech.kwik.core.util.Bytes;
 
 import java.net.InetSocketAddress;
@@ -29,6 +28,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 
 /**
  * Proxy for server connection that ensures that all processing of received datagrams is executed on a separate thread.
@@ -43,13 +43,15 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final List<InitialPacket> firstInitialPackets;
     private final ByteBuffer data;
     private final PacketMetaData firstInitialPacketMetaData;
+    private final Logger log;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, List<InitialPacket> firstInitialPackets, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, List<InitialPacket> firstInitialPackets, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData, Logger log) {
         this.serverConnection = serverConnection;
         this.firstInitialPackets = firstInitialPackets != null? firstInitialPackets: List.of();
         this.data = remainingDatagramData;
         this.firstInitialPacketMetaData = initialPacketMetaData;
+        this.log = log;
 
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + Bytes.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
@@ -87,7 +89,8 @@ public class ServerConnectionThread implements ServerConnectionProxy {
             firstInitialPackets.forEach(firstInitialPacket ->
                     serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData));
 
-            DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
+            PacketParser parser = serverConnection.createParser();
+            DatagramFilter datagramProcessingChain = wrapWithFilters(parser, serverConnection::increaseAntiAmplificationLimit, serverConnection::datagramProcessed);
 
             if (data.hasRemaining()) {
                 datagramProcessingChain.processDatagram(data.slice(), firstInitialPacketMetaData);
@@ -111,6 +114,17 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     @Override
     public String toString() {
         return "ServerConnectionThread[" + Bytes.bytesToHex(getOriginalDestinationConnectionId()) + "]";
+    }
+
+    private DatagramFilter wrapWithFilters(PacketParser parser, Consumer<Integer> receivedPayloadBytesCounterFunction, Runnable postProcessingFunction) {
+        return
+                // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
+                new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
+                        new ClientAddressFilter(firstInitialPacketMetaData.sourceAddress(), log,
+                                new ClientInitialScidFilter(serverConnection.getDestinationConnectionId(), log,
+                                        new InitialPacketMinimumSizeFilter(log,
+                                                new DatagramPostProcessingFilter(postProcessingFunction, log,
+                                                        new DatagramParserFilter(parser))))));
     }
 
     static class ReceivedDatagram {
