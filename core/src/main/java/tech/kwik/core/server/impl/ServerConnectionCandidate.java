@@ -149,6 +149,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         executor.submit(() -> {
             // Serialize processing (per connection candidate): duplicate initial packets might arrive faster than they are processed.
             synchronized (this) {
+                if (inError) {
+                    return;
+                }
                 // Because of possible queueing in the executor, a connection might already exist (i.e. when multiple
                 // packets queued before the connection was registered).
                 if (registeredConnection != null) {
