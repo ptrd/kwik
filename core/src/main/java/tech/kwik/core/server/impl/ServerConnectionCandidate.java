@@ -203,7 +203,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
         catch (TlsProtocolException | TransportError | UnacceptablePacketException invalidTlsMesssage) {
             // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
-            log.warn("Dropped initial packet that did not contain valid CH (no connection created)");
+            log.warn("Dropped initial packet that did not contain valid CH (no connection created): "
+                    + invalidTlsMesssage + " "
+                    + Bytes.bytesToHex(Arrays.copyOfRange(data.array(), 0, Integer.min(data.limit(), 64))));
             // Further processing is not necessary and unwanted, as these errors can not occur accidentally.
             // This seems to create an attack vector for on-path attackers when the Client Hello does not fit in one
             // initial packet (if the attacker is able to send a second packet that arrives before the second packet
