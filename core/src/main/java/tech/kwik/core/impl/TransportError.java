@@ -30,7 +30,7 @@ public class TransportError extends Exception {
     }
 
     public TransportError(QuicConstants.TransportErrorCode transportErrorCode, String message) {
-        super(message);
+        super(transportErrorCode + ": " + message);
         this.transportErrorCode = transportErrorCode;
     }
 

@@ -18,12 +18,14 @@
  */
 package tech.kwik.core.packet;
 
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.frame.DatagramFrame;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
-import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class QuicPacketTest {
@@ -201,6 +203,42 @@ class QuicPacketTest {
 
         // Then
         assertThat(candidatePacketNumber).isEqualTo(0x00000000ffffffffL);
+    }
+
+    @Test
+    void parsingNewTokenFrameWithZeroLengthConnectionIdShouldThrow() throws Exception {
+        // Given                   type  seq   prior connection id length
+        byte[] data = new byte[] { 0x18, 0x01, 0x00, 0x00,
+                // and 128 bits of stateless reset token
+                (byte)0x00, (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04, (byte)0x05, (byte)0x06, (byte)0x07,
+                (byte)0x08, (byte)0x09, (byte)0x0A, (byte)0x0B, (byte)0x0C, (byte)0x0D, (byte)0x0E, (byte)0x0F };
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+
+        // When
+        assertThatThrownBy(() -> packet.parseFrames(data, mock(Logger.class)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .hasMessageContaining("FRAME_ENCODING_ERROR");
+    }
+
+    @Test
+    void parsingNewTokenFrameWithConnectionIdLengthGreaterThan20ShouldThrow() throws Exception {
+        // Given                   type  seq   prior connection id length
+        byte[] data = new byte[] { 0x18, 0x01, 0x00, 0x15,
+                // connection id, 21 bytes
+                (byte)0x00, (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04, (byte)0x05, (byte)0x06, (byte)0x07, (byte)0x08, (byte)0x09,
+                (byte)0x0A, (byte)0x0B, (byte)0x0C, (byte)0x0D, (byte)0x0E, (byte)0x0F, (byte)0x10, (byte)0x11, (byte)0x12, (byte)0x13,
+                (byte)0x14,
+                // and 128 bits of stateless reset token
+                (byte)0x00, (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04, (byte)0x05, (byte)0x06, (byte)0x07,
+                (byte)0x08, (byte)0x09, (byte)0x0A, (byte)0x0B, (byte)0x0C, (byte)0x0D, (byte)0x0E, (byte)0x0F };
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+
+        // When
+        assertThatThrownBy(() -> packet.parseFrames(data, mock(Logger.class)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .hasMessageContaining("FRAME_ENCODING_ERROR");
     }
 
     @Test
