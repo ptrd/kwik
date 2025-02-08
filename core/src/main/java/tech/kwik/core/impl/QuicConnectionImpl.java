@@ -443,6 +443,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        getConnectionIdManager().process(newConnectionIdFrame);
+    }
+
+    @Override
     public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
     }
 

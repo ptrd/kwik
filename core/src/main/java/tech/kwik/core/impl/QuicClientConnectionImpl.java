@@ -768,11 +768,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        connectionIdManager.process(newConnectionIdFrame);
-    }
-
-    @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
     }
 

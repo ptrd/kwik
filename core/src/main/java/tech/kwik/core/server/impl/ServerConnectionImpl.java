@@ -38,7 +38,11 @@ import tech.kwik.core.cid.ConnectionIdManager;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.CryptoStream;
-import tech.kwik.core.frame.*;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.HandshakeDoneFrame;
+import tech.kwik.core.frame.NewTokenFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.RetireConnectionIdFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.LogProxy;
 import tech.kwik.core.log.Logger;
@@ -576,11 +580,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.20
         // "A server MUST treat receipt of a HANDSHAKE_DONE frame as a connection error of type PROTOCOL_VIOLATION."
         immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected handshake done frame");
-    }
-
-    @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        connectionIdManager.process(newConnectionIdFrame);
     }
 
     @Override
