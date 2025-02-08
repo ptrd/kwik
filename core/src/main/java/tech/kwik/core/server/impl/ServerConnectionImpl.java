@@ -585,6 +585,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
+        // " A server MUST treat receipt of a NEW_TOKEN frame as a connection error of type PROTOCOL_VIOLATION."
+        immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected new token frame");
     }
 
     @Override
