@@ -70,6 +70,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.INVALID_TOKEN;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
 import static tech.kwik.core.impl.QuicConnectionImpl.Status.Connected;
@@ -572,6 +573,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.20
+        // "A server MUST treat receipt of a HANDSHAKE_DONE frame as a connection error of type PROTOCOL_VIOLATION."
+        immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected handshake done frame");
     }
 
     @Override
