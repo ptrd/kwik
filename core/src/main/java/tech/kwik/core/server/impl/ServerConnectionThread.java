@@ -93,6 +93,10 @@ public class ServerConnectionThread implements ServerConnectionProxy {
             DatagramFilter datagramProcessingChain = wrapWithFilters(parser, serverConnection::increaseAntiAmplificationLimit, serverConnection::datagramProcessed);
 
             if (data.hasRemaining()) {
+                // While processing the first initial packet, the anti amplification limit was already increased with the
+                // total datagram size. Now the remainder of the datagram is processed, which will make the
+                // AntiAmplificationTrackingFilter to count these bytes again. To compensate for this, the limit is decreased
+                serverConnection.increaseAntiAmplificationLimit(-1 * data.remaining());
                 datagramProcessingChain.processDatagram(data.slice(), firstInitialPacketMetaData);
             }
 

@@ -30,12 +30,12 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class ServerConnectionThreadTest {
 
@@ -86,5 +86,30 @@ class ServerConnectionThreadTest {
 
         // Then
         verify(parser).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 73), any(PacketMetaData.class));
+    }
+
+    @Test
+    void testRemainingDatagramDataShouldNotIncreaseAntiAmplificationLimit() throws InterruptedException {
+        // Given
+        AtomicInteger antiAmplificationLimit = new AtomicInteger(0);
+        stubAntiAmplificationLimitWith(antiAmplificationLimit);
+
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        ByteBuffer remainingData = ByteBuffer.allocate(1173);
+        remainingData.position(1100);
+
+        // When
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, metaData, mock(Logger.class));
+        Thread.sleep(10);
+
+        // Then
+        assertThat(antiAmplificationLimit.get()).isZero();
+    }
+
+    private void stubAntiAmplificationLimitWith(AtomicInteger antiAmplificationLimit) {
+        doAnswer(invocation -> {
+            antiAmplificationLimit.addAndGet(invocation.getArgument(0));
+            return null;
+        }).when(serverConnection).increaseAntiAmplificationLimit(anyInt());
     }
 }
