@@ -184,10 +184,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected PacketFilter createProcessorChain() {
         return new CheckDestinationFilter(
                 new DropDuplicatePacketsFilter(
-                        new VersionNegotiationConfirmedFilter(
-                                new PostProcessingFilter(
-                                        new QlogPacketFilter(
-                                                new ClosingOrDrainingFilter(this, log))))));
+                        new FramesCheckFilter(
+                                new VersionNegotiationConfirmedFilter(
+                                        new PostProcessingFilter(
+                                                new QlogPacketFilter(
+                                                        new ClosingOrDrainingFilter(this, log)))))));
     }
 
     PacketParser createParser() {
@@ -782,7 +783,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (versionNegotiationStatus == VersionChangeUnconfirmed) {
                 if (packet.getVersion().equals(quicVersion.getVersion())) {
                     versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;

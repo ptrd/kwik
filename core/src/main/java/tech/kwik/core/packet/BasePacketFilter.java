@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 
@@ -41,7 +42,7 @@ public abstract class BasePacketFilter implements PacketFilter {
         this.log = next.logger();
     }
 
-    public void next(QuicPacket packet, PacketMetaData metaData) {
+    public void next(QuicPacket packet, PacketMetaData metaData) throws TransportError {
         next.processPacket(packet, metaData);
     }
 

@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 
 public class QlogPacketFilter extends BasePacketFilter {
@@ -31,7 +32,7 @@ public class QlogPacketFilter extends BasePacketFilter {
     }
 
     @Override
-    public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+    public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
         logger().getQLog().emitPacketReceivedEvent(packet, metaData.timeReceived());
         next(packet, metaData);
     }

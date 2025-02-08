@@ -87,8 +87,9 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     private void process() {
         try {
-            firstInitialPackets.forEach(firstInitialPacket ->
-                    serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData));
+            for (InitialPacket firstInitialPacket : firstInitialPackets) {
+                serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
+            }
 
             PacketParser parser = serverConnection.createParser();
             DatagramFilter datagramProcessingChain = wrapWithFilters(parser, serverConnection::increaseAntiAmplificationLimit, serverConnection::datagramProcessed);

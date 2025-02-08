@@ -237,8 +237,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     protected PacketFilter createProcessorChain() {
         return new CheckDestinationFilter(
                 new DropDuplicatePacketsFilter(
+                        new FramesCheckFilter(
                         new PostProcessingFilter(
-                                new ClosingOrDrainingFilter(this, log))));
+                                new ClosingOrDrainingFilter(this, log)))));
     }
 
     private Predicate<DatagramPacket> createPacketFilter() {

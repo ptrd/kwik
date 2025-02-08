@@ -18,10 +18,11 @@
  */
 package tech.kwik.core.packet;
 
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.common.PnSpace;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.common.PnSpace;
+import tech.kwik.core.impl.TransportError;
 
 import java.util.stream.Stream;
 
@@ -40,7 +41,7 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void firstPacketOnInitialLevelWillBePassed() {
+    void firstPacketOnInitialLevelWillBePassed() throws Exception {
         // Given
 
         // When
@@ -52,7 +53,7 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void samePacketNumberOnDifferentLevelWillBePassed() {
+    void samePacketNumberOnDifferentLevelWillBePassed() throws Exception {
         // Given
         QuicPacket initialPacket = createInitialPacket(0);
         filter.processPacket(initialPacket, null);
@@ -67,7 +68,7 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void duplicatePacketWillBeDropped() {
+    void duplicatePacketWillBeDropped() throws Exception {
         // Given
         QuicPacket packet3 = createInitialPacket(3);
         filter.processPacket(packet3, null);
@@ -81,9 +82,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void delayedPacketWillBeProcessed() {
+    void delayedPacketWillBeProcessed() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9).forEach(packet -> processPacket(filter, packet));
         clearInvocations(endpoint);
 
         // When
@@ -93,10 +94,19 @@ class DropDuplicatePacketsFilterTest {
         verify(endpoint, times(1)).processPacket(argThat(packet -> packet.getPacketNumber() == 4), any());
     }
 
+    private void processPacket(PacketFilter filter, QuicPacket packet)  {
+        try {
+            filter.processPacket(packet, null);
+        }
+        catch (TransportError e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Test
-    void delayedPacketInsideWindowWillBeProcessed() {
+    void delayedPacketInsideWindowWillBeProcessed() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14).forEach(packet -> processPacket(filter, packet));
         // Window is now 5 .. 14
         clearInvocations(endpoint);
 
@@ -108,9 +118,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void afterTotalRollOverDelayedPacketInsideWindowWillBeProcessed() {
+    void afterTotalRollOverDelayedPacketInsideWindowWillBeProcessed() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23).forEach(packet -> processPacket(filter, packet));
         // Window is now 14 .. 23
         clearInvocations(endpoint);
 
@@ -122,9 +132,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void newPacketOutsideWindowsWillBeProcessed() {
+    void newPacketOutsideWindowsWillBeProcessed() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> processPacket(filter, packet));
         clearInvocations(endpoint);
 
         // When
@@ -135,9 +145,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void duplicatePacketsInsideWindowWillBeDiscarded() {
+    void duplicatePacketsInsideWindowWillBeDiscarded() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> processPacket(filter, packet));
         // Window is now: 2 .. 11
         clearInvocations(endpoint);
 
@@ -150,9 +160,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void packetNumberOutsideWindowIsAlwaysDiscarded() {
+    void packetNumberOutsideWindowIsAlwaysDiscarded() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 14).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 14).forEach(packet -> processPacket(filter, packet));
         // Window is now: 5 .. 14
         clearInvocations(endpoint);
 
@@ -168,9 +178,9 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void duplicatePacketOutsideWindowIsDiscarded() {
+    void duplicatePacketOutsideWindowIsDiscarded() throws Exception {
         // Given
-        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> filter.processPacket(packet, null));
+        createInitialPackets(0, 1, 2, 3, 5, 6, 7, 9, 10, 11).forEach(packet -> processPacket(filter, packet));
         // Window is now: 2 .. 11
         clearInvocations(endpoint);
 
@@ -182,7 +192,7 @@ class DropDuplicatePacketsFilterTest {
     }
 
     @Test
-    void retryOrVersionNegotiationPacketsAreAlwaysProcessed() {
+    void retryOrVersionNegotiationPacketsAreAlwaysProcessed() throws Exception {
         // Given
         QuicPacket packet = createNoPacketNumberPacket();
 

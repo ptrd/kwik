@@ -63,7 +63,7 @@ class ServerConnectionThreadTest {
     void testIncomingPacketsShouldBeParsed() throws Exception {
         // Given
         PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), metaData, mock(Logger.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), ByteBuffer.allocate(0), metaData, mock(Logger.class));
 
         // When
         serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), new InetSocketAddress(54221));
@@ -81,7 +81,7 @@ class ServerConnectionThreadTest {
         remainingData.position(1100);
 
         // When
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, metaData, mock(Logger.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), remainingData, metaData, mock(Logger.class));
         Thread.sleep(10);
 
         // Then

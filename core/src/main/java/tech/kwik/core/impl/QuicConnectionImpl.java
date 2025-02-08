@@ -972,7 +972,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (checkDestinationConnectionId(packet)) {
                 next(packet, metaData);
             }
@@ -989,7 +989,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (connectionState.closingOrDraining()) {
                 if (connectionState.isClosing()) {
                     // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
@@ -1014,7 +1014,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             }
 
             @Override
-            public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+            public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
                 next(packet, metaData);
                 getSender().packetProcessed(metaData.moreDataInDatagram());
             }
