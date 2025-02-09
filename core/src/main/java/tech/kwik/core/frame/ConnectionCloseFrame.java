@@ -148,18 +148,26 @@ public class ConnectionCloseFrame extends QuicFrame {
     public int getFrameLength() {
         return 1
                 + VariableLengthInteger.bytesNeeded(errorCode)
-                + VariableLengthInteger.bytesNeeded(0)
+                + (frameType == 0x1c? VariableLengthInteger.bytesNeeded(0): 0)
                 + VariableLengthInteger.bytesNeeded(reasonPhrase.length)
                 + reasonPhrase.length;
     }
 
     @Override
     public void serialize(ByteBuffer buffer) {
-        buffer.put((byte) 0x1c);
-        VariableLengthInteger.encode(errorCode, buffer);
-        VariableLengthInteger.encode(0, buffer);
-        VariableLengthInteger.encode(reasonPhrase.length, buffer);
-        buffer.put(reasonPhrase);
+        if (frameType == 0x1c) {
+            buffer.put((byte) 0x1c);
+            VariableLengthInteger.encode(errorCode, buffer);
+            VariableLengthInteger.encode(0, buffer);  // triggering frame type
+            VariableLengthInteger.encode(reasonPhrase.length, buffer);
+            buffer.put(reasonPhrase);
+        }
+        else {  // frameType == 0x1d
+            buffer.put((byte) 0x1d);
+            VariableLengthInteger.encode(errorCode, buffer);
+            VariableLengthInteger.encode(reasonPhrase.length, buffer);
+            buffer.put(reasonPhrase);
+        }
     }
 
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
