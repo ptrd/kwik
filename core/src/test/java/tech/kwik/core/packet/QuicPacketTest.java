@@ -206,6 +206,33 @@ class QuicPacketTest {
     }
 
     @Test
+    void parseMaxStreamsFrameWithInvalidIntegerEncodingShouldLeadToFrameEncodingError() {
+        // Given
+        byte[] data = new byte[] { 0x12, 0b0100_1010 };
+
+        // When
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+        assertThatThrownBy(() -> packet.parseFrames(data, mock(Logger.class)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .hasMessageContaining("FRAME_ENCODING_ERROR");
+    }
+
+    @Test
+    void parseNewTokenFrameWithTokenLargerThanFrameShouldLeadToFrameEncodingError() {
+        // Given
+        byte[] data = new byte[] { 0x07, 0x20,
+                (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04, (byte)0x05, (byte)0x06, (byte)0x07, (byte)0x08 };
+
+        // When
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+        assertThatThrownBy(() -> packet.parseFrames(data, mock(Logger.class)))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .hasMessageContaining("FRAME_ENCODING_ERROR");
+    }
+
+    @Test
     void parsingNewTokenFrameWithZeroLengthConnectionIdShouldThrow() throws Exception {
         // Given                   type  seq   prior connection id length
         byte[] data = new byte[] { 0x18, 0x01, 0x00, 0x00,

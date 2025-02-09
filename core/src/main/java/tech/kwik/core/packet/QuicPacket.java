@@ -374,8 +374,8 @@ abstract public class QuicPacket {
             }
         }
         catch (InvalidIntegerEncodingException e) {
-            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
-            throw new InvalidPacketException("invalid integer encoding");
+            log.error("Parse error while parsing frame of type " + frameType + ".");
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid integer encoding");
         }
         catch (IllegalArgumentException e) {
             log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
@@ -384,8 +384,8 @@ abstract public class QuicPacket {
             throw new InvalidPacketException("unexpected large int value");
         }
         catch (BufferUnderflowException e) {
-            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
-            throw new InvalidPacketException("invalid frame encoding");
+            log.error("Parse error while parsing frame of type " + frameType + ".");
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid frame encoding");
         }
     }
 
