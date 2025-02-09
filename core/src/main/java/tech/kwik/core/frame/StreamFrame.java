@@ -18,8 +18,10 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
@@ -103,7 +105,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         return frameLength;
     }
 
-    public StreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public StreamFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError, IntegerTooLargeException {
         int startPosition = buffer.position();
 
         int frameType = buffer.get();
@@ -111,14 +113,14 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         boolean withLength = ((frameType & 0x02) == 0x02);
         isFinal = ((frameType & 0x01) == 0x01);
 
-        streamId = VariableLengthInteger.parse(buffer);
+        streamId = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support stream id's larger than max int.
         streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
 
         if (withOffset) {
             offset = VariableLengthInteger.parseLong(buffer);
         }
         if (withLength) {
-            length = VariableLengthInteger.parse(buffer);
+            length = VariableLengthInteger.parseInt(buffer);
         }
         else {
             length = buffer.limit() - buffer.position();

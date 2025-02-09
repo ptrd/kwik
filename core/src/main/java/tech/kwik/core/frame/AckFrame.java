@@ -18,8 +18,10 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
@@ -128,7 +130,7 @@ public class AckFrame extends QuicFrame {
         buffer.put(frameBytes);
     }
 
-    public AckFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public AckFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException, TransportError {
         log.debug("Parsing AckFrame");
         acknowledgedRanges = new ArrayList<>();
 
@@ -136,28 +138,29 @@ public class AckFrame extends QuicFrame {
 
         largestAcknowledged = VariableLengthInteger.parseLong(buffer);
 
-        // Parse as long to protect to against buggy peers. Convert to int as MAX_INT is large enough to hold the
-        // largest ack delay that makes sense (even with an delay exponent of 0, MAX_INT is approx 2147 seconds, approx. half an hour).
-        ackDelay = (int) VariableLengthInteger.parseLong(buffer);
+        // Kwik does not support ack delay larger than what fits in an int. An int is large enough to hold the largest
+        // ack delay that makes sense (even with a delay exponent of 0, MAX_INT is 2147 seconds, approx. half an hour).
+        ackDelay = parseVariableLengthIntegerLimitedToInt(buffer);
 
-        int ackBlockCount = (int) VariableLengthInteger.parseLong(buffer);
+        int ackBlockCount = VariableLengthInteger.parseInt(buffer);
 
         long currentSmallest = largestAcknowledged;
         // The smallest of the first block is the largest - (rangeSize - 1).
-        currentSmallest -= addAcknowledgeRange(largestAcknowledged, 1 + VariableLengthInteger.parse(buffer)) - 1;
+        int firstAckRange = parseVariableLengthIntegerLimitedToInt(buffer);  // A range larger than 2^31 is hardly imaginable.
+        currentSmallest -= addAcknowledgeRange(largestAcknowledged, 1 + firstAckRange) - 1;
 
         for (int i = 0; i < ackBlockCount; i++) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1:
             // "Each Gap indicates a range of packets that are not being
             //   acknowledged.  The number of packets in the gap is one higher than
             //   the encoded value of the Gap Field."
-            int gapSize = VariableLengthInteger.parse(buffer) + 1;
+            int gapSize = parseVariableLengthIntegerLimitedToInt(buffer) + 1;
             // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-19.3.1:
             // "Each ACK Block acknowledges a contiguous range of packets by
             //   indicating the number of acknowledged packets that precede the
             //   largest packet number in that block.  A value of zero indicates that
             //   only the largest packet number is acknowledged."
-            int contiguousPacketsPreceding = VariableLengthInteger.parse(buffer) + 1;
+            int contiguousPacketsPreceding = parseVariableLengthIntegerLimitedToInt(buffer) + 1;
             // The largest of the next range is the current smallest - (gap size + 1), because the gap size counts the
             // ones not being present, and we need the first (below) being present.
             // The new current smallest is largest of the next range - (range size - 1)

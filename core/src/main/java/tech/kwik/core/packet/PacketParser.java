@@ -153,7 +153,7 @@ public abstract class PacketParser {
         return packet;
     }
 
-    protected abstract Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException;
+    protected abstract Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException, TransportError;
 
     /**
      * Constructs a (yet empty) long header packet based on the packet flags (first byte).

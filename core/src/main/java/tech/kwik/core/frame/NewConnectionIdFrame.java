@@ -77,8 +77,8 @@ public class NewConnectionIdFrame extends QuicFrame {
     public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError {
         buffer.get();
 
-        sequenceNr = VariableLengthInteger.parse(buffer);
-        retirePriorTo = VariableLengthInteger.parse(buffer);
+        sequenceNr = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support sequence number larger than max int.
+        retirePriorTo = parseVariableLengthIntegerLimitedToInt(buffer);
         int connectionIdLength = buffer.get();
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.15
         // "Values less than 1 and greater than 20 are invalid and MUST be treated as a connection error of type FRAME_ENCODING_ERROR."

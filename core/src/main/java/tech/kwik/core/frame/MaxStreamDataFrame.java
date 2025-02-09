@@ -20,6 +20,7 @@ package tech.kwik.core.frame;
 
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
 
@@ -44,10 +45,10 @@ public class MaxStreamDataFrame extends QuicFrame {
         this.maxData = maxData;
     }
 
-    public MaxStreamDataFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public MaxStreamDataFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError {
         buffer.get();
 
-        streamId = VariableLengthInteger.parse(buffer);
+        streamId = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support stream id's larger than max int.
         maxData = VariableLengthInteger.parseLong(buffer);
 
         return this;

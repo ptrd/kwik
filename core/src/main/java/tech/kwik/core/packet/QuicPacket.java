@@ -23,6 +23,7 @@ import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.frame.*;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
@@ -383,7 +384,10 @@ abstract public class QuicPacket {
             // Strictly speaking, this would not be an invalid packet, but Kwik cannot handle it.
             throw new InvalidPacketException("unexpected large int value");
         }
-        catch (BufferUnderflowException e) {
+        catch (BufferUnderflowException | IntegerTooLargeException e) {
+            // Buffer underflow is obviously a frame encoding error.
+            // In this context, integer too large means there is an int value in the frame that can't be valid (e.g.
+            // a length of a byte array > 2^32-1), so this really is a frame encoding error.
             log.error("Parse error while parsing frame of type " + frameType + ".");
             throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid frame encoding");
         }

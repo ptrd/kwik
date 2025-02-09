@@ -19,8 +19,10 @@
 package tech.kwik.core.packet;
 
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.DecryptionException;
@@ -245,10 +247,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int length;
         try {
             // "The length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes"
-            length = VariableLengthInteger.parse(buffer);
+            length = VariableLengthInteger.parseInt(buffer);
         }
-        catch (IllegalArgumentException | InvalidIntegerEncodingException invalidInt) {
-            throw new InvalidPacketException();
+        catch (IllegalArgumentException | InvalidIntegerEncodingException | IntegerTooLargeException invalidInt) {
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
         }
         log.debug("Length (PN + payload): " + length);
 

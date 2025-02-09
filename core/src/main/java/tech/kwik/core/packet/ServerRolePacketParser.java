@@ -18,15 +18,18 @@
  */
 package tech.kwik.core.packet;
 
-import tech.kwik.core.impl.InvalidPacketException;
-import tech.kwik.core.impl.QuicConnectionImpl;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.InvalidPacketException;
+import tech.kwik.core.impl.QuicConnectionImpl;
+import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
@@ -50,7 +53,7 @@ public class ServerRolePacketParser extends PacketParser {
         this.versionNegotiationStatusSupplier = versionNegotiationStatusSupplier;
     }
 
-    protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException {
+    protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException, TransportError {
         Aead aead;
 
         if (retryRequired && packet instanceof InitialPacket) {
@@ -61,9 +64,10 @@ public class ServerRolePacketParser extends PacketParser {
             data.position(7 + destCidLength + srcCidLength);
             int tokenLength;
             try {
-                tokenLength = VariableLengthInteger.parse(data);
-            } catch (InvalidIntegerEncodingException e) {
-                throw new InvalidPacketException();
+                tokenLength = VariableLengthInteger.parseInt(data);
+            }
+            catch (InvalidIntegerEncodingException | IntegerTooLargeException e) {
+                throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
             }
             data.reset();
             if (tokenLength == 0) {

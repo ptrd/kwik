@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.Version;
@@ -36,7 +37,7 @@ import java.time.Instant;
 public class ConnectionCloseFrame extends QuicFrame {
 
     private long errorCode;
-    private int triggeringFrameType;
+    private long triggeringFrameType;
     private byte[] reasonPhrase = new byte[0];
     private int tlsError = -1;
     private int frameType;
@@ -75,7 +76,7 @@ public class ConnectionCloseFrame extends QuicFrame {
         }
     }
 
-    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
         frameType = buffer.get() & 0xff;
         if (frameType != 0x1c && frameType != 0x1d) {
             throw new RuntimeException();  // Programming error
@@ -83,9 +84,9 @@ public class ConnectionCloseFrame extends QuicFrame {
 
         errorCode = VariableLengthInteger.parseLong(buffer);
         if (frameType == 0x1c) {
-            triggeringFrameType = VariableLengthInteger.parse(buffer);
+            triggeringFrameType = VariableLengthInteger.parseLong(buffer);
         }
-        int reasonPhraseLength = VariableLengthInteger.parse(buffer);
+        int reasonPhraseLength = VariableLengthInteger.parseInt(buffer);
         if (reasonPhraseLength > 0) {
             reasonPhrase = new byte[reasonPhraseLength];
             buffer.get(reasonPhrase);
