@@ -505,10 +505,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         catch (ProtocolError e) {
             connectionError(new TransportError(PROTOCOL_VIOLATION));
         }
+        catch (TransportError e) {
+            connectionError(e);
+        }
         catch (InterruptedException e) {
             log.debug("Terminating receiver loop because of interrupt");
         }
-        catch (Exception error) {
+        catch (RuntimeException error) {
             log.debug("Terminating receiver loop because of error", error);
             abortConnection(error);
         }

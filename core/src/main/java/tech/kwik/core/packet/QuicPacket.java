@@ -204,9 +204,14 @@ abstract public class QuicPacket {
 
         frames = new ArrayList<>();
         parseFrames(frameBytes, log);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
+        // "An endpoint MUST (...) after removing both packet and header protection, (...)"
+        checkReservedBits(decryptedFlags);
     }
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
+
+    protected void checkReservedBits(byte decryptedFlags) throws TransportError {}
 
     byte[] createHeaderProtectionMask(byte[] sample, Aead aead) {
         return createHeaderProtectionMask(sample, 4, aead);

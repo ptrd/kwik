@@ -137,6 +137,16 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
+    protected void checkReservedBits(byte decryptedFlags) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+        // "An endpoint MUST treat receipt of a packet that has a non-zero value for these bits, after removing both
+        //  packet and header protection, as a connection error of type PROTOCOL_VIOLATION. "
+        if ((decryptedFlags & 0x0c) != 0) {
+            throw new TransportError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION, "Reserved bits in long header packet are not zero");
+        }
+    }
+
+    @Override
     public int estimateLength(int additionalPayload) {
         int packetNumberSize = computePacketNumberSize(packetNumber);
         int payloadSize = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
