@@ -657,6 +657,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.2
+        // "clients that receive an Initial packet with a non-zero Token Length field MUST either discard the packet or
+        //  generate a connection error of type PROTOCOL_VIOLATION."
+        if (packet.getToken() != null && packet.getToken().length > 0) {
+            log.error("Received Initial packet with non-zero token length; discarding packet");
+            return ProcessResult.Abort;
+        }
+
         if (! packet.getVersion().equals(quicVersion.getVersion())) {
             handleVersionNegotiation(packet.getVersion());
         }

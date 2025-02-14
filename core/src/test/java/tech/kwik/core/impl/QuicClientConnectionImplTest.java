@@ -104,6 +104,18 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region initial packet
+    @Test
+    void initialWithTokenShouldBeDiscarded() {
+        // When
+        byte[] token = new byte[16];
+        PacketProcessor.ProcessResult result = connection.process(new InitialPacket(Version.getDefault(), destinationConnectionId, new byte[0], token, new PingFrame()), Instant.now());
+
+        // Then
+        assertThat(result).isEqualTo(PacketProcessor.ProcessResult.Abort);
+    }
+    //endregion
+
     //region retry
     @Test
     void testRetryPacketInitiatesInitialPacketWithToken() throws Exception {
