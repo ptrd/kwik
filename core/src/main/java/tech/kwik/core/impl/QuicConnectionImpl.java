@@ -562,6 +562,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     /**
+     * Immediately closes the connection with a QUIC layer error and enters the "closing state".
+     * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
+     * is ended and all connection state is discarded.
+     * If this method is called outside received-message-processing, post-processing actions (including flushing the
+     * sender) should be performed by the caller.
+     *
+     * @param error       The error code, see https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+     * @param errorReason
+     */
+    protected void immediateCloseWithError(QuicConstants.TransportErrorCode error, String errorReason) {
+        immediateCloseWithError(error.value, QUIC_LAYER_ERROR, errorReason);
+    }
+
+    /**
      * Immediately closes the connection (with or without a QUIC layer error) and enters the "closing state".
      * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
      * is ended and all connection state is discarded.

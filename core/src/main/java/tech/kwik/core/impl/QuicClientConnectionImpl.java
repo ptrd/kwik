@@ -76,9 +76,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static tech.kwik.agent15.TlsConstants.SignatureScheme.*;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.VERSION_NEGOTIATION_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 import static tech.kwik.core.common.EncryptionLevel.App;
 import static tech.kwik.core.common.EncryptionLevel.Handshake;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
@@ -780,6 +778,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
+        // "The token MUST NOT be empty. A client MUST treat receipt of a NEW_TOKEN frame with an empty Token field as
+        //  a connection error of type FRAME_ENCODING_ERROR."
+        if (newTokenFrame.getToken().length == 0) {
+            immediateCloseWithError(FRAME_ENCODING_ERROR, "empty token in NEW_TOKEN frame");
+        }
     }
 
     @Override

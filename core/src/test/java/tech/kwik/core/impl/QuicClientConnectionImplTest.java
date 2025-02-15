@@ -67,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static tech.kwik.agent15.TlsConstants.NamedGroup.secp256r1;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 class QuicClientConnectionImplTest {
@@ -98,6 +99,7 @@ class QuicClientConnectionImplTest {
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
+        FieldSetter.setField(connection, "sender", sender);
 
         testScheduledExecutor = new TestScheduledExecutor(new TestClock());
         FieldSetter.setField(connection, QuicConnectionImpl.class, "callbackThread", testScheduledExecutor);
@@ -720,6 +722,22 @@ class QuicClientConnectionImplTest {
         assertThat(connectionTerminatedEvent.closeReason()).isEqualTo(ConnectionTerminatedEvent.CloseReason.StatelessReset);
         assertThat(connectionTerminatedEvent.closedByPeer()).isTrue();
         assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
+    }
+    //endregion
+
+    //region misc
+    @Test
+    void receivingNewTokenFrameWithEmptyTokenShouldLeadToConnectionError() {
+        // Given
+        NewTokenFrame newTokenFrame = new NewTokenFrame(new byte[0]);
+
+        // When
+        connection.process(newTokenFrame, mock(QuicPacket.class), Instant.now());
+
+        // Then
+        verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame &&
+                        ((ConnectionCloseFrame) frame).getErrorCode() == FRAME_ENCODING_ERROR.value),
+                any(EncryptionLevel.class));
     }
     //endregion
 
