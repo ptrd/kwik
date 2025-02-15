@@ -18,17 +18,19 @@
  */
 package tech.kwik.core.frame;
 
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.generic.VariableLengthInteger;
-import tech.kwik.core.log.Logger;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
-import static tech.kwik.core.frame.AckFrame.FIXED_SENDER_ACK_DELAY_EXPONENT;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static tech.kwik.core.frame.AckFrame.FIXED_SENDER_ACK_DELAY_EXPONENT;
 
 class AckFrameTest extends FrameTest {
 
@@ -156,6 +158,16 @@ class AckFrameTest extends FrameTest {
 
         assertThat(ack.getAckedPacketNumbers()).containsOnly(2L, 0L);
         assertThat(ack.toString()).contains("[2,0|");
+    }
+
+    @Test
+    void parseAckFrameThatImpliesNegativePacketNumber() {
+        //                         ackframe   largest  delay ack-block-count #acked-below largest gap (size) #acked-below ecn-counts
+        byte[] data = new byte[] { 0x03,      0x02,    0x00, 0x01,           0x00,                0x01,      0x00,        0x70, 0x39, 0x70, 0x39, 0x70, 0x39 };
+
+        assertThatThrownBy(() -> new AckFrame().parse(ByteBuffer.wrap(data), mock(Logger.class)))
+            .isInstanceOf(TransportError.class)
+            .hasMessageContaining("negative packet number");
     }
     //endregion
 

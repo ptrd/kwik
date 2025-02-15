@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
@@ -178,7 +179,12 @@ public class AckFrame extends QuicFrame {
         return this;
     }
 
-    private int addAcknowledgeRange(long largestOfRange, int rangeSize) {
+    private int addAcknowledgeRange(long largestOfRange, int rangeSize) throws TransportError {
+        if (largestOfRange - rangeSize + 1 < 0) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.3.1
+            // If any computed packet number is negative, an endpoint MUST generate a connection error of type FRAME_ENCODING_ERROR.
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "negative packet number in ACK frame");
+        }
         acknowledgedRanges.add(new Range(largestOfRange - rangeSize + 1, largestOfRange));
         return rangeSize;
     }
