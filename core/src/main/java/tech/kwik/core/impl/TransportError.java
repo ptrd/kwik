@@ -26,6 +26,7 @@ public class TransportError extends Exception {
     private final QuicConstants.TransportErrorCode transportErrorCode;
 
     public TransportError(QuicConstants.TransportErrorCode transportErrorCode) {
+        super(transportErrorCode.toString());
         this.transportErrorCode = transportErrorCode;
     }
 

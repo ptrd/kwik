@@ -459,6 +459,17 @@ class CryptoStreamTest {
                 // Then
         ).doesNotThrowAnyException();
     }
+
+    @Test
+    void cryptoFrameWithLargeOffsetShouldLeadToException() {
+        // When
+        assertThatThrownBy(() ->
+                // When
+                cryptoStream.add(new CryptoFrame(QUIC_VERSION, 1_000_000, new byte[1000])))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .hasMessageContaining("CRYPTO_BUFFER_EXCEEDED");
+    }
     //endregion
 
     //region buffering crypto
