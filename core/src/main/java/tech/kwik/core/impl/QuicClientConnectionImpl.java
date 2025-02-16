@@ -908,12 +908,20 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         connectionIdManager.setInitialStatelessResetToken(peerTransportParams.getStatelessResetToken());
 
         if (processedRetryPacket) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:"
+            // "- absence of the retry_source_connection_id transport parameter from the server after receiving a Retry packet"
+            // "- a mismatch between values received from a peer in these transport parameters and the value sent in the
+            //    corresponding Destination or Source Connection ID fields of Initial packets."
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! connectionIdManager.validateRetrySourceConnectionId(peerTransportParams.getRetrySourceConnectionId())) {
                 immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
             }
         }
         else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:"
+            // "- presence of the retry_source_connection_id transport parameter when no Retry packet was received"
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
                 immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
@@ -960,11 +968,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private boolean verifyConnectionIds(TransportParameters transportParameters) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
-        // "An endpoint MUST treat absence of the initial_source_connection_id
-        //   transport parameter from either endpoint or absence of the
-        //   original_destination_connection_id transport parameter from the
-        //   server as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+        // "An endpoint MUST treat the absence of the initial_source_connection_id transport parameter from either endpoint
+        //  or the absence of the original_destination_connection_id transport parameter from the server as a connection
+        //  error of type TRANSPORT_PARAMETER_ERROR."
         if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
             log.error("Missing connection id from server transport parameter");
             if (transportParameters.getInitialSourceConnectionId() == null) {

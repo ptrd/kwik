@@ -642,7 +642,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
         if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
             // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or
