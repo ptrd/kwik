@@ -21,8 +21,10 @@ package tech.kwik.core.server.impl;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.util.Bytes;
+import tech.kwik.core.util.SecureHash;
 
 import java.net.InetSocketAddress;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -43,6 +45,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     private final Map<ConnectionSource, ServerConnectionProxy> currentConnections;
     private final Lock checkEmptyLock;
     private final Condition allConnectionsClosed;
+    private final SecureHash secureHash;
 
     ServerConnectionRegistryImpl(Logger log) {
         this.log = log;
@@ -50,24 +53,32 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
 
         checkEmptyLock = new ReentrantLock();
         allConnectionsClosed = checkEmptyLock.newCondition();
+
+        byte[] seed = new byte[16];
+        new SecureRandom().nextBytes(seed);
+        secureHash = new SecureHash(seed);
     }
 
     @Override
     public void registerConnection(ServerConnectionProxy connection, byte[] connectionId) {
-        currentConnections.put(new ConnectionSource(connectionId), connection);
+        currentConnections.put(connectionSource(connectionId), connection);
+    }
+
+    private ConnectionSource connectionSource(byte[] connectionId) {
+        return new ConnectionSource(connectionId, secureHash);
     }
 
     @Override
     public void deregisterConnection(ServerConnectionProxy connection, byte[] connectionId) {
-        currentConnections.remove(new ConnectionSource(connectionId));
+        currentConnections.remove(connectionSource(connectionId));
         checkAllConnectionsClosed();
     }
 
     @Override
     public void registerAdditionalConnectionId(byte[] currentConnectionId, byte[] newConnectionId) {
-        ServerConnectionProxy connection = currentConnections.get(new ConnectionSource(currentConnectionId));
+        ServerConnectionProxy connection = currentConnections.get(connectionSource(currentConnectionId));
         if (connection != null) {
-            currentConnections.put(new ConnectionSource(newConnectionId), connection);
+            currentConnections.put(connectionSource(newConnectionId), connection);
         }
         else {
             log.error("Cannot add additional cid to non-existing connection " + Bytes.bytesToHex(currentConnectionId));
@@ -76,21 +87,21 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
 
     @Override
     public void deregisterConnectionId(byte[] connectionId) {
-        currentConnections.remove(new ConnectionSource(connectionId));
+        currentConnections.remove(connectionSource(connectionId));
         checkAllConnectionsClosed();
     }
 
     Optional<ServerConnectionProxy> isExistingConnection(InetSocketAddress clientAddress, byte[] dcid) {
-        return Optional.ofNullable(currentConnections.get(new ConnectionSource(dcid)));
+        return Optional.ofNullable(currentConnections.get(connectionSource(dcid)));
     }
 
     ServerConnectionProxy removeConnection(ServerConnectionImpl connection) {
         // Remove the entry this is registered with the original dcid
-        ServerConnectionProxy removed = currentConnections.remove(new ConnectionSource(connection.getOriginalDestinationConnectionId()));
+        ServerConnectionProxy removed = currentConnections.remove(connectionSource(connection.getOriginalDestinationConnectionId()));
 
         // Remove all entries that are registered with the active cids
         List<ServerConnectionProxy> removedConnections = connection.getActiveConnectionIds().stream()
-                .map(cid -> new ConnectionSource(cid))
+                .map(cid -> connectionSource(cid))
                 .map(cs -> currentConnections.remove(cs))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());

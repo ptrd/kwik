@@ -18,15 +18,15 @@
  */
 package tech.kwik.qlog;
 
-import tech.kwik.qlog.event.CongestionControlMetricsEvent;
-import tech.kwik.qlog.event.ConnectionCreatedEvent;
-import tech.kwik.qlog.event.ConnectionTerminatedEvent;
-import tech.kwik.qlog.event.QLogEventProcessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import tech.kwik.qlog.event.CongestionControlMetricsEvent;
+import tech.kwik.qlog.event.ConnectionCreatedEvent;
+import tech.kwik.qlog.event.ConnectionTerminatedEvent;
+import tech.kwik.qlog.event.QLogEventProcessor;
 
 import java.io.File;
 import java.time.Instant;
@@ -55,13 +55,14 @@ class QLogBackEndTest {
     }
 
     @Test
-    void eventsWithSameCidShouldBeProcessedBySameConnectionQLog() throws InterruptedException {
+    void eventsWithSameConnectionHandleShouldBeProcessedBySameConnectionQLog() throws InterruptedException {
+        long connectionHandle = 1L;
         // Given
-        ConnectionCreatedEvent event1 = spy(new ConnectionCreatedEvent(new byte[]{ 0x01, 0x02, 0x03 }, Instant.now()));
+        ConnectionCreatedEvent event1 = spy(new ConnectionCreatedEvent(connectionHandle, new byte[]{ 0x01, 0x02, 0x03 }, Instant.now()));
         qLogBackEnd.getQueue().add(event1);
 
         // When
-        QLogEvent event2 = spy(new CongestionControlMetricsEvent(new byte[]{ 0x01, 0x02, 0x03 }, 0, 0, Instant.now()));
+        QLogEvent event2 = spy(new CongestionControlMetricsEvent(connectionHandle, new byte[]{ 0x01, 0x02, 0x03 }, 0, 0, Instant.now()));
         qLogBackEnd.getQueue().add(event2);
 
         // Then
@@ -78,11 +79,12 @@ class QLogBackEndTest {
 
     @Test
     void connectionTerminatedEventShouldRemoveConnectionQLog() throws InterruptedException {
-        qLogBackEnd.getQueue().add(new ConnectionCreatedEvent(new byte[]{ 0x01, 0x02, 0x03 }, Instant.now()));
+        long connectionHandle = 1L;
+        qLogBackEnd.getQueue().add(new ConnectionCreatedEvent(connectionHandle, new byte[]{ 0x01, 0x02, 0x03 }, Instant.now()));
 
-        QLogEvent close1 = spy(new ConnectionTerminatedEvent(new byte[]{ 0x01, 0x02, 0x03 }));
+        QLogEvent close1 = spy(new ConnectionTerminatedEvent(connectionHandle, new byte[]{ 0x01, 0x02, 0x03 }));
         qLogBackEnd.getQueue().add(close1);
-        QLogEvent close2 = spy(new ConnectionTerminatedEvent(new byte[]{ 0x01, 0x02, 0x03 }));
+        QLogEvent close2 = spy(new ConnectionTerminatedEvent(connectionHandle, new byte[]{ 0x01, 0x02, 0x03 }));
         qLogBackEnd.getQueue().add(close2);
 
         // Then...

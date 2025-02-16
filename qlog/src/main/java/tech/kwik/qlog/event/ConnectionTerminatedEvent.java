@@ -24,8 +24,8 @@ import java.time.Instant;
 
 public class ConnectionTerminatedEvent extends QLogEvent {
 
-    public ConnectionTerminatedEvent(byte[] originalDcid) {
-        super(originalDcid, Instant.now());
+    public ConnectionTerminatedEvent(long connectionHandle, byte[] originalDcid) {
+        super(connectionHandle, originalDcid, Instant.now());
     }
 
     @Override

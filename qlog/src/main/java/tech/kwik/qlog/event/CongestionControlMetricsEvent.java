@@ -27,8 +27,8 @@ public class CongestionControlMetricsEvent extends QLogEvent {
     private final long congestionWindow;
     private final long bytesInFlight;
 
-    public CongestionControlMetricsEvent(byte[] originalDcid, long congestionWindow, long bytesInFlight, Instant eventTime) {
-        super(originalDcid, eventTime);
+    public CongestionControlMetricsEvent(long connectionHandle, byte[] originalDcid, long congestionWindow, long bytesInFlight, Instant eventTime) {
+        super(connectionHandle, originalDcid, eventTime);
         this.congestionWindow = congestionWindow;
         this.bytesInFlight = bytesInFlight;
     }

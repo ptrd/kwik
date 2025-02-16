@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Queue;
+import java.util.Random;
 
 /**
  * Entrypoint of the QLog module. Collects qlog events and processes them asynchronously.
@@ -35,14 +36,17 @@ import java.util.Queue;
  */
 public class QLogFrontEnd implements QLog {
 
+    private static Random randomGenerator = new Random();
+
     private final byte[] originalDcid;
     private final Queue<QLogEvent> eventQueue;
-
+    private final long connectionHandle;
 
     public QLogFrontEnd(byte[] originalDestinationConnectionId) {
         originalDcid = originalDestinationConnectionId;
         String qlogdirEnvVar = System.getenv("QLOGDIR");
         if (qlogdirEnvVar != null && !qlogdirEnvVar.isBlank()) {
+            connectionHandle = randomGenerator.nextLong();
             eventQueue = new QLogBackEnd().getQueue();
             File qlogDir = new File(qlogdirEnvVar);
             if (!qlogDir.exists()) {
@@ -50,53 +54,54 @@ public class QLogFrontEnd implements QLog {
             }
         }
         else {
+            connectionHandle = -1;
             eventQueue = new NullQueue();
         }
     }
 
     @Override
     public void emitConnectionCreatedEvent(Instant created) {
-        eventQueue.add(new ConnectionCreatedEvent(originalDcid, created));
+        eventQueue.add(new ConnectionCreatedEvent(connectionHandle, originalDcid, created));
     }
 
     @Override
     public void emitPacketSentEvent(QuicPacket packet, Instant sent) {
-        eventQueue.add(new PacketSentEvent(originalDcid, packet, sent));
+        eventQueue.add(new PacketSentEvent(connectionHandle, originalDcid, packet, sent));
     }
 
     @Override
     public void emitPacketSentEvent(List<QuicPacket> packets, Instant sent) {
-        packets.stream().forEach(packet -> eventQueue.add(new PacketSentEvent(originalDcid, packet, sent)));
+        packets.stream().forEach(packet -> eventQueue.add(new PacketSentEvent(connectionHandle, originalDcid, packet, sent)));
     }
 
     @Override
     public void emitPacketReceivedEvent(QuicPacket packet, Instant received) {
-        eventQueue.add(new PacketReceivedEvent(originalDcid, packet, received));
+        eventQueue.add(new PacketReceivedEvent(connectionHandle, originalDcid, packet, received));
     }
 
     @Override
     public void emitPacketLostEvent(QuicPacket packet, Instant received) {
-        eventQueue.add(new PacketLostEvent(originalDcid, packet, received));
+        eventQueue.add(new PacketLostEvent(connectionHandle, originalDcid, packet, received));
     }
 
     @Override
     public void emitConnectionTerminatedEvent() {
-        eventQueue.add(new ConnectionTerminatedEvent(originalDcid));
+        eventQueue.add(new ConnectionTerminatedEvent(connectionHandle, originalDcid));
     }
 
     @Override
     public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {
-        eventQueue.add(new CongestionControlMetricsEvent(originalDcid, congestionWindow, bytesInFlight, Instant.now()));
+        eventQueue.add(new CongestionControlMetricsEvent(connectionHandle, originalDcid, congestionWindow, bytesInFlight, Instant.now()));
     }
 
     @Override
     public void emitConnectionClosedEvent(Instant time) {
-        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.idleTimeout));
+        eventQueue.add(new ConnectionClosedEvent(connectionHandle, originalDcid, time, ConnectionClosedEvent.Trigger.idleTimeout));
     }
 
     @Override
     public void emitConnectionClosedEvent(Instant time, long errorCode, String errorReason) {
-        eventQueue.add(new ConnectionClosedEvent(originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, errorCode, errorReason));
+        eventQueue.add(new ConnectionClosedEvent(connectionHandle, originalDcid, time, ConnectionClosedEvent.Trigger.immediateClose, errorCode, errorReason));
     }
 
     private static class NullQueue implements Queue<QLogEvent> {
@@ -162,7 +167,6 @@ public class QLogFrontEnd implements QLog {
 
         @Override
         public void clear() {
-
         }
 
         @Override

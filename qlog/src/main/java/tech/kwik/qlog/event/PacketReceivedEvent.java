@@ -24,8 +24,8 @@ import java.time.Instant;
 
 public class PacketReceivedEvent extends PacketEvent {
 
-    public PacketReceivedEvent(byte[] originalDcid, QuicPacket packet, Instant received) {
-        super(originalDcid, packet, received);
+    public PacketReceivedEvent(long connectionHandle, byte[] originalDcid, QuicPacket packet, Instant received) {
+        super(connectionHandle, originalDcid, packet, received);
     }
 
     @Override

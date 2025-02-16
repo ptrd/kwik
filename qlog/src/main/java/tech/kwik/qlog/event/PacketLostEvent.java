@@ -28,8 +28,8 @@ import java.time.Instant;
  */
 public class PacketLostEvent extends PacketEvent {
 
-    public PacketLostEvent(byte[] cid, QuicPacket packet, Instant time) {
-        super(cid, packet, time);
+    public PacketLostEvent(long connectionHandle, byte[] cid, QuicPacket packet, Instant time) {
+        super(connectionHandle, cid, packet, time);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,25 +16,21 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.qlog.event;
+package tech.kwik.core.util;
 
-import tech.kwik.core.packet.QuicPacket;
-import tech.kwik.qlog.QLogEvent;
+import io.whitfin.siphash.SipHasher;
+import io.whitfin.siphash.SipHasherContainer;
 
-import java.time.Instant;
+public class SecureHash {
 
-public abstract class PacketEvent extends QLogEvent {
+    private final SipHasherContainer container;
 
-    private final QuicPacket packet;
-
-    public PacketEvent(long connectionHandle, byte[] cid, QuicPacket packet, Instant time) {
-        super(connectionHandle, cid, time);
-        this.packet = packet;
+    public SecureHash(byte[] key) {
+        container = SipHasher.container(key);
     }
 
-    public QuicPacket getPacket() {
-        return packet;
+    public int generateHashCode(byte[] dcid) {
+        long longHash = container.hash(dcid);
+        return (int)(longHash ^ (longHash >>> 32));
     }
-
-
 }
