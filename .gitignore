@@ -17,3 +17,4 @@ certs/
 www
 /todo
 .DS_Store
+/dist
