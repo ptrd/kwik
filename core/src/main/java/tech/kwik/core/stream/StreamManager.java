@@ -272,9 +272,12 @@ public class StreamManager {
             }
         }
         else {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-19.11
-            // "An endpoint MUST terminate a connection with a STREAM_LIMIT_ERROR error if a peer opens more
-            //  streams than was permitted."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-4.6
+            // "An endpoint that receives a frame with a stream ID exceeding the limit it has sent MUST treat this as a
+            //  connection error of type STREAM_LIMIT_ERROR"
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.11
+            // "An endpoint MUST terminate a connection with a STREAM_LIMIT_ERROR error if a peer opens more streams
+            //  than was permitted."
             throw new TransportError(STREAM_LIMIT_ERROR);
         }
         return streams.get(requestedStreamId);

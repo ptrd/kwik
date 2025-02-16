@@ -67,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static tech.kwik.agent15.TlsConstants.NamedGroup.secp256r1;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 class QuicClientConnectionImplTest {
@@ -98,9 +99,22 @@ class QuicClientConnectionImplTest {
         sender = Mockito.mock(SenderImpl.class);
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
         FieldSetter.setField(connectionIdManager, "sender", sender);
+        FieldSetter.setField(connection, "sender", sender);
 
         testScheduledExecutor = new TestScheduledExecutor(new TestClock());
         FieldSetter.setField(connection, QuicConnectionImpl.class, "callbackThread", testScheduledExecutor);
+    }
+    //endregion
+
+    //region initial packet
+    @Test
+    void initialWithTokenShouldBeDiscarded() {
+        // When
+        byte[] token = new byte[16];
+        PacketProcessor.ProcessResult result = connection.process(new InitialPacket(Version.getDefault(), destinationConnectionId, new byte[0], token, new PingFrame()), Instant.now());
+
+        // Then
+        assertThat(result).isEqualTo(PacketProcessor.ProcessResult.Abort);
     }
     //endregion
 
@@ -386,7 +400,9 @@ class QuicClientConnectionImplTest {
 
         verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class));
     }
+    //endregion
 
+    //region connection id
     @Test
     void receivingRetireConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
@@ -401,9 +417,7 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
         verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
-    //endregion
 
-    //region connection id
     @Test
     void receivingPacketWitYetUnusedConnectionIdLeadsToNewSourceConnectionId() throws Exception {
         // Given
@@ -710,6 +724,23 @@ class QuicClientConnectionImplTest {
         assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
     }
     //endregion
+
+    //region misc
+    @Test
+    void receivingNewTokenFrameWithEmptyTokenShouldLeadToConnectionError() {
+        // Given
+        NewTokenFrame newTokenFrame = new NewTokenFrame(new byte[0]);
+
+        // When
+        connection.process(newTokenFrame, mock(QuicPacket.class), Instant.now());
+
+        // Then
+        verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame &&
+                        ((ConnectionCloseFrame) frame).getErrorCode() == FRAME_ENCODING_ERROR.value),
+                any(EncryptionLevel.class));
+    }
+    //endregion
+
     //region helper methods
     private void setFixedOriginalDestinationConnectionId(byte[] originalConnectionId) throws Exception {
         var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();

@@ -20,12 +20,18 @@ package tech.kwik.core.impl;
 
 import tech.kwik.core.QuicConstants;
 
-// https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-error-codes
-public class TransportError extends QuicError {
+// https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+public class TransportError extends Exception {
 
     private final QuicConstants.TransportErrorCode transportErrorCode;
 
     public TransportError(QuicConstants.TransportErrorCode transportErrorCode) {
+        super(transportErrorCode.toString());
+        this.transportErrorCode = transportErrorCode;
+    }
+
+    public TransportError(QuicConstants.TransportErrorCode transportErrorCode, String message) {
+        super(transportErrorCode + ": " + message);
         this.transportErrorCode = transportErrorCode;
     }
 

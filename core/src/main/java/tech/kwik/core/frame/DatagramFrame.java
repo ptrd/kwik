@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.ImplementationError;
@@ -64,10 +65,10 @@ public class DatagramFrame extends QuicFrame {
         buffer.put(data);
     }
 
-    public QuicFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
-        int frameType = VariableLengthInteger.parse(buffer);
+    public QuicFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+        int frameType = VariableLengthInteger.parseInt(buffer);
         if (frameType == DATAGRAM_FRAME_TYPE_WITH_LEN) {
-            int length = VariableLengthInteger.parse(buffer);
+            int length = VariableLengthInteger.parseInt(buffer);
             data = new byte[length];
             buffer.get(data);
         }

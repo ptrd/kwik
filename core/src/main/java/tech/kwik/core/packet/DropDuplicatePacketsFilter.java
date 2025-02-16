@@ -19,6 +19,7 @@
 package tech.kwik.core.packet;
 
 import tech.kwik.core.common.PnSpace;
+import tech.kwik.core.impl.TransportError;
 
 import java.util.Arrays;
 
@@ -56,7 +57,7 @@ public class DropDuplicatePacketsFilter extends BasePacketFilter {
     }
 
     @Override
-    public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+    public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
         if (packet.getPnSpace() == null || packetNumberSpace[packet.getPnSpace().ordinal()].checkPacketNumber(packet)) {
             next(packet, metaData);
         }

@@ -38,7 +38,11 @@ import tech.kwik.core.cid.ConnectionIdManager;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.CryptoStream;
-import tech.kwik.core.frame.*;
+import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.HandshakeDoneFrame;
+import tech.kwik.core.frame.NewTokenFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.RetireConnectionIdFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.LogProxy;
 import tech.kwik.core.log.Logger;
@@ -70,6 +74,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.INVALID_TOKEN;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
 import static tech.kwik.core.impl.QuicConnectionImpl.Status.Connected;
@@ -184,10 +189,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected PacketFilter createProcessorChain() {
         return new CheckDestinationFilter(
                 new DropDuplicatePacketsFilter(
-                        new VersionNegotiationConfirmedFilter(
-                                new PostProcessingFilter(
-                                        new QlogPacketFilter(
-                                                new ClosingOrDrainingFilter(this, log))))));
+                        new FramesCheckFilter(
+                                new VersionNegotiationConfirmedFilter(
+                                        new PostProcessingFilter(
+                                                new QlogPacketFilter(
+                                                        new ClosingOrDrainingFilter(this, log)))))));
     }
 
     PacketParser createParser() {
@@ -571,20 +577,30 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
-    }
-
-    @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        connectionIdManager.process(newConnectionIdFrame);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.20
+        // "A server MUST treat receipt of a HANDSHAKE_DONE frame as a connection error of type PROTOCOL_VIOLATION."
+        immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected handshake done frame");
     }
 
     @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
+        // " A server MUST treat receipt of a NEW_TOKEN frame as a connection error of type PROTOCOL_VIOLATION."
+        immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected new token frame");
     }
 
     @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
+    }
+
+    /**
+     * Trivial (do nothing else) override to make method accessible in this package.
+     * @param cause
+     */
+    @Override
+    protected void connectionError(TransportError cause) {
+        super.connectionError(cause);
     }
 
     @Override
@@ -626,7 +642,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             throw new TransportError(TRANSPORT_PARAMETER_ERROR);
         }
         if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-7.3
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
             // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
             //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
             // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or
@@ -773,7 +789,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (versionNegotiationStatus == VersionChangeUnconfirmed) {
                 if (packet.getVersion().equals(quicVersion.getVersion())) {
                     versionNegotiationStatus = VersionNegotiationStatus.VersionNegotiated;

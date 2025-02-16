@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
@@ -25,6 +26,7 @@ import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.DecryptionException;
 import tech.kwik.core.impl.InvalidPacketException;
 import tech.kwik.core.impl.PacketProcessor;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
@@ -62,7 +64,7 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.remaining() < 1 + sourceConnectionIdLength) {
             throw new InvalidPacketException();
@@ -94,6 +96,15 @@ public class ShortHeaderPacket extends QuicPacket {
         }
         finally {
             packetSize = buffer.position() - 0;
+        }
+    }
+
+    protected void checkReservedBits(byte decryptedFlags) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
+        // "An endpoint MUST treat receipt of a packet that has a non-zero value for these bits, after removing both
+        //  packet and header protection, as a connection error of type PROTOCOL_VIOLATION. "
+        if ((decryptedFlags & 0x18) != 0) {
+            throw new TransportError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION, "Reserved bits in short header packet are not zero");
         }
     }
 

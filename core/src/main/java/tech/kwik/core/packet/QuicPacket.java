@@ -18,10 +18,12 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.frame.*;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
@@ -104,7 +106,7 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException, TransportError {
         if (buffer.remaining() < remainingLength) {
             throw new InvalidPacketException();
         }
@@ -202,9 +204,14 @@ abstract public class QuicPacket {
 
         frames = new ArrayList<>();
         parseFrames(frameBytes, log);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
+        // "An endpoint MUST (...) after removing both packet and header protection, (...)"
+        checkReservedBits(decryptedFlags);
     }
 
     protected void setUnprotectedHeader(byte decryptedFlags) {}
+
+    protected void checkReservedBits(byte decryptedFlags) throws TransportError {}
 
     byte[] createHeaderProtectionMask(byte[] sample, Aead aead) {
         return createHeaderProtectionMask(sample, 4, aead);
@@ -283,7 +290,7 @@ abstract public class QuicPacket {
         return candidatePn;
     }
 
-    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidPacketException {
+    protected void parseFrames(byte[] frameBytes, Logger log) throws InvalidPacketException, TransportError {
         ByteBuffer buffer = ByteBuffer.wrap(frameBytes);
 
         int frameType = -1;
@@ -365,16 +372,16 @@ abstract public class QuicPacket {
                             frames.add(new StreamFrame().parse(buffer, log));
                         }
                         else {
-                            // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-12.4
+                            // https://www.rfc-editor.org/rfc/rfc9000.html#section-12.4
                             // "An endpoint MUST treat the receipt of a frame of unknown type as a connection error of type FRAME_ENCODING_ERROR."
-                            throw new ProtocolError("connection error FRAME_ENCODING_ERROR");
+                            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
                         }
                 }
             }
         }
         catch (InvalidIntegerEncodingException e) {
-            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
-            throw new InvalidPacketException("invalid integer encoding");
+            log.error("Parse error while parsing frame of type " + frameType + ".");
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid integer encoding");
         }
         catch (IllegalArgumentException e) {
             log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
@@ -382,9 +389,12 @@ abstract public class QuicPacket {
             // Strictly speaking, this would not be an invalid packet, but Kwik cannot handle it.
             throw new InvalidPacketException("unexpected large int value");
         }
-        catch (BufferUnderflowException e) {
-            log.error("Parse error while parsing frame of type " + frameType + ", packet will be marked invalid (and dropped)");
-            throw new InvalidPacketException("invalid frame encoding");
+        catch (BufferUnderflowException | IntegerTooLargeException e) {
+            // Buffer underflow is obviously a frame encoding error.
+            // In this context, integer too large means there is an int value in the frame that can't be valid (e.g.
+            // a length of a byte array > 2^32-1), so this really is a frame encoding error.
+            log.error("Parse error while parsing frame of type " + frameType + ".");
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid frame encoding");
         }
     }
 
@@ -515,7 +525,7 @@ abstract public class QuicPacket {
 
     public abstract byte[] generatePacketBytes(Aead aead);
 
-    public abstract void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException;
+    public abstract void parse(ByteBuffer data, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError;
 
     public List<QuicFrame> getFrames() {
         return frames;

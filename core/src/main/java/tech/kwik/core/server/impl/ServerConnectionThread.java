@@ -18,9 +18,9 @@
  */
 package tech.kwik.core.server.impl;
 
-import tech.kwik.core.packet.DatagramParserFilter;
-import tech.kwik.core.packet.InitialPacket;
-import tech.kwik.core.packet.PacketMetaData;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.*;
 import tech.kwik.core.util.Bytes;
 
 import java.net.InetSocketAddress;
@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 
 /**
  * Proxy for server connection that ensures that all processing of received datagrams is executed on a separate thread.
@@ -43,13 +44,15 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     private final List<InitialPacket> firstInitialPackets;
     private final ByteBuffer data;
     private final PacketMetaData firstInitialPacketMetaData;
+    private final Logger log;
 
 
-    public ServerConnectionThread(ServerConnectionImpl serverConnection, List<InitialPacket> firstInitialPackets, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData) {
+    public ServerConnectionThread(ServerConnectionImpl serverConnection, List<InitialPacket> firstInitialPackets, ByteBuffer remainingDatagramData, PacketMetaData initialPacketMetaData, Logger log) {
         this.serverConnection = serverConnection;
         this.firstInitialPackets = firstInitialPackets != null? firstInitialPackets: List.of();
         this.data = remainingDatagramData;
         this.firstInitialPacketMetaData = initialPacketMetaData;
+        this.log = log;
 
         queue = new LinkedBlockingQueue<>();
         String threadId = "receiver-" + Bytes.bytesToHex(serverConnection.getOriginalDestinationConnectionId());
@@ -84,12 +87,18 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
     private void process() {
         try {
-            firstInitialPackets.forEach(firstInitialPacket ->
-                    serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData));
+            for (InitialPacket firstInitialPacket : firstInitialPackets) {
+                serverConnection.getPacketProcessorChain().processPacket(firstInitialPacket, firstInitialPacketMetaData);
+            }
 
-            DatagramParserFilter datagramProcessingChain = new DatagramParserFilter(serverConnection.createParser());
+            PacketParser parser = serverConnection.createParser();
+            DatagramFilter datagramProcessingChain = wrapWithFilters(parser, serverConnection::increaseAntiAmplificationLimit, serverConnection::datagramProcessed);
 
             if (data.hasRemaining()) {
+                // While processing the first initial packet, the anti amplification limit was already increased with the
+                // total datagram size. Now the remainder of the datagram is processed, which will make the
+                // AntiAmplificationTrackingFilter to count these bytes again. To compensate for this, the limit is decreased
+                serverConnection.increaseAntiAmplificationLimit(-1 * data.remaining());
                 datagramProcessingChain.processDatagram(data.slice(), firstInitialPacketMetaData);
             }
 
@@ -99,8 +108,19 @@ public class ServerConnectionThread implements ServerConnectionProxy {
                 datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
+        catch (TransportError error) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-11.1
+            // "Connection Errors
+            //  Errors that result in the connection being unusable, such as an obvious violation of protocol semantics
+            //  or corruption of state that affects an entire connection, MUST be signaled using a CONNECTION_CLOSE frame"
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "Transport Error Codes
+            //  This section lists the defined QUIC transport error codes that can be used in a CONNECTION_CLOSE frame
+            //  with a type of 0x1c. These errors apply to the entire connection."
+            serverConnection.connectionError(error);
+        }
         catch (InterruptedException e) {
-            // Terminate process and thread, see terminate() method
+            // Terminate process and thread, see dispose() method
         }
         catch (Throwable error) {
             // Of course, this should never happen. But if it does, there is no point in going on with this connection.
@@ -111,6 +131,17 @@ public class ServerConnectionThread implements ServerConnectionProxy {
     @Override
     public String toString() {
         return "ServerConnectionThread[" + Bytes.bytesToHex(getOriginalDestinationConnectionId()) + "]";
+    }
+
+    private DatagramFilter wrapWithFilters(PacketParser parser, Consumer<Integer> receivedPayloadBytesCounterFunction, Runnable postProcessingFunction) {
+        return
+                // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
+                new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
+                        new ClientAddressFilter(firstInitialPacketMetaData.sourceAddress(), log,
+                                new ClientInitialScidFilter(serverConnection.getDestinationConnectionId(), log,
+                                        new InitialPacketMinimumSizeFilter(log,
+                                                new DatagramPostProcessingFilter(postProcessingFunction, log,
+                                                        new DatagramParserFilter(parser))))));
     }
 
     static class ReceivedDatagram {

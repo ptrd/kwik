@@ -21,6 +21,7 @@ package tech.kwik.core.server.impl;
 import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
+import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
@@ -58,9 +59,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static tech.kwik.core.common.EncryptionLevel.Initial;
@@ -80,8 +79,8 @@ public class ServerConnectorImpl implements ServerConnector {
     private TlsServerEngineFactory tlsEngineFactory;
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
-    private final ExecutorService sharedExecutor = Executors.newSingleThreadExecutor();
-    private final ScheduledExecutorService sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService sharedExecutor;
+    private final ScheduledExecutorService sharedScheduledExecutor;
     private final Context context;
     private final ServerConnectionRegistryImpl connectionRegistry;
     private final int connectionIdLength;
@@ -144,6 +143,11 @@ public class ServerConnectorImpl implements ServerConnector {
                 .map(Version::getId)
                 .collect(Collectors.toList());
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
+
+        int maxSharedExecutorThreads = 10;
+        sharedExecutor = new ThreadPoolExecutor(1, maxSharedExecutorThreads, 60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<Runnable>(), new DaemonThreadFactory("server connector shared executor"));
+        sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         context = new ServerConnectorContext();
 
         serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");

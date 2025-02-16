@@ -21,19 +21,21 @@ package tech.kwik.core.server.impl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketFilter;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.ServerRolePacketParser;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class ServerConnectionThreadTest {
 
@@ -58,12 +60,13 @@ class ServerConnectionThreadTest {
     }
 
     @Test
-    void testIncomingPacketsShouldBeParsed() throws InterruptedException {
+    void testIncomingPacketsShouldBeParsed() throws Exception {
         // Given
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), ByteBuffer.allocate(0), mock(PacketMetaData.class));
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), ByteBuffer.allocate(0), metaData, mock(Logger.class));
 
         // When
-        serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), null);
+        serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), new InetSocketAddress(54221));
         Thread.sleep(10);
 
         // Then
@@ -71,16 +74,42 @@ class ServerConnectionThreadTest {
     }
 
     @Test
-    void testRemainingDatagramDataShouldBeParsed() throws InterruptedException {
+    void testRemainingDatagramDataShouldBeParsed() throws Exception {
         // Given
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
         ByteBuffer remainingData = ByteBuffer.allocate(1173);
         remainingData.position(1100);
 
         // When
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, mock(PacketMetaData.class));
+        serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), remainingData, metaData, mock(Logger.class));
         Thread.sleep(10);
 
         // Then
         verify(parser).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 73), any(PacketMetaData.class));
+    }
+
+    @Test
+    void testRemainingDatagramDataShouldNotIncreaseAntiAmplificationLimit() throws InterruptedException {
+        // Given
+        AtomicInteger antiAmplificationLimit = new AtomicInteger(0);
+        stubAntiAmplificationLimitWith(antiAmplificationLimit);
+
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        ByteBuffer remainingData = ByteBuffer.allocate(1173);
+        remainingData.position(1100);
+
+        // When
+        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, metaData, mock(Logger.class));
+        Thread.sleep(10);
+
+        // Then
+        assertThat(antiAmplificationLimit.get()).isZero();
+    }
+
+    private void stubAntiAmplificationLimitWith(AtomicInteger antiAmplificationLimit) {
+        doAnswer(invocation -> {
+            antiAmplificationLimit.addAndGet(invocation.getArgument(0));
+            return null;
+        }).when(serverConnection).increaseAntiAmplificationLimit(anyInt());
     }
 }

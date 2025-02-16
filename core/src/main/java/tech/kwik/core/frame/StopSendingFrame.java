@@ -20,6 +20,7 @@ package tech.kwik.core.frame;
 
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
@@ -44,10 +45,10 @@ public class StopSendingFrame extends QuicFrame {
         this.errorCode = errorCode;
     }
 
-    public StopSendingFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public StopSendingFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError {
         buffer.get();
 
-        streamId = VariableLengthInteger.parse(buffer);
+        streamId = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support stream id's larger than max int.
         errorCode = VariableLengthInteger.parseLong(buffer);
 
         return this;

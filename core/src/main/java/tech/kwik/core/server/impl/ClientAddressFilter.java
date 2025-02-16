@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.BaseDatagramFilter;
 import tech.kwik.core.packet.DatagramFilter;
@@ -36,7 +37,7 @@ public class ClientAddressFilter extends BaseDatagramFilter {
     }
 
     @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
+    public void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         if (metaData.sourceAddress().equals(clientAddress)) {
             next(data, metaData);
         }

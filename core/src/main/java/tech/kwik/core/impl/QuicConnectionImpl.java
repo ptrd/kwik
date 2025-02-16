@@ -443,6 +443,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        getConnectionIdManager().process(newConnectionIdFrame);
+    }
+
+    @Override
     public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
     }
 
@@ -557,6 +562,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     /**
+     * Immediately closes the connection with a QUIC layer error and enters the "closing state".
+     * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
+     * is ended and all connection state is discarded.
+     * If this method is called outside received-message-processing, post-processing actions (including flushing the
+     * sender) should be performed by the caller.
+     *
+     * @param error       The error code, see https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+     * @param errorReason
+     */
+    protected void immediateCloseWithError(QuicConstants.TransportErrorCode error, String errorReason) {
+        immediateCloseWithError(error.value, QUIC_LAYER_ERROR, errorReason);
+    }
+
+    /**
      * Immediately closes the connection (with or without a QUIC layer error) and enters the "closing state".
      * Connection close frame with indicated error (or "NO_ERROR") is sent to peer and after 3 x PTO, the closing state
      * is ended and all connection state is discarded.
@@ -646,6 +665,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             }
             lastConnectionCloseFrameSent = closeFrame;
         }
+    }
+
+    /**
+     * Handle connection error that did not occur during processing of a received packet.
+     * @param cause
+     */
+    protected void connectionError(TransportError cause) {
+        immediateCloseWithError(cause.getTransportErrorCode().value, cause.getMessage());
+        getSender().flush();
+        runPostProcessingActions();
     }
 
     protected void handlePacketInClosingState(QuicPacket packet) {
@@ -962,7 +991,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (checkDestinationConnectionId(packet)) {
                 next(packet, metaData);
             }
@@ -979,7 +1008,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
 
         @Override
-        public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+        public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
             if (connectionState.closingOrDraining()) {
                 if (connectionState.isClosing()) {
                     // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2.1
@@ -1004,7 +1033,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             }
 
             @Override
-            public void processPacket(QuicPacket packet, PacketMetaData metaData) {
+            public void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError {
                 next(packet, metaData);
                 getSender().packetProcessed(metaData.moreDataInDatagram());
             }

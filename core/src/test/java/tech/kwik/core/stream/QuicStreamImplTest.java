@@ -18,12 +18,18 @@
  */
 package tech.kwik.core.stream;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.MaxStreamDataFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.ResetStreamFrame;
 import tech.kwik.core.frame.StopSendingFrame;
 import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.impl.QuicConnectionImpl;
 import tech.kwik.core.impl.Role;
@@ -31,11 +37,6 @@ import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.test.FieldReader;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -416,7 +417,8 @@ class QuicStreamImplTest {
             } catch (InterruptedException e) {}
             try {
                 quicStream.addStreamData(resurrect(new StreamFrame(0, 4, new byte[0], true)));
-            } catch (TransportError e) {
+            }
+            catch (TransportError e) {
                 throw new RuntimeException(e);
             }
         }).start();
@@ -1390,7 +1392,8 @@ class QuicStreamImplTest {
             streamFrame.serialize(buffer);
             buffer.flip();
             return new StreamFrame().parse(buffer, logger);
-        } catch (InvalidIntegerEncodingException e) {
+        }
+        catch (InvalidIntegerEncodingException | TransportError | IntegerTooLargeException e) {
             throw new RuntimeException(e);
         }
     }

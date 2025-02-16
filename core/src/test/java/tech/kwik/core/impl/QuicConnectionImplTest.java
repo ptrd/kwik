@@ -85,7 +85,7 @@ class QuicConnectionImplTest {
 
     //region close
     @Test
-    void whenClosingNormalPacketsAreNotProcessed() {
+    void whenClosingNormalPacketsAreNotProcessed() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose();
@@ -99,7 +99,7 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void whenClosingDuringInitialNormalPacketsAreNotProcessed() {
+    void whenClosingDuringInitialNormalPacketsAreNotProcessed() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose();
@@ -114,7 +114,7 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void whenClosingNormalPacketLeadsToSendingConnectionClose() {
+    void whenClosingNormalPacketLeadsToSendingConnectionClose() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateClose();
@@ -129,7 +129,7 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void whenClosingNormalPacketLeadsToSendingConnectionCloseWithSameErrorInfo() {
+    void whenClosingNormalPacketLeadsToSendingConnectionCloseWithSameErrorInfo() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.immediateCloseWithError(QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, "something went wrong");
@@ -177,7 +177,7 @@ class QuicConnectionImplTest {
     }
 
     @Test
-    void whenReceivingCloseNormalPacketsAreNotProcessed() {
+    void whenReceivingCloseNormalPacketsAreNotProcessed() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
         connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);

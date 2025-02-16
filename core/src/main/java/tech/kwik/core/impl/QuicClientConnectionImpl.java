@@ -76,9 +76,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static tech.kwik.agent15.TlsConstants.SignatureScheme.*;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.VERSION_NEGOTIATION_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 import static tech.kwik.core.common.EncryptionLevel.App;
 import static tech.kwik.core.common.EncryptionLevel.Handshake;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
@@ -237,8 +235,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     protected PacketFilter createProcessorChain() {
         return new CheckDestinationFilter(
                 new DropDuplicatePacketsFilter(
+                        new FramesCheckFilter(
                         new PostProcessingFilter(
-                                new ClosingOrDrainingFilter(this, log))));
+                                new ClosingOrDrainingFilter(this, log)))));
     }
 
     private Predicate<DatagramPacket> createPacketFilter() {
@@ -501,10 +500,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 }
             }
         }
+        catch (ProtocolError e) {
+            connectionError(new TransportError(PROTOCOL_VIOLATION));
+        }
+        catch (TransportError e) {
+            connectionError(e);
+        }
         catch (InterruptedException e) {
             log.debug("Terminating receiver loop because of interrupt");
         }
-        catch (Exception error) {
+        catch (RuntimeException error) {
             log.debug("Terminating receiver loop because of error", error);
             abortConnection(error);
         }
@@ -650,6 +655,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(InitialPacket packet, Instant time) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.2
+        // "clients that receive an Initial packet with a non-zero Token Length field MUST either discard the packet or
+        //  generate a connection error of type PROTOCOL_VIOLATION."
+        if (packet.getToken() != null && packet.getToken().length > 0) {
+            log.error("Received Initial packet with non-zero token length; discarding packet");
+            return ProcessResult.Abort;
+        }
+
         if (! packet.getVersion().equals(quicVersion.getVersion())) {
             handleVersionNegotiation(packet.getVersion());
         }
@@ -764,12 +777,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        connectionIdManager.process(newConnectionIdFrame);
-    }
-
-    @Override
     public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
+        // "The token MUST NOT be empty. A client MUST treat receipt of a NEW_TOKEN frame with an empty Token field as
+        //  a connection error of type FRAME_ENCODING_ERROR."
+        if (newTokenFrame.getToken().length == 0) {
+            immediateCloseWithError(FRAME_ENCODING_ERROR, "empty token in NEW_TOKEN frame");
+        }
     }
 
     @Override
@@ -894,12 +908,20 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         connectionIdManager.setInitialStatelessResetToken(peerTransportParams.getStatelessResetToken());
 
         if (processedRetryPacket) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:"
+            // "- absence of the retry_source_connection_id transport parameter from the server after receiving a Retry packet"
+            // "- a mismatch between values received from a peer in these transport parameters and the value sent in the
+            //    corresponding Destination or Source Connection ID fields of Initial packets."
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! connectionIdManager.validateRetrySourceConnectionId(peerTransportParams.getRetrySourceConnectionId())) {
                 immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
             }
         }
         else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:"
+            // "- presence of the retry_source_connection_id transport parameter when no Retry packet was received"
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
                 immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
             }
@@ -946,11 +968,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     private boolean verifyConnectionIds(TransportParameters transportParameters) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-29#section-7.3
-        // "An endpoint MUST treat absence of the initial_source_connection_id
-        //   transport parameter from either endpoint or absence of the
-        //   original_destination_connection_id transport parameter from the
-        //   server as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+        // "An endpoint MUST treat the absence of the initial_source_connection_id transport parameter from either endpoint
+        //  or the absence of the original_destination_connection_id transport parameter from the server as a connection
+        //  error of type TRANSPORT_PARAMETER_ERROR."
         if (transportParameters.getInitialSourceConnectionId() == null || transportParameters.getOriginalDestinationConnectionId() == null) {
             log.error("Missing connection id from server transport parameter");
             if (transportParameters.getInitialSourceConnectionId() == null) {

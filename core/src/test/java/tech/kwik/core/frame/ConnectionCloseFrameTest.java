@@ -18,12 +18,14 @@
  */
 package tech.kwik.core.frame;
 
-import tech.kwik.core.impl.Version;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 
 class ConnectionCloseFrameTest {
@@ -42,4 +44,33 @@ class ConnectionCloseFrameTest {
         assertThat(connectionCloseFrame.getFrameLength()).isEqualTo(buffer.remaining());
     }
 
+    @Test
+    void testGetFrameLength1d() {
+        // Given
+        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false, "http3 request cancelled");
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        connectionCloseFrame.serialize(buffer);
+        buffer.flip();
+
+        // Then
+        assertThat(connectionCloseFrame.getFrameLength()).isEqualTo(buffer.remaining());
+    }
+
+    @Test
+    void deserializeFrameWithApplicationError() throws Exception {
+        // Given
+        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false, "http3 request cancelled");
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        connectionCloseFrame.serialize(buffer);
+        buffer.flip();
+
+        // When
+        ConnectionCloseFrame deserialized = new ConnectionCloseFrame(Version.getDefault()).parse(buffer, mock(Logger.class));
+
+        // Then
+        assertThat(deserialized.hasApplicationProtocolError()).isTrue();
+        assertThat(deserialized.getErrorCode()).isEqualTo(0x010c);
+    }
 }

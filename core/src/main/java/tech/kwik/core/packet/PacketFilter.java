@@ -18,7 +18,9 @@
  */
 package tech.kwik.core.packet;
 
+import tech.kwik.core.impl.TransportError;
+
 public interface PacketFilter {
 
-    void processPacket(QuicPacket packet, PacketMetaData metaData);
+    void processPacket(QuicPacket packet, PacketMetaData metaData) throws TransportError;
 }

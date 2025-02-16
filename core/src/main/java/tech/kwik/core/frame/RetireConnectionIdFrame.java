@@ -20,6 +20,7 @@ package tech.kwik.core.frame;
 
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
@@ -42,9 +43,9 @@ public class RetireConnectionIdFrame extends QuicFrame {
         this.sequenceNr = sequenceNumber;
     }
 
-    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public RetireConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError {
         buffer.get();
-        sequenceNr = VariableLengthInteger.parse(buffer);
+        sequenceNr = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support sequence numbers larger than max int.
         return this;
     }
 

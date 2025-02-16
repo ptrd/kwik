@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.BaseDatagramFilter;
@@ -40,7 +41,7 @@ public class InitialPacketMinimumSizeFilter extends BaseDatagramFilter {
     }
 
     @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
+    public void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         data.mark();
         int datagramLength = data.limit() - data.position();
         byte flags = data.get();

@@ -18,8 +18,10 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.QuicPacket;
@@ -72,12 +74,17 @@ public class NewConnectionIdFrame extends QuicFrame {
         buffer.put(statelessResetToken);
     }
 
-    public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public NewConnectionIdFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, TransportError {
         buffer.get();
 
-        sequenceNr = VariableLengthInteger.parse(buffer);
-        retirePriorTo = VariableLengthInteger.parse(buffer);
+        sequenceNr = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support sequence number larger than max int.
+        retirePriorTo = parseVariableLengthIntegerLimitedToInt(buffer);
         int connectionIdLength = buffer.get();
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.15
+        // "Values less than 1 and greater than 20 are invalid and MUST be treated as a connection error of type FRAME_ENCODING_ERROR."
+        if (connectionIdLength < 1 || connectionIdLength > 20) {
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR, "invalid connection id length");
+        }
         connectionId = new byte[connectionIdLength];
         buffer.get(connectionId);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020, 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2025 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,20 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.core.impl;
+package tech.kwik.core.generic;
 
 /**
- * Indicates an invalid packet, i.e. a packet that could not be parsed correctly due to authentication failure.
- * Should not be used for (frame) encoding errors!
+ * Exception thrown when an integer is too large to be represented as an int.
  */
-public class InvalidPacketException extends Exception {
-
-    public InvalidPacketException() {
-        super();
-    }
-
-    public InvalidPacketException(String message) {
-        super(message);
-    }
+public class IntegerTooLargeException extends Exception {
 }
-

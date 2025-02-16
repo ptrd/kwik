@@ -19,12 +19,15 @@
 package tech.kwik.core.packet;
 
 
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.DecryptionException;
 import tech.kwik.core.impl.InvalidPacketException;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 
@@ -134,6 +137,16 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
+    protected void checkReservedBits(byte decryptedFlags) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+        // "An endpoint MUST treat receipt of a packet that has a non-zero value for these bits, after removing both
+        //  packet and header protection, as a connection error of type PROTOCOL_VIOLATION. "
+        if ((decryptedFlags & 0x0c) != 0) {
+            throw new TransportError(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION, "Reserved bits in long header packet are not zero");
+        }
+    }
+
+    @Override
     public int estimateLength(int additionalPayload) {
         int packetNumberSize = computePacketNumberSize(packetNumber);
         int payloadSize = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
@@ -195,7 +208,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException {
+    public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
         log.debug("Parsing " + this.getClass().getSimpleName());
         if (buffer.position() != 0) {
             // parsePacketNumberAndPayload method requires packet to start at 0.
@@ -244,10 +257,10 @@ public abstract class LongHeaderPacket extends QuicPacket {
         int length;
         try {
             // "The length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes"
-            length = VariableLengthInteger.parse(buffer);
+            length = VariableLengthInteger.parseInt(buffer);
         }
-        catch (IllegalArgumentException | InvalidIntegerEncodingException invalidInt) {
-            throw new InvalidPacketException();
+        catch (IllegalArgumentException | InvalidIntegerEncodingException | IntegerTooLargeException invalidInt) {
+            throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
         }
         log.debug("Length (PN + payload): " + length);
 

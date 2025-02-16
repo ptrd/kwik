@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.packet.BaseDatagramFilter;
 import tech.kwik.core.packet.DatagramFilter;
 import tech.kwik.core.packet.PacketMetaData;
@@ -47,7 +48,7 @@ public class AntiAmplificationTrackingFilter extends BaseDatagramFilter {
     }
 
     @Override
-    public void processDatagram(ByteBuffer data, PacketMetaData metaData) {
+    public void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         receivedPayloadBytesCounter.accept(data.remaining());
         next(data, metaData);
     }

@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.frame;
 
+import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.log.Logger;
@@ -42,10 +43,10 @@ public class NewTokenFrame extends QuicFrame {
         newToken = token;
     }
 
-    public NewTokenFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException {
+    public NewTokenFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
         buffer.get();
 
-        int tokenLength = VariableLengthInteger.parse(buffer);
+        int tokenLength = VariableLengthInteger.parseInt(buffer);
         newToken = new byte[tokenLength];
         buffer.get(newToken);
 

@@ -19,6 +19,11 @@
 package tech.kwik.core.frame;
 
 
+import tech.kwik.core.QuicConstants;
+import tech.kwik.core.generic.IntegerTooLargeException;
+import tech.kwik.core.generic.InvalidIntegerEncodingException;
+import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
@@ -53,4 +58,23 @@ public abstract class QuicFrame {
     public abstract int getFrameLength();
 
     public abstract void serialize(ByteBuffer buffer);
+
+    /**
+     * Parse a variable length integer from the buffer for which Kwik does not support a value larger than max int.
+     * If the value is larger than Integer.MAX_VALUE, a TransportError of type INTERNAL_ERROR is thrown.
+     * If the value itself is not correctly encoded, an InvalidIntegerEncodingException is thrown.
+     * @param buffer
+     * @return
+     * @throws InvalidIntegerEncodingException
+     * @throws TransportError
+     */
+    protected int parseVariableLengthIntegerLimitedToInt(ByteBuffer buffer) throws InvalidIntegerEncodingException, TransportError {
+        try {
+            return VariableLengthInteger.parseInt(buffer);
+        }
+        catch (IntegerTooLargeException e) {
+            // This is not an invalid integer encoding, but a value that is too large for the implementation.
+            throw new TransportError(QuicConstants.TransportErrorCode.INTERNAL_ERROR, "value too large");
+        }
+    }
 }

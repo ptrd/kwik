@@ -35,7 +35,9 @@ public class VariableLengthInteger {
      * @param buffer
      * @return
      * @throws InvalidIntegerEncodingException
+     * @deprecated use {@link #parseInt(ByteBuffer)} instead
      */
+    @Deprecated
     public static int parse(ByteBuffer buffer) throws InvalidIntegerEncodingException {
         long value = parseLong(buffer);
         if (value <= Integer.MAX_VALUE) {
@@ -44,6 +46,26 @@ public class VariableLengthInteger {
         else {
             // If value can be larger than int, parseLong should have called.
             throw new IllegalArgumentException("value to large for Java int");
+        }
+    }
+
+    /**
+     * Parses a variable length integer and returns the value as in int. Throws an exception when the actual value is
+     * larger than <code>Integer.MAX_VALUE</code>, so only use it in cases where a large value can be considered an
+     * error, e.g. when the QUIC specification defines a smaller range for a specific integer.
+     * Note that smaller values (needlessly) encoded in eight bytes, are parsed correctly.
+     * @param buffer
+     * @return
+     * @throws InvalidIntegerEncodingException
+     */
+    public static int parseInt(ByteBuffer buffer) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+        long value = parseLong(buffer);
+        if (value <= Integer.MAX_VALUE) {
+            return (int) value;
+        }
+        else {
+            // If value can be larger than int, parseLong should have called.
+            throw new IntegerTooLargeException();
         }
     }
 

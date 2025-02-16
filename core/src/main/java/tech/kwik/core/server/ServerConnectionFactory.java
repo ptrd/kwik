@@ -87,6 +87,6 @@ public class ServerConnectionFactory {
     }
 
     public ServerConnectionProxy createServerConnectionProxy(ServerConnectionImpl connection, List<InitialPacket> initialPackets, ByteBuffer data, PacketMetaData metaData) {
-        return new ServerConnectionThread(connection, initialPackets, data, metaData);
+        return new ServerConnectionThread(connection, initialPackets, data, metaData, log);
     }
 }

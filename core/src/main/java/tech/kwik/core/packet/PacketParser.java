@@ -22,11 +22,7 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
-import tech.kwik.core.impl.DecryptionException;
-import tech.kwik.core.impl.InvalidPacketException;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.impl.VersionHolder;
+import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
@@ -67,7 +63,7 @@ public abstract class PacketParser {
         largestPacketNumber = new long[PnSpace.values().length];
     }
 
-    public void parseAndProcessPackets(ByteBuffer data, PacketMetaData metaData) {
+    public void parseAndProcessPackets(ByteBuffer data, PacketMetaData metaData) throws TransportError {
         while (data.remaining() > 0) {
             try {
                 QuicPacket packet = parsePacket(data);
@@ -113,7 +109,7 @@ public abstract class PacketParser {
         }
     }
 
-    public QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException {
+    public QuicPacket parsePacket(ByteBuffer data) throws MissingKeysException, DecryptionException, InvalidPacketException, TransportError {
         data.mark();
         if (data.remaining() < 2) {
             throw new InvalidPacketException("packet too short to be valid QUIC packet");
@@ -157,7 +153,7 @@ public abstract class PacketParser {
         return packet;
     }
 
-    protected abstract Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException;
+    protected abstract Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException, TransportError;
 
     /**
      * Constructs a (yet empty) long header packet based on the packet flags (first byte).
