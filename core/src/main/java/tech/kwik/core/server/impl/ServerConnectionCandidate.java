@@ -88,7 +88,9 @@ import java.util.function.Consumer;
 public class ServerConnectionCandidate implements ServerConnectionProxy, DatagramFilter {
 
     // Minimum length for initial crypto frames, except for the last one (which of course is allowed to be shorter)
-    public static final int MINIMUM_NON_FINAL_CRYPTO_LENGTH = 1000;
+    // A value close to (1200 - packet overhead) would make a lot of sense, but at least in interop tests, some
+    // implementations like to test scenario's with smaller Client Hello parts. To support these, a smaller value is chosen.
+    public static final int MINIMUM_NON_FINAL_CRYPTO_LENGTH = 700;
 
     private final Version quicVersion;
     private final InetSocketAddress clientAddress;
