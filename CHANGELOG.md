@@ -1,5 +1,14 @@
 # Releases
 
+## 0.10.1 (2025-02-18)
+
+- better distinguish between variable length integers whose size is plain wrong or whose size is not supported by Kwik
+- fix: serialization of connection close frame of type 0x1d
+- respond with connection error when a packet contains a frame type that is not permitted 
+- respond with connection error to situations as unknown frame, invalid frame encoding, and a lot more
+- do not create a server connection before a complete and valid Client Hello message is received
+- use siphash for key in connection table
+
 ## 0.10 (2025-01-10)
 
 **Note: this release has a breaking change (which is, however, easy to fix)**
