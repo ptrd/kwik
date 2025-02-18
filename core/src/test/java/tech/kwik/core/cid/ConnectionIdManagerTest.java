@@ -18,16 +18,16 @@
  */
 package tech.kwik.core.cid;
 
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.frame.NewConnectionIdFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.RetireConnectionIdFrame;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.send.Sender;
-import tech.kwik.core.server.ServerConnectionRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.frame.NewConnectionIdFrame;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.RetireConnectionIdFrame;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.send.Sender;
+import tech.kwik.core.server.ServerConnectionRegistry;
 
 import java.util.Arrays;
 import java.util.List;
@@ -35,11 +35,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static tech.kwik.core.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static tech.kwik.core.cid.ConnectionIdManager.MAX_CIDS_PER_CONNECTION;
 
 
 class ConnectionIdManagerTest {
@@ -458,5 +459,17 @@ class ConnectionIdManagerTest {
 
         // Then
         assertThat(connectionIdManager.getAllPeerConnectionIds().get(0).getConnectionId()).isEqualTo(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+    }
+
+    @Test
+    void whenUsingZeroLengthCidReceivingRetireConnectionIdFrameShouldCloseConnection() {
+        // Given
+        ConnectionIdManager clientCidMgr = new ConnectionIdManager(0, 8, sender, closeCallback, mock(Logger.class));
+
+        // When
+        clientCidMgr.process(new RetireConnectionIdFrame(Version.getDefault(), 0), new byte[0]);
+
+        // Then
+        verify(closeCallback).accept(argThat(errorCode -> errorCode == PROTOCOL_VIOLATION.value), anyString());
     }
 }
