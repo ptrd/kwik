@@ -18,17 +18,16 @@
  */
 package tech.kwik.core.tls;
 
+import tech.kwik.agent15.alert.DecodeErrorException;
+import tech.kwik.agent15.extension.Extension;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
-import tech.kwik.core.impl.ProtocolError;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
-import tech.kwik.agent15.alert.DecodeErrorException;
-import tech.kwik.agent15.extension.Extension;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -235,8 +234,9 @@ public class QuicTransportParametersExtension extends Extension {
         log.debug("Transport parameters: ");
         while (buffer.position() - startPosition < extensionLength) {
             try {
-                parseTransportParameter(buffer, senderRole, log);
-            } catch (InvalidIntegerEncodingException e) {
+                parseTransportParameter(buffer, log);
+            }
+            catch (InvalidIntegerEncodingException e) {
                 throw new DecodeErrorException("invalid integer encoding in transport parameter extension");
             }
         }
@@ -248,7 +248,7 @@ public class QuicTransportParametersExtension extends Extension {
         return this;
     }
 
-    void parseTransportParameter(ByteBuffer buffer, Role senderRol, Logger log) throws DecodeErrorException, InvalidIntegerEncodingException {
+    void parseTransportParameter(ByteBuffer buffer, Logger log) throws DecodeErrorException, InvalidIntegerEncodingException {
         long parameterId = VariableLengthInteger.parseLong(buffer);
         int size = VariableLengthInteger.parse(buffer);
         if (buffer.remaining() < size) {
@@ -393,7 +393,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
     }
 
-    private void parsePreferredAddress(ByteBuffer buffer, Logger log) {
+    private void parsePreferredAddress(ByteBuffer buffer, Logger log) throws DecodeErrorException {
         try {
             TransportParameters.PreferredAddress preferredAddress = new TransportParameters.PreferredAddress();
 
@@ -411,7 +411,7 @@ public class QuicTransportParametersExtension extends Extension {
             preferredAddress.setIp6Port((buffer.get() << 8) | buffer.get());
 
             if (preferredAddress.getIp4() == null && preferredAddress.getIp6() == null) {
-                throw new ProtocolError("Preferred address: no valid IP address");
+                throw new DecodeErrorException("Preferred address: no valid IP address");
             }
 
             int connectionIdSize = buffer.get();

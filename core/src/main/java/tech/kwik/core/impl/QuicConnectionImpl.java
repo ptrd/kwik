@@ -54,9 +54,7 @@ import java.util.function.Function;
 
 import static tech.kwik.core.ConnectionTerminatedEvent.CloseReason;
 import static tech.kwik.core.ConnectionTerminatedEvent.CloseReason.ConnectionLost;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.NO_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 import static tech.kwik.core.common.EncryptionLevel.App;
 import static tech.kwik.core.common.EncryptionLevel.Handshake;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
@@ -294,6 +292,36 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * @return  length of the connection ID
      */
     protected abstract int getSourceConnectionIdLength();
+
+    protected void validateTransportParameters(TransportParameters transportParameters) throws TransportError {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.4
+        // "An endpoint MUST treat receipt of a transport parameter with an invalid value as a connection error
+        //  of type TRANSPORT_PARAMETER_ERROR."
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "Values below 1200 are invalid."
+        if (transportParameters.getMaxUdpPayloadSize() < 1200) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "Values above 20 are invalid."
+        if (transportParameters.getAckDelayExponent() > 20) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "Values of 2^14 or greater are invalid."
+        if (transportParameters.getMaxAckDelay() >= 16384) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "The value of the active_connection_id_limit parameter MUST be at least 2."
+        if (transportParameters.getActiveConnectionIdLimit() < 2) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+    }
 
     /**
      * Process the transport parameters that are common to client and server.

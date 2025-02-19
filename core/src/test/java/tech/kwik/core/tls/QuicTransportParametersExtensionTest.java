@@ -18,14 +18,13 @@
  */
 package tech.kwik.core.tls;
 
-import tech.kwik.core.impl.ProtocolError;
+import org.junit.jupiter.api.Test;
+import tech.kwik.agent15.alert.DecodeErrorException;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.test.ByteUtils;
-import tech.kwik.agent15.alert.DecodeErrorException;
-import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -51,7 +50,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
 
@@ -78,7 +77,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
         assertThat(preferredAddress.getIp4()).isNull();
@@ -98,7 +97,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
         assertThat(preferredAddress.getIp6()).isNull();
@@ -120,8 +119,8 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
 
         assertThatThrownBy(
-                () -> params.parseTransportParameter(buffer, Role.Server, mock(Logger.class)))
-                .isInstanceOf(ProtocolError.class);
+                () -> params.parseTransportParameter(buffer, mock(Logger.class)))
+                .isInstanceOf(DecodeErrorException.class);
     }
 
     @Test

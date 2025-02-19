@@ -48,6 +48,7 @@ import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
 
 import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.KeyPair;
@@ -197,11 +198,11 @@ class QuicClientConnectionImplTest {
         transportParameters.setOriginalDestinationConnectionId(originalDestinationId);
         // -  does contain an original destination id (but incorrect)
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
-        connection.setPeerTransportParameters(transportParameters);
 
-        ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
-        verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
-        assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters)
+                // Then
+        ).isInstanceOf(TransportError.class);
     }
 
     @Test
@@ -261,6 +262,83 @@ class QuicClientConnectionImplTest {
         ArgumentCaptor<Long> errorCaptor = ArgumentCaptor.forClass(Long.class);
         verify(connection).immediateCloseWithError(errorCaptor.capture(), any(), any());
         assertThat(errorCaptor.getValue()).isEqualTo(TRANSPORT_PARAMETER_ERROR.value);
+    }
+    //endregion
+
+    //region transport parameters
+    @Test
+    void invalidStatelessResetTransportParameterShouldThrow() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setStatelessResetToken(new byte[13]);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void invalidPreferredAddressTransportParameterShouldThrow() throws Exception {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        TransportParameters.PreferredAddress preferredAddress = new TransportParameters.PreferredAddress();
+        preferredAddress.setIp4(Inet4Address.getByAddress(new byte[] { 0x01, 0x02, 0x03, 0x04 }));
+        preferredAddress.setConnectionId(ByteBuffer.allocate(0), 0);
+        transportParameters.setPreferredAddress(preferredAddress);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void invalidMaxUdpPayloadSizeShouldThrow() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxUdpPayloadSize(1111);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void invalidMaxAckDelayShouldThrow() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setMaxAckDelay(16_789);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void invalidAckDelayExponentShouldThrow() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setAckDelayExponent(21);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void invalidActiveConnectionIdLimitShouldThrow() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setActiveConnectionIdLimit(1);
+
+        // When
+        assertThatThrownBy(() -> connection.setPeerTransportParameters(transportParameters))
+                // Then
+                .isInstanceOf(TransportError.class);
     }
     //endregion
 
@@ -438,19 +516,19 @@ class QuicClientConnectionImplTest {
 
     @Test
     void receivingPacketWitYetUnusedConnectionIdDoesNotLeadToNewSourceConnectionIdWhenActiveCidLimitReached() throws Exception {
-        FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
-
-        TransportParameters params = new TransportParameters();
-        params.setActiveConnectionIdLimit(1);
-        connection.setPeerTransportParameters(params);
+        // Given
+        simulateSuccessfulConnect();
+        setTransportParametersWithActiveConnectionIdLimit(2);
 
         byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
         byte[] nextConnectionId = newConnectionIds[0];
         assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
 
         clearInvocations(sender);
+        // When
         connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
 
+        // Then
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }
 
@@ -796,7 +874,7 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"), finalStatus);
     }
 
-    private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) {
+    private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) throws Exception {
         TransportParameters params = new TransportParameters();
         params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
         params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());

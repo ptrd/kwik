@@ -371,7 +371,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         else {
             try {
                 validateAndProcess(((QuicTransportParametersExtension) tpExtension.get()).getTransportParameters());
-            } catch (TransportError transportParameterError) {
+            }
+            catch (TransportError transportParameterError) {
                 throw new TlsProtocolException("transport parameter error", transportParameterError);
             }
         }
@@ -614,6 +615,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
+        validateTransportParameters(transportParameters);
+
         TransportParameters.VersionInformation versionInformation = transportParameters.getVersionInformation();
         if (versionInformation != null) {
             Optional<Version> clientPreferred = versionInformation.getOtherVersions().stream()
@@ -626,38 +629,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 connectionSecrets.recomputeInitialKeys();
             }
         }
-        if (transportParameters.getInitialMaxStreamsBidi() > 0x1000000000000000l) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        if (transportParameters.getMaxUdpPayloadSize() < 1200) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        if (transportParameters.getAckDelayExponent() > 20) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        if (transportParameters.getMaxAckDelay() > 16384) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        if (transportParameters.getActiveConnectionIdLimit() < 2) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
-            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
-            // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
-            //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
-            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or
-            //  PROTOCOL_VIOLATION: a mismatch between values received from a peer in these transport parameters and the
-            //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
-        // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
-        // "A client MUST NOT include any server-only transport parameter: original_destination_connection_id,
-        //  preferred_address, retry_source_connection_id, or stateless_reset_token. A server MUST treat receipt of any
-        //  of these transport parameters as a connection error of type TRANSPORT_PARAMETER_ERROR."
-        if (transportParameters.getOriginalDestinationConnectionId() != null || transportParameters.getPreferredAddress() != null
-                || transportParameters.getRetrySourceConnectionId() != null || transportParameters.getStatelessResetToken() != null) {
-            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
-        }
 
         determineIdleTimeout(configuration.maxIdleTimeout(), transportParameters.getMaxIdleTimeout());
 
@@ -669,6 +640,29 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         streamManager.setFlowController(flowController);
 
         processCommonTransportParameters(transportParameters);
+    }
+
+    protected void validateTransportParameters(TransportParameters transportParameters) throws TransportError {
+        super.validateTransportParameters(transportParameters);
+
+        if (!connectionIdManager.validateInitialPeerConnectionId(transportParameters.getInitialSourceConnectionId())) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+            // "An endpoint MUST treat absence of the initial_source_connection_id transport parameter from either
+            //  endpoint (...) as a connection error of type TRANSPORT_PARAMETER_ERROR."
+            // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or
+            //  PROTOCOL_VIOLATION: a mismatch between values received from a peer in these transport parameters and the
+            //  value sent in the corresponding Destination or Source Connection ID fields of Initial packets."
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "A client MUST NOT include any server-only transport parameter: original_destination_connection_id,
+        //  preferred_address, retry_source_connection_id, or stateless_reset_token. A server MUST treat receipt of any
+        //  of these transport parameters as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        if (transportParameters.getOriginalDestinationConnectionId() != null || transportParameters.getPreferredAddress() != null
+                || transportParameters.getRetrySourceConnectionId() != null || transportParameters.getStatelessResetToken() != null) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR);
+        }
     }
 
     @Override
