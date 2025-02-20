@@ -657,9 +657,6 @@ class ServerConnectionImplTest {
     }
 
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {
-        TransportParameters invalidMaxStreamsBidi = createDefaultTransportParameters();
-        invalidMaxStreamsBidi.setInitialMaxStreamsBidi(0x1000000000000001l);
-
         TransportParameters invalidMaxUdpPayloadSize = createDefaultTransportParameters();
         invalidMaxUdpPayloadSize.setMaxUdpPayloadSize(1199);
 
@@ -675,7 +672,7 @@ class ServerConnectionImplTest {
         TransportParameters incorrectInitialSourceConnectionId = createDefaultTransportParameters();
         incorrectInitialSourceConnectionId.setInitialSourceConnectionId(new byte[] { 0, 0, 7, 0, 0, 0, 0, 0 });
 
-        return Stream.of(invalidMaxStreamsBidi, invalidMaxUdpPayloadSize, invalidAckDelayExponent, invalidMaxAckDelay,
+        return Stream.of(invalidMaxUdpPayloadSize, invalidAckDelayExponent, invalidMaxAckDelay,
                 invalidActiveConnectionIdLimit, incorrectInitialSourceConnectionId);
     }
 

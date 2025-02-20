@@ -20,6 +20,7 @@ package tech.kwik.core.impl;
 
 import tech.kwik.agent15.NewSessionTicket;
 import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.TlsProtocolException;
 import tech.kwik.agent15.engine.CertificateWithPrivateKey;
 import tech.kwik.agent15.engine.ClientMessageSender;
 import tech.kwik.agent15.engine.TlsClientEngine;
@@ -632,16 +633,21 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void extensionsReceived(List<Extension> extensions) {
-        extensions.forEach(ex -> {
+    public void extensionsReceived(List<Extension> extensions) throws TlsProtocolException {
+        for (Extension ex: extensions) {
             if (ex instanceof EarlyDataExtension) {
                 setEarlyDataStatus(EarlyDataStatus.Accepted);
                 log.info("Server has accepted early data.");
             }
             else if (ex instanceof QuicTransportParametersExtension) {
-                setPeerTransportParameters(((QuicTransportParametersExtension) ex).getTransportParameters());
+                try {
+                    setPeerTransportParameters(((QuicTransportParametersExtension) ex).getTransportParameters());
+                }
+                catch (TransportError e) {
+                    throw new TlsProtocolException("Invalid transport parameters", e);
+                }
             }
-        });
+        }
     }
 
     @Override
@@ -876,7 +882,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         return peerTransportParams;
     }
 
-    void setPeerTransportParameters(TransportParameters receivedTransportParameters) {
+    void setPeerTransportParameters(TransportParameters receivedTransportParameters) throws TransportError {
+        validateTransportParameters(receivedTransportParameters);
+
         if (!verifyConnectionIds(receivedTransportParameters)) {
             return;
         }
@@ -915,7 +923,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             //    corresponding Destination or Source Connection ID fields of Initial packets."
             if (peerTransportParams.getRetrySourceConnectionId() == null ||
                     ! connectionIdManager.validateRetrySourceConnectionId(peerTransportParams.getRetrySourceConnectionId())) {
-                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "incorrect retry_source_connection_id transport parameter");
+                throw new TransportError(TRANSPORT_PARAMETER_ERROR, "incorrect retry_source_connection_id transport parameter");
             }
         }
         else {
@@ -923,11 +931,39 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:"
             // "- presence of the retry_source_connection_id transport parameter when no Retry packet was received"
             if (peerTransportParams.getRetrySourceConnectionId() != null) {
-                immediateCloseWithError(TRANSPORT_PARAMETER_ERROR.value, "unexpected retry_source_connection_id transport parameter");
+                 throw new TransportError(TRANSPORT_PARAMETER_ERROR, "unexpected retry_source_connection_id transport parameter");
             }
         }
 
         processCommonTransportParameters(peerTransportParams);
+    }
+
+    @Override
+    protected void validateTransportParameters(TransportParameters transportParameters) throws TransportError {
+        super.validateTransportParameters(transportParameters);
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.4
+        // "An endpoint MUST treat receipt of a transport parameter with an invalid value as a connection error
+        //  of type TRANSPORT_PARAMETER_ERROR."
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+        // "This parameter is a sequence of 16 bytes."
+        if (transportParameters.getStatelessResetToken() != null && transportParameters.getStatelessResetToken().length != 16) {
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR, "Invalid stateless reset token length");
+        }
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.1
+        // "A server that chooses a zero-length connection ID MUST NOT provide a preferred address. Similarly, a server
+        //  MUST NOT include a zero-length connection ID in this transport parameter. A client MUST treat a violation of
+        //  these requirements as a connection error of type TRANSPORT_PARAMETER_ERROR."
+        if (transportParameters.getPreferredAddress() != null) {
+            if (connectionIdManager.getCurrentPeerConnectionId().length == 0) {
+                throw new TransportError(TRANSPORT_PARAMETER_ERROR, "Unexpected preferred address parameter for server using zero-length connection ID");
+            }
+            if (transportParameters.getPreferredAddress().getConnectionId().length == 0) {
+                throw new TransportError(TRANSPORT_PARAMETER_ERROR, "Preferred address with zero-length connection ID");
+            }
+        }
     }
 
     private void setZeroRttTransportParameters(TransportParameters rememberedTransportParameters) {

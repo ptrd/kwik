@@ -99,7 +99,7 @@ public class ConnectionIdManager {
 
     /**
      * Creates a connection ID manager for client role.
-     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (server)
+     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (client)
      * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
      * @param sender  the sender to send messages to the peer
      * @param closeConnectionCallback  callback for closing the connection with a transport error code

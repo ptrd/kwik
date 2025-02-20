@@ -18,21 +18,23 @@
  */
 package tech.kwik.core.tls;
 
-import tech.kwik.core.impl.ProtocolError;
+import org.junit.jupiter.api.Test;
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.alert.DecodeErrorException;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.test.ByteUtils;
-import tech.kwik.agent15.alert.DecodeErrorException;
-import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.HashSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 
 class QuicTransportParametersExtensionTest {
@@ -51,7 +53,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
 
@@ -78,7 +80,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
         assertThat(preferredAddress.getIp4()).isNull();
@@ -98,7 +100,7 @@ class QuicTransportParametersExtensionTest {
         });
 
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
-        params.parseTransportParameter(buffer, Role.Server, mock(Logger.class));
+        params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class));
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
         assertThat(preferredAddress.getIp6()).isNull();
@@ -120,8 +122,8 @@ class QuicTransportParametersExtensionTest {
         QuicTransportParametersExtension params = new QuicTransportParametersExtension();
 
         assertThatThrownBy(
-                () -> params.parseTransportParameter(buffer, Role.Server, mock(Logger.class)))
-                .isInstanceOf(ProtocolError.class);
+                () -> params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(DecodeErrorException.class);
     }
 
     @Test
@@ -269,6 +271,20 @@ class QuicTransportParametersExtensionTest {
         assertThat(versionInfo).isNotNull();
         assertThat(versionInfo.getChosenVersion()).isEqualTo(Version.QUIC_version_1);
         assertThat(versionInfo.getOtherVersions()).containsExactly(Version.QUIC_version_2, Version.QUIC_version_1);
+    }
+
+    @Test
+    void parsingTransportParametersWithDuplicateShouldThrow() throws Exception {
+        //                                     ext id ext size  id sz value 30.000 id sz value 30.000
+        byte[] rawData = ByteUtils.hexToBytes("00 39  00 0c     01 04 80 00 75 30 01 04 80 00 75 30".replaceAll(" ", ""));
+
+        QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
+
+        // When
+        assertThatThrownBy(() -> transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Server, mock(Logger.class)))
+                // Then
+                .isInstanceOf(TlsProtocolException.class)
+                .hasMessageContaining(TRANSPORT_PARAMETER_ERROR.toString());
     }
 
     @Test

@@ -18,23 +18,26 @@
  */
 package tech.kwik.core.tls;
 
+import tech.kwik.agent15.TlsProtocolException;
+import tech.kwik.agent15.alert.DecodeErrorException;
+import tech.kwik.agent15.extension.Extension;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
-import tech.kwik.core.impl.ProtocolError;
 import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
-import tech.kwik.agent15.alert.DecodeErrorException;
-import tech.kwik.agent15.extension.Extension;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static tech.kwik.core.QuicConstants.TransportParameterId.*;
 import static tech.kwik.core.impl.Role.Server;
@@ -225,19 +228,24 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.get(data);
     }
 
-    public QuicTransportParametersExtension parse(ByteBuffer buffer, Role senderRole, Logger log) throws DecodeErrorException {
+    public QuicTransportParametersExtension parse(ByteBuffer buffer, Role senderRole, Logger log) throws TlsProtocolException {
         int extensionType = buffer.getShort() & 0xffff;
         if (!isCodepoint(quicVersion, extensionType)) {
             throw new RuntimeException();  // Must be programming error
         }
         int extensionLength = buffer.getShort();
         int startPosition = buffer.position();
+        Set<Long> parsedParameters = new HashSet<>();
         log.debug("Transport parameters: ");
         while (buffer.position() - startPosition < extensionLength) {
             try {
-                parseTransportParameter(buffer, senderRole, log);
-            } catch (InvalidIntegerEncodingException e) {
+                parseTransportParameter(buffer, parsedParameters, log);
+            }
+            catch (InvalidIntegerEncodingException e) {
                 throw new DecodeErrorException("invalid integer encoding in transport parameter extension");
+            }
+            catch (TransportError e) {
+                throw new TlsProtocolException(e.getMessage(), e);
             }
         }
 
@@ -248,8 +256,13 @@ public class QuicTransportParametersExtension extends Extension {
         return this;
     }
 
-    void parseTransportParameter(ByteBuffer buffer, Role senderRol, Logger log) throws DecodeErrorException, InvalidIntegerEncodingException {
+    void parseTransportParameter(ByteBuffer buffer, Set<Long> parsedParameters, Logger log) throws DecodeErrorException, InvalidIntegerEncodingException, TransportError {
         long parameterId = VariableLengthInteger.parseLong(buffer);
+        if (!parsedParameters.add(parameterId)) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.4
+            // "An endpoint SHOULD treat receipt of duplicate transport parameters as a connection error of type TRANSPORT_PARAMETER_ERROR."
+            throw new TransportError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR, "duplicate transport parameter");
+        }
         int size = VariableLengthInteger.parse(buffer);
         if (buffer.remaining() < size) {
             throw new DecodeErrorException("Invalid transport parameter extension");
@@ -393,7 +406,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
     }
 
-    private void parsePreferredAddress(ByteBuffer buffer, Logger log) {
+    private void parsePreferredAddress(ByteBuffer buffer, Logger log) throws DecodeErrorException {
         try {
             TransportParameters.PreferredAddress preferredAddress = new TransportParameters.PreferredAddress();
 
@@ -411,7 +424,7 @@ public class QuicTransportParametersExtension extends Extension {
             preferredAddress.setIp6Port((buffer.get() << 8) | buffer.get());
 
             if (preferredAddress.getIp4() == null && preferredAddress.getIp6() == null) {
-                throw new ProtocolError("Preferred address: no valid IP address");
+                throw new DecodeErrorException("Preferred address: no valid IP address");
             }
 
             int connectionIdSize = buffer.get();
