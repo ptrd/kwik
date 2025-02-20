@@ -827,12 +827,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             return 0x100 + ((ErrorAlert) tlsError).alertDescription().value;
         }
         else if (tlsError.getCause() instanceof TransportError) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
             return ((TransportError) tlsError.getCause()).getTransportErrorCode().value;
         }
         else {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-20.1
-            // "INTERNAL_ERROR (0x1):  The endpoint encountered an internal error and cannot continue with the connection."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "INTERNAL_ERROR (0x1): The endpoint encountered an internal error and cannot continue with the connection."
             return INTERNAL_ERROR.value;
         }
     }
