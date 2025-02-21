@@ -20,11 +20,11 @@ package tech.kwik.cli;
 
 import tech.kwik.core.frame.FrameProcessor;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * Generic frame, for sending arbitrary frame data. Sole purpose is to test how implementations respond to invalid or
@@ -44,7 +44,7 @@ public class RawFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
         throw new UnsupportedOperationException("RawFrame cannot be processed");
     }
 

@@ -23,11 +23,11 @@ import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.ImplementationError;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * RFC 9221   An Unreliable Datagram Extension to QUIC
@@ -84,8 +84,8 @@ public class DatagramFrame extends QuicFrame {
 
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
-        frameProcessor.process(this, packet, timeReceived);
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
+        frameProcessor.process(this, packet, metaData);
     }
 
     @Override

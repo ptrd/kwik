@@ -568,8 +568,8 @@ class ServerConnectionImplTest {
         connection.process(packet1, metaDataForNow());
         connection.process(packet2, metaDataForNow());
 
-        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
-        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
+        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(PacketMetaData.class));
+        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(PacketMetaData.class));
     }
     //endregion
 

@@ -496,12 +496,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 addressValidated = true;
                 sender.unsetAntiAmplificationLimit();
                 // Valid token, proceed as usual.
-                processFrames(packet, metaData.timeReceived());
+                processFrames(packet, metaData);
                 return ProcessResult.Continue;
             }
         }
         else {
-            processFrames(packet, metaData.timeReceived());
+            processFrames(packet, metaData);
             return ProcessResult.Continue;
         }
     }
@@ -523,7 +523,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, metaData.timeReceived());
+        processFrames(packet, metaData);
         return ProcessResult.Continue;
     }
 
@@ -546,7 +546,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
-        processFrames(packet, metaData.timeReceived());
+        processFrames(packet, metaData);
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-initial-keys
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
         connectionSecrets.discardKeys(Initial);
@@ -568,7 +568,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 applicationProtocolStarted = true;
             }
 
-            processFrames(packet, metaData.timeReceived());
+            processFrames(packet, metaData);
         }
         else {
             log.warn("Ignoring 0-RTT packet because server connection does not accept early data.");
@@ -577,21 +577,21 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, PacketMetaData metaData) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.20
         // "A server MUST treat receipt of a HANDSHAKE_DONE frame as a connection error of type PROTOCOL_VIOLATION."
         immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected handshake done frame");
     }
 
     @Override
-    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, PacketMetaData metaData) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
         // " A server MUST treat receipt of a NEW_TOKEN frame as a connection error of type PROTOCOL_VIOLATION."
         immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected new token frame");
     }
 
     @Override
-    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 

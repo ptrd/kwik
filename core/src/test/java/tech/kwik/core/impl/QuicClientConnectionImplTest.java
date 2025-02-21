@@ -56,7 +56,6 @@ import java.security.KeyPairGenerator;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -413,7 +412,7 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new MaxStreamDataFrame(stream.getStreamId(), 10_000)), Instant.now());
+                        new MaxStreamDataFrame(stream.getStreamId(), 10_000)), mock(PacketMetaData.class));
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(10_000);
     }
@@ -432,7 +431,7 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(1000);
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new MaxDataFrame(4_000)), Instant.now());
+                        new MaxDataFrame(4_000)), mock(PacketMetaData.class));
 
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 99999)).isEqualTo(4_000);
     }
@@ -446,7 +445,7 @@ class QuicClientConnectionImplTest {
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                        new ConnectionCloseFrame(Version.getDefault())), mock(PacketMetaData.class));
 
         verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -458,13 +457,13 @@ class QuicClientConnectionImplTest {
 
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                        new ConnectionCloseFrame(Version.getDefault())), mock(PacketMetaData.class));
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                        new ConnectionCloseFrame(Version.getDefault())), mock(PacketMetaData.class));
         connection.processFrames(
                 new ShortHeaderPacket(Version.getDefault(), destinationConnectionId,
-                        new ConnectionCloseFrame(Version.getDefault())), Instant.now());
+                        new ConnectionCloseFrame(Version.getDefault())), mock(PacketMetaData.class));
 
         verify(sender, times(1)).send(argThat(frame -> frame instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -490,7 +489,7 @@ class QuicClientConnectionImplTest {
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
 
         RetireConnectionIdFrame retireFrame = new RetireConnectionIdFrame(Version.getDefault(), 0);
-        connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame), Instant.now());
+        connection.processFrames(new ShortHeaderPacket(Version.getDefault(), connection.getSourceConnectionId(), retireFrame), mock(PacketMetaData.class));
 
         assertThat(connection.getSourceConnectionIds()).hasSize(2);
         verify(sender).send(argThat(frame -> frame instanceof NewConnectionIdFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -576,7 +575,7 @@ class QuicClientConnectionImplTest {
     void retireConnectionIdFrameShouldBeRetransmittedWhenLost() throws Exception {
         // Given
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
-        connection.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }), null, null);
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x0c, 0x0f, 0x0d, 0x0e }), null, mock(PacketMetaData.class));
 
         // When
         connection.retireDestinationConnectionId(0);
@@ -601,11 +600,11 @@ class QuicClientConnectionImplTest {
     void receivingReorderedNewConnectionIdWithSequenceNumberThatIsAlreadyRetiredShouldImmediatelySendRetire() throws Exception {
         // Given
         FieldSetter.setField(connection, connection.getClass().getSuperclass().getDeclaredField("connectionState"), QuicClientConnectionImpl.Status.Connected);
-        connection.process(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }), null, null);
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 4, 3, new byte[]{ 0x04, 0x04, 0x04, 0x04 }), null, mock(PacketMetaData.class));
         clearInvocations(sender);
 
         // When
-        connection.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }), null, null);
+        connection.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }), null, mock(PacketMetaData.class));
 
         // Then
         verify(sender).send(argThat(frame -> frame.equals(new RetireConnectionIdFrame(Version.getDefault(), 2))), any(EncryptionLevel.class), any(Consumer.class));
@@ -665,7 +664,7 @@ class QuicClientConnectionImplTest {
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
 
         // When
-        connection.process(new HandshakeDoneFrame(Version.getDefault()), mock(QuicPacket.class), Instant.now());
+        connection.process(new HandshakeDoneFrame(Version.getDefault()), mock(QuicPacket.class), mock(PacketMetaData.class));
 
         // Then
         verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Handshake));
@@ -810,7 +809,7 @@ class QuicClientConnectionImplTest {
         NewTokenFrame newTokenFrame = new NewTokenFrame(new byte[0]);
 
         // When
-        connection.process(newTokenFrame, mock(QuicPacket.class), Instant.now());
+        connection.process(newTokenFrame, mock(QuicPacket.class), mock(PacketMetaData.class));
 
         // Then
         verify(sender).send(argThat(frame -> frame instanceof ConnectionCloseFrame &&

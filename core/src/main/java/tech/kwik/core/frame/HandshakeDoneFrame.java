@@ -20,10 +20,10 @@ package tech.kwik.core.frame;
 
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-19.20
@@ -57,8 +57,8 @@ public class HandshakeDoneFrame extends QuicFrame {
         return "HandshakeDoneFrame[]";
     }
 
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
-        frameProcessor.process(this, packet, timeReceived);
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
+        frameProcessor.process(this, packet, metaData);
     }
 }
 

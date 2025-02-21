@@ -21,10 +21,10 @@ package tech.kwik.core.frame;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * Represents a max streams frame.
@@ -82,7 +82,7 @@ public class MaxStreamsFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
-        frameProcessor.process(this, packet, timeReceived);
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
+        frameProcessor.process(this, packet, metaData);
     }
 }

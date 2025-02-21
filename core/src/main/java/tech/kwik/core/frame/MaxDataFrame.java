@@ -21,10 +21,10 @@ package tech.kwik.core.frame;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-19.9
 public class MaxDataFrame extends QuicFrame {
@@ -65,7 +65,7 @@ public class MaxDataFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
-        frameProcessor.process(this, packet, timeReceived);
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
+        frameProcessor.process(this, packet, metaData);
     }
 }

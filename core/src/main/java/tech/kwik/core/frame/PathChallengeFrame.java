@@ -20,11 +20,11 @@ package tech.kwik.core.frame;
 
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * Represents a path challenge frame.
@@ -76,8 +76,8 @@ public class PathChallengeFrame extends QuicFrame {
     }
 
     @Override
-    public void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived) {
-        frameProcessor.process(this, packet, timeReceived);
+    public void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData) {
+        frameProcessor.process(this, packet, metaData);
     }
 }
 

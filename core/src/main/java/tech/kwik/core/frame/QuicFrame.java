@@ -24,10 +24,10 @@ import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 
 /**
  * Base class for all classes that represent a QUIC frame.
@@ -49,7 +49,7 @@ public abstract class QuicFrame {
         return true;
     }
 
-    public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, Instant timeReceived);
+    public abstract void accept(FrameProcessor frameProcessor, QuicPacket packet, PacketMetaData metaData);
 
     /**
      * Returns the length of the frame (in bytes) if it were to be serialized by the serialize method.

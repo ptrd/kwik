@@ -673,7 +673,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             handleVersionNegotiation(packet.getVersion());
         }
         connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
-        processFrames(packet, metaData.timeReceived());
+        processFrames(packet, metaData);
         ignoreVersionNegotiation = true;
         return ProcessResult.Continue;
     }
@@ -690,14 +690,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public ProcessResult process(HandshakePacket packet, PacketMetaData metaData) {
-        processFrames(packet, metaData.timeReceived());
+        processFrames(packet, metaData);
         return ProcessResult.Continue;
     }
 
     @Override
     public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, metaData.timeReceived());
+        processFrames(packet, metaData);
         return ProcessResult.Continue;
     }
 
@@ -765,7 +765,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, PacketMetaData metaData) {
         synchronized (handshakeStateLock) {
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                 handshakeState = HandshakeState.Confirmed;
@@ -783,7 +783,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, PacketMetaData metaData) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
         // "The token MUST NOT be empty. A client MUST treat receipt of a NEW_TOKEN frame with an empty Token field as
         //  a connection error of type FRAME_ENCODING_ERROR."
@@ -793,7 +793,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         connectionIdManager.process(retireConnectionIdFrame, packet.getDestinationConnectionId());
     }
 

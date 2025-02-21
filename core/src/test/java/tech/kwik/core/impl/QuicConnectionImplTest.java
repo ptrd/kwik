@@ -604,7 +604,7 @@ class QuicConnectionImplTest {
         DatagramFrame datagramFrame = new DatagramFrame(new byte[] { 0x01, 0x02, 0x03 });
 
         // When
-        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+        connection.process(datagramFrame, mock(QuicPacket.class), mock(PacketMetaData.class));
         scheduler.clockAdvanced();
 
         // Then
@@ -618,7 +618,7 @@ class QuicConnectionImplTest {
         DatagramFrame datagramFrame = new DatagramFrame(new byte[16]);
 
         // When
-        connection.process(datagramFrame, mock(QuicPacket.class), Instant.now());
+        connection.process(datagramFrame, mock(QuicPacket.class), mock(PacketMetaData.class));
 
         // Then
         testClock.fastForward(3 * onePto);
@@ -669,15 +669,15 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(AckFrame ackFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(CryptoFrame cryptoFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
@@ -685,78 +685,78 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(MaxDataFrame maxDataFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
-
-        }
-
-        @Override
-        public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(NewTokenFrame newTokenFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
-        }
-
-        @Override
-        public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(Padding paddingFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
+        }
+
+        @Override
+        public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(PingFrame pingFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
-        }
-
-        @Override
-        public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         }
 
         @Override
-        public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
         @Override
-        public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+        public void process(StreamFrame streamFrame, QuicPacket packet, PacketMetaData metaData) {
+        }
+
+        @Override
+        public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
+
+        }
+
+        @Override
+        public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
 
         }
 
@@ -767,7 +767,7 @@ class QuicConnectionImplTest {
 
         @Override
         public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
-            processFrames(packet, metaData.timeReceived());
+            processFrames(packet, mock(PacketMetaData.class));
             return null;
         }
 

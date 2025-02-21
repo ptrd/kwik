@@ -20,10 +20,10 @@ package tech.kwik.qlog;
 
 import jakarta.json.stream.JsonGenerator;
 import tech.kwik.core.frame.*;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
-import java.time.Instant;
 import java.util.ListIterator;
 
 public class FrameFormatter implements FrameProcessor {
@@ -36,7 +36,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(AckFrame ackFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "ack")
                 .writeStartArray("acked_ranges");
@@ -53,7 +53,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "connection_close")
                 .write("error_code", connectionCloseFrame.getErrorCode())
@@ -61,7 +61,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(CryptoFrame cryptoFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "crypto")
                 .write("offset", cryptoFrame.getOffset())
@@ -70,22 +70,22 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "data_blocked").writeEnd();
     }
 
     @Override
-    public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(DatagramFrame datagramFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "datagram").writeEnd();
     }
 
     @Override
-    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(HandshakeDoneFrame handshakeDoneFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "handshake_done").writeEnd();
     }
 
     @Override
-    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "max_data")
                 .write("maximum", maxDataFrame.getMaxData())
@@ -93,7 +93,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "max_stream_data")
                 .write("stream_id", maxStreamDataFrame.getStreamId())
@@ -102,7 +102,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "max_streams")
                 .write("stream_type", maxStreamsFrame.isAppliesToBidirectional()? "bidirectional": "unidirectional")
@@ -111,7 +111,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "new_connection_id")
                 .write("sequence_number", newConnectionIdFrame.getSequenceNr())
@@ -121,7 +121,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(NewTokenFrame newTokenFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "new_token")
                 .write("token", format(newTokenFrame.getToken()))
@@ -129,27 +129,27 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(Padding paddingFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "padding").writeEnd();
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "path_challenge").writeEnd();
     }
 
     @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "path_response").writeEnd();
     }
 
     @Override
-    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PingFrame pingFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject().write("frame_type", "ping").writeEnd();
     }
 
     @Override
-    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "reset_stream")
                 .write("stream_id", resetStreamFrame.getStreamId())
@@ -159,7 +159,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "retire_connection_id")
                 .write("sequence_number", retireConnectionIdFrame.getSequenceNr())
@@ -167,7 +167,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "stop_sending")
                 .write("stream_id", stopSendingFrame.getStreamId())
@@ -176,7 +176,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamFrame streamFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "stream")
                 .write("stream_id", streamFrame.getStreamId())
@@ -187,7 +187,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "stream_data_blocked")
                 .write("stream_id", streamDataBlockedFrame.getStreamId())
@@ -196,7 +196,7 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
-    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "streams_blocked")
                 .write("stream_type", streamsBlockedFrame.isBidirectional()? "bidirectional": "unidirectional")

@@ -281,9 +281,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
-    protected void processFrames(QuicPacket packet, Instant timeReceived) {
+    protected void processFrames(QuicPacket packet, PacketMetaData metaData) {
         for (QuicFrame frame: packet.getFrames()) {
-            frame.accept(this, packet, timeReceived);
+            frame.accept(this, packet, metaData);
         }
     }
 
@@ -398,17 +398,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(AckFrame ackFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(AckFrame ackFrame, QuicPacket packet, PacketMetaData metaData) {
         ackFrame.setDelayExponent(peerAckDelayExponent);
-        getAckGenerator().received(ackFrame, packet.getPnSpace(), timeReceived);
-        recoveryManager.received(ackFrame, packet.getPnSpace(), timeReceived);
+        getAckGenerator().received(ackFrame, packet.getPnSpace(), metaData.timeReceived());
+        recoveryManager.received(ackFrame, packet.getPnSpace(), metaData.timeReceived());
     }
 
     @Override
-    public void process(CryptoFrame cryptoFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(CryptoFrame cryptoFrame, QuicPacket packet, PacketMetaData metaData) {
         try {
             getCryptoStream(packet.getEncryptionLevel()).add(cryptoFrame);
-            postProcessCrypto(cryptoFrame, packet, timeReceived);
+            postProcessCrypto(cryptoFrame, packet, metaData.timeReceived());
             log.receivedPacketInfo(getCryptoStream(packet.getEncryptionLevel()).toStringReceived());
         }
         catch (TlsProtocolException e) {
@@ -426,17 +426,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected abstract void cryptoProcessingErrorOcurred(Exception exception);
 
     @Override
-    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(ConnectionCloseFrame connectionCloseFrame, QuicPacket packet, PacketMetaData metaData) {
         handlePeerClosing(connectionCloseFrame, packet.getEncryptionLevel());
     }
 
     @Override
-    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(DataBlockedFrame dataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         log.warn("Received " + dataBlockedFrame);
     }
 
     @Override
-    public void process(DatagramFrame datagramFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(DatagramFrame datagramFrame, QuicPacket packet, PacketMetaData metaData) {
         // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
         // "An endpoint that receives a DATAGRAM frame when it has not indicated support via the transport parameter
         //  MUST terminate the connection with an error of type PROTOCOL_VIOLATION."
@@ -453,12 +453,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxDataFrame maxDataFrame, QuicPacket packet, PacketMetaData metaData) {
         flowController.process(maxDataFrame);
     }
 
     @Override
-    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxStreamDataFrame maxStreamDataFrame, QuicPacket packet, PacketMetaData metaData) {
         try {
             flowController.process(maxStreamDataFrame);
         } catch (TransportError transportError) {
@@ -466,23 +466,23 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
     @Override
-    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(MaxStreamsFrame maxStreamsFrame, QuicPacket packet, PacketMetaData metaData) {
         getStreamManager().process(maxStreamsFrame);
     }
 
     @Override
-    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(NewConnectionIdFrame newConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         getConnectionIdManager().process(newConnectionIdFrame);
     }
 
     @Override
-    public void process(Padding paddingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(Padding paddingFrame, QuicPacket packet, PacketMetaData metaData) {
     }
 
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-path_challenge-frames
     // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
         PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Responses to path validation using PATH_RESPONSE frames are sent just once."
@@ -490,16 +490,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
     }
 
     @Override
-    public void process(PingFrame pingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(PingFrame pingFrame, QuicPacket packet, PacketMetaData metaData) {
         // Intentionally left empty (nothing to do on receiving ping: will be acknowledged like any other ack-eliciting frame)
     }
 
     @Override
-    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, PacketMetaData metaData) {
         try {
             getStreamManager().process(resetStreamFrame);
         }
@@ -509,12 +509,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, PacketMetaData metaData) {
         getStreamManager().process(stopSendingFrame);
     }
 
     @Override
-    public void process(StreamFrame streamFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamFrame streamFrame, QuicPacket packet, PacketMetaData metaData) {
         try {
             getStreamManager().process(streamFrame);
         }
@@ -524,12 +524,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
-    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamDataBlockedFrame streamDataBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         log.warn("Received " + streamDataBlockedFrame);
     }
 
     @Override
-    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, Instant timeReceived) {
+    public void process(StreamsBlockedFrame streamsBlockedFrame, QuicPacket packet, PacketMetaData metaData) {
         log.warn("Received " + streamsBlockedFrame);
     }
 
