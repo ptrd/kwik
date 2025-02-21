@@ -381,7 +381,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void processPacket(QuicPacket packet, PacketMetaData metaData) {
-        ProcessResult result = packet.accept(this, metaData.timeReceived());
+        ProcessResult result = packet.accept(this, metaData);
         if (result == ProcessResult.Abort) {
             return;
         }

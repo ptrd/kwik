@@ -30,7 +30,6 @@ import tech.kwik.core.log.Logger;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -531,7 +530,7 @@ abstract public class QuicPacket {
         return frames;
     }
 
-    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time);
+    public abstract PacketProcessor.ProcessResult accept(PacketProcessor processor, PacketMetaData metaData);
 
     /**
      * https://tools.ietf.org/html/draft-ietf-quic-recovery-18#section-2

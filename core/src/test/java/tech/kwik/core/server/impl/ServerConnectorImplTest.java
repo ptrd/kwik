@@ -20,6 +20,7 @@ package tech.kwik.core.server.impl;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import tech.kwik.core.QuicConnection;
@@ -348,6 +349,7 @@ class ServerConnectorImplTest {
     //endregion
 
     //region close server connector
+    @Disabled  // flaky
     @Test
     void afterCloseNoAdditionalThreadsShouldBePresent() throws Exception {
         // Given

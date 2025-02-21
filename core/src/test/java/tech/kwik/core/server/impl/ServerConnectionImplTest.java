@@ -106,7 +106,7 @@ class ServerConnectionImplTest {
     @Test
     void whenParsingClientHelloLeadsToTlsErrorConnectionIsClosed() throws Exception {
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame(Version.getDefault(), new byte[123])), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame(Version.getDefault(), new byte[123])), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame), eq(EncryptionLevel.Initial));
@@ -122,7 +122,7 @@ class ServerConnectionImplTest {
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
                 List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), TlsConstants.NamedGroup.secp256r1, clientExtensions, null, ClientHello.PskKeyEstablishmentMode.both);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame), eq(EncryptionLevel.Initial));
@@ -134,7 +134,7 @@ class ServerConnectionImplTest {
         List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("h2"), createTransportParametersExtension());
         ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -148,7 +148,7 @@ class ServerConnectionImplTest {
     void clientHelloLackingTransportParametersExtensionLeadsToConnectionClose() throws Exception {
         // When
         List<Extension> clientExtensions = List.of(alpn);
-        connection.process(createInitialClientPacket(clientExtensions), Instant.now());
+        connection.process(createInitialClientPacket(clientExtensions), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -160,7 +160,7 @@ class ServerConnectionImplTest {
     void clientHelloWithCorrectTransportParametersIsAccepted() throws Exception {
         // When
         TransportParameters clientTransportParams = createDefaultTransportParameters();
-        connection.process(createInitialClientPacket(clientTransportParams), Instant.now());
+        connection.process(createInitialClientPacket(clientTransportParams), mock(PacketMetaData.class));
 
         // Then
         List<Extension> serverExtensions = tlsServerEngine.getServerExtensions();
@@ -172,7 +172,7 @@ class ServerConnectionImplTest {
     void whenTransportParametersContainsInvalidValueServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client);
-        connection.process(createInitialClientPacket(transportParametersExtension), Instant.now());
+        connection.process(createInitialClientPacket(transportParametersExtension), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -185,7 +185,7 @@ class ServerConnectionImplTest {
     void whenTransportParametersContainsInvalidParameterServerShouldCloseConnection(TransportParameters tp) throws Exception {
         // When
         QuicTransportParametersExtension transportParametersExtension = new QuicTransportParametersExtensionTest(tp);
-        connection.process(createInitialClientPacket(transportParametersExtension), Instant.now());
+        connection.process(createInitialClientPacket(transportParametersExtension), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -204,7 +204,7 @@ class ServerConnectionImplTest {
         clientTransportParams.setInitialMaxStreamsBidi(100);
 
         // When
-        connection.process(createInitialClientPacket(clientTransportParams), Instant.now());
+        connection.process(createInitialClientPacket(clientTransportParams), mock(PacketMetaData.class));
 
         // Then
         verify(streamManager).setInitialMaxStreamsUni(longThat(value -> value == 3));
@@ -214,7 +214,7 @@ class ServerConnectionImplTest {
     @Test
     void serverShouldSendAlpnAndQuicTransportParameterExtensions() throws Exception {
         // When
-        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
@@ -225,7 +225,7 @@ class ServerConnectionImplTest {
     @Test
     void serverShouldSendTransportParameterDisableActiveMigration() throws Exception {
         // When
-        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
@@ -240,7 +240,7 @@ class ServerConnectionImplTest {
         connection.enableDatagramExtension();
 
         // When
-        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
@@ -256,7 +256,7 @@ class ServerConnectionImplTest {
         clientTransportParameters.setMaxDatagramFrameSize(1234);
 
         // When
-        connection.process(createInitialClientPacket(clientTransportParameters), Instant.now());
+        connection.process(createInitialClientPacket(clientTransportParameters), mock(PacketMetaData.class));
 
         // Then
         TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
@@ -277,7 +277,7 @@ class ServerConnectionImplTest {
         CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
 
         // When
-        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
         // Then
         assertThat(connection.getQuicVersion()).isEqualTo(QuicConnection.QuicVersion.V2);
@@ -295,7 +295,7 @@ class ServerConnectionImplTest {
         CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
 
         // When
-        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), Instant.now());
+        connection.process(new InitialPacket(Version.QUIC_version_1, new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
         // Then
         assertThat(connection.getQuicVersion()).isEqualTo(QuicConnection.QuicVersion.V1);
@@ -310,7 +310,7 @@ class ServerConnectionImplTest {
         FieldReader fieldReader = new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"));
 
         // When
-        connection.process(createInitialClientPacket(createDefaultTransportParameters()), Instant.now());
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
 
         // Then
         assertThat(fieldReader.read()).isEqualTo(QuicConnectionImpl.Status.Handshaking);
@@ -351,7 +351,7 @@ class ServerConnectionImplTest {
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
 
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), null);
 
         // Then
         verify(connection.getSender()).send(any(RetryPacket.class));
@@ -361,13 +361,13 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredAllRetryPacketsContainsSameToken() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
         clearInvocations(connection.getSender());
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(retryPacket -> Arrays.equals(retryPacket.getRetryToken(), retryToken)));
@@ -378,7 +378,7 @@ class ServerConnectionImplTest {
         // Given
         byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
         ServerConnectionImpl connection1 = createServerConnection(createTlsServerEngine(), true, dcid1);
-        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), Instant.now());
+        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), mock(PacketMetaData.class));
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection1.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
@@ -386,7 +386,7 @@ class ServerConnectionImplTest {
         // When
         byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
         ServerConnectionImpl connection2 = createServerConnection(createTlsServerEngine(), true, dcid2);
-        connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), Instant.now());
+        connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
         verify(connection2.getSender()).send(argThat(retryPacket -> !Arrays.equals(retryPacket.getRetryToken(), retryToken)));
@@ -397,7 +397,7 @@ class ServerConnectionImplTest {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, null);
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
@@ -406,7 +406,7 @@ class ServerConnectionImplTest {
         // When
         ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, Collections.emptyList());
         CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -417,14 +417,14 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredInitialWithInvalidTokenConnectionIsClosed() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
         byte[] incorrectToken = Arrays.copyOfRange(retryToken, 0, retryToken.length - 1);
 
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], incorrectToken, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], incorrectToken, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
@@ -511,7 +511,7 @@ class ServerConnectionImplTest {
     @Test
     void whenPeerAddressValidatedAntiAmplificationIsDisabled() {
         // When
-        connection.process(new HandshakePacket(Version.getDefault(), new byte[0], new byte[0], new CryptoFrame(Version.getDefault(), new byte[300])), Instant.now());
+        connection.process(new HandshakePacket(Version.getDefault(), new byte[0], new byte[0], new CryptoFrame(Version.getDefault(), new byte[300])), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).unsetAntiAmplificationLimit();
@@ -521,7 +521,7 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredInitialWithValidTokenDisablesAntiAmplificationLimit() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), null);
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
@@ -530,7 +530,7 @@ class ServerConnectionImplTest {
         // When
         ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, Collections.emptyList());
         CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
 
         // Then
         verify(connection.getSender()).unsetAntiAmplificationLimit();
@@ -551,7 +551,7 @@ class ServerConnectionImplTest {
         connection = createServerConnection(tlsServerEngineFactory, false, new byte[8], odcid, cid -> {}, cryptoStream);
 
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
         assertThat(cryptoStream.getBufferedMessagesCount()).isEqualTo(0);
@@ -565,8 +565,8 @@ class ServerConnectionImplTest {
         CryptoFrame secondFrame = mock(CryptoFrame.class);
         InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
         InitialPacket packet2 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, secondFrame);
-        connection.process(packet1, Instant.now());
-        connection.process(packet2, Instant.now());
+        connection.process(packet1, metaDataForNow());
+        connection.process(packet2, metaDataForNow());
 
         verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
         verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(Instant.class));
@@ -580,7 +580,7 @@ class ServerConnectionImplTest {
         FieldSetter.setField(connection, QuicConnectionImpl.class.getDeclaredField("connectionSecrets"), connectionSecrets);
 
         // When
-        connection.process(mock(HandshakePacket.class), Instant.now());
+        connection.process(mock(HandshakePacket.class), mock(PacketMetaData.class));
 
         // Then
         verify(connectionSecrets).discardKeys(argThat(level -> level == EncryptionLevel.Initial));

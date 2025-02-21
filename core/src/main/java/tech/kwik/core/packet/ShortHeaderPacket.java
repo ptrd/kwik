@@ -32,7 +32,6 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
@@ -175,8 +174,8 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
-        return processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, PacketMetaData metaData) {
+        return processor.process(this, metaData);
     }
 
     protected void checkPacketType(byte flags) {

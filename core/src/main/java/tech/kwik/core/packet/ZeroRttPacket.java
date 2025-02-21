@@ -18,14 +18,13 @@
  */
 package tech.kwik.core.packet;
 
-import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.PacketProcessor;
 import tech.kwik.core.common.PnSpace;
+import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.PacketProcessor;
 import tech.kwik.core.impl.Version;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -96,8 +95,8 @@ public class ZeroRttPacket extends LongHeaderPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
-         return processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, PacketMetaData metaData) {
+         return processor.process(this, metaData);
     }
 
     @Override

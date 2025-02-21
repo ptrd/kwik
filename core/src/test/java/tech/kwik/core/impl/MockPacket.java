@@ -25,10 +25,10 @@ import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -130,7 +130,7 @@ public class MockPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, PacketMetaData metaData) {
         return PacketProcessor.ProcessResult.Continue;
     }
 

@@ -474,7 +474,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public ProcessResult process(InitialPacket packet, Instant time) {
+    public ProcessResult process(InitialPacket packet, PacketMetaData metaData) {
         assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
 
         connectionState = Handshaking;
@@ -496,12 +496,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 addressValidated = true;
                 sender.unsetAntiAmplificationLimit();
                 // Valid token, proceed as usual.
-                processFrames(packet, time);
+                processFrames(packet, metaData.timeReceived());
                 return ProcessResult.Continue;
             }
         }
         else {
-            processFrames(packet, time);
+            processFrames(packet, metaData.timeReceived());
             return ProcessResult.Continue;
         }
     }
@@ -521,20 +521,20 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, metaData.timeReceived());
         return ProcessResult.Continue;
     }
 
     @Override
-    public ProcessResult process(VersionNegotiationPacket packet, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket packet, PacketMetaData packetMetaData) {
         // Intentionally discarding packet without any action (clients should not send Version Negotiation packets).
         return ProcessResult.Abort;
     }
 
     @Override
-    public ProcessResult process(HandshakePacket packet, Instant time) {
+    public ProcessResult process(HandshakePacket packet, PacketMetaData metaData) {
         if (! addressValidated) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-8.1
             // "In particular, receipt of a packet protected with Handshake keys confirms that the peer successfully processed
@@ -546,7 +546,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.2.1
         // "A server stops sending and processing Initial packets when it receives its first Handshake packet. "
         sender.discard(PnSpace.Initial, "first handshake packet received");  // Only discards when not yet done.
-        processFrames(packet, time);
+        processFrames(packet, metaData.timeReceived());
         // https://www.rfc-editor.org/rfc/rfc9001.html#name-discarding-initial-keys
         // "a server MUST discard Initial keys when it first successfully processes a Handshake packet"
         connectionSecrets.discardKeys(Initial);
@@ -555,20 +555,20 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public ProcessResult process(RetryPacket packet, Instant time) {
+    public ProcessResult process(RetryPacket packet, PacketMetaData metaData) {
         // Intentionally discarding packet without any action (clients should not send Retry packets).
         return ProcessResult.Abort;
     }
 
     @Override
-    public ProcessResult process(ZeroRttPacket packet, Instant time) {
+    public ProcessResult process(ZeroRttPacket packet, PacketMetaData metaData) {
         if (acceptedEarlyData) {
             if (! applicationProtocolStarted) {
                 applicationProtocolRegistry.startApplicationProtocolConnection(negotiatedApplicationProtocol, this);
                 applicationProtocolStarted = true;
             }
 
-            processFrames(packet, time);
+            processFrames(packet, metaData.timeReceived());
         }
         else {
             log.warn("Ignoring 0-RTT packet because server connection does not accept early data.");

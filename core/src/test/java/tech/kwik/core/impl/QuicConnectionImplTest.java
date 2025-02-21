@@ -95,7 +95,7 @@ class QuicConnectionImplTest {
         packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
-        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+        verify(packet, never()).accept(any(PacketProcessor.class), any(PacketMetaData.class));
     }
 
     @Test
@@ -110,7 +110,7 @@ class QuicConnectionImplTest {
         packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
-        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+        verify(packet, never()).accept(any(PacketProcessor.class), any(PacketMetaData.class));
     }
 
     @Test
@@ -187,7 +187,7 @@ class QuicConnectionImplTest {
         packetProcessor.processPacket(packet, metaDataForNow());
 
         // Then
-        verify(packet, never()).accept(any(PacketProcessor.class), any(Instant.class));
+        verify(packet, never()).accept(any(PacketProcessor.class), any(PacketMetaData.class));
     }
 
     @Test
@@ -761,33 +761,33 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public ProcessResult process(InitialPacket packet, Instant time) {
+        public ProcessResult process(InitialPacket packet, PacketMetaData metaData) {
             return null;
         }
 
         @Override
-        public ProcessResult process(ShortHeaderPacket packet, Instant time) {
-            processFrames(packet, time);
+        public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
+            processFrames(packet, metaData.timeReceived());
             return null;
         }
 
         @Override
-        public ProcessResult process(VersionNegotiationPacket packet, Instant time) {
+        public ProcessResult process(VersionNegotiationPacket packet, PacketMetaData packetMetaData) {
             return null;
         }
 
         @Override
-        public ProcessResult process(HandshakePacket packet, Instant time) {
+        public ProcessResult process(HandshakePacket packet, PacketMetaData metaData) {
             return null;
         }
 
         @Override
-        public ProcessResult process(RetryPacket packet, Instant time) {
+        public ProcessResult process(RetryPacket packet, PacketMetaData metaData) {
             return null;
         }
 
         @Override
-        public ProcessResult process(ZeroRttPacket packet, Instant time) {
+        public ProcessResult process(ZeroRttPacket packet, PacketMetaData metaData) {
             return null;
         }
 

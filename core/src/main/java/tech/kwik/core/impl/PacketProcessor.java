@@ -20,8 +20,6 @@ package tech.kwik.core.impl;
 
 import tech.kwik.core.packet.*;
 
-import java.time.Instant;
-
 public interface PacketProcessor {
 
     enum ProcessResult {
@@ -29,15 +27,15 @@ public interface PacketProcessor {
         Abort
     }
 
-    ProcessResult process(InitialPacket packet, Instant time);
+    ProcessResult process(InitialPacket packet, PacketMetaData metaData);
 
-    ProcessResult process(ShortHeaderPacket packet, Instant time);
+    ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData);
 
-    ProcessResult process(VersionNegotiationPacket packet, Instant time);
+    ProcessResult process(VersionNegotiationPacket packet, PacketMetaData packetMetaData);
 
-    ProcessResult process(HandshakePacket packet, Instant time);
+    ProcessResult process(HandshakePacket packet, PacketMetaData metaData);
 
-    ProcessResult process(RetryPacket packet, Instant time);
+    ProcessResult process(RetryPacket packet, PacketMetaData metaData);
 
-    ProcessResult process(ZeroRttPacket packet, Instant time);
+    ProcessResult process(ZeroRttPacket packet, PacketMetaData metaData);
 }

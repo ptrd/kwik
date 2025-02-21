@@ -35,7 +35,6 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.Arrays;
 
 /**
@@ -209,8 +208,8 @@ public class RetryPacket extends QuicPacket {
     }
 
     @Override
-    public PacketProcessor.ProcessResult accept(PacketProcessor processor, Instant time) {
-        return processor.process(this, time);
+    public PacketProcessor.ProcessResult accept(PacketProcessor processor, PacketMetaData metaData) {
+        return processor.process(this, metaData);
     }
 
     @Override

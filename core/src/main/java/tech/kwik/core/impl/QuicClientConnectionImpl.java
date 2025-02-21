@@ -660,7 +660,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public ProcessResult process(InitialPacket packet, Instant time) {
+    public ProcessResult process(InitialPacket packet, PacketMetaData metaData) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.2
         // "clients that receive an Initial packet with a non-zero Token Length field MUST either discard the packet or
         //  generate a connection error of type PROTOCOL_VIOLATION."
@@ -673,7 +673,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             handleVersionNegotiation(packet.getVersion());
         }
         connectionIdManager.registerInitialPeerCid(packet.getSourceConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, metaData.timeReceived());
         ignoreVersionNegotiation = true;
         return ProcessResult.Continue;
     }
@@ -689,20 +689,20 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public ProcessResult process(HandshakePacket packet, Instant time) {
-        processFrames(packet, time);
+    public ProcessResult process(HandshakePacket packet, PacketMetaData metaData) {
+        processFrames(packet, metaData.timeReceived());
         return ProcessResult.Continue;
     }
 
     @Override
-    public ProcessResult process(ShortHeaderPacket packet, Instant time) {
+    public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        processFrames(packet, time);
+        processFrames(packet, metaData.timeReceived());
         return ProcessResult.Continue;
     }
 
     @Override
-    public ProcessResult process(VersionNegotiationPacket vnPacket, Instant time) {
+    public ProcessResult process(VersionNegotiationPacket vnPacket, PacketMetaData packetMetaData) {
         if (!ignoreVersionNegotiation && !vnPacket.getServerSupportedVersions().contains(quicVersion.getVersion())) {
             log.info("Server doesn't support " + quicVersion + ", but only: " + ((VersionNegotiationPacket) vnPacket).getServerSupportedVersions().stream().map(v -> v.toString()).collect(Collectors.joining(", ")));
             throw new VersionNegotiationFailure();
@@ -717,7 +717,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile boolean processedRetryPacket = false;
 
     @Override
-    public ProcessResult process(RetryPacket packet, Instant time) {
+    public ProcessResult process(RetryPacket packet, PacketMetaData metaData) {
         if (packet.validateIntegrityTag(connectionIdManager.getOriginalDestinationConnectionId())) {
             if (!processedRetryPacket) {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.5
@@ -759,7 +759,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    public ProcessResult process(ZeroRttPacket packet, Instant time) {
+    public ProcessResult process(ZeroRttPacket packet, PacketMetaData metaData) {
         // Intentionally discarding packet without any action (servers should not send 0-RTT packets).
         return ProcessResult.Abort;
     }

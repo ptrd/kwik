@@ -112,7 +112,7 @@ class QuicClientConnectionImplTest {
     void initialWithTokenShouldBeDiscarded() {
         // When
         byte[] token = new byte[16];
-        PacketProcessor.ProcessResult result = connection.process(new InitialPacket(Version.getDefault(), destinationConnectionId, new byte[0], token, new PingFrame()), Instant.now());
+        PacketProcessor.ProcessResult result = connection.process(new InitialPacket(Version.getDefault(), destinationConnectionId, new byte[0], token, new PingFrame()), null);
 
         // Then
         assertThat(result).isEqualTo(PacketProcessor.ProcessResult.Abort);
@@ -507,7 +507,7 @@ class QuicClientConnectionImplTest {
         assertThat(newUnusedConnectionId).isNotEqualTo(connection.getSourceConnectionId());
         clearInvocations(sender);
 
-        connection.process(new ShortHeaderPacket(Version.getDefault(), newUnusedConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), newUnusedConnectionId, new Padding(20)),  mock(PacketMetaData.class));
 
         // Then
         assertThat(connection.getSourceConnectionIds().get(0).getConnectionIdStatus()).isEqualTo(ConnectionIdStatus.USED);
@@ -526,7 +526,7 @@ class QuicClientConnectionImplTest {
 
         clearInvocations(sender);
         // When
-        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)),  mock(PacketMetaData.class));
 
         // Then
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
@@ -545,10 +545,10 @@ class QuicClientConnectionImplTest {
         byte[][] newConnectionIds = connection.newConnectionIds(1, 0);
         byte[] nextConnectionId = newConnectionIds[0];
         assertThat(nextConnectionId).isNotEqualTo(connection.getSourceConnectionId());
-        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), nextConnectionId, new Padding(20)), mock(PacketMetaData.class));
 
         clearInvocations(sender);
-        connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)), Instant.now());
+        connection.process(new ShortHeaderPacket(Version.getDefault(), firstConnectionId, new Padding(20)),  mock(PacketMetaData.class));
 
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
     }
@@ -619,7 +619,7 @@ class QuicClientConnectionImplTest {
         when(vnWithClientVersion.getServerSupportedVersions()).thenReturn(List.of(Version.getDefault()));
 
         try {
-            connection.process(vnWithClientVersion, Instant.now());
+            connection.process(vnWithClientVersion, null);
         }
         catch (Throwable exception) {
             exception.printStackTrace();
@@ -630,10 +630,10 @@ class QuicClientConnectionImplTest {
     @Test
     void versionNegotationAfterClientHasReceivedOthePacketShouldBeIgnored() {
         VersionNegotiationPacket vn = new VersionNegotiationPacket();
-        connection.process(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new PingFrame()), Instant.now());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[0], new byte[0], new byte[0], new PingFrame()), mock(PacketMetaData.class));
 
         try {
-            connection.process(vn, Instant.now());
+            connection.process(vn, null);
         }
         catch (Throwable exception) {
             fail();
