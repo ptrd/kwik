@@ -62,7 +62,7 @@ class ServerConnectionThreadTest {
     @Test
     void testIncomingPacketsShouldBeParsed() throws Exception {
         // Given
-        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10, 1207);
         serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), ByteBuffer.allocate(0), metaData, mock(Logger.class));
 
         // When
@@ -76,7 +76,7 @@ class ServerConnectionThreadTest {
     @Test
     void testRemainingDatagramDataShouldBeParsed() throws Exception {
         // Given
-        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10, 1207);
         ByteBuffer remainingData = ByteBuffer.allocate(1173);
         remainingData.position(1100);
 
@@ -94,7 +94,7 @@ class ServerConnectionThreadTest {
         AtomicInteger antiAmplificationLimit = new AtomicInteger(0);
         stubAntiAmplificationLimitWith(antiAmplificationLimit);
 
-        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10);
+        PacketMetaData metaData = new PacketMetaData(Instant.now(), new InetSocketAddress(54221), 10, 1207);
         ByteBuffer remainingData = ByteBuffer.allocate(1173);
         remainingData.position(1100);
 

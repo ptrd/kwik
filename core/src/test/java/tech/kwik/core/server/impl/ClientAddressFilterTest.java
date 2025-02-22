@@ -42,7 +42,7 @@ class ClientAddressFilterTest {
         ClientAddressFilter filter = new ClientAddressFilter(initialClientAddress, mock(Logger.class), sink);
 
         // When
-        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), initialClientAddress, 0));
+        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), initialClientAddress, 0, 1207));
 
         // Then
         verify(sink).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));
@@ -57,7 +57,7 @@ class ClientAddressFilterTest {
 
         // When
         InetSocketAddress otherAddress = new InetSocketAddress("www.example.com", 5840);
-        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), otherAddress, 0));
+        filter.processDatagram(ByteBuffer.allocate(50), new PacketMetaData(Instant.now(), otherAddress, 0, 1207));
 
         // Then
         verify(sink, never()).processDatagram(any(ByteBuffer.class), any(PacketMetaData.class));

@@ -351,7 +351,7 @@ class ServerConnectionImplTest {
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
 
         // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), null);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
 
         // Then
         verify(connection.getSender()).send(any(RetryPacket.class));
@@ -521,7 +521,7 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredInitialWithValidTokenDisablesAntiAmplificationLimit() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), null);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
         ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
         verify(connection.getSender()).send(argumentCaptor.capture());
         byte[] retryToken = argumentCaptor.getValue().getRetryToken();
@@ -653,7 +653,7 @@ class ServerConnectionImplTest {
     //region test helper methods
     private PacketMetaData metaDataForNow() {
         InetSocketAddress sourceAddress = new InetSocketAddress(52719);
-        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0, 1204);
     }
 
     static Stream<TransportParameters> provideTransportParametersWithInvalidValue() {

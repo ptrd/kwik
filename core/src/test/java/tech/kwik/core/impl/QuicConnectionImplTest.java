@@ -630,7 +630,7 @@ class QuicConnectionImplTest {
     //region helper methods
     private PacketMetaData metaDataForNow() {
         InetSocketAddress sourceAddress = new InetSocketAddress(52719);
-        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0, 1204);
     }
 
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
