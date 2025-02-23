@@ -16,21 +16,31 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.core.send;
-
-import tech.kwik.core.frame.QuicFrame;
+package tech.kwik.core.cid;
 
 import java.net.InetSocketAddress;
-import java.util.function.Consumer;
 
+/**
+ * Provides connection IDs for the current connection.
+ */
+public interface ConnectionIdProvider {
 
-public interface SendRequest {
+    /**
+     * Returns the initial connection ID. During handshake, this will be _the_ connection ID. After the handshake,
+     * new connection IDs might be issued and used by the peer.
+     * @return
+     */
+    byte[] getInitialConnectionId();
 
-    int getEstimatedSize();
+    /**
+     * Returns the connection ID that this endpoint uses to address the peer.
+     * @return
+     */
+    byte[] getPeerConnectionId(InetSocketAddress clientAddress);
 
-    QuicFrame getFrame(int maxSize);
-
-    Consumer<QuicFrame> getLostCallback();
-
-    InetSocketAddress getAlternateAddress();
+    /**
+     * Registers the (initial) client address, so it can be associated with the initial connection ID.
+     * @param clientAddress
+     */
+    void registerClientAddress(InetSocketAddress clientAddress);
 }

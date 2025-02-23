@@ -18,10 +18,10 @@
  */
 package tech.kwik.core.recovery;
 
-import tech.kwik.core.impl.Version;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.MaxDataFrame;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.impl.Version;
 import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.LongHeaderPacket;
@@ -43,6 +43,13 @@ public abstract class RecoveryTests {
 
     QuicPacket createPacket(int packetNumber, QuicFrame frame) {
         ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frame);
+        setPacketNumber(packet, packetNumber);
+        return packet;
+    }
+
+    QuicPacket createPacket(int packetNumber, List<QuicFrame> frames) {
+        ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[0], frames.get(0));
+        frames.stream().skip(1).forEach(packet::addFrame);
         setPacketNumber(packet, packetNumber);
         return packet;
     }

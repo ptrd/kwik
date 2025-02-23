@@ -16,21 +16,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.core.send;
+package tech.kwik.core.socket;
 
-import tech.kwik.core.frame.QuicFrame;
-
+import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.function.Consumer;
+import java.nio.ByteBuffer;
+import java.time.Instant;
 
+/**
+ * Abstracts the DatagramSocket used for sending and receiving, so it can hide implementation details related to
+ * connection migration and path validation.
+ */
+public interface SocketManager {
 
-public interface SendRequest {
+    Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException;
 
-    int getEstimatedSize();
+    void close();
 
-    QuicFrame getFrame(int maxSize);
-
-    Consumer<QuicFrame> getLostCallback();
-
-    InetSocketAddress getAlternateAddress();
+    InetSocketAddress getClientAddress();
 }

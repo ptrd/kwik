@@ -24,6 +24,7 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.Padding;
+import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.FrameReceivedListener;
@@ -356,12 +357,14 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         List<QuicPacket> unAckedPackets = lossDetectors[pnSpace.ordinal()].unAcked();
         Optional<QuicPacket> ackEliciting = unAckedPackets.stream()
                 .filter(p -> p.isAckEliciting())
-                // Filter out Ping packets, ie. packets consisting of PingFrame's, padding and AckFrame's only.
-                .filter(p -> ! p.getFrames().stream().allMatch(frame -> frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame))
+                // Filter out packets that only contain frames that should not be retransmitted (in a probe).
+                .filter(p -> ! p.getFrames().stream().allMatch(frame -> frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame || frame instanceof PathChallengeFrame || frame instanceof Padding))
                 .findFirst();
         if (ackEliciting.isPresent()) {
             List<QuicFrame> framesToRetransmit = ackEliciting.get().getFrames().stream()
                     .filter(frame -> !(frame instanceof AckFrame))
+                    .filter(frame -> !(frame instanceof PathChallengeFrame))
+                    .filter(frame -> !(frame instanceof Padding))
                     .collect(Collectors.toList());
             return framesToRetransmit;
         }

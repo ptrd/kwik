@@ -45,9 +45,11 @@ import tech.kwik.core.frame.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
+import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
 import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.send.SenderImpl;
+import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
 import tech.kwik.core.stream.FlowControl;
 import tech.kwik.core.stream.StreamManager;
@@ -121,10 +123,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final boolean usingIPv4;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
-    private final DatagramSocket socket;
+    private final ClientSocketManager socketManager;
     private final InetAddress serverAddress;
     private final SenderImpl sender;
-    private final Receiver receiver;
+    private final MultipleAddressReceiver receiver;
     private volatile PacketParser parser;
     private final StreamManager streamManager;
     private volatile TransportParameters transportParams;
@@ -179,23 +181,25 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.clientCertificateKey = clientCertificateKey;
         this.socketFactory = socketFactory != null? socketFactory: (address) -> new DatagramSocket();
 
-        socket = this.socketFactory.createSocket(serverAddress);
-
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
-                        this, "", initialRtt, log);
-        sender.enableAllLevels();
-        idleTimer.setPtoSupplier(sender::getPto);
-        ackGenerator = sender.getGlobalAckGenerator();
-
-        receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
-
-        streamManager = new StreamManager(this, Role.Client, log, connectionProperties, callbackThread);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
+
+        receiver = new MultipleAddressReceiver(log, createPacketFilter(), this::abortConnection);
+        socketManager = new ClientSocketManager(new InetSocketAddress(serverAddress, port), receiver, socketFactory);
+        connectionIdManager.registerClientAddress(socketManager.getClientAddress());
+
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, "", initialRtt, log);
+        sender.enableAllLevels();
+        connectionIdManager.setSender(sender);
+        idleTimer.setPtoSupplier(sender::getPto);
+        ackGenerator = sender.getGlobalAckGenerator();
+
+        transportParams = initTransportParameters();
+        streamManager = new StreamManager(this, Role.Client, log, connectionProperties, callbackThread);
 
         connectionState = Status.Created;
         tlsEngine = TlsClientEngineFactory.createClientEngine(new ClientMessageSender() {
@@ -832,7 +836,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         super.terminate();
         handshakeFinishedCondition.countDown();
         receiver.shutdown();
-        socket.close();
+        socketManager.close();
         if (receiverThread != null) {
             receiverThread.interrupt();
         }
@@ -840,11 +844,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void changeAddress() {
         try {
-            DatagramSocket newSocket = socketFactory.createSocket(serverAddress);
-            sender.changeAddress(newSocket);
-            receiver.changeAddress(newSocket);
-            log.info("Changed local address to " + newSocket.getLocalPort());
-        } catch (SocketException e) {
+            InetSocketAddress newAddress = socketManager.changeClientPort();
+            log.info("Changed local address to " + newAddress.getPort());
+        }
+        catch (SocketException e) {
             // Fairly impossible, as we created a socket on an ephemeral port
             log.error("Changing local address failed", e);
         }
@@ -1124,7 +1127,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected ConnectionIdManager getConnectionIdManager() {
+    public ConnectionIdManager getConnectionIdManager() {
         return connectionIdManager;
     }
 
@@ -1275,7 +1278,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public InetSocketAddress getLocalAddress() {
-        return (InetSocketAddress) socket.getLocalSocketAddress();
+        return socketManager.getLocalSocketAddress();
     }
 
     @Override

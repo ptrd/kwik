@@ -26,11 +26,7 @@ import org.mockito.stubbing.Answer;
 import tech.kwik.core.cc.CongestionController;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.Padding;
-import tech.kwik.core.frame.PingFrame;
-import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.HandshakeState;
 import tech.kwik.core.impl.PacketMatcherByPacketNumber;
 import tech.kwik.core.impl.Role;
@@ -320,6 +316,53 @@ class RecoveryManagerTest extends RecoveryTests {
         assertThat(framesToRetransmit).isNotEmpty();
         assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
         assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
+    @Test
+    void singlePathChallengeFrameShouldNotBeRetransmitted() throws Exception {
+        QuicPacket packet1 = createPacket(0, new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, new StreamFrame(1, new byte[90], true));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathChallengeFrameNorPaddingShouldBeRetransmittedWhenCombined() throws Exception {
+        QuicPacket packet1 = createPacket(0, List.of(new PathChallengeFrame(Version.QUIC_version_1, new byte[8]), new Padding(2)));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, new StreamFrame(1, new byte[90], true));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class, Padding.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathChallengeFrameShouldNeverBeRetransmitted() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new StreamFrame(1, new byte[90], true), new PathChallengeFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void neverPutPaddingInProbe() {
+        QuicPacket packet = createPacket(0, List.of(new Padding(2), new AckFrame(0), new PathChallengeFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(Padding.class);
     }
 
     /**

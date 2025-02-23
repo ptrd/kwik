@@ -21,12 +21,14 @@ package tech.kwik.core.cid;
 import tech.kwik.core.frame.NewConnectionIdFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.RetireConnectionIdFrame;
+import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.send.Sender;
 import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.server.impl.ServerConnectionProxy;
 
+import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
@@ -38,17 +40,19 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.CONNECTION_ID_LIMI
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static tech.kwik.core.common.EncryptionLevel.App;
+import static tech.kwik.core.impl.Role.Client;
+import static tech.kwik.core.impl.Role.Server;
 
 /**
  * Manages the collections of connection ID's for the connection, both for this (side of the) connection and the peer's.
  */
-public class ConnectionIdManager {
+public class ConnectionIdManager implements ConnectionIdProvider {
 
     public static final int MAX_CIDS_PER_CONNECTION = 6;
 
     private final int connectionIdLength;
     private final ServerConnectionRegistry connectionRegistry;
-    private final Sender sender;
+    private volatile Sender sender;
     private final BiConsumer<Integer, String> closeConnectionCallback;
     private final SourceConnectionIdRegistry cidRegistry;
     private final DestinationConnectionIdRegistry peerCidRegistry;
@@ -61,28 +65,28 @@ public class ConnectionIdManager {
     private volatile int maxPeerCids;
     private volatile byte[] retrySourceCid;
     private final Version quicVersion = Version.QUIC_version_1;
-
+    private final Role role;
 
     /**
      * Creates a connection ID manager for server role.
-     * @param initialClientCid  the initial connection ID of the client
+     *
+     * @param initialClientCid                the initial connection ID of the client
      * @param originalDestinationConnectionId
-     * @param connectionIdLength  the length of the connection IDs generated for this endpoint (server)
-     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
-     * @param connectionRegistry  the connection registry for associating new connection IDs with the connection
-     * @param sender  the sender to send messages to the peer
-     * @param closeConnectionCallback  callback for closing the connection with a transport error code
-     * @param log  logger
+     * @param connectionIdLength              the length of the connection IDs generated for this endpoint (server)
+     * @param maxPeerCids                     the maximum number of peer connection IDs this endpoint is willing to store
+     * @param connectionRegistry              the connection registry for associating new connection IDs with the connection
+     * @param closeConnectionCallback         callback for closing the connection with a transport error code
+     * @param log                             logger
      */
     public ConnectionIdManager(byte[] initialClientCid, byte[] originalDestinationConnectionId, int connectionIdLength,
-                               int maxPeerCids, ServerConnectionRegistry connectionRegistry, Sender sender,
+                               int maxPeerCids, ServerConnectionRegistry connectionRegistry,
                                BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.originalDestinationConnectionId = originalDestinationConnectionId;
         this.connectionIdLength = connectionIdLength;
         this.maxPeerCids = maxPeerCids;
         this.connectionRegistry = connectionRegistry;
-        this.sender = sender;
         this.closeConnectionCallback = closeConnectionCallback;
+        role = Server;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         initialConnectionId = cidRegistry.currentConnectionId;
 
@@ -99,19 +103,19 @@ public class ConnectionIdManager {
 
     /**
      * Creates a connection ID manager for client role.
-     * @param connectionIdLength  the length of the connection ID's generated for this endpoint (client)
-     * @param maxPeerCids  the maximum number of peer connection IDs this endpoint is willing to store
-     * @param sender  the sender to send messages to the peer
-     * @param closeConnectionCallback  callback for closing the connection with a transport error code
-     * @param log  logger
+     *
+     * @param connectionIdLength      the length of the connection ID's generated for this endpoint (client)
+     * @param maxPeerCids             the maximum number of peer connection IDs this endpoint is willing to store
+     * @param closeConnectionCallback callback for closing the connection with a transport error code
+     * @param log                     logger
      */
-    public ConnectionIdManager(Integer connectionIdLength, int maxPeerCids, Sender sender, BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
+    public ConnectionIdManager(Integer connectionIdLength, int maxPeerCids, BiConsumer<Integer, String> closeConnectionCallback, Logger log) {
         this.maxPeerCids = maxPeerCids;
-        this.sender = sender;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         this.connectionIdLength = cidRegistry.getConnectionIdlength();
         initialConnectionId = cidRegistry.getCurrent();
         this.closeConnectionCallback = closeConnectionCallback;
+        role = Client;
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-negotiating-connection-ids
         // "When an Initial packet is sent by a client (...), the client populates the Destination Connection ID field
@@ -143,6 +147,7 @@ public class ConnectionIdManager {
     }
 
     public void handshakeFinished() {
+        assert role == Server;
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
@@ -317,6 +322,23 @@ public class ConnectionIdManager {
         }
     }
 
+    @Override
+    public byte[] getPeerConnectionId(InetSocketAddress clientAddress) {
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.getCurrent(clientAddress);
+        }
+        else {
+            return new byte[0];
+        }
+    }
+
+    @Override
+    public void registerClientAddress(InetSocketAddress clientAddress) {
+        if (peerCidRegistry != null) {
+            peerCidRegistry.registerClientAddress(clientAddress);
+        }
+    }
+
     /**
      * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
      * Source Connection ID field of the first Initial packet it sends/send for the connection.
@@ -375,6 +397,7 @@ public class ConnectionIdManager {
      * @param connectionId  the connection ID used in the (received) retry packet.
      */
     public void registerRetrySourceConnectionId(byte[] connectionId) {
+        assert role == Client;
         retrySourceCid = connectionId;
     }
 
@@ -384,6 +407,7 @@ public class ConnectionIdManager {
      * @return  true if the given connection ID matches the retry source connection id registered earlier.
      */
     public boolean validateRetrySourceConnectionId(byte[] connectionId) {
+        assert role == Client;
         return Arrays.equals(retrySourceCid, connectionId);
     }
 
@@ -392,6 +416,7 @@ public class ConnectionIdManager {
      * @param connectionId
      */
     public void registerInitialPeerCid(byte[] connectionId) {
+        assert role == Client;
         peerCidRegistry.replaceInitialConnectionId(connectionId);
     }
 
@@ -400,6 +425,7 @@ public class ConnectionIdManager {
      * @param statelessResetToken
      */
     public void setInitialStatelessResetToken(byte[] statelessResetToken) {
+        assert role == Client;
         peerCidRegistry.setInitialStatelessResetToken(statelessResetToken);
     }
 
@@ -409,6 +435,7 @@ public class ConnectionIdManager {
      * @return
      */
     public boolean isStatelessResetToken(byte[] data) {
+        assert role == Client;
         return peerCidRegistry.isStatelessResetToken(data);
     }
 
@@ -462,6 +489,10 @@ public class ConnectionIdManager {
      */
     public byte[] getCurrentConnectionId() {
         return cidRegistry.getActive();
+    }
+
+    public void setSender(Sender sender) {
+        this.sender = sender;
     }
 
     /**

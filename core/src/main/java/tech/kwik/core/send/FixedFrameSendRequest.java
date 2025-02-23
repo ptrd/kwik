@@ -20,16 +20,25 @@ package tech.kwik.core.send;
 
 import tech.kwik.core.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.util.function.Consumer;
 
 public class FixedFrameSendRequest implements SendRequest {
 
     private final QuicFrame fixedFrame;
     private final Consumer<QuicFrame> lostCallback;
+    private final InetSocketAddress alternateAddress;
 
     public FixedFrameSendRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
         this.fixedFrame = fixedFrame;
         this.lostCallback = lostCallback;
+        alternateAddress = null;
+    }
+
+    public FixedFrameSendRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback, InetSocketAddress address) {
+        this.fixedFrame = fixedFrame;
+        this.lostCallback = lostCallback;
+        this.alternateAddress = address;
     }
 
     public Class<QuicFrame> getFrameType() {
@@ -49,5 +58,10 @@ public class FixedFrameSendRequest implements SendRequest {
     @Override
     public Consumer<QuicFrame> getLostCallback() {
         return lostCallback;
+    }
+
+    @Override
+    public InetSocketAddress getAlternateAddress() {
+        return alternateAddress;
     }
 }

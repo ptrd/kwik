@@ -18,138 +18,20 @@
  */
 package tech.kwik.core.receive;
 
-import tech.kwik.core.log.Logger;
-
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
  */
-public class Receiver {
+public interface Receiver {
 
-    public static final int MAX_DATAGRAM_SIZE = 1500;
+    int MAX_DATAGRAM_SIZE = 1500;
 
-    private volatile DatagramSocket socket;
-    private final Logger log;
-    private final Consumer<Throwable> abortCallback;
-    private final Predicate<DatagramPacket> packetFilter;
-    private final Thread receiverThread;
-    private final BlockingQueue<RawPacket> receivedPacketsQueue;
-    private volatile boolean isClosing = false;
-    private volatile boolean changing = false;
+    void start();
 
-    public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback) {
-        this(socket, log, abortCallback, d -> true);
-    }
+    void shutdown();
 
-    public Receiver(DatagramSocket socket, Logger log, Consumer<Throwable> abortCallback, Predicate<DatagramPacket> packetFilter) {
-        this.socket = Objects.requireNonNull(socket);
-        this.log = Objects.requireNonNull(log);
-        this.abortCallback = Objects.requireNonNull(abortCallback);
-        this.packetFilter = Objects.requireNonNull(packetFilter);
+    RawPacket get() throws InterruptedException;
 
-        receiverThread = new Thread(() -> run(), "receiver");
-        receiverThread.setDaemon(true);
-        receivedPacketsQueue = new LinkedBlockingQueue<>();
+    RawPacket get(int timeout) throws InterruptedException;
 
-        try {
-            log.debug("Socket receive buffer size: " + socket.getReceiveBufferSize());
-        } catch (SocketException e) {
-            // Ignore
-        }
-    }
-
-    public void start() {
-        receiverThread.start();
-    }
-
-    public void shutdown() {
-        isClosing = true;
-        receiverThread.interrupt();
-    }
-
-    public RawPacket get() throws InterruptedException {
-        return receivedPacketsQueue.take();
-    }
-
-    public boolean hasMore() {
-        return !receivedPacketsQueue.isEmpty();
-    }
-
-    /**
-     * Retrieves a received packet from the queue.
-     * @param timeout    the wait timeout in seconds
-     * @return
-     * @throws InterruptedException
-     */
-    public RawPacket get(int timeout) throws InterruptedException {
-        return receivedPacketsQueue.poll(timeout, TimeUnit.SECONDS);
-    }
-
-    private void run() {
-        int counter = 0;
-
-        try {
-            while (! isClosing) {
-                byte[] receiveBuffer = new byte[MAX_DATAGRAM_SIZE];
-                DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-                try {
-                    socket.receive(receivedPacket);
-
-                    if (packetFilter.test(receivedPacket)) {
-                        Instant timeReceived = Instant.now();
-                        RawPacket rawPacket = new RawPacket(receivedPacket, timeReceived, counter++);
-                        receivedPacketsQueue.add(rawPacket);
-                    }
-                }
-                catch (SocketTimeoutException timeout) {
-                    // Impossible, as no socket timeout set
-                }
-                catch (SocketException socketError) {
-                    if (changing) {
-                        // Expected
-                        log.debug("Ignoring socket closed exception, because changing socket", socketError);
-                        changing = false;  // Don't do it again.
-                    }
-                    else {
-                        throw socketError;
-                    }
-                }
-            }
-
-            log.debug("Terminating receive loop");
-        }
-        catch (IOException e) {
-            if (! isClosing) {
-                // This is probably fatal
-                log.error("IOException while receiving datagrams", e);
-                abortCallback.accept(e);
-            }
-            else {
-                log.debug("closing receiver");
-            }
-        }
-        catch (Throwable fatal) {
-            log.error("IOException while receiving datagrams", fatal);
-            abortCallback.accept(fatal);
-        }
-    }
-
-    public void changeAddress(DatagramSocket newSocket) {
-        DatagramSocket oldSocket = socket;
-        socket = newSocket;
-        changing = true;
-        oldSocket.close();
-    }
+    boolean hasMore();
 }

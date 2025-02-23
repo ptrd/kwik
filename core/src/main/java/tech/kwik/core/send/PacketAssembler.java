@@ -19,18 +19,22 @@
 package tech.kwik.core.send;
 
 import tech.kwik.core.ack.AckGenerator;
+import tech.kwik.core.cid.ConnectionIdProvider;
+import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.impl.Version;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
 import tech.kwik.core.packet.ZeroRttPacket;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -46,36 +50,53 @@ public class PacketAssembler {
     protected final EncryptionLevel level;
     protected final SendRequestQueue requestQueue;
     protected final AckGenerator ackGenerator;
+    protected final ConnectionIdProvider cidProvider;
     private final PacketNumberGenerator packetNumberGenerator;
     protected long nextPacketNumber;
     private volatile boolean stopping;
     private Consumer<PacketAssembler> finalizerCallback;
 
 
-    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator) {
-        this(version, level, requestQueue, ackGenerator, new PacketNumberGenerator());
+    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator,
+                           ConnectionIdProvider connectionIdProvider) {
+        this(version, level, requestQueue, ackGenerator, connectionIdProvider, new PacketNumberGenerator());
     }
 
-    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator, PacketNumberGenerator pnGenerator) {
+    public PacketAssembler(VersionHolder version, EncryptionLevel level, SendRequestQueue requestQueue, AckGenerator ackGenerator,
+                           ConnectionIdProvider connectionIdProvider, PacketNumberGenerator pnGenerator) {
         quicVersion = version;
         this.level = level;
-        this.requestQueue = requestQueue;
-        this.ackGenerator = ackGenerator;
-        packetNumberGenerator = pnGenerator;
+        this.requestQueue = Objects.requireNonNull(requestQueue);
+        this.ackGenerator = Objects.requireNonNull(ackGenerator);
+        this.cidProvider = Objects.requireNonNull(connectionIdProvider);
+        packetNumberGenerator = Objects.requireNonNull(pnGenerator);
     }
 
     /**
      * Assembles a QUIC packet for the encryption level handled by this instance.
-     * @param remainingCwndSize
-     * @param availablePacketSize
-     * @param sourceConnectionId        can be null when encryption level is 1-rtt; but not for the other levels; can be empty array though
-     * @param destinationConnectionId
+     *
+     * @param remainingCwndSize     the maximum size the congestion window allows at this time
+     * @param availablePacketSize   the maximum size that is available for the packet
+     * @param defaultClientAddress  the client address to use if the queued request does not specify an (alternate) address
      * @return
      */
-    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress defaultClientAddress) {
         final int available = Integer.min(remainingCwndSize, availablePacketSize);
 
-        QuicPacket packet = createPacket(sourceConnectionId, destinationConnectionId);
+        // First check for alternate client address (has always priority)
+        if (requestQueue.hasAlternateAddressRequest()) {
+            assert level == EncryptionLevel.App;
+            Optional<SendRequest> request = requestQueue.getAlternateAddressRequest(available);
+            if (request.isPresent()) {
+                return request.map(sendRequest -> {
+                    QuicPacket packet = createPacket(sendRequest.getAlternateAddress());
+                    packet.addFrame(sendRequest.getFrame(available));
+                    return new SendItem(packet, sendRequest.getAlternateAddress());
+                });
+            }
+        }
+
+        QuicPacket packet = createPacket(defaultClientAddress);
         List<Consumer<QuicFrame>> callbacks = new ArrayList<>();
 
         AckFrame ackFrame = null;
@@ -127,7 +148,7 @@ public class PacketAssembler {
             }
             packet.setIsProbe(true);
             packet.addFrames(probeData);
-            return Optional.of(new SendItem(packet));
+            return Optional.of(new SendItem(packet, defaultClientAddress));
         }
 
         if (requestQueue.hasRequests()) {
@@ -185,7 +206,7 @@ public class PacketAssembler {
             assembledItem = Optional.empty();
         }
         else {
-            assembledItem = Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks)));
+            assembledItem = Optional.of(new SendItem(packet, createPacketLostCallback(packet, callbacks), defaultClientAddress));
         }
 
         if (stopping && requestQueue.isEmpty(false)) {
@@ -219,17 +240,20 @@ public class PacketAssembler {
         };
     }
 
-    protected QuicPacket createPacket(byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    protected QuicPacket createPacket(InetSocketAddress clientAddress) {
+        Version version = quicVersion.getVersion();
+        byte[] destinationConnectionId = cidProvider.getPeerConnectionId(clientAddress);
+
         QuicPacket packet;
         switch (level) {
             case Handshake:
-                packet = new HandshakePacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, null);
+                packet = new HandshakePacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, null);
                 break;
             case App:
-                packet = new ShortHeaderPacket(quicVersion.getVersion(), destinationConnectionId, null);
+                packet = new ShortHeaderPacket(version, destinationConnectionId, null);
                 break;
             case ZeroRTT:
-                packet = new ZeroRttPacket(quicVersion.getVersion(), sourceConnectionId, destinationConnectionId, (QuicFrame) null);
+                packet = new ZeroRttPacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, (QuicFrame) null);
                 break;
             default:
                 throw new RuntimeException();  // programming error

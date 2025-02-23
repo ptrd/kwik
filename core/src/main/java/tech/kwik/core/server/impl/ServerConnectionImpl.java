@@ -53,6 +53,7 @@ import tech.kwik.core.server.ApplicationProtocolSettings;
 import tech.kwik.core.server.ServerConnection;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionRegistry;
+import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.stream.FlowControl;
 import tech.kwik.core.stream.StreamManager;
 import tech.kwik.core.tls.QuicTransportParametersExtension;
@@ -84,7 +85,7 @@ import static tech.kwik.core.impl.QuicConnectionImpl.VersionNegotiationStatus.Ve
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
 
-    private static final int TOKEN_SIZE = 37;
+    static final int TOKEN_SIZE = 37;
     private final Random random;
     private final SenderImpl sender;
     private final Version originalVersion;
@@ -100,6 +101,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final StreamManager streamManager;
     private final byte[] token;
     private final ConnectionIdManager connectionIdManager;
+    private final ServerConnectionSocketManager socketManager;
     private volatile String negotiatedApplicationProtocol;
     private volatile long bytesReceived;
     private volatile boolean addressValidated;
@@ -147,8 +149,17 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 // TlsConstants.CipherSuite.TLS_AES_128_CCM_8_SHA256 not used in QUIC!
         ));
 
+        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
+            immediateCloseWithError(error, reason);
+        };
+        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, closeWithErrorFunction, log);
+        connectionIdManager.registerClientAddress(initialClientAddress);
+
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), serverSocket, initialClientAddress,this, Bytes.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
+        socketManager = new ServerConnectionSocketManager(serverSocket, initialClientAddress);
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, Bytes.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
+        connectionIdManager.setSender(sender);
+
         if (! retryRequired) {
             sender.setAntiAmplificationLimit(0);
         }
@@ -161,10 +172,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             cryptoStreams.add(bufferedInitialCrypto);
         }
 
-        BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
-            immediateCloseWithError(error, reason);
-        };
-        connectionIdManager = new ConnectionIdManager(peerCid, originalDcid, configuration.connectionIdLength(), allowedClientConnectionIds, connectionRegistry, sender, closeWithErrorFunction, log);
 
         ackGenerator = sender.getGlobalAckGenerator();
 
@@ -233,7 +240,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    protected ConnectionIdManager getConnectionIdManager() {
+    public ConnectionIdManager getConnectionIdManager() {
         return connectionIdManager;
     }
 
@@ -516,8 +523,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     private void sendRetry() {
-        RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
-        sender.send(retry);
+        try {
+            RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+            byte[] packetBytes = retry.generatePacketBytes(null);  // Retry packet is not encrypted, so no keys needed.
+            Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes), initialClientAddress);
+            log.sent(timeSent, retry);
+            log.getQLog().emitPacketSentEvent(retry, timeSent);
+        }
+        catch (IOException e) {
+            log.error("Sending retry packet failed", e);
+        }
     }
 
     @Override

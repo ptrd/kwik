@@ -24,6 +24,7 @@ import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +43,7 @@ public class SendRequestQueue {
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
+    private volatile SendRequest altAddressRequest;
 
     public SendRequestQueue(EncryptionLevel level) {
         this(Clock.systemUTC(), level);
@@ -92,6 +94,11 @@ public class SendRequestQueue {
 
     public void addProbeRequest(List<QuicFrame> frames) {
         probeQueue.addLast(frames);
+    }
+
+    public void addAlternateAddressRequest(QuicFrame frame, InetSocketAddress address) {
+        assert altAddressRequest == null;  // Can only have one alternate-address request at a time
+        altAddressRequest = new FixedFrameSendRequest(frame, f -> {}, address);
     }
 
     public boolean hasProbe() {
@@ -236,5 +243,17 @@ public class SendRequestQueue {
         return "SendRequestQueue[" + encryptionLevel + "]";
     }
 
+    public boolean hasAlternateAddressRequest() {
+        return altAddressRequest != null;
+    }
+
+    public Optional<SendRequest> getAlternateAddressRequest(int available) {
+        try {
+            return Optional.ofNullable(altAddressRequest);
+        }
+        finally {
+            altAddressRequest = null;
+        }
+    }
 }
 

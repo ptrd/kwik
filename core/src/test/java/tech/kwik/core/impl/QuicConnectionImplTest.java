@@ -826,7 +826,7 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        protected ConnectionIdManager getConnectionIdManager() {
+        public ConnectionIdManager getConnectionIdManager() {
             return null;
         }
 

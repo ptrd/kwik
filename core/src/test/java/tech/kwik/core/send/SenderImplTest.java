@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.cid.ConnectionIdManager;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
@@ -35,13 +36,14 @@ import tech.kwik.core.impl.*;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
+import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -49,31 +51,39 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
+import static tech.kwik.core.impl.TestUtils.getArbitraryLocalAddress;
 
 class SenderImplTest extends AbstractSenderTest {
 
     private TestClock clock;
     private SenderImpl sender;
     private GlobalPacketAssembler packetAssembler;
-    private DatagramSocket socket;
+    private ClientSocketManager socketManager;
+    private InetSocketAddress clientAddress;
     private ConnectionSecrets connectionSecrets;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         clock = new TestClock();
-        socket = mock(DatagramSocket.class);
-        InetSocketAddress peerAddress = new InetSocketAddress("example.com", 443);
+        ConnectionIdManager connectionIdProvider = mock(ConnectionIdManager.class);
+        when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[4]);
+        when(connectionIdProvider.getPeerConnectionId(any())).thenReturn(new byte[4]);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
         when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
-
+        when(connection.getConnectionIdManager()).thenReturn(connectionIdProvider);
         connectionSecrets = mock(ConnectionSecrets.class);
         Aead aead = TestUtils.createKeys();
+        connectionSecrets = mock(ConnectionSecrets.class);
         when(connectionSecrets.getOwnAead(any(EncryptionLevel.class))).thenReturn(aead);
 
-        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socket, peerAddress, connection, "", 100, new NullLogger());
+        socketManager = mock(ClientSocketManager.class);
+        when(socketManager.getClientAddress()).thenReturn(new InetSocketAddress(InetAddress.getLoopbackAddress(), 4433));
+        sender = new SenderImpl(clock, new VersionHolder(Version.getDefault()), 1200, socketManager, connection, "", 100, new NullLogger());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("connectionSecrets"), connectionSecrets);
+        
+        clientAddress = getArbitraryLocalAddress();
     }
 
     @Test
@@ -95,10 +105,10 @@ class SenderImplTest extends AbstractSenderTest {
         ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
         ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
         packet1.setPacketNumber(10);
-        sender.send(List.of(new SendItem(packet1)));
+        sender.send(List.of(new SendItem(packet1, clientAddress)));
         packet1.setPacketNumber(11);
         packet2.setPacketNumber(12);
-        sender.send(List.of(new SendItem(packet1), new SendItem(packet2)));
+        sender.send(List.of(new SendItem(packet1, clientAddress), new SendItem(packet2, clientAddress)));
 
         assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
         assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
@@ -131,7 +141,7 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then verify
         ArgumentCaptor<Integer> packetSizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), packetSizeCaptor.capture(), any(byte[].class), any(byte[].class));
+        verify(packetAssembler, atLeastOnce()).assemble(anyInt(), packetSizeCaptor.capture(), any(InetSocketAddress.class));
         assertThat(packetSizeCaptor.getValue()).isLessThanOrEqualTo(3 * 1200);
     }
 
@@ -149,12 +159,13 @@ class SenderImplTest extends AbstractSenderTest {
         sender.sendIfAny();
 
         // Then   (given fixed size of StreamFrames, only three packets will fit in the limit of 3 * 1200)
-        verify(socket, times(3)).send(any(DatagramPacket.class));
+        verify(socketManager, times(3)).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
-    private void setupMockPacketAssember() throws NoSuchFieldException {
+    private void setupMockPacketAssember() throws Exception {
         packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(InetSocketAddress.class)))
+                .thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""), clientAddress)));
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
@@ -169,7 +180,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket, never()).send(any(DatagramPacket.class));
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -183,7 +194,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -197,7 +208,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -211,7 +222,7 @@ class SenderImplTest extends AbstractSenderTest {
         sender.doLoopIteration();
 
         // Then
-        verify(socket).send(any(DatagramPacket.class));
+        verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test
@@ -222,10 +233,10 @@ class SenderImplTest extends AbstractSenderTest {
         // When
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new AckFrame(0));
         initialPacket.setPacketNumber(1);
-        sender.send(mutableListOf(new SendItem(initialPacket)));
+        sender.send(mutableListOf(new SendItem(initialPacket, getArbitraryLocalAddress())));
 
         // Then
-        verify(socket, never()).send(any(DatagramPacket.class));
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     private <T> List<T> mutableListOf(T item) {

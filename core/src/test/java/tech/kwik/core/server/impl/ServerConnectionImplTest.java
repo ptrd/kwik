@@ -57,6 +57,7 @@ import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionRegistry;
+import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.stream.StreamManager;
 import tech.kwik.core.test.ByteUtils;
 import tech.kwik.core.test.FieldReader;
@@ -93,6 +94,7 @@ class ServerConnectionImplTest {
     private ApplicationLayerProtocolNegotiationExtension alpn = new ApplicationLayerProtocolNegotiationExtension(DEFAULT_APPLICATION_PROTOCOL);
     private TlsServerEngine tlsServerEngine;
     private TlsServerEngineFactory tlsServerEngineFactory;
+    private ServerConnectionSocketManager socketManager;
 
     //region setup
     @BeforeEach
@@ -328,6 +330,21 @@ class ServerConnectionImplTest {
         // Then
         assertThat(fieldReader.read()).isEqualTo(QuicConnectionImpl.Status.Connected);
     }
+
+    @Test
+    void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
+        byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+        CryptoFrame firstFrame = mock(CryptoFrame.class);
+        CryptoFrame secondFrame = mock(CryptoFrame.class);
+        InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
+        InitialPacket packet2 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, secondFrame);
+        connection.process(packet1, metaDataForNow());
+        connection.process(packet2, metaDataForNow());
+
+        verify(firstFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(PacketMetaData.class));
+        verify(secondFrame).accept(any(FrameProcessor.class), any(QuicPacket.class), any(PacketMetaData.class));
+    }
     //endregion
 
     //region destination connection id
@@ -354,23 +371,22 @@ class ServerConnectionImplTest {
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
 
         // Then
-        verify(connection.getSender()).send(any(RetryPacket.class));
+        verify(socketManager).send(argThat(this::isRetry), any(InetSocketAddress.class));
     }
 
     @Test
     void whenRetryIsRequiredAllRetryPacketsContainsSameToken() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
-        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection.getSender()).send(argumentCaptor.capture());
-        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
-        clearInvocations(connection.getSender());
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
+        byte[] retryToken = captureRetryToken(socketManager);
+        clearInvocations(socketManager);
+
         // When
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
-        verify(connection.getSender()).send(argThat(retryPacket -> Arrays.equals(retryPacket.getRetryToken(), retryToken)));
+        verify(socketManager).send(argThat(byteArray -> Arrays.equals(getRetryToken(byteArray), retryToken)), any(InetSocketAddress.class));
     }
 
     @Test
@@ -378,10 +394,9 @@ class ServerConnectionImplTest {
         // Given
         byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
         ServerConnectionImpl connection1 = createServerConnection(createTlsServerEngine(), true, dcid1);
-        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), mock(PacketMetaData.class));
-        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection1.getSender()).send(argumentCaptor.capture());
-        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), metaDataForNow());
+        ServerConnectionSocketManager socketManager1 = getSocketManager(connection1);
+        byte[] retryToken1 = captureRetryToken(socketManager1);
 
         // When
         byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
@@ -389,18 +404,17 @@ class ServerConnectionImplTest {
         connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), mock(PacketMetaData.class));
 
         // Then
-        verify(connection2.getSender()).send(argThat(retryPacket -> !Arrays.equals(retryPacket.getRetryToken(), retryToken)));
+        ServerConnectionSocketManager socketManager2 = getSocketManager(connection2);
+        byte[] retryToken2 = captureRetryToken(socketManager2);
+        assertThat(retryToken2).isNotEqualTo(retryToken1);
     }
 
     @Test
     void whenRetryIsRequiredInitialWithTokenIsProcessed() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, null);
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
-        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection.getSender()).send(argumentCaptor.capture());
-        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
+        byte[] retryToken = captureRetryToken(socketManager);
         clearInvocations(connection.getSender());
 
         // When
@@ -417,10 +431,8 @@ class ServerConnectionImplTest {
     void whenRetryIsRequiredInitialWithInvalidTokenConnectionIsClosed() throws Exception {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
-        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection.getSender()).send(argumentCaptor.capture());
-        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
+        byte[] retryToken = captureRetryToken(socketManager);
         byte[] incorrectToken = Arrays.copyOfRange(retryToken, 0, retryToken.length - 1);
 
         // When
@@ -446,17 +458,12 @@ class ServerConnectionImplTest {
         secondInitialPacket.setPacketNumber(1);
 
         connection.getPacketProcessorChain().processPacket(initialPacket, metaDataForNow());
-        ArgumentCaptor<RetryPacket> argumentCaptor1 = ArgumentCaptor.forClass(RetryPacket.class);
-
-        verify(connection.getSender()).send(argumentCaptor1.capture());
-        byte[] retryPacket1 = argumentCaptor1.getValue().generatePacketBytes(null);
-        clearInvocations(connection.getSender());
+        byte[] retryPacket1 = captureRetryPacket(socketManager);
+        clearInvocations(socketManager);
 
         // When
         connection.getPacketProcessorChain().processPacket(secondInitialPacket, metaDataForNow());
-        ArgumentCaptor<RetryPacket> argumentCaptor2 = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection.getSender()).send(argumentCaptor2.capture());
-        byte[] retryPacket2 = argumentCaptor1.getValue().generatePacketBytes(null);
+        byte[] retryPacket2 = captureRetryPacket(socketManager);
 
         // Then
         assertThat(retryPacket1).isEqualTo(retryPacket2);
@@ -522,9 +529,7 @@ class ServerConnectionImplTest {
         // Given
         connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-        ArgumentCaptor<RetryPacket> argumentCaptor = ArgumentCaptor.forClass(RetryPacket.class);
-        verify(connection.getSender()).send(argumentCaptor.capture());
-        byte[] retryToken = argumentCaptor.getValue().getRetryToken();
+        byte[] retryToken = captureRetryToken(socketManager);
         clearInvocations(connection.getSender());
 
         // When
@@ -715,6 +720,9 @@ class ServerConnectionImplTest {
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);
+        socketManager = mock(ServerConnectionSocketManager.class);
+        when(socketManager.send(any(), any(InetSocketAddress.class))).thenReturn(Instant.now());
+        FieldSetter.setField(connection, connection.getClass().getDeclaredField("socketManager"), socketManager);
         return connection;
     }
 
@@ -843,6 +851,32 @@ class ServerConnectionImplTest {
             return new byte[32];
         }
     }
+
+    boolean isRetry(ByteBuffer byteArray) {
+        return RetryPacket.isRetry((byteArray.get(0) & 0x30) >> 4, Version.QUIC_version_1);
+    }
+
+    ServerConnectionSocketManager getSocketManager(ServerConnectionImpl connection) throws NoSuchFieldException {
+        return (ServerConnectionSocketManager) new FieldReader(connection, ServerConnectionImpl.class.getDeclaredField("socketManager")).read();
+    }
+
+    byte[] getRetryToken(ByteBuffer retryPacketBytes) {
+        int tokenStart = 1 + 4 + 1 + 8 + 1 + 8;
+        return Arrays.copyOfRange(retryPacketBytes.array(), tokenStart, tokenStart + ServerConnectionImpl.TOKEN_SIZE);
+    }
+
+    byte[] captureRetryToken(ServerConnectionSocketManager socketManager) throws Exception {
+        ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
+        return getRetryToken(argumentCaptor.getValue());
+    }
+
+    byte[] captureRetryPacket(ServerConnectionSocketManager socketManager) throws Exception {
+        ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
+        return argumentCaptor.getValue().array();
+    }
+
     /**
      * For testing behaviour when invalid parameters are sent (for client or server), the serialize method must be
      * overridden, because the original will check for each parameter whether it is valid to sent for the given role.
