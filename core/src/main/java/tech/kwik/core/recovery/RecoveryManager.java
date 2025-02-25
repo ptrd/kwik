@@ -358,7 +358,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         Optional<QuicPacket> ackEliciting = unAckedPackets.stream()
                 .filter(p -> p.isAckEliciting())
                 // Filter out packets that only contain frames that should not be retransmitted (in a probe).
-                .filter(p -> ! p.getFrames().stream().allMatch(frame -> frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame || frame instanceof PathChallengeFrame || frame instanceof Padding))
+                .filter(p -> ! p.getFrames().stream().allMatch(RecoveryManager::nonRetransmittableFrame))
                 .findFirst();
         if (ackEliciting.isPresent()) {
             List<QuicFrame> framesToRetransmit = ackEliciting.get().getFrames().stream()
@@ -371,6 +371,10 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         else {
             return Collections.emptyList();
         }
+    }
+
+    static boolean nonRetransmittableFrame(QuicFrame frame) {
+        return frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame || frame instanceof PathChallengeFrame;
     }
 
     PnSpaceTime getEarliestLossTime(Function<LossDetector, Instant> pnSpaceTimeFunction) {
