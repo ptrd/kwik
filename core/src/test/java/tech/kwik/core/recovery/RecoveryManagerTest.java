@@ -375,6 +375,40 @@ class RecoveryManagerTest extends RecoveryTests {
 
         assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(Padding.class);
     }
+
+    @Test
+    void pathResponseFrameShouldNotBeRetransmittedWhenSolo() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+    }
+
+    @Test
+    void pathResponseFrameShouldNotBeConsideredForRetransmit() throws Exception {
+        QuicPacket packet1 = createPacket(0, List.of(new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, List.of(new StreamFrame(1, new byte[90], true)));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathResponseFrameShouldNotBeRetransmittedWhenCombined() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new StreamFrame(1, new byte[90], true), new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
     //endregion
 
     /**

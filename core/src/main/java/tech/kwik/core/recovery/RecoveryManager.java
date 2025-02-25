@@ -22,11 +22,7 @@ import tech.kwik.core.cc.CongestionController;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.Padding;
-import tech.kwik.core.frame.PathChallengeFrame;
-import tech.kwik.core.frame.PingFrame;
-import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.FrameReceivedListener;
 import tech.kwik.core.impl.HandshakeState;
 import tech.kwik.core.impl.HandshakeStateListener;
@@ -364,6 +360,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             List<QuicFrame> framesToRetransmit = ackEliciting.get().getFrames().stream()
                     .filter(frame -> !(frame instanceof AckFrame))
                     .filter(frame -> !(frame instanceof PathChallengeFrame))
+                    .filter(frame -> !(frame instanceof PathResponseFrame))
                     .filter(frame -> !(frame instanceof Padding))
                     .collect(Collectors.toList());
             return framesToRetransmit;
@@ -374,7 +371,8 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     static boolean nonRetransmittableFrame(QuicFrame frame) {
-        return frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame || frame instanceof PathChallengeFrame;
+        return frame instanceof PingFrame || frame instanceof Padding || frame instanceof AckFrame ||
+                frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame;
     }
 
     PnSpaceTime getEarliestLossTime(Function<LossDetector, Instant> pnSpaceTimeFunction) {
