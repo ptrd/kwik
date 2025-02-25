@@ -58,6 +58,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private RttEstimator rttEstimator;
     private TestClock clock;
 
+    //region setup
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         rttEstimator = mock(RttEstimator.class);
@@ -84,7 +85,9 @@ class RecoveryManagerTest extends RecoveryTests {
     void shutdownRecoveryManager() {
         recoveryManager.stopRecovery();
     }
+    //endregion
 
+    //region loss
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1.2
     // "If packets sent prior to the largest
     //   acknowledged packet cannot yet be declared lost, then a timer SHOULD
@@ -104,7 +107,9 @@ class RecoveryManagerTest extends RecoveryTests {
         clock.fastForward(defaultRtt);
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(1)));
     }
+    //endregion
 
+    //region probe
     @Test
     void whenAckElicitingPacketIsNotAckedProbeIsSent() {
         // Given recovery manager is not in handshake state anymore
@@ -241,6 +246,23 @@ class RecoveryManagerTest extends RecoveryTests {
     }
 
     @Test
+    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
+        // Given a client sends an initial packet that is acknowledged
+        recoveryManager.packetSent(createCryptoPacket(0), clock.instant(), lostPacket -> {});
+        clock.fastForward(defaultRtt);
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial, clock.instant());
+
+        // When nothing is received during first probe timeout
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        clock.fastForward(probeTimeout);
+
+        // Then even though all client packets are acked, it sends to a probe to prevent a deadlock when server cannot send due to the amplification limit
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+    }
+    //endregion
+
+    //region loss time
+    @Test
     void earliestLossTimeIsFound() throws Exception {
         // Given mock loss detectors are instantiated and registered in the recovery manager
         LossDetector[] detectors = new LossDetector[3];
@@ -258,7 +280,9 @@ class RecoveryManagerTest extends RecoveryTests {
         // Then the value of the earliest is returned
         assertThat(recoveryManager.getEarliestLossTime(LossDetector::getLossTime).pnSpace.ordinal()).isEqualTo(2);
     }
+    //endregion
 
+    //region retransmit
     @Test
     void initialPacketRetransmit() {
         // Given an initial packet is sent (with crypto frames only)
@@ -274,22 +298,9 @@ class RecoveryManagerTest extends RecoveryTests {
         // And the lost packet handler is not called (because that would lead to an additional retransmit: the probe is the retransmit)
         verify(lostPacketHandler, never()).process(any(InitialPacket.class));
     }
+    //endregion
 
-    @Test
-    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
-        // Given a client sends an initial packet that is acknowledged
-        recoveryManager.packetSent(createCryptoPacket(0), clock.instant(), lostPacket -> {});
-        clock.fastForward(defaultRtt);
-        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial, clock.instant());
-
-        // When nothing is received during first probe timeout
-        int probeTimeout = defaultRtt + 4 * defaultRttVar;
-        clock.fastForward(probeTimeout);
-
-        // Then even though all client packets are acked, it sends to a probe to prevent a deadlock when server cannot send due to the amplification limit
-        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
-    }
-
+    //region probe data
     @Test
     void framesToRetransmitShouldNotBePing() throws Exception {
         QuicPacket pingPacket = createHandshakePacket(0, new PingFrame());
@@ -364,6 +375,7 @@ class RecoveryManagerTest extends RecoveryTests {
 
         assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(Padding.class);
     }
+    //endregion
 
     /**
      * Ensure that packetSent is called when probes packets are sent with the given packetNumbers.
