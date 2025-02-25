@@ -19,14 +19,19 @@
 package tech.kwik.core.server.impl;
 
 import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.BaseDatagramFilter;
 import tech.kwik.core.packet.DatagramFilter;
+import tech.kwik.core.packet.LongHeaderPacket;
 import tech.kwik.core.packet.PacketMetaData;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
+/**
+ * Discards long header packets whose source address does not match the given (client) address.
+ */
 public class ClientAddressFilter extends BaseDatagramFilter {
 
     private final InetSocketAddress clientAddress;
@@ -38,13 +43,21 @@ public class ClientAddressFilter extends BaseDatagramFilter {
 
     @Override
     public void processDatagram(ByteBuffer data, PacketMetaData metaData) throws TransportError {
-        if (metaData.sourceAddress().equals(clientAddress)) {
-            next(data, metaData);
+        data.mark();
+        byte flags = data.get();
+        int version = data.getInt();
+        data.reset();
+        if (LongHeaderPacket.isLongHeaderPacket(flags, Version.parse(version))) {
+            if (metaData.sourceAddress().equals(clientAddress)) {
+                next(data, metaData);
+            }
+            else {
+                discard(data, metaData,
+                        String.format("Dropping packet with unmatched source address %s (expected %s).", metaData.sourceAddress(), clientAddress));
+            }
         }
         else {
-            discard(data, metaData,
-                    String.format("Dropping packet with unmatched source address %s (expected %s).", metaData.sourceAddress(), clientAddress));
+            next(data, metaData);
         }
-
     }
 }
