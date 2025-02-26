@@ -40,10 +40,10 @@ public class SendRequestQueue {
     private final EncryptionLevel encryptionLevel;
     private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
     private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
+    private Deque<SendRequest> altAddressRequestQueue = new ConcurrentLinkedDeque<>();
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
-    private volatile SendRequest altAddressRequest;
 
     public SendRequestQueue(EncryptionLevel level) {
         this(Clock.systemUTC(), level);
@@ -97,8 +97,7 @@ public class SendRequestQueue {
     }
 
     public void addAlternateAddressRequest(QuicFrame frame, InetSocketAddress address) {
-        assert altAddressRequest == null;  // Can only have one alternate-address request at a time
-        altAddressRequest = new FixedFrameSendRequest(frame, f -> {}, address);
+        altAddressRequestQueue.add(new FixedFrameSendRequest(frame, f -> {}, address));
     }
 
     public boolean hasProbe() {
@@ -248,16 +247,11 @@ public class SendRequestQueue {
     }
 
     public boolean hasAlternateAddressRequest() {
-        return altAddressRequest != null;
+        return ! altAddressRequestQueue.isEmpty();
     }
 
     public Optional<SendRequest> getAlternateAddressRequest(int available) {
-        try {
-            return Optional.ofNullable(altAddressRequest);
-        }
-        finally {
-            altAddressRequest = null;
-        }
+        return next(altAddressRequestQueue, available);
     }
 }
 
