@@ -32,18 +32,22 @@ import java.time.Instant;
 public class ServerConnectionSocketManager implements SocketManager {
 
     private final DatagramSocket serverSocket;
-    private final InetSocketAddress initialClientAddress;
+    private volatile InetSocketAddress clientAddress;
     private final Clock clock;
 
     public ServerConnectionSocketManager(DatagramSocket serverSocket, InetSocketAddress initialClientAddress) {
         this.serverSocket = serverSocket;
-        this.initialClientAddress = initialClientAddress;
+        this.clientAddress = initialClientAddress;
         this.clock = Clock.systemUTC();
+    }
+
+    public Instant send(ByteBuffer data) throws IOException {
+        return send(data, clientAddress);
     }
 
     @Override
     public Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException {
-        DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), initialClientAddress.getAddress(), initialClientAddress.getPort());
+        DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), clientAddress.getAddress(), clientAddress.getPort());
         Instant timeSent = clock.instant();
         serverSocket.send(datagram);
         return timeSent;
@@ -56,6 +60,10 @@ public class ServerConnectionSocketManager implements SocketManager {
 
     @Override
     public InetSocketAddress getClientAddress() {
-        return initialClientAddress;
+        return clientAddress;
+    }
+
+    public void changeClientAddress(InetSocketAddress clientAddress) {
+        this.clientAddress = clientAddress;
     }
 }
