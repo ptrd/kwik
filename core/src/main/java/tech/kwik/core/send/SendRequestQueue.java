@@ -179,15 +179,19 @@ public class SendRequestQueue {
     public boolean hasRequests() {
         return !requestQueue.isEmpty();
     }
-    
+
     public Optional<SendRequest> next(int maxFrameLength) {
+        return next(requestQueue, maxFrameLength);
+    }
+
+    private Optional<SendRequest> next(Deque<SendRequest> queue, int maxFrameLength) {
         if (maxFrameLength < 1) {  // Minimum frame size is 1: some frames (e.g. ping) are just a type field.
             // Forget it
             return Optional.empty();
         }
 
         try {
-            for (Iterator<SendRequest> iterator = requestQueue.iterator(); iterator.hasNext(); ) {
+            for (Iterator<SendRequest> iterator = queue.iterator(); iterator.hasNext(); ) {
                 SendRequest next = iterator.next();
                 if (next.getEstimatedSize() <= maxFrameLength) {
                     iterator.remove();
