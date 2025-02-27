@@ -24,7 +24,6 @@ import tech.kwik.core.cid.ConnectionIdProvider;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.Padding;
-import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.InitialPacket;
@@ -99,7 +98,7 @@ public class GlobalPacketAssembler {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
-        boolean hasPathChallengeOrResponse = false;
+        boolean hasPathResponse = false;
 
         int minPacketSize = 19;  // Is mininum size for short header packet, long header packet is at least 24
         int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
@@ -116,8 +115,8 @@ public class GlobalPacketAssembler {
                     if (level == Initial) {
                         hasInitial = true;
                     }
-                    if (item.get().getPacket().getFrames().stream().anyMatch(f -> f instanceof PathChallengeFrame || f instanceof PathResponseFrame)) {
-                        hasPathChallengeOrResponse = true;
+                    if (item.get().getPacket().getFrames().stream().anyMatch(f -> f instanceof PathResponseFrame)) {
+                        hasPathResponse = true;
                     }
                 }
                 if (remaining < minPacketSize && (maxDatagramSize - size) < minPacketSize) {
@@ -142,7 +141,7 @@ public class GlobalPacketAssembler {
             size += requiredPadding;
         }
 
-        if (hasPathChallengeOrResponse && size < 1200) {
+        if (hasPathResponse && size < 1200) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-8.2.1
             // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
             //  maximum datagram size of 1200 bytes."
