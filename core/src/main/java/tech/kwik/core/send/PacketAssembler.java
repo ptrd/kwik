@@ -250,7 +250,7 @@ public class PacketAssembler {
                 packet = new HandshakePacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, null);
                 break;
             case App:
-                packet = new ShortHeaderPacket(version, destinationConnectionId, null);
+                packet = new ShortHeaderPacket(version, destinationConnectionId);
                 break;
             case ZeroRTT:
                 packet = new ZeroRttPacket(version, cidProvider.getInitialConnectionId(), destinationConnectionId, (QuicFrame) null);

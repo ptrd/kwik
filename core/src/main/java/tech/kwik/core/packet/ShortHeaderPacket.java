@@ -33,6 +33,7 @@ import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class ShortHeaderPacket extends QuicPacket {
@@ -48,7 +49,18 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     /**
-     * Constructs a short header packet for sending (client role).
+     * Constructs a short header packet for sending.
+     * @param quicVersion
+     * @param destinationConnectionId
+     */
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId) {
+        this.quicVersion = quicVersion;
+        this.destinationConnectionId = destinationConnectionId;
+        frames = new ArrayList<>();
+    }
+
+    /**
+     * Constructs a short header packet for sending.
      * @param quicVersion
      * @param destinationConnectionId
      * @param frame
@@ -60,6 +72,13 @@ public class ShortHeaderPacket extends QuicPacket {
         if (frame != null) {
             frames.add(frame);
         }
+    }
+
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, List<QuicFrame> frames) {
+        this.quicVersion = quicVersion;
+        this.destinationConnectionId = destinationConnectionId;
+        this.frames = new ArrayList<>();
+        this.frames.addAll(frames);
     }
 
     @Override
