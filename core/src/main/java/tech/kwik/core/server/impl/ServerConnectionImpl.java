@@ -38,15 +38,12 @@ import tech.kwik.core.cid.ConnectionIdManager;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.CryptoStream;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.HandshakeDoneFrame;
-import tech.kwik.core.frame.NewTokenFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.RetireConnectionIdFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.LogProxy;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.*;
+import tech.kwik.core.path.PathValidator;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 import tech.kwik.core.server.ApplicationProtocolSettings;
@@ -95,6 +92,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final boolean retryRequired;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
+    private final PathValidator pathValidator;
     private volatile ServerConnectionConfig configuration;
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
@@ -188,6 +186,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         sender.start(connectionSecrets);
 
         streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
+
+        pathValidator = new PathValidator(quicVersion, initialClientAddress, sender, log, socketManager);
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
@@ -538,6 +538,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
+        pathValidator.checkSourceAddress(packet, metaData);
         processFrames(packet, metaData);
         return ProcessResult.Continue;
     }
@@ -603,6 +604,16 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.7
         // " A server MUST treat receipt of a NEW_TOKEN frame as a connection error of type PROTOCOL_VIOLATION."
         immediateCloseWithError(PROTOCOL_VIOLATION.value, "unexpected new token frame");
+    }
+
+    @Override
+    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
+        super.process(pathChallengeFrame, packet, metaData);
+    }
+
+    @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
+        pathValidator.checkPathResponse(pathResponseFrame, metaData);
     }
 
     @Override
