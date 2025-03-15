@@ -251,14 +251,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public int getMaxShortHeaderPacketOverhead() {
-        return 1  // flag byte
-                + connectionIdManager.getCurrentPeerConnectionId().length
-                + 4  // max packet number size, in practice this will be mostly 1
-                + 16; // encryption overhead
-    }
-
-    @Override
     protected int getSourceConnectionIdLength() {
         return connectionIdManager.getInitialConnectionId().length;
     }
