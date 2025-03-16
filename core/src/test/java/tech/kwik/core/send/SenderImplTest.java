@@ -69,7 +69,6 @@ class SenderImplTest extends AbstractSenderTest {
         when(connectionIdProvider.getInitialConnectionId()).thenReturn(new byte[4]);
         when(connectionIdProvider.getPeerConnectionId(any())).thenReturn(new byte[4]);
         QuicConnectionImpl connection = mock(QuicConnectionImpl.class);
-        when(connection.getDestinationConnectionId()).thenReturn(new byte[4]);
         when(connection.getSourceConnectionId()).thenReturn(new byte[4]);
         when(connection.getIdleTimer()).thenReturn(new IdleTimer(connection, new NullLogger()));
         when(connection.getConnectionIdManager()).thenReturn(connectionIdProvider);

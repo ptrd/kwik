@@ -21,11 +21,17 @@ package tech.kwik.core.cid;
 import tech.kwik.core.log.Logger;
 
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-
+/**
+ * Registry of the peer's connection IDs, which are used by this endpoint as destination connection IDs.
+ * The peer issues these connection IDs and determines when they are retired.
+ * It is up to this endpoint to determine which connection ID to use for a specific client address.
+ */
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
@@ -148,6 +154,19 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     public void registerClientAddress(InetSocketAddress clientAddress) {
         assert(cidByClientAddress.isEmpty() || cidByClientAddress.get(clientAddress).equals(connectionIds.get(0)));
         cidByClientAddress.put(clientAddress, connectionIds.get(0));
+    }
+
+    /**
+     * Returns the max connection ID length of currently active connection IDs.
+     * @return
+     */
+    @Override
+    public int getConnectionIdlength() {
+        return connectionIds.values().stream()
+                .filter(cid -> cid.getConnectionIdStatus().active())
+                .mapToInt(cid -> cid.getConnectionId().length)
+                .max()
+                .getAsInt();
     }
 }
 

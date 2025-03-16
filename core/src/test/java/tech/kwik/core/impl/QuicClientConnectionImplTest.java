@@ -76,7 +76,8 @@ class QuicClientConnectionImplTest {
     private final byte[] destinationConnectionId = { 0x00, 0x01, 0x02, 0x03 };
 
     private QuicClientConnectionImpl connection;
-    private byte[] originalDestinationId;
+    private byte[] originalDestinationConnectionId;
+    private byte[] peerConnectionId;
     private SenderImpl sender;
     private TlsClientEngine tlsClientEngine;
     private TestScheduledExecutor testScheduledExecutor;
@@ -97,10 +98,12 @@ class QuicClientConnectionImplTest {
                 .logger(logger).build();
         FieldSetter.setField(connection, "parser", mock(ClientRolePacketParser.class));
         sender = Mockito.mock(SenderImpl.class);
-        var connectionIdManager = new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        ConnectionIdManager connectionIdManager = (ConnectionIdManager) new FieldReader(connection, connection.getClass().getDeclaredField("connectionIdManager")).read();
+        peerConnectionId = new byte[] { 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+        connectionIdManager.registerInitialPeerCid(peerConnectionId);
         FieldSetter.setField(connectionIdManager, "sender", sender);
         FieldSetter.setField(connection, "sender", sender);
-
+        originalDestinationConnectionId = connectionIdManager.getOriginalDestinationConnectionId();
         testScheduledExecutor = new TestScheduledExecutor(new TestClock());
         FieldSetter.setField(connection, QuicConnectionImpl.class, "callbackThread", testScheduledExecutor);
     }
@@ -143,18 +146,18 @@ class QuicClientConnectionImplTest {
     void testSecondRetryPacketShouldBeIgnored() throws Exception {
         simulateSuccessfulConnect();
 
-        byte[] originalConnectionId = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        originalDestinationConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
-        setFixedOriginalDestinationConnectionId(originalConnectionId);
+        setFixedOriginalDestinationConnectionId(originalDestinationConnectionId);
 
         // Simulate a first RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "5e5f918434a24d4b601745b4f0db7908");
+        RetryPacket retryPacket = createRetryPacket(originalDestinationConnectionId, "5e5f918434a24d4b601745b4f0db7908");
         connection.process(retryPacket, null);
 
         clearInvocations(sender);
 
         // Simulate a second RetryPacket is received
-        RetryPacket secondRetryPacket = createRetryPacket(connection.getDestinationConnectionId(), "00f4bbc72790b7c7947f86ec9fb0a68d");
+        RetryPacket secondRetryPacket = createRetryPacket(originalDestinationConnectionId, "00f4bbc72790b7c7947f86ec9fb0a68d");
         connection.process(secondRetryPacket, null);
 
         verify(sender, never()).send(any(QuicFrame.class), any(EncryptionLevel.class), any(Consumer.class));
@@ -194,7 +197,7 @@ class QuicClientConnectionImplTest {
         // - has the server's source cid (because the test stops after "sending" the retry-packet, this is not the "final" server source cid, but the one used in the retry packet)
         transportParameters.setInitialSourceConnectionId(retryPacket.getSourceConnectionId());
         // - does contain the original destination id
-        transportParameters.setOriginalDestinationConnectionId(originalDestinationId);
+        transportParameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         // -  does contain an original destination id (but incorrect)
         transportParameters.setRetrySourceConnectionId(new byte[] { 0x0d, 0x0d, 0x0d, 0x0d });
 
@@ -214,7 +217,7 @@ class QuicClientConnectionImplTest {
         // - has the server's source cid (because the test stops after "sending" the retry-packet, this is not the "final" server source cid, but the one used in the retry packet)
         transportParameters.setInitialSourceConnectionId(retryPacket.getSourceConnectionId());
         // - does contain the original destination id
-        transportParameters.setOriginalDestinationConnectionId(originalDestinationId);
+        transportParameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         // - sets the retry cid to the source cid of the retry packet
         transportParameters.setRetrySourceConnectionId(retryPacket.getSourceConnectionId());
         connection.setPeerTransportParameters(transportParameters);
@@ -233,16 +236,16 @@ class QuicClientConnectionImplTest {
 
     @Test
     void testWithNormalConnectionTransportParametersShouldNotContainRetrySourceId() throws Exception {
-        byte[] originalSourceConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
-        setFixedOriginalDestinationConnectionId(originalSourceConnectionId);
+        originalDestinationConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        setFixedOriginalDestinationConnectionId(originalDestinationConnectionId);
         simulateSuccessfulConnect();
         connection = spy(connection);
 
         // Simulate a TransportParametersExtension is received that does not contain a retry source id
         TransportParameters transportParameters = new TransportParameters();
         // But it must contain
-        transportParameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        transportParameters.setOriginalDestinationConnectionId(originalSourceConnectionId);
+        transportParameters.setInitialSourceConnectionId(originalDestinationConnectionId);
+        transportParameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         connection.setPeerTransportParameters(transportParameters);
 
         verify(connection, never()).immediateCloseWithError(anyInt(), anyString());
@@ -346,8 +349,8 @@ class QuicClientConnectionImplTest {
     void testCreateStream() throws Exception {
         simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 10, 10, 10);
-        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        parameters.setInitialSourceConnectionId(peerConnectionId);
+        parameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         connection.setPeerTransportParameters(parameters);
 
         QuicStream stream = connection.createStream(true);
@@ -391,8 +394,8 @@ class QuicClientConnectionImplTest {
     void receivingTransportParametersInitializesFlowController() throws Exception {
         simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(30, 9000, 1, 1);
-        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        parameters.setInitialSourceConnectionId(peerConnectionId);
+        parameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         connection.setPeerTransportParameters(parameters);
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(9000);
@@ -402,8 +405,8 @@ class QuicClientConnectionImplTest {
     void receivingMaxStreamDataFrameIncreasesFlowControlLimit() throws Exception {
         simulateSuccessfulConnect();
         TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
-        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        parameters.setInitialSourceConnectionId(peerConnectionId);
+        parameters.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         parameters.setInitialMaxData(100_000);
         parameters.setInitialMaxStreamDataBidiRemote(9000);
         connection.setPeerTransportParameters(parameters);
@@ -420,12 +423,12 @@ class QuicClientConnectionImplTest {
     @Test
     void receivingMaxDataFrameIncreasesFlowControlLimit() throws Exception {
         simulateSuccessfulConnect();
-        TransportParameters parameters = new TransportParameters(10, 0, 3, 3);
-        parameters.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        parameters.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
-        parameters.setInitialMaxData(1_000);
-        parameters.setInitialMaxStreamDataBidiRemote(9000);
-        connection.setPeerTransportParameters(parameters);
+        TransportParameters serverParams = new TransportParameters(10, 0, 3, 3);
+        serverParams.setInitialSourceConnectionId(peerConnectionId);
+        serverParams.setOriginalDestinationConnectionId(originalDestinationConnectionId);
+        serverParams.setInitialMaxData(1_000);
+        serverParams.setInitialMaxStreamDataBidiRemote(9000);
+        connection.setPeerTransportParameters(serverParams);
 
         QuicStream stream = connection.createStream(true);
         assertThat(connection.getFlowController().increaseFlowControlLimit(stream, 9999)).isEqualTo(1000);
@@ -838,12 +841,12 @@ class QuicClientConnectionImplTest {
     private RetryPacket simulateConnectionReceivingRetryPacket() throws Exception {
         simulateSuccessfulConnect();
 
-        originalDestinationId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        originalDestinationConnectionId = new byte[]{ 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
         // By using a fixed value for the original destination connection, the integrity tag will also have a fixed value, which simplifies the test
-        setFixedOriginalDestinationConnectionId(originalDestinationId);
+        setFixedOriginalDestinationConnectionId(originalDestinationConnectionId);
 
         // Simulate a RetryPacket is received
-        RetryPacket retryPacket = createRetryPacket(connection.getDestinationConnectionId(), "9442e0ac29f6d650adc5e4b4a3cd12cc");
+        RetryPacket retryPacket = createRetryPacket(originalDestinationConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
         return retryPacket;
     }
@@ -875,8 +878,8 @@ class QuicClientConnectionImplTest {
 
     private void setTransportParametersWithActiveConnectionIdLimit(int connectionIdLimit) throws Exception {
         TransportParameters params = new TransportParameters();
-        params.setInitialSourceConnectionId(connection.getDestinationConnectionId());
-        params.setOriginalDestinationConnectionId(connection.getDestinationConnectionId());
+        params.setInitialSourceConnectionId(peerConnectionId);
+        params.setOriginalDestinationConnectionId(originalDestinationConnectionId);
         params.setActiveConnectionIdLimit(connectionIdLimit);
         connection.setPeerTransportParameters(params);
     }

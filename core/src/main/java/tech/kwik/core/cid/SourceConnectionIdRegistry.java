@@ -23,7 +23,24 @@ import tech.kwik.core.util.Bytes;
 
 import java.util.Arrays;
 
-
+/**
+ * Registry of this endpoint's connection IDs. The peer uses these connection IDs as destination connection IDs.
+ * This endpoint issues these connection IDs (initially, by set the source connection ID in the long header packets and
+ * after the handshake by sending NewConnectionId frames), but the peer determines which connection ID to use: it can
+ * use any active (not retired) connection ID at any time. Hence, there is no notion of a "current" connection ID.
+ * Only during the handshake, the connection ID is fixed (except for a server using preferred address).
+ *
+ * https://www.rfc-editor.org/rfc/rfc9000.html#section-5.1
+ * "Each connection possesses a set of connection identifiers, or connection IDs, each of which can identify the
+ *  connection. Connection IDs are independently selected by endpoints; each endpoint selects the connection IDs that
+ *  its peer uses."
+ *  https://www.rfc-editor.org/rfc/rfc9000.html#section-5.1.1
+ *  "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long packet
+ *   header (Section 17.2) during the handshake. The sequence number of the initial connection ID is 0. If the
+ *   preferred_address transport parameter is sent, the sequence number of the supplied connection ID is 1."
+ *  "Connection IDs that are issued and not retired are considered active; any active connection ID is valid for use
+ *   with the current connection at any time, in any packet type. "
+ */
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
     public SourceConnectionIdRegistry(Integer cidLength, Logger logger) {
@@ -73,6 +90,14 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
         return connectionIds.get(sequenceNr).getConnectionId();
     }
 
+    /**
+     * Returns the initial source connection ID, which is the first connection ID issued by this endpoint.
+     * This method should only be used during the handshake (as connection ID's may change after the handshake).
+     * @return
+     */
+    public byte[] getInitialConnectionId() {
+        return connectionIds.get(0).getConnectionId();
+    }
 }
 
 

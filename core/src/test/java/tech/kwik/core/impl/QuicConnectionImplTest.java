@@ -846,11 +846,6 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        public byte[] getDestinationConnectionId() {
-            return new byte[0];
-        }
-
-        @Override
         public void setMaxAllowedBidirectionalStreams(int max) {
         }
 

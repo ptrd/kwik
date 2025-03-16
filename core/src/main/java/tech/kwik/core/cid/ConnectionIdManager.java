@@ -57,7 +57,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     private final SourceConnectionIdRegistry cidRegistry;
     private final DestinationConnectionIdRegistry peerCidRegistry;
     private final byte[] initialConnectionId;
-    private final byte[] initialPeerConnectionId;
+    private volatile byte[] initialPeerConnectionId;
     private final byte[] originalDestinationConnectionId;
     /** The maximum numbers of connection IDs this endpoint can use; determined by the TP supplied by the peer */
     private volatile int maxCids = 2;
@@ -113,7 +113,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         this.maxPeerCids = maxPeerCids;
         cidRegistry = new SourceConnectionIdRegistry(connectionIdLength, log);
         this.connectionIdLength = cidRegistry.getConnectionIdlength();
-        initialConnectionId = cidRegistry.getCurrent();
+        initialConnectionId = cidRegistry.getInitialConnectionId();
         this.closeConnectionCallback = closeConnectionCallback;
         role = Client;
 
@@ -124,7 +124,6 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         new SecureRandom().nextBytes(originalDestinationConnectionId);
 
         peerCidRegistry = new DestinationConnectionIdRegistry(originalDestinationConnectionId, log);
-        initialPeerConnectionId = originalDestinationConnectionId;
 
         connectionRegistry = new ServerConnectionRegistry() {   // TODO
             @Override
@@ -309,19 +308,6 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         }
     }
 
-    /**
-     * Returns the (peer's) connection ID that is currently used by this endpoint to address the peer.
-     * @return
-     */
-    public byte[] getCurrentPeerConnectionId() {
-        if (peerCidRegistry != null) {
-            return peerCidRegistry.getCurrent();
-        }
-        else {
-            return new byte[0];
-        }
-    }
-
     @Override
     public byte[] getPeerConnectionId(InetSocketAddress clientAddress) {
         if (peerCidRegistry != null) {
@@ -411,12 +397,17 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         return Arrays.equals(retrySourceCid, connectionId);
     }
 
+    public byte[] getInitialPeerConnectionId() {
+        return initialPeerConnectionId;
+    }
+
     /**
      * Registers the initial connection ID issued by the peer (server). Used in client role only.
      * @param connectionId
      */
     public void registerInitialPeerCid(byte[] connectionId) {
         assert role == Client;
+        initialPeerConnectionId = connectionId;
         peerCidRegistry.replaceInitialConnectionId(connectionId);
     }
 
@@ -502,5 +493,9 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      */
     public boolean isActiveCid(byte[] cid) {
         return getActiveConnectionIds().stream().anyMatch(activeCid -> Arrays.equals(activeCid, cid));
+    }
+
+    public int getCurrentPeerConnectionIdLength() {
+        return peerCidRegistry.getConnectionIdlength();
     }
 }

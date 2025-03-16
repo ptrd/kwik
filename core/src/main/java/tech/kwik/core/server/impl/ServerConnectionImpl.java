@@ -269,11 +269,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public byte[] getDestinationConnectionId() {
-        return connectionIdManager.getCurrentPeerConnectionId();
-    }
-
-    @Override
     public void earlySecretsKnown() {
         // https://www.rfc-editor.org/rfc/rfc9369.html#name-compatible-negotiation-requ
         // "Servers can accept 0-RTT and then process 0-RTT packets from the original version."
@@ -516,7 +511,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     private void sendRetry() {
         try {
-            RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), getDestinationConnectionId(), getOriginalDestinationConnectionId(), token);
+            RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), connectionIdManager.getInitialPeerConnectionId(), getOriginalDestinationConnectionId(), token);
             byte[] packetBytes = retry.generatePacketBytes(null);  // Retry packet is not encrypted, so no keys needed.
             Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes), initialClientAddress);
             log.sent(timeSent, retry);
@@ -675,6 +670,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public InetAddress getInitialClientAddress() {
         return initialClientAddress.getAddress();
+    }
+
+    public InetSocketAddress getInitialClientInetSocketAddress() {
+        return initialClientAddress;
+    }
+
+    public byte[] getInitialClientConnectionId() {
+        return connectionIdManager.getInitialPeerConnectionId();
     }
 
     private class TlsMessageSender implements ServerMessageSender {
