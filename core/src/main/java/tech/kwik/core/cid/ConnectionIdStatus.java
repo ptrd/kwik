@@ -33,5 +33,9 @@ public enum ConnectionIdStatus {
     public boolean notUnusedOrRetired() {
         return !this.equals(NEW) && !this.equals(RETIRED);
     }
+
+    public boolean notRetired() {
+        return !this.equals(RETIRED);
+    }
 }
 

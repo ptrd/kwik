@@ -24,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -34,21 +35,20 @@ import java.util.stream.Collectors;
  */
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
+    private volatile int currentCidIndex;
     private volatile int notRetiredThreshold;  // all sequence numbers below are retired
     private final Map<InetSocketAddress, ConnectionIdInfo> cidByClientAddress = new ConcurrentHashMap<>();
 
 
     public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
         super(log);
-        currentConnectionId = initialConnectionId;
-        connectionIds.put(0, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
+        currentCidIndex = 0;
+        connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
     }
 
     public void replaceInitialConnectionId(byte[] connectionId) {
-        InetSocketAddress currentAddress = getCurrentAddress();
-        connectionIds.put(0, new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE));
-        currentConnectionId = connectionId;
-        cidByClientAddress.put(currentAddress, connectionIds.get(0));
+        connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE));
+        cidByClientAddress.clear();
     }
 
     /**
@@ -69,32 +69,22 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     public byte[] useNext() {
-        int currentIndex = currentIndex();
-        if (connectionIds.containsKey(currentIndex + 1)) {
-            InetSocketAddress currentAddress = getCurrentAddress();
-            currentConnectionId = connectionIds.get(currentIndex + 1).getConnectionId();
-            connectionIds.get(currentIndex).setStatus(ConnectionIdStatus.USED);
-            connectionIds.get(currentIndex+1).setStatus(ConnectionIdStatus.IN_USE);
-            cidByClientAddress.put(currentAddress, connectionIds.get(currentIndex+1));
-            return currentConnectionId;
+        int previousCidIndex = currentCidIndex;
+        Optional<Integer> nextCidIndex = findNextIndex();
+        if (nextCidIndex.isPresent()) {
+            currentCidIndex = nextCidIndex.get();
+            connectionIds.get(previousCidIndex).setStatus(ConnectionIdStatus.USED);
+            cidByClientAddress.clear();
+            connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
+            return connectionIds.get(currentCidIndex).getConnectionId();
         }
         else {
             return null;
         }
     }
 
-    private InetSocketAddress getCurrentAddress() {
-        InetSocketAddress currentAddress = cidByClientAddress.entrySet().stream()
-                .filter(entry -> Arrays.equals(entry.getValue().getConnectionId(), currentConnectionId))
-                .map(entry -> entry.getKey())
-                .findAny()
-                .get();
-        return currentAddress;
-    }
-
     public List<Integer> retireAllBefore(int retirePriorTo) {
         notRetiredThreshold = retirePriorTo;
-        int currentIndex = currentIndex();
 
         List<Integer> toRetire = connectionIds.entrySet().stream()
                 .filter(entry -> entry.getKey() < retirePriorTo)
@@ -104,17 +94,23 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
         toRetire.forEach(seqNr -> retireConnectionId(seqNr));
 
-        if (connectionIds.get(currentIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
-            // Find one that is not retired
-            ConnectionIdInfo nextCid = connectionIds.values().stream()
-                    .filter(cid -> !cid.getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED))
-                    .findFirst()
+        if (connectionIds.get(currentCidIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
+            cidByClientAddress.clear();
+            currentCidIndex = findNextIndex()
                     .orElseThrow(() -> new IllegalStateException("Can't find connection id that is not retired"));
-            nextCid.setStatus(ConnectionIdStatus.IN_USE);
-            currentConnectionId = nextCid.getConnectionId();
+            connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
         }
 
         return toRetire;
+    }
+
+    private Optional<Integer> findNextIndex() {
+        return connectionIds.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .filter(e -> e.getKey() > currentCidIndex)
+                .filter(e -> e.getValue().getConnectionIdStatus().notRetired())
+                .map(e -> e.getKey())
+                .findFirst();
     }
 
     public void setInitialStatelessResetToken(byte[] statelessResetToken) {
@@ -135,18 +131,14 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     public byte[] getCurrent(InetSocketAddress clientAddress) {
         cidByClientAddress.computeIfAbsent(clientAddress, (address) -> {
-            int currentIndex = currentIndex();
-            if (connectionIds.containsKey(currentIndex + 1)) {
-                connectionIds.get(currentIndex).setStatus(ConnectionIdStatus.USED);
-                ConnectionIdInfo newCid = connectionIds.get(currentIndex + 1);
-                newCid.setStatus(ConnectionIdStatus.IN_USE);
-                return newCid;
+            boolean currentIsInUse = cidByClientAddress.values().stream().anyMatch(cid -> cid.getSequenceNumber() == currentCidIndex);
+            if (currentIsInUse) {
+                findNextIndex().ifPresent(cid -> currentCidIndex = cid);
+                // or else (no new (unused) connection ID):
+                // Re-use current, let caller decide whether this is appropriate for the situation.
+                connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
             }
-            else {
-                // So no new (unused) connection ID. Re-use current, let caller decide whether this is appropriate for
-                // the situation.
-                return connectionIds.get(currentIndex);
-            }
+            return connectionIds.get(currentCidIndex);
         });
         return cidByClientAddress.get(clientAddress).getConnectionId();
     }
