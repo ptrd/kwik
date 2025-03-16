@@ -21,6 +21,7 @@ package tech.kwik.core.cid;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.util.Bytes;
 
+import java.security.SecureRandom;
 import java.util.Arrays;
 
 /**
@@ -43,8 +44,25 @@ import java.util.Arrays;
  */
 public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
 
+    public static final int DEFAULT_CID_LENGTH = 8;
+
+    protected final int connectionIdLength;
+    protected final SecureRandom randomGenerator;
+    protected volatile byte[] currentConnectionId;
+
     public SourceConnectionIdRegistry(Integer cidLength, Logger logger) {
-        super(cidLength, logger);
+        super(logger);
+        connectionIdLength = cidLength != null? cidLength: DEFAULT_CID_LENGTH;
+        randomGenerator = new SecureRandom();
+
+        currentConnectionId = generateConnectionId();
+        connectionIds.put(0, new ConnectionIdInfo(0, currentConnectionId, ConnectionIdStatus.IN_USE));
+    }
+
+    private byte[] generateConnectionId() {
+        byte[] connectionId = new byte[connectionIdLength];
+        randomGenerator.nextBytes(connectionId);
+        return connectionId;
     }
 
     public ConnectionIdInfo generateNew() {
@@ -91,12 +109,28 @@ public class SourceConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     /**
+     * Get an active connection ID. There can be multiple active connection IDs, this method returns an arbitrary one.
+     * @return  an active connection ID or null if non is active (which should never happen).
+     */
+    public byte[] getActive() {
+        return connectionIds.entrySet().stream()
+                .filter(e -> e.getValue().getConnectionIdStatus().active())
+                .map(e -> e.getValue().getConnectionId())
+                .findFirst().orElse(null);
+    }
+
+
+    /**
      * Returns the initial source connection ID, which is the first connection ID issued by this endpoint.
      * This method should only be used during the handshake (as connection ID's may change after the handshake).
      * @return
      */
     public byte[] getInitialConnectionId() {
         return connectionIds.get(0).getConnectionId();
+    }
+
+    public int getConnectionIdlength() {
+        return connectionIdLength;
     }
 }
 

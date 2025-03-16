@@ -152,7 +152,6 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
      * Returns the max connection ID length of currently active connection IDs.
      * @return
      */
-    @Override
     public int getConnectionIdlength() {
         return connectionIds.values().stream()
                 .filter(cid -> cid.getConnectionIdStatus().active())
