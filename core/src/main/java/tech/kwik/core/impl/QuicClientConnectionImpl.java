@@ -186,7 +186,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(cidLength, connectionProperties.getActiveConnectionIdLimit(), closeWithErrorFunction, log);
 
         receiver = new MultipleAddressReceiver(log, createPacketFilter(), this::abortConnection);
         socketManager = new ClientSocketManager(new InetSocketAddress(serverAddress, port), receiver, socketFactory);
