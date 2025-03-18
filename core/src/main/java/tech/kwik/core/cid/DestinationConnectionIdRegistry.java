@@ -97,6 +97,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         if (connectionIds.get(currentCidIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
             cidByClientAddress.clear();
             currentCidIndex = findNextIndex()
+                    // will never here, as this is called from processing a NewConnectionID frame, which implies that a new connection ID is available
                     .orElseThrow(() -> new IllegalStateException("Can't find connection id that is not retired"));
             connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
         }
