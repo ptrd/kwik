@@ -357,7 +357,7 @@ class ServerConnectionImplTest {
         connection = createServerConnection(tlsServerEngineFactory, false, clientSourceCid, odcid, cid -> {});
 
         // Then
-        assertThat(connection.getDestinationConnectionId()).isEqualTo(clientSourceCid);
+        assertThat(connection.getConnectionIdManager().getPeerConnectionId(connection.getInitialClientInetSocketAddress())).isEqualTo(clientSourceCid);
     }
     //endregion
 

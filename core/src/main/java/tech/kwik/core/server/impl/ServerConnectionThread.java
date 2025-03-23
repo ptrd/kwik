@@ -138,7 +138,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
                 // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
                 new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
                         new ClientAddressFilter(firstInitialPacketMetaData.sourceAddress(), log,
-                                new ClientInitialScidFilter(serverConnection.getDestinationConnectionId(), log,
+                                new ClientInitialScidFilter(serverConnection.getInitialClientConnectionId(), log,
                                         new InitialPacketMinimumSizeFilter(log,
                                                 new DatagramPostProcessingFilter(postProcessingFunction, log,
                                                         new DatagramParserFilter(parser))))));

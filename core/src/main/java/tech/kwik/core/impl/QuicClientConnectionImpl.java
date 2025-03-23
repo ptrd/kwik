@@ -186,7 +186,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(cidLength, 2, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(cidLength, connectionProperties.getActiveConnectionIdLimit(), closeWithErrorFunction, log);
 
         receiver = new MultipleAddressReceiver(log, createPacketFilter(), this::abortConnection);
         socketManager = new ClientSocketManager(new InetSocketAddress(serverAddress, port), receiver, socketFactory);
@@ -373,7 +373,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         log.info(String.format("Original destination connection id: %s (scid: %s)", bytesToHex(connectionIdManager.getOriginalDestinationConnectionId()), bytesToHex(connectionIdManager.getInitialConnectionId())));
-        generateInitialKeys();
+        generateInitialKeys(connectionIdManager.getOriginalDestinationConnectionId());
 
         receiver.start();
         sender.start(connectionSecrets);
@@ -520,8 +520,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private void generateInitialKeys() {
-        connectionSecrets.computeInitialKeys(connectionIdManager.getCurrentPeerConnectionId());
+    private void generateInitialKeys(byte[] initialServerCid) {
+        connectionSecrets.computeInitialKeys(initialServerCid);
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
@@ -737,7 +737,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 connectionIdManager.registerInitialPeerCid(peerConnectionId);
                 connectionIdManager.registerRetrySourceConnectionId(peerConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(peerConnectionId));
-                generateInitialKeys();
+                generateInitialKeys(peerConnectionId);
                 ((ClientRolePacketParser) parser).setOriginalDestinationConnectionId(peerConnectionId);
 
                 // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.3
@@ -868,15 +868,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    @Override
-    public int getMaxShortHeaderPacketOverhead() {
-        return 1  // flag byte
-                + connectionIdManager.getCurrentPeerConnectionId().length
-                + 4  // max packet number size, in practice this will be mostly 1
-                + 16 // encryption overhead
-        ;
-    }
-
     public TransportParameters getTransportParameters() {
         return transportParams;
     }
@@ -960,7 +951,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         //  MUST NOT include a zero-length connection ID in this transport parameter. A client MUST treat a violation of
         //  these requirements as a connection error of type TRANSPORT_PARAMETER_ERROR."
         if (transportParameters.getPreferredAddress() != null) {
-            if (connectionIdManager.getCurrentPeerConnectionId().length == 0) {
+            if (connectionIdManager.getInitialPeerConnectionId().length == 0) {
                 throw new TransportError(TRANSPORT_PARAMETER_ERROR, "Unexpected preferred address parameter for server using zero-length connection ID");
             }
             if (transportParameters.getPreferredAddress().getConnectionId().length == 0) {
@@ -1026,7 +1017,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:
         //   *  a mismatch between values received from a peer in these transport parameters and the value sent in the
         //      corresponding Destination or Source Connection ID fields of Initial packets."
-        if (! Arrays.equals(connectionIdManager.getCurrentPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
+        if (! Arrays.equals(connectionIdManager.getInitialPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
             immediateCloseWithError(PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
             return false;
@@ -1143,11 +1134,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public Map<Integer, ConnectionIdInfo> getSourceConnectionIds() {
         return connectionIdManager.getAllConnectionIds();
-    }
-
-    @Override
-    public byte[] getDestinationConnectionId() {
-        return connectionIdManager.getCurrentPeerConnectionId();
     }
 
     public Map<Integer, ConnectionIdInfo> getDestinationConnectionIds() {

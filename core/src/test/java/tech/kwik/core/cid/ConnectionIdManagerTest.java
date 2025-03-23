@@ -54,9 +54,10 @@ class ConnectionIdManagerTest {
     private ConnectionIdManager clientConnectionIdManager;
     private BiConsumer<Integer, String> closeCallback;
     private byte[] initialClientCid;
+    private InetSocketAddress clientAddress;
 
     @BeforeEach
-    void initObjectUnderTest() {
+    void initObjectUnderTest() throws Exception {
         connectionRegistry = mock(ServerConnectionRegistry.class);
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
@@ -64,6 +65,8 @@ class ConnectionIdManagerTest {
         serverConnectionIdManager = new ConnectionIdManager(initialClientCid, new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
         serverConnectionIdManager.setSender(sender);
         clientConnectionIdManager = new ConnectionIdManager(4, 2, closeCallback, mock(Logger.class));
+        clientAddress = getArbitraryLocalAddress();
+        clientConnectionIdManager.registerClientAddress(clientAddress);
         clientConnectionIdManager.setSender(sender);
     }
 
@@ -290,20 +293,21 @@ class ConnectionIdManagerTest {
     @Test
     void retiredCidShouldNotBeUsedAnymoreAsDestination() {
         // Given
-        byte[] originalDcid = serverConnectionIdManager.getCurrentPeerConnectionId();
+        byte[] originalDcid = serverConnectionIdManager.getPeerConnectionId(clientAddress);
         serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[] { 0x34, 0x1f, 0x5a, 0x55 }));
 
         // When
         serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 1, new byte[] { 0x5b, 0x2e, 0x1a, 0x44 }));
 
         // Then
-        assertThat(serverConnectionIdManager.getCurrentPeerConnectionId()).isNotEqualTo(originalDcid);
+        // TODO this fails, known bug
+        assertThat(serverConnectionIdManager.getPeerConnectionId(clientAddress)).isNotEqualTo(originalDcid);
     }
 
     @Test
     void newConnectionIdWithSequenceNumberZeroShouldFail() {
         // Given
-        byte[] originalDcid = serverConnectionIdManager.getCurrentPeerConnectionId();
+        byte[] originalDcid = serverConnectionIdManager.getPeerConnectionId(clientAddress);
         byte[] newDcid = Arrays.copyOf(originalDcid, originalDcid.length);
         newDcid[0] += 1;  // So now the two or definitely different
 
