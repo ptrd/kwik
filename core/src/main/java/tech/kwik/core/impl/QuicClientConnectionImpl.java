@@ -1046,7 +1046,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         if (connectionState == Status.Handshaking) {
             handshakeError = error.toString();
         }
-        connectionState = Status.Closing;
+        connectionState = Status.Error;
 
         if (error != null) {
             log.error("Aborting connection because of error", error);
