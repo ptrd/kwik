@@ -147,4 +147,32 @@ public class TestScheduledExecutorTest {
 
         assertThat(hasBeenExecuted.get()).isFalse();
     }
+
+    @Test
+    void whenTaskSchedulesNewTaskBothShouldHaveBeenRun() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+            scheduledExecutor.schedule((Runnable) () -> hasBeenExecuted.incrementAndGet(), 100, TimeUnit.MILLISECONDS);
+        }, 100, TimeUnit.MILLISECONDS);
+        clock.fastForward(200);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(2);
+    }
+
+    @Test
+    void whenSecondTaskSchedulesNewTaskAllShouldHaveBeenRun() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+        }, 100, TimeUnit.MILLISECONDS);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+            scheduledExecutor.schedule((Runnable) () -> hasBeenExecuted.incrementAndGet(), 10, TimeUnit.MILLISECONDS);
+        }, 200, TimeUnit.MILLISECONDS);
+        clock.fastForward(110);
+        clock.fastForward(110);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(3);
+    }
 }
