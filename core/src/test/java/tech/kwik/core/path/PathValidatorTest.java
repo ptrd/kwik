@@ -30,6 +30,8 @@ import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
+import tech.kwik.core.test.TestClock;
+import tech.kwik.core.test.TestScheduledExecutor;
 
 import java.net.InetSocketAddress;
 import java.time.Instant;
@@ -47,6 +49,8 @@ class PathValidatorTest {
     private InetSocketAddress defaultClientAddress;
     private SenderImpl sender;
     private ServerConnectionSocketManager socketManager;
+    private TestClock testClock;
+    private TestScheduledExecutor testScheduledExecutor;
 
     //region setup
     @BeforeEach
@@ -54,7 +58,9 @@ class PathValidatorTest {
         defaultClientAddress = new InetSocketAddress("localhost", 43861);
         sender = mock(SenderImpl.class);
         socketManager = mock(ServerConnectionSocketManager.class);
-        pathValidator = new PathValidator(VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, mock(Logger.class), socketManager);
+        testClock = new TestClock();
+        testScheduledExecutor = new TestScheduledExecutor(testClock);
+        pathValidator = new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, mock(Logger.class), socketManager, testClock);
     }
     //endregion
 
@@ -163,6 +169,63 @@ class PathValidatorTest {
 
         // Then
         assertThat(pathValidator.isValidated(newAddress)).isFalse();
+    }
+    //endregion
+
+    //region path validation timeout
+    @Test
+    void whenNoPathResponseIsReceivedNewPathChallengeIsSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        clearInvocations(sender);
+        int initalPto = 1000;
+
+        // When
+        testClock.fastForward(initalPto);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+    }
+
+    @Test
+    void whenNoPathResponseIsReceivedNewPathChallengesAreSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        clearInvocations(sender);
+        int initalPto = 1000;
+
+        testClock.fastForward(initalPto);
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(initalPto);
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        testClock.fastForward(initalPto);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+    }
+
+    @Test
+    void whenNoPathResponseIsReceivedAtAllValidationIsTerminated() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        clearInvocations(sender);
+        int initalPto = 1000;
+        int timeout = 3 * initalPto;
+
+        testClock.fastForward(timeout);
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(100 * initalPto);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
     }
     //endregion
 

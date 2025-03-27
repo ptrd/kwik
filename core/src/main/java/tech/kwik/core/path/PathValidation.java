@@ -19,6 +19,7 @@
 package tech.kwik.core.path;
 
 import java.net.InetSocketAddress;
+import java.time.Instant;
 
 public class PathValidation {
 
@@ -26,15 +27,27 @@ public class PathValidation {
 
     private final InetSocketAddress addressToValidate;
     private final boolean startedByProbingPacket;
+    private final Instant startedAt;
     private Status status = Status.InProgress;
 
-    public PathValidation(InetSocketAddress addressToValidate, boolean startedByProbingPacket) {
+    private int challengeRepeatCount = 0;
+
+    public PathValidation(InetSocketAddress addressToValidate, boolean startedByProbingPacket, Instant start) {
         this.addressToValidate = addressToValidate;
         this.startedByProbingPacket = startedByProbingPacket;
+        this.startedAt = start;
     }
 
     public InetSocketAddress getAddressToValidate() {
         return addressToValidate;
+    }
+
+    public int getChallengeRepeatCount() {
+        return challengeRepeatCount;
+    }
+
+    public void incrementChallengeRepeatCount() {
+        this.challengeRepeatCount++;
     }
 
     public boolean isStartedByProbingPacket() {
@@ -51,5 +64,9 @@ public class PathValidation {
 
     public void setValidated() {
         status = Status.Validated;
+    }
+
+    public Instant startedAt() {
+        return startedAt;
     }
 }

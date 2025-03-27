@@ -33,9 +33,12 @@ import tech.kwik.core.socket.ServerConnectionSocketManager;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 
 public class PathValidator {
@@ -46,18 +49,25 @@ public class PathValidator {
     private final SenderImpl sender;
     private final Logger logger;
     private final ServerConnectionSocketManager socketManager;
-    private Map<Long, PathValidation> pathValidationsByChallenge;
-    private Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
-
+    private final Clock clock;
+    private final Map<Long, PathValidation> pathValidationsByChallenge;
+    private final Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
+    private final ScheduledExecutorService executor;
 
     public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager) {
+        this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, logger, socketManager, Clock.systemUTC());
+    }
+
+    public PathValidator(ScheduledExecutorService executor, VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager, Clock clock) {
         this.version = version;
         currentAddress = clientAddress;
         this.sender = sender;
         this.logger = logger;
         this.socketManager = socketManager;
+        this.clock = clock;
         pathValidationsByChallenge = new ConcurrentHashMap<>();
         pathValidationsByAddress = new ConcurrentHashMap<>();
+        this.executor = executor;
     }
 
     public void checkSourceAddress(QuicPacket packet, PacketMetaData metaData) {
@@ -81,12 +91,43 @@ public class PathValidator {
     }
 
     private void startValidation(QuicPacket packet, InetSocketAddress packetSourceAddress) {
-        byte[] challenge = generateChallenge();
-        PathValidation validation = new PathValidation(packetSourceAddress, isProbingPacket(packet));
-        pathValidationsByChallenge.put(convertToLong(challenge), validation);
+        PathValidation validation = new PathValidation(packetSourceAddress, isProbingPacket(packet), clock.instant());
         pathValidationsByAddress.put(packetSourceAddress, validation);
+
+        doValidation(validation);
+    }
+
+    private void doValidation(PathValidation validation) {
+        byte[] challenge = generateChallenge();
+        pathValidationsByChallenge.put(convertToLong(challenge), validation);
         PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
-        sender.sendAlternateAddress(pathChallengeFrame, packetSourceAddress);
+        sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate());
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
+        // "An endpoint SHOULD NOT probe a new path with packets containing a PATH_CHALLENGE frame more frequently
+        //  than it would send an Initial packet. "
+        int initialPto = 1000;
+        int delay = initialPto * (int) (Math.pow(2, validation.getChallengeRepeatCount()));
+
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.4
+        // "Endpoints SHOULD abandon path validation based on a timer."
+        if (clock.instant().plusMillis(delay).isAfter(validation.startedAt().plusMillis(3 * initialPto))) {
+            logger.info("Path validation failed: " + validation.getAddressToValidate());
+            remove(validation);
+        }
+        else {
+            executor.schedule(() -> {
+                if (validation.isInProgress()) {
+                    doValidation(validation);
+                }
+            }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            validation.incrementChallengeRepeatCount();
+        }
+    }
+
+    private void remove(PathValidation validation) {
+        pathValidationsByAddress.remove(validation.getAddressToValidate());
+        pathValidationsByChallenge.values().removeIf(v -> v == validation);
     }
 
     private boolean pathValidationInProgress(InetSocketAddress address) {
