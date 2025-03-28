@@ -300,7 +300,6 @@ class ConnectionIdManagerTest {
         serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 2, 1, new byte[] { 0x5b, 0x2e, 0x1a, 0x44 }));
 
         // Then
-        // TODO this fails, known bug
         assertThat(serverConnectionIdManager.getPeerConnectionId(clientAddress)).isNotEqualTo(originalDcid);
     }
 
