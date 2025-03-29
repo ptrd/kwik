@@ -229,11 +229,7 @@ public class LossDetector {
     }
 
     private boolean sentTimeTooLongAgo(PacketStatus p, Instant lostSendTime) {
-        return p.packet().getPacketNumber() <= largestAcked && isBeforeOrAt(p.timeSent(), lostSendTime);
-    }
-
-    static boolean isBeforeOrAt(Instant i1, Instant i2) {
-        return i1.isBefore(i2) || i1.equals(i2);
+        return p.packet().getPacketNumber() <= largestAcked && p.timeSent().isBefore(lostSendTime);
     }
 
     private void declareLost(List<PacketStatus> lostPacketsInfo) {
