@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.path;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +62,11 @@ class PathValidatorTest {
         testClock = new TestClock();
         testScheduledExecutor = new TestScheduledExecutor(testClock);
         pathValidator = new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, mock(Logger.class), socketManager, testClock);
+    }
+
+    @AfterEach
+    void tearDown() {
+        testScheduledExecutor.shutdown();
     }
     //endregion
 

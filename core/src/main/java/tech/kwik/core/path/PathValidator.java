@@ -98,11 +98,6 @@ public class PathValidator {
     }
 
     private void doValidation(PathValidation validation) {
-        byte[] challenge = generateChallenge();
-        pathValidationsByChallenge.put(convertToLong(challenge), validation);
-        PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
-        sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate());
-
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
         // "An endpoint SHOULD NOT probe a new path with packets containing a PATH_CHALLENGE frame more frequently
         //  than it would send an Initial packet. "
@@ -111,17 +106,23 @@ public class PathValidator {
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.4
         // "Endpoints SHOULD abandon path validation based on a timer."
-        if (clock.instant().plusMillis(delay).isAfter(validation.startedAt().plusMillis(3 * initialPto))) {
-            logger.info("Path validation failed: " + validation.getAddressToValidate());
+        if (clock.instant().isAfter(validation.startedAt().plusMillis((long) (3 * initialPto * 1.05f)))) {
+            logger.info("Path validation failed for " + validation.getAddressToValidate() + " after " + validation.getChallengeRepeatCount() + " attempts and timeout of " + (3 * initialPto) + "ms");
             remove(validation);
         }
         else {
+            byte[] challenge = generateChallenge();
+            pathValidationsByChallenge.put(convertToLong(challenge), validation);
+            PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
+            sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate());
+            validation.incrementChallengeRepeatCount();
+
+            // And schedule the next check
             executor.schedule(() -> {
                 if (validation.isInProgress()) {
                     doValidation(validation);
                 }
             }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
-            validation.incrementChallengeRepeatCount();
         }
     }
 
