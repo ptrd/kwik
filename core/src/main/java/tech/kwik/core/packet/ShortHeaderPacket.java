@@ -81,6 +81,22 @@ public class ShortHeaderPacket extends QuicPacket {
         this.frames.addAll(frames);
     }
 
+    /**
+     * Creates a short header packet without explicitely specifying a QUIC version; use for tests only!
+     * @param packetNumber
+     * @param destinationConnectionId
+     * @param frame
+     */
+    public ShortHeaderPacket(long packetNumber, byte[] destinationConnectionId, QuicFrame frame) {
+        this.quicVersion = Version.getDefault();
+        setPacketNumber(packetNumber);
+        this.destinationConnectionId = destinationConnectionId;
+        frames = new ArrayList<>();
+        if (frame != null) {
+            frames.add(frame);
+        }
+    }
+
     @Override
     public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
         log.debug("Parsing " + this.getClass().getSimpleName());

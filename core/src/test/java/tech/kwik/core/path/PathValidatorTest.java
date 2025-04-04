@@ -258,7 +258,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(Version.getDefault(), new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
 
@@ -276,7 +276,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(Version.getDefault(), new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
         PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
@@ -297,7 +297,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(Version.getDefault(), new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
         PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
@@ -306,13 +306,39 @@ class PathValidatorTest {
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
 
         // When
-        QuicPacket anotherProbingPacket = new ShortHeaderPacket(Version.getDefault(), new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket anotherProbingPacket = new ShortHeaderPacket(69, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
         pathValidator.checkSourceAddress(anotherProbingPacket, packetMetaData);
 
         // Then
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
         verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(newAddress)));
     }
+
+    @Test
+    void whenPathIsValidatedNonProbingPacketShouldNotTriggerConnectionMigrationWhenNotHighestNumbered() {
+        // Given
+        QuicPacket highestNumbered = new ShortHeaderPacket(80, new byte[8], new StreamFrame(1, new byte[571], false));
+        pathValidator.checkSourceAddress(highestNumbered, metaDataFor(650, defaultClientAddress));
+
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        QuicPacket probingPacket = new ShortHeaderPacket(78, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        pathValidator.checkSourceAddress(probingPacket, packetMetaData);
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+        verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+
+        // When
+        QuicPacket newAddressPacket = normalPacket(79);
+        pathValidator.checkSourceAddress(newAddressPacket, packetMetaData);
+
+        // Then
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(newAddress)));
+    }
+
     //endregion
 
     //region utility methods
@@ -363,7 +389,11 @@ class PathValidatorTest {
     }
 
     private QuicPacket normalPacket() {
-        return new ShortHeaderPacket(Version.getDefault(), new byte[8], new StreamFrame(0, new byte[1130], false));
+        return normalPacket(68);
+    }
+
+    private QuicPacket normalPacket(long pn) {
+        return new ShortHeaderPacket(pn, new byte[8], new StreamFrame(0, new byte[1130], false));
     }
     //endregion
 }

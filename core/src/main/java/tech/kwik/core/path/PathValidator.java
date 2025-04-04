@@ -53,6 +53,7 @@ public class PathValidator {
     private final Map<Long, PathValidation> pathValidationsByChallenge;
     private final Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
     private final ScheduledExecutorService executor;
+    private volatile long highestReceivedPacketNumber;
 
     public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager) {
         this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, logger, socketManager, Clock.systemUTC());
@@ -71,12 +72,17 @@ public class PathValidator {
     }
 
     public void checkSourceAddress(QuicPacket packet, PacketMetaData metaData) {
+        highestReceivedPacketNumber = Long.max(highestReceivedPacketNumber, packet.getPacketNumber());
+
         InetSocketAddress packetSourceAddress = metaData.sourceAddress();
 
         if (!packetSourceAddress.equals(currentAddress)) {
 
             if (isValidated(packetSourceAddress)) {
-                if (!isProbingPacket(packet)) {
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
+                // "Receiving a packet from a new peer address containing a non-probing frame indicates that the peer has migrated to that address."
+                // "An endpoint only changes the address to which it sends packets in response to the highest-numbered non-probing packet."
+                if (!isProbingPacket(packet) && packet.getPacketNumber() == highestReceivedPacketNumber) {
                     logger.info("Receiving non-probing packet on new (validated) path; migrating connection to " + packetSourceAddress);
                     migrateConnection(packetSourceAddress);
                 }
