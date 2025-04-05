@@ -339,6 +339,26 @@ class PathValidatorTest {
         verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(newAddress)));
     }
 
+    @Test
+    void whenClientMigratesBackToPreviousAddressServerShouldMigrateImmediately() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        verify(socketManager).changeClientAddress(argThat(address -> address.equals(newAddress)));
+        clearInvocations(socketManager);
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(684, defaultClientAddress));
+
+        // Then
+        verify(socketManager).changeClientAddress(argThat(address -> address.equals(defaultClientAddress)));
+    }
     //endregion
 
     //region utility methods

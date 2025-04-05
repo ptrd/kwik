@@ -38,6 +38,17 @@ public class PathValidation {
         this.startedAt = start;
     }
 
+    public static PathValidation preValidated(InetSocketAddress validatedAddress) {
+        return new PathValidation(validatedAddress);
+    }
+
+    private PathValidation(InetSocketAddress validatedAddress) {
+        this.addressToValidate = validatedAddress;
+        this.startedAt = Instant.now();
+        this.startedByProbingPacket = false;
+        this.status = Status.Validated;
+    }
+
     public InetSocketAddress getAddressToValidate() {
         return addressToValidate;
     }

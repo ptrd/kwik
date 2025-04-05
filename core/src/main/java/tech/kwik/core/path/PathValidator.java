@@ -45,7 +45,7 @@ public class PathValidator {
 
     private static Random randomGenerator = new SecureRandom();
     private final VersionHolder version;
-    private final InetSocketAddress currentAddress;
+    private volatile InetSocketAddress currentAddress;
     private final SenderImpl sender;
     private final Logger logger;
     private final ServerConnectionSocketManager socketManager;
@@ -69,6 +69,8 @@ public class PathValidator {
         pathValidationsByChallenge = new ConcurrentHashMap<>();
         pathValidationsByAddress = new ConcurrentHashMap<>();
         this.executor = executor;
+
+        pathValidationsByAddress.put(clientAddress, PathValidation.preValidated(clientAddress));
     }
 
     public void checkSourceAddress(QuicPacket packet, PacketMetaData metaData) {
@@ -141,8 +143,9 @@ public class PathValidator {
         return pathValidationsByAddress.containsKey(address) && pathValidationsByAddress.get(address).isInProgress();
     }
 
-    private void migrateConnection(InetSocketAddress packetSourceAddress) {
-        socketManager.changeClientAddress(packetSourceAddress);
+    private void migrateConnection(InetSocketAddress newAddress) {
+        socketManager.changeClientAddress(newAddress);
+        currentAddress = newAddress;
     }
 
     private byte[] generateChallenge() {
