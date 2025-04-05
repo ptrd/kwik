@@ -324,7 +324,12 @@ public class InteractiveShell {
     }
 
     private void changeUdpPort(String args) {
-        quicConnection.changeAddress();
+        if (! args.isBlank()) {
+            quicConnection.changeAddress(toInt(args));
+        }
+        else {
+            quicConnection.changeAddress();
+        }
     }
 
     private void help(String arg) {

@@ -843,9 +843,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void changeAddress() {
+        changeAddress(null);
+    }
+
+    public void changeAddress(Integer localPort) {
         try {
-            InetSocketAddress newAddress = socketManager.changeClientPort();
-            log.info("Changed local address to " + newAddress.getPort());
+            int oldPort = socketManager.getLocalSocketAddress().getPort();
+            InetSocketAddress newAddress = socketManager.changeClientPort(localPort);
+            log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
         }
         catch (SocketException e) {
             // Fairly impossible, as we created a socket on an ephemeral port

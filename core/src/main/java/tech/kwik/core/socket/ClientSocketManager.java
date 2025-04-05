@@ -90,8 +90,14 @@ public class ClientSocketManager implements SocketManager {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }
 
-    public InetSocketAddress changeClientPort() throws SocketException {
-        DatagramSocket newSocket = new DatagramSocket();
+    public InetSocketAddress changeClientPort(Integer port) throws SocketException {
+        DatagramSocket newSocket;
+        if (port != null) {
+            newSocket = new DatagramSocket(new InetSocketAddress(port));
+        }
+        else {
+            newSocket = new DatagramSocket();
+        }
         receiver.addSocket(newSocket);
         receiver.removeSocket(socket);
         socket = newSocket;
