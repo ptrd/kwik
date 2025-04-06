@@ -409,6 +409,34 @@ class PathValidatorTest {
         // Then
         verify(socketManager).changeClientAddress(argThat(address -> address.equals(defaultClientAddress)));
     }
+
+    @Test
+    void numberOfStoredPathValidationsShouldBeLimited() {
+        // Given
+        testClock.fastForward(1);
+        int basePortNumber = 59643;
+        for (int i = 0; i < 69; i++) {
+            int newPort = basePortNumber + i;
+            InetSocketAddress newAddress = new InetSocketAddress("localhost", newPort);
+            PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+            pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+            testClock.fastForward(1);
+            PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+            PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+            pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+            testClock.fastForward(1);
+            assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        }
+        clearInvocations(socketManager);
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(684, defaultClientAddress));
+
+        // Then
+        verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(defaultClientAddress)));
+    }
     //endregion
 
     //region utility methods
@@ -454,6 +482,7 @@ class PathValidatorTest {
     private PathChallengeFrame capturePathChallengeFrame() {
         ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
         verify(sender).sendAlternateAddress(captor.capture(), any(InetSocketAddress.class));
+        clearInvocations(sender);
 
         return (PathChallengeFrame) captor.getValue();
     }

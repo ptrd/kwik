@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -108,6 +109,8 @@ public class PathValidator {
         pathValidationsByAddress.put(packetSourceAddress, validation);
 
         doValidation(validation);
+
+        purgeOldValidations();
     }
 
     private void doValidation(PathValidation validation) {
@@ -144,13 +147,24 @@ public class PathValidator {
         pathValidationsByChallenge.values().removeIf(v -> v == validation);
     }
 
+    private void purgeOldValidations() {
+        pathValidationsByAddress.values().stream()
+                .sorted(Comparator.reverseOrder())
+                .skip(10)
+                .forEach(this::remove);
+    }
+
     private boolean pathValidationInProgress(InetSocketAddress address) {
-        return pathValidationsByAddress.containsKey(address) && pathValidationsByAddress.get(address).isInProgress();
+        PathValidation validation = pathValidationsByAddress.get(address);
+        return validation != null && validation.isInProgress();
     }
 
     private void migrateConnection(InetSocketAddress newAddress) {
         socketManager.changeClientAddress(newAddress);
-        pathValidationsByAddress.get(currentAddress).setAddressLastUsed(currentAddressLastUsed);
+        PathValidation validation = pathValidationsByAddress.get(currentAddress);
+        if (validation != null) {
+            validation.setAddressLastUsed(currentAddressLastUsed);
+        }
         currentAddress = newAddress;
         currentAddressLastUsed = null;
     }
@@ -205,6 +219,7 @@ public class PathValidator {
     }
 
     public boolean isValidated(InetSocketAddress newAddress) {
-        return pathValidationsByAddress.containsKey(newAddress) && pathValidationsByAddress.get(newAddress).isValidated(clock.instant());
+        PathValidation validation = pathValidationsByAddress.get(newAddress);
+        return validation != null && validation.isValidated(clock.instant());
     }
 }

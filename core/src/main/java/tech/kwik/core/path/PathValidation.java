@@ -21,8 +21,9 @@ package tech.kwik.core.path;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 
-public class PathValidation {
+public class PathValidation implements Comparable<PathValidation> {
 
     private static final int UNUSED_ADDRESS_MAX_VALIDATION_TIME = 5 * 60;
 
@@ -51,6 +52,15 @@ public class PathValidation {
         this.startedAt = validatedAt;
         this.startedByProbingPacket = false;
         this.status = Status.Validated;
+    }
+
+    @Override
+    public int compareTo(PathValidation other) {
+        return Comparator.comparing(PathValidation::startTime).compare(this, other);
+    }
+
+    private Instant startTime() {
+        return startedAt;
     }
 
     public InetSocketAddress getAddressToValidate() {
