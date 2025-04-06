@@ -35,6 +35,7 @@ import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -351,6 +352,55 @@ class PathValidatorTest {
 
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
         verify(socketManager).changeClientAddress(argThat(address -> address.equals(newAddress)));
+        clearInvocations(socketManager);
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(684, defaultClientAddress));
+
+        // Then
+        verify(socketManager).changeClientAddress(argThat(address -> address.equals(defaultClientAddress)));
+    }
+
+    @Test
+    void whenClientMigratesBackToPreviousAddressAfterLongTimeServerShouldNotMigrateWithoutRevalidation() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        verify(socketManager).changeClientAddress(argThat(address -> address.equals(newAddress)));
+        clearInvocations(socketManager);
+
+        // When
+        Duration longTime = Duration.ofMinutes(13);
+        testClock.fastForward((int) longTime.toMillis());
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(684, defaultClientAddress));
+
+        // Then
+        verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
+    }
+
+    @Test
+    void whenClientMigratesBackToPreviousLongTimeUsedAddressServerShouldMigrateImmediately() {
+        // Given
+        Duration longTime = Duration.ofMinutes(15);
+        testClock.fastForward((int) longTime.toMillis());
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(1200, defaultClientAddress));
+
+        // New client address
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Respond to validation
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
         clearInvocations(socketManager);
 
         // When

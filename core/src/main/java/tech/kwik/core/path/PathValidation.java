@@ -19,9 +19,12 @@
 package tech.kwik.core.path;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.time.Instant;
 
 public class PathValidation {
+
+    private static final int UNUSED_ADDRESS_MAX_VALIDATION_TIME = 5 * 60;
 
     public enum Status {InProgress, Validated, Failed}
 
@@ -29,6 +32,7 @@ public class PathValidation {
     private final boolean startedByProbingPacket;
     private final Instant startedAt;
     private Status status = Status.InProgress;
+    private Instant addressLastUsed;
 
     private int challengeRepeatCount = 0;
 
@@ -38,13 +42,13 @@ public class PathValidation {
         this.startedAt = start;
     }
 
-    public static PathValidation preValidated(InetSocketAddress validatedAddress) {
-        return new PathValidation(validatedAddress);
+    public static PathValidation preValidated(InetSocketAddress validatedAddress, Instant validatedAt) {
+        return new PathValidation(validatedAddress, validatedAt);
     }
 
-    private PathValidation(InetSocketAddress validatedAddress) {
+    private PathValidation(InetSocketAddress validatedAddress, Instant validatedAt) {
         this.addressToValidate = validatedAddress;
-        this.startedAt = Instant.now();
+        this.startedAt = validatedAt;
         this.startedByProbingPacket = false;
         this.status = Status.Validated;
     }
@@ -69,8 +73,21 @@ public class PathValidation {
         return status == Status.InProgress;
     }
 
-    public boolean isValidated() {
-        return status == Status.Validated;
+    public boolean isValidated(Instant now) {
+        return status == Status.Validated &&
+                validatedRecently(now);
+    }
+
+    // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
+    // "An endpoint MAY skip validation of a peer address if that address has been seen recently."
+    private boolean validatedRecently(Instant now) {
+        return addressLastUsed == null?
+                Duration.between(startedAt, now).toSeconds() < UNUSED_ADDRESS_MAX_VALIDATION_TIME :
+                Duration.between(addressLastUsed, now).toSeconds() < UNUSED_ADDRESS_MAX_VALIDATION_TIME;
+    }
+
+    public void setAddressLastUsed(Instant addressLastUsed) {
+        this.addressLastUsed = addressLastUsed;
     }
 
     public void setValidated() {

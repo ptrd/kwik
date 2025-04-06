@@ -34,6 +34,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +55,7 @@ public class PathValidator {
     private final Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
     private final ScheduledExecutorService executor;
     private volatile long highestReceivedPacketNumber;
+    private volatile Instant currentAddressLastUsed;
 
     public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager) {
         this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, logger, socketManager, Clock.systemUTC());
@@ -70,7 +72,7 @@ public class PathValidator {
         pathValidationsByAddress = new ConcurrentHashMap<>();
         this.executor = executor;
 
-        pathValidationsByAddress.put(clientAddress, PathValidation.preValidated(clientAddress));
+        pathValidationsByAddress.put(clientAddress, PathValidation.preValidated(clientAddress, clock.instant()));
     }
 
     public void checkSourceAddress(QuicPacket packet, PacketMetaData metaData) {
@@ -95,6 +97,9 @@ public class PathValidator {
                 logger.info(String.format("Potential address migration? %s -> %s; starting path validation", currentAddress, packetSourceAddress));
                 startValidation(packet, packetSourceAddress);
             }
+        }
+        else {
+            currentAddressLastUsed = clock.instant();
         }
     }
 
@@ -145,7 +150,9 @@ public class PathValidator {
 
     private void migrateConnection(InetSocketAddress newAddress) {
         socketManager.changeClientAddress(newAddress);
+        pathValidationsByAddress.get(currentAddress).setAddressLastUsed(currentAddressLastUsed);
         currentAddress = newAddress;
+        currentAddressLastUsed = null;
     }
 
     private byte[] generateChallenge() {
@@ -198,6 +205,6 @@ public class PathValidator {
     }
 
     public boolean isValidated(InetSocketAddress newAddress) {
-        return pathValidationsByAddress.containsKey(newAddress) && pathValidationsByAddress.get(newAddress).isValidated();
+        return pathValidationsByAddress.containsKey(newAddress) && pathValidationsByAddress.get(newAddress).isValidated(clock.instant());
     }
 }
