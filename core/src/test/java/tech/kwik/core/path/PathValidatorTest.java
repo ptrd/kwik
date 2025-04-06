@@ -312,7 +312,7 @@ class PathValidatorTest {
 
         // Then
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
-        verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(newAddress)));
+        verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
     }
 
     @Test
@@ -337,7 +337,7 @@ class PathValidatorTest {
 
         // Then
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
-        verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(newAddress)));
+        verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
     }
 
     @Test
@@ -435,7 +435,7 @@ class PathValidatorTest {
         pathValidator.checkSourceAddress(normalPacket(), metaDataFor(684, defaultClientAddress));
 
         // Then
-        verify(socketManager, never()).changeClientAddress(argThat(address -> address.equals(defaultClientAddress)));
+        verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
     }
     //endregion
 
