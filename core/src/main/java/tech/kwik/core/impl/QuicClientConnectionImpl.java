@@ -809,6 +809,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     protected void cryptoProcessingErrorOcurred(Exception exception) {
         if (connectionState == Status.Handshaking) {
             handshakeError = exception.toString();
+            log.error("Handshake failed with crypto error", exception);
         }
         else {
             log.error("Processing crypto frame failed with ", exception);
