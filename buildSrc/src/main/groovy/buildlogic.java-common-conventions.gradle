@@ -28,7 +28,7 @@ repositories {
     mavenCentral()
 }
 
-ext.agent15_version = '3.0'
+ext.agent15_version = '3.1'
 
 dependencies {
     testImplementation('org.junit.jupiter:junit-jupiter:5.11.4')
