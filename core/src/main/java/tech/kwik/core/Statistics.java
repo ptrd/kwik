@@ -20,17 +20,51 @@ package tech.kwik.core;
 
 import tech.kwik.core.send.SendStatistics;
 
+import java.util.Objects;
+
 public class Statistics {
 
     private final SendStatistics senderStatistics;
 
     public Statistics(SendStatistics statistics) {
-        senderStatistics = statistics;
+        senderStatistics = Objects.requireNonNull(statistics);
     }
 
     @SuppressWarnings("NarrowCalculation")
     public float efficiency() {
         return senderStatistics.bytesSent() > 0? (float) ((senderStatistics.dataBytesSent() * 10000 / senderStatistics.bytesSent()) / 100.0) : 0;
+    }
+
+    public int datagramsSent() {
+        return senderStatistics.datagramsSent();
+    }
+
+    public long bytesSent() {
+        return senderStatistics.bytesSent();
+    }
+
+    public long dataBytesSent() {
+        return senderStatistics.dataBytesSent();
+    }
+
+    public long lostPackets() {
+        return senderStatistics.lostPackets();
+    }
+
+    public long packetsSent() {
+        return senderStatistics.packetsSent();
+    }
+
+    public int smoothedRtt() {
+        return senderStatistics.smoothedRtt();
+    }
+
+    public int rttVar() {
+        return senderStatistics.rttVar();
+    }
+
+    public int latestRtt() {
+        return senderStatistics.latestRtt();
     }
 
     @Override
