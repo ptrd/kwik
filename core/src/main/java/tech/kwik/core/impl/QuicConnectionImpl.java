@@ -777,8 +777,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (connectionListener != null) {
             callbackThread.submit(() -> connectionListener.disconnected(connectionDisconnectEvent));
         }
-        String logMessage = (connectionDisconnectEvent.closedByPeer()? "Peer is closing ": "Closing ") + this +
-                (connectionDisconnectEvent.hasError()? " with error " + connectionDisconnectEvent.errorDescription(): "") + ".";
+        String logMessage = (connectionDisconnectEvent.closedByPeer()? "Peer is closing ": "Closing ") +
+                this +
+                (connectionDisconnectEvent.hasError()?
+                        " with error " + connectionDisconnectEvent.errorDescription():
+                        " (reason: " + connectionDisconnectEvent.closeReason() + ")");
         log.info(logMessage);
     }
 

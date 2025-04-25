@@ -69,7 +69,7 @@ public class QuicStreamImpl implements QuicStream {
         this.log = log;
 
         if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
-            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize());
+            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize(), log);
         }
         else {
             inputStream = new NullStreamInputStream();

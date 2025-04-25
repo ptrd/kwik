@@ -18,11 +18,12 @@
  */
 package tech.kwik.core.stream;
 
-import tech.kwik.core.impl.QuicConnectionImpl;
-import tech.kwik.core.impl.Role;
-import tech.kwik.core.frame.StreamFrame;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.impl.QuicConnectionImpl;
+import tech.kwik.core.impl.Role;
+import tech.kwik.core.log.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -36,7 +37,7 @@ class StreamInputStreamImplTest {
         StreamManager streamManager = mock(StreamManager.class);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
-        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L);
+        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, mock(Logger.class));
     }
 
     @Test

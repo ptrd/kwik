@@ -120,7 +120,7 @@ public class InteropClient {
             builder.uri(downloadUrls.get(0).toURI());
             builder.logger(logger);
             builder.initialRtt(100);
-            builder.connectTimeout(Duration.ofSeconds(5));
+            builder.connectTimeout(Duration.ofSeconds(30));
             String keylogfileEnvVar = System.getenv("SSLKEYLOGFILE");
             if (keylogfileEnvVar != null && ! keylogfileEnvVar.isBlank()) {
                 System.out.println("Writing keys to " + keylogfileEnvVar);
@@ -159,7 +159,14 @@ public class InteropClient {
         try {
             myPool.submit(() ->
                     downloadUrls.parallelStream()
-                            .forEach(url -> http09Request(connection, url, outputDir)))
+                            .forEach(url -> {
+                                try {
+                                    http09Request(connection, url, outputDir);
+                                }
+                                catch (IOException e) {
+                                    logger.error("downloading " + url + " failed", e);
+                                }
+                            }))
                     .get(5, TimeUnit.MINUTES);
             logger.info("Downloaded " + downloadUrls);
         } catch (InterruptedException e) {
@@ -216,10 +223,11 @@ public class InteropClient {
         logger.logPackets(true);
 
         for (URL download : downloadUrls) {
+            QuicClientConnection connection = null;
             try {
-                logger.info("Setting up connection for downloading " + download + " at " + timeNow());
+                connection = builder.build();
+                logger.info("Setting up connection for downloading " + download + " at " + timeNow() + " on " + connection);
 
-                QuicClientConnection connection = builder.build();
                 connection.connect();
 
                 logger.info("Starting downloading " + download + " at " + timeNow() + " on " + connection);
@@ -231,7 +239,7 @@ public class InteropClient {
                 connection.close();
             }
             catch (IOException ioError) {
-                logger.error(timeNow() + " Error in client: " + ioError);
+                logger.error(timeNow() + " Error in client: " + ioError + " for " + connection);
             }
         }
     }
@@ -310,14 +318,14 @@ public class InteropClient {
         logger.info("Downloaded " + downloadUrls.get(0) + " finished at " + timeNow());
     }
 
-    private static void http09Request(QuicClientConnection connection, URL url, File outputDir) {
+    private static void http09Request(QuicClientConnection connection, URL url, File outputDir) throws IOException {
         try {
             HttpClient httpClient = new Http09Client(connection, false);
             HttpRequest request = HttpRequest.newBuilder().uri(url.toURI()).build();
             String fileName = new File(url.getFile()).getName();
             httpClient.send(request, HttpResponse.BodyHandlers.ofFile(Paths.get(outputDir.getAbsolutePath(), fileName)));
         }
-        catch (IOException | URISyntaxException | InterruptedException e) {
+        catch (URISyntaxException | InterruptedException e) {
             throw new RuntimeException(e);
         }
     }

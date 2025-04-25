@@ -23,6 +23,7 @@ import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.StopSendingFrame;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.log.Logger;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -43,6 +44,7 @@ class StreamInputStreamImpl extends StreamInputStream {
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
 
     private final QuicStreamImpl quicStream;
+    private final Logger log;
     private volatile boolean closed;
     private volatile boolean reset;
     private volatile Thread blockingReaderThread;
@@ -55,8 +57,9 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile boolean aborted;
     private volatile long finalSize = -1;
 
-    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize) {
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
         this.quicStream = quicStream;
+        this.log = log;
         receiveBuffer = new ReceiveBufferImpl();
 
         receiverFlowControlLimit = receiveBufferSize;
@@ -92,6 +95,7 @@ class StreamInputStreamImpl extends StreamInputStream {
         if (!aborted && !closed && !reset) {
             synchronized (addMonitor) {
                 if (frame.getUpToOffset() > receiverFlowControlLimit) {
+                    log.error("Flow control error on stream " + quicStream.streamId + ": frame up to offset " + frame.getUpToOffset() + " exceeds flow control limit " + receiverFlowControlLimit);
                     throw new TransportError(FLOW_CONTROL_ERROR);
                 }
                 receiveBuffer.add(frame);

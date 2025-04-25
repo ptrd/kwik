@@ -50,4 +50,8 @@ public class TransportError extends Exception {
         return transportErrorCode;
     }
 
+    @Override
+    public String toString() {
+        return "TransportError (" + transportErrorCode + ")";
+    }
 }
