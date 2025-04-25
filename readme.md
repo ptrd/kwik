@@ -100,9 +100,6 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
         <version>0.10.1</version>
     </dependency>
 
-For running Kwik 0.10.1 you'll need the [siphash](https://github.com/whitfin/siphash-java) dependency. The official release from siphash won't work because it is not a Java Module. You can download the Java Module version of siphash [here](https://github.com/ptrd/kwik/blob/master/localdeps/siphash-2.0.0-auto-module.jar). If you build Kwik from source, the correct siphash dependency
-is automatically included in the distribution files.
-
 ### Java Module System
 
 The following Kwik artifacts define a Java module with the given name:

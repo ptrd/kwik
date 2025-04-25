@@ -1,5 +1,17 @@
 # Releases
 
+## 0.10.2 (2025-04-25)
+
+- small improvents in Interop test runner
+- add getters to `Statistics` class to expose send statistics
+  [issue 65](https://github.com/ptrd/kwik/issues/65)
+- use `com.io7m.repackage.io.whitfin:io.whitfin.siphash` instead of `io.whitfin:siphash` because it has Java module support
+  [issue 63](https://github.com/ptrd/kwik/issues/63), [issue 59](https://github.com/ptrd/kwik/issues/59)
+- upgrade agent15 to 3.1 to fix issue with signature algorithm on Android
+  [issue 62](https://github.com/ptrd/kwik/issues/62)
+- improved error logging
+- generate connection errors for error situations as prescribed by RFC9000
+
 ## 0.10.1 (2025-02-18)
 
 - better distinguish between variable length integers whose size is plain wrong or whose size is not supported by Kwik
