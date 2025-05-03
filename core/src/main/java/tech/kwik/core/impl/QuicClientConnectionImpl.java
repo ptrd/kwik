@@ -1310,7 +1310,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                         java.security.cert.X509Certificate[] certs, String authType) {
                 }
         };
-        System.out.println("SECURITY WARNING: INSECURE configuration! Server certificate validation is disabled; QUIC connections may be subject to man-in-the-middle attacks!");
+
+        String propValue = System.getProperty("tech.kwik.core.no-security-warnings");
+        boolean suppressWarning = propValue != null && propValue.toLowerCase().equals("true");
+        if (! suppressWarning) {
+            System.out.println("SECURITY WARNING: INSECURE configuration! Server certificate validation is disabled; QUIC connections may be subject to man-in-the-middle attacks!");
+        }
         tlsEngine.setTrustManager(trustAllCerts);
         tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
     }
