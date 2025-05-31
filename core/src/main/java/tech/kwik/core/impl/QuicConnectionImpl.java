@@ -73,10 +73,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         Closing,
         Draining,
         Closed,
-        Failed;
+        Failed,
+        Error;
 
         public boolean closingOrDraining() {
-            return this == Closing || this == Draining || this == Closed || this == Failed;
+            return this == Closing || this == Draining || this == Closed || this == Failed || this == Error;
         }
 
         public boolean isClosing() {
