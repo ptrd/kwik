@@ -1,5 +1,13 @@
 # Releases
 
+
+## 0.10.3 (2025-06-03)
+
+- fix: aborting connection (e.g. on network error) leading to incorrect internal state causing an assert to fail
+  [issue 60](https://github.com/ptrd/kwik/issues/60)
+- added option to suppress warning about insecure configuration (disabled certificate validation) with system property
+  (`-Dtech.kwik.core.no-security-warnings=true`)
+
 ## 0.10.2 (2025-04-25)
 
 - small improvents in Interop test runner

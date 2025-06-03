@@ -97,7 +97,7 @@ Kwik is available in the Maven Central Repository. To use it in your project, ad
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>kwik</artifactId>
-        <version>0.10.1</version>
+        <version>0.10.3</version>
     </dependency>
 
 ### Java Module System
