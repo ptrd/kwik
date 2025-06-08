@@ -45,7 +45,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 public class PathValidator {
 
-    private static Random randomGenerator = new SecureRandom();
+    private static final Random randomGenerator = new SecureRandom();
     private final VersionHolder version;
     private volatile InetSocketAddress currentAddress;
     private final SenderImpl sender;
@@ -210,6 +210,7 @@ public class PathValidator {
             InetSocketAddress validatedAddress = pathValidation.getAddressToValidate();
             logger.info("Path validated: " + validatedAddress);
             if (! pathValidation.isStartedByProbingPacket()) {
+                logger.info("Immediately migrating connection to validated address: " + validatedAddress);
                 migrateConnection(validatedAddress);
             }
         }

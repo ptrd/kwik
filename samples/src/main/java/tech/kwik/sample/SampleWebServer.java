@@ -82,6 +82,7 @@ public class SampleWebServer {
         log.timeFormat(Logger.TimeFormat.Long);
         log.logWarning(true);
         log.logInfo(true);
+        log.logPackets(true);
 
         File certificateFile = null;
         File certificateKeyFile = null;
