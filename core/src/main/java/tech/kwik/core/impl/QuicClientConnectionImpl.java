@@ -67,6 +67,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -843,18 +844,27 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void changeAddress() {
-        changeAddress(null);
-    }
-
-    public void changeAddress(Integer localPort) {
         try {
-            int oldPort = socketManager.getLocalSocketAddress().getPort();
-            InetSocketAddress newAddress = socketManager.changeClientPort(localPort);
-            log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
+            changeAddress(null);
         }
         catch (SocketException e) {
             // Fairly impossible, as we created a socket on an ephemeral port
             log.error("Changing local address failed", e);
+        }
+    }
+
+    public void changeAddress(Integer localPort) throws SocketException {
+        int oldPort = socketManager.getLocalSocketAddress().getPort();
+        InetSocketAddress newAddress = socketManager.changeClientPort(localPort);
+        log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
+    }
+
+    public void sendPathChallenge(int paddingSize) {
+        byte[] challengeData = new byte[8];
+        new SecureRandom().nextBytes(challengeData);
+        send(new PathChallengeFrame(quicVersion.getVersion(), challengeData), f -> {}, paddingSize == 0);
+        if (paddingSize > 0) {
+            send(new Padding(paddingSize), f -> {}, true);
         }
     }
 

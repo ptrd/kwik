@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -97,6 +98,7 @@ public class InteractiveShell {
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
+        commands.put("pc", this::pathChallenge);
         commands.put("raw", this::sendRaw);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
@@ -325,7 +327,12 @@ public class InteractiveShell {
 
     private void changeUdpPort(String args) {
         if (! args.isBlank()) {
-            quicConnection.changeAddress(toInt(args));
+            try {
+                quicConnection.changeAddress(toInt(args));
+            }
+            catch (SocketException e) {
+                error(e);
+            }
         }
         else {
             quicConnection.changeAddress();
@@ -490,6 +497,10 @@ public class InteractiveShell {
         quicConnection.ping();
     }
 
+    private void pathChallenge(String arg) {
+        quicConnection.sendPathChallenge(toInt(arg));
+    }
+
     private void quack(String s) {
         if (quicConnection.isDatagramExtensionEnabled()) {
             quicConnection.setDatagramHandler(data -> System.out.println("Received datagram: \"" + new String(data) + "\""));
@@ -512,8 +523,14 @@ public class InteractiveShell {
 
     private Integer toInt(String value) {
         try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
+            if (! value.isBlank()) {
+                return Integer.parseInt(value);
+            }
+            else {
+                return 0;
+            }
+        }
+        catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0;
         }
@@ -521,8 +538,14 @@ public class InteractiveShell {
 
     private Long toLong(String value) {
         try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException e) {
+            if (! value.isBlank()) {
+                return Long.parseLong(value);
+            }
+            else {
+                return 0L;
+            }
+        }
+        catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0L;
         }
