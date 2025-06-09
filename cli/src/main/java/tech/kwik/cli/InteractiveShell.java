@@ -461,8 +461,8 @@ public class InteractiveShell {
         arguments += " ";
         String firstArg = arguments.substring(0, arguments.indexOf(" ")).toLowerCase();
         if (! firstArg.equals("frame")) {
-            System.err.println("Command syntax: raw frame <data>, where <data> is a mix of hex bytes and 'varint <decimal number>'");
-            System.err.println("For example: \"raw frame 0e 0000 varint 4 cafebabe\" sends a stream frame with stream id 0, offset 0, length 4 and data cafebabe");
+            System.out.println("Command syntax: raw frame <data>, where <data> is a mix of hex bytes and 'varint <decimal number>'");
+            System.out.println("For example: \"raw frame 0e 0000 varint 4 cafebabe\" sends a stream frame with stream id 0, offset 0, length 4 and data cafebabe");
             return;
         }
 
@@ -488,7 +488,7 @@ public class InteractiveShell {
                         VariableLengthInteger.encode(Integer.parseInt(integer), buffer);
                     }
                     else {
-                        System.err.println("varint argument must be a (decimal) integer");
+                        error("varint argument must be a (decimal) integer");
                     }
                 }
             }
@@ -508,7 +508,20 @@ public class InteractiveShell {
     }
 
     private void pathChallenge(String arg) {
-        quicConnection.sendPathChallenge(toInt(arg));
+        List<String> args = Arrays.stream(arg.split(" ")).filter(s -> !s.isBlank()).collect(Collectors.toList());
+        if (args.size() >= 1 && !(args.get(0).equals("std") || args.get(0).equals("alt"))) {
+            error("First argument must be 'std' or 'alt' to indicate which path to challenge");
+            return;
+        }
+
+        boolean useStandardPath = args.size() == 0 || args.get(0).equals("std");
+
+        if (args.size() >= 1) {
+            args.remove(0);
+        }
+        int paddingSize = args.size() >= 1? toInt(args.get(0)): 0;
+
+        quicConnection.sendPathChallenge(useStandardPath, paddingSize);
     }
 
     private void quack(String s) {
@@ -524,6 +537,10 @@ public class InteractiveShell {
     private void error(Exception error) {
         System.out.println("error: " + error);
         error.printStackTrace();
+    }
+
+    private void error(String message) {
+        System.out.println("Error: " + message);
     }
 
     private void prompt() {

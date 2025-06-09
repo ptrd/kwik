@@ -863,12 +863,25 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
         log.info("Added local address " + newAddress.getPort());
     }
-    public void sendPathChallenge(int paddingSize) {
+
+    public void sendPathChallenge(boolean useStandardPath, int paddingSize) {
         byte[] challengeData = new byte[8];
         new SecureRandom().nextBytes(challengeData);
-        send(new PathChallengeFrame(quicVersion.getVersion(), challengeData), f -> {}, paddingSize == 0);
+
+        QuicFrame pathChallengeFrame = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
         if (paddingSize > 0) {
-            send(new Padding(paddingSize), f -> {}, true);
+            pathChallengeFrame = new CompositeFrame(pathChallengeFrame, new Padding(paddingSize));
+        }
+
+        if (useStandardPath) {
+            send(pathChallengeFrame, f -> {}, true);
+        }
+        else {
+            if (socketManager.getAlternateClientAddress() == null) {
+                log.warn("Cannot send path challenge to alternate address, because it is not set");
+                return;
+            }
+            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress());
         }
     }
 
