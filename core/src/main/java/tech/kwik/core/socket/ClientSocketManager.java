@@ -90,18 +90,27 @@ public class ClientSocketManager implements SocketManager {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }
 
-    public InetSocketAddress changeClientPort(Integer port) throws SocketException {
-        DatagramSocket newSocket;
-        if (port != null) {
-            newSocket = new DatagramSocket(new InetSocketAddress(port));
+    public InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
+        if (port == null || alternateSocket.getLocalPort() != port) {
+            DatagramSocket newSocket;
+            if (port != null) {
+                newSocket = new DatagramSocket(new InetSocketAddress(port));
+            }
+            else {
+                newSocket = new DatagramSocket();
+            }
+            receiver.addSocket(newSocket);
+            receiver.removeSocket(socket);
+            socket = newSocket;
+            clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
         }
         else {
-            newSocket = new DatagramSocket();
+            receiver.removeSocket(socket);
+            socket = alternateSocket;
+            alternateSocket = null;
+            clientAddress = alternateClientAddress;
+            alternateClientAddress = null;
         }
-        receiver.addSocket(newSocket);
-        receiver.removeSocket(socket);
-        socket = newSocket;
-        clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
         return clientAddress;
     }
 
@@ -109,10 +118,19 @@ public class ClientSocketManager implements SocketManager {
         return socket;
     }
 
-    public InetSocketAddress bindNewLocalAddress() throws SocketException {
-        alternateSocket = new DatagramSocket();
+    public InetSocketAddress addLocalAddress(Integer port) throws SocketException {
+        if (port != null) {
+            alternateSocket = new DatagramSocket(new InetSocketAddress(port));
+        }
+        else {
+            alternateSocket = new DatagramSocket();
+        }
         alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
         receiver.addSocket(alternateSocket);
+        return alternateClientAddress;
+    }
+
+    public InetSocketAddress getAlternateClientAddress() {
         return alternateClientAddress;
     }
 }

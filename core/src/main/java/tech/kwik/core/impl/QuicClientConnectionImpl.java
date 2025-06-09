@@ -855,10 +855,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void changeAddress(Integer localPort) throws SocketException {
         int oldPort = socketManager.getLocalSocketAddress().getPort();
-        InetSocketAddress newAddress = socketManager.changeClientPort(localPort);
+        InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
         log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
     }
 
+    public void addLocalAddress(Integer localPort) throws SocketException {
+        InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
+        log.info("Added local address " + newAddress.getPort());
+    }
     public void sendPathChallenge(int paddingSize) {
         byte[] challengeData = new byte[8];
         new SecureRandom().nextBytes(challengeData);

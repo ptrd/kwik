@@ -96,6 +96,7 @@ public class InteractiveShell {
         commands.put("cid_list", this::printConnectionIds);
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
+        commands.put("udp_add", this::addUdpPort);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
         commands.put("pc", this::pathChallenge);
@@ -336,6 +337,15 @@ public class InteractiveShell {
         }
         else {
             quicConnection.changeAddress();
+        }
+    }
+
+    private void addUdpPort(String args) {
+        try {
+            quicConnection.addLocalAddress(toInt(args));
+        }
+        catch (SocketException e) {
+            error(e);
         }
     }
 
