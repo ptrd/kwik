@@ -181,7 +181,7 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     protected StreamOutputStream createStreamOutputStream(Integer sendBufferSize, FlowControl flowControl) {
-        return new StreamOutputStreamImpl(this, sendBufferSize, flowControl);
+        return new StreamOutputStreamImpl(this, sendBufferSize, flowControl, log);
     }
 
     /**

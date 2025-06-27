@@ -108,7 +108,7 @@ public class EarlyDataStream extends QuicStreamImpl {
 
     protected class EarlyDataStreamOutputStreamImpl extends StreamOutputStreamImpl {
         protected EarlyDataStreamOutputStreamImpl(Integer sendBufferSize, FlowControl flowController) {
-            super(EarlyDataStream.this, sendBufferSize, flowController);
+            super(EarlyDataStream.this, sendBufferSize, flowController, log);
         }
 
         @Override

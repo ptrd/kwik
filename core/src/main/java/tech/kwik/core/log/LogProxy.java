@@ -114,6 +114,11 @@ public class LogProxy implements Logger {
     }
 
     @Override
+    public void logStream(boolean enabled) {
+        proxiedLogger.logStream(enabled);
+    }
+
+    @Override
     public void useRelativeTime(boolean enabled) {
         proxiedLogger.useRelativeTime(enabled);
     }
@@ -256,6 +261,11 @@ public class LogProxy implements Logger {
     @Override
     public void fc(String message) {
         proxiedLogger.fc(message);
+    }
+
+    @Override
+    public void stream(String message) {
+        proxiedLogger.stream(message);
     }
 
     @Override

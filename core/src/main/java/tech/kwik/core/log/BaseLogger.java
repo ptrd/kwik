@@ -47,6 +47,7 @@ public abstract class BaseLogger implements Logger {
     private volatile boolean logRecovery = false;
     private volatile boolean logCongestionControl = false;
     private volatile boolean logFlowControl = false;
+    private volatile boolean logStream;
     private volatile boolean useRelativeTime = false;
     private volatile DateTimeFormatter timeFormatter;
     private Instant start;
@@ -119,6 +120,11 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void logFlowControl(boolean enabled) {
         logFlowControl = enabled;
+    }
+
+    @Override
+    public void logStream(boolean enabled) {
+        logStream = enabled;
     }
 
     @Override
@@ -351,6 +357,13 @@ public abstract class BaseLogger implements Logger {
     @Override
     public void fc(String message) {
         if (logFlowControl) {
+            log(formatTime(Instant.now()) + " " + message);
+        }
+    }
+
+    @Override
+    public void stream(String message) {
+        if (logStream) {
             log(formatTime(Instant.now()) + " " + message);
         }
     }

@@ -83,6 +83,11 @@ public class NullLogger implements Logger {
     }
 
     @Override
+    public void logStream(boolean enabled) {
+
+    }
+
+    @Override
     public void useRelativeTime(boolean enabled) {
     }
 
@@ -197,6 +202,11 @@ public class NullLogger implements Logger {
 
     @Override
     public void fc(String message) {
+    }
+
+    @Override
+    public void stream(String message) {
+
     }
 
     @Override

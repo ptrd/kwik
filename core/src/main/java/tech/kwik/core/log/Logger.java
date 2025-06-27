@@ -58,6 +58,8 @@ public interface Logger {
 
     void logFlowControl(boolean enabled);
 
+    void logStream(boolean enabled);
+
     void useRelativeTime(boolean enabled);
 
     void timeFormat(TimeFormat aLong);
@@ -115,6 +117,8 @@ public interface Logger {
     void cc(String message);
 
     void fc(String message);
+
+    void stream(String message);
 
     void receivedPacketInfo(String info);
 

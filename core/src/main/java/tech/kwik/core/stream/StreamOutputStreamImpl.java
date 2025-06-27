@@ -24,6 +24,7 @@ import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.ResetStreamFrame;
 import tech.kwik.core.frame.StreamDataBlockedFrame;
 import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.log.Logger;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -40,6 +41,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private final Object lock = new Object();
 
     private final SendBuffer sendBuffer;
+    private final Logger log;
     private final int maxBufferSize;
     private final RetransmitBuffer retransmitBuffer;
     // Current offset is the offset of the next byte in the stream that will be sent.
@@ -59,10 +61,11 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     protected final FlowControl flowController;
     private volatile boolean aborted;
 
-    StreamOutputStreamImpl(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl) {
+    StreamOutputStreamImpl(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl, Logger log) {
         this.quicStream = quicStream;
         flowController = flowControl;
         sendBuffer = new SendBuffer(sendBufferSize);
+        this.log = log;
         maxBufferSize = sendBuffer.getMaxSize();
         retransmitBuffer = new RetransmitBuffer();
         flowController.streamOpened(quicStream);
@@ -190,6 +193,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                 if (currentOffset != blockedOffset) {
                     // Not handled before, remember this offset, so this isn't executed twice for the same offset
                     blockedOffset = currentOffset;
+                    log.stream(quicStream + " blocked at " + blockedOffset);
                     // And let peer know
                     // https://www.rfc-editor.org/rfc/rfc9000.html#name-data-flow-control
                     // "A sender SHOULD send a STREAM_DATA_BLOCKED or DATA_BLOCKED frame to indicate to the receiver
@@ -218,6 +222,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     @Override
     public void streamNotBlocked(int streamId) {
+        log.stream(quicStream + " unblocked at " + currentOffset);
         // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
         // and let sendFrame method determine whether there is more to send or not.
         quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);  // No need to flush, as this is called while processing received message
