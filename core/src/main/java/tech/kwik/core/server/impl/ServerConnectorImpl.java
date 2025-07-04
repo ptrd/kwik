@@ -41,6 +41,7 @@ import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionFactory;
 import tech.kwik.core.server.ServerConnector;
 import tech.kwik.core.util.Bytes;
+import tech.kwik.core.util.MemoryWatcher;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -151,6 +152,8 @@ public class ServerConnectorImpl implements ServerConnector {
         context = new ServerConnectorContext();
 
         serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");
+
+        new MemoryWatcher(85, log);
     }
 
     // Intentionally private: for use with deprecated constructors only.
