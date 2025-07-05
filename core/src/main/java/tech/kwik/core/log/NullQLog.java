@@ -48,6 +48,9 @@ public class NullQLog implements QLog {
     public void emitCongestionControlMetrics(long congestionWindow, long bytesInFlight) {}
 
     @Override
+    public void emitRttMetrics(int smoothedRtt, int rttVar, int latestRtt) {}
+
+    @Override
     public void emitConnectionClosedEvent(Instant created) {}
 
     @Override

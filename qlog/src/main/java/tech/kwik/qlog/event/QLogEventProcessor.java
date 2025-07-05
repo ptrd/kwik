@@ -32,5 +32,7 @@ public interface QLogEventProcessor {
 
     void process(CongestionControlMetricsEvent event);
 
+    void process(RttMetricsEvent rttMetricsEvent);
+
     void process(PacketLostEvent packetLostEvent);
 }

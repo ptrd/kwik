@@ -99,6 +99,11 @@ public class ConnectionQLog implements QLogEventProcessor {
     }
 
     @Override
+    public void process(RttMetricsEvent event) {
+        emitMetrics(event);
+    }
+
+    @Override
     public void process(PacketLostEvent packetLostEvent) {
         writePacketLostEvent(packetLostEvent);
     }
@@ -181,6 +186,18 @@ public class ConnectionQLog implements QLogEventProcessor {
                 .writeStartObject("data")
                 .write("bytes_in_flight", event.getBytesInFlight())
                 .write("congestion_window", event.getCongestionWindow())
+                .writeEnd()  // data
+                .writeEnd(); // event
+    }
+
+    private void emitMetrics(RttMetricsEvent event) {
+        jsonGenerator.writeStartObject()
+                .write("time", Duration.between(startTime, event.getTime()).toMillis())
+                .write("name", "recovery:metrics_updated")
+                .writeStartObject("data")
+                .write("smoothed_rtt", event.getSmoothedRtt())
+                .write("rtt_variance", event.getRttVar())
+                .write("latest_rtt", event.getLatestRtt())
                 .writeEnd()  // data
                 .writeEnd(); // event
     }

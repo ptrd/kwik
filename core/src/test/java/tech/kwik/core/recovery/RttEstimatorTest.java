@@ -18,14 +18,15 @@
  */
 package tech.kwik.core.recovery;
 
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.MockPacket;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.log.Logger;
-import tech.kwik.core.test.FieldSetter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.frame.AckFrame;
+import tech.kwik.core.impl.MockPacket;
+import tech.kwik.core.log.Logger;
+import tech.kwik.core.log.QLog;
+import tech.kwik.core.test.FieldSetter;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RttEstimatorTest {
 
@@ -42,6 +44,7 @@ class RttEstimatorTest {
     @BeforeAll
     static void initLogger() {
         logger = mock(Logger.class);
+        when(logger.getQLog()).thenReturn(mock(QLog.class));
     }
 
     @BeforeEach

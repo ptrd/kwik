@@ -132,6 +132,7 @@ public class RttEstimator {
         if (largestAcked.isPresent()) {
             if (newlyAcked.stream().anyMatch(s -> s.packet().isAckEliciting())) {
                 addSample(timeReceived, largestAcked.get().timeSent(), ack.getAckDelay());
+                log.getQLog().emitRttMetrics(getSmoothedRtt(), getRttVar(), getLatestRtt());
             }
         }
     }
