@@ -100,6 +100,13 @@ public class QLogFrontEnd implements QLog {
     }
 
     @Override
+    public void emitRecoveryMetrics(long congestionWindow, long bytesInFlight, int smoothedRtt, int rttVar, int latestRtt) {
+        CongestionControlMetricsEvent controlMetricsEvent = new CongestionControlMetricsEvent(connectionHandle, originalDcid, congestionWindow, bytesInFlight, Instant.now());
+        RttMetricsEvent rttMetricsEvent = new RttMetricsEvent(connectionHandle, originalDcid, smoothedRtt, rttVar, latestRtt, Instant.now());
+        eventQueue.add(new RecoveryMetricsEvent(controlMetricsEvent, rttMetricsEvent));
+    }
+
+    @Override
     public void emitConnectionClosedEvent(Instant time) {
         eventQueue.add(new ConnectionClosedEvent(connectionHandle, originalDcid, time, ConnectionClosedEvent.Trigger.idleTimeout));
     }

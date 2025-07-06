@@ -150,6 +150,10 @@ public class LossDetector {
         lost = 0;
     }
 
+    /**
+     * Detect lost packets.
+     * Intentionally package protected, because it needs to be called by the loss detection timer also.
+     */
     void detectLostPackets() {
         if (isClosed) {
             return;

@@ -56,7 +56,6 @@ public class NewRenoCongestionController extends AbstractCongestionController im
     @Override
     public synchronized void registerInFlight(QuicPacket sentPacket) {
         super.registerInFlight(sentPacket);
-        log.getQLog().emitCongestionControlMetrics(congestionWindow, bytesInFlight);
     }
 
     @Override
@@ -94,7 +93,6 @@ public class NewRenoCongestionController extends AbstractCongestionController im
 //        log.cc("CC status: bytes in flight:" + bytesInFlight + " cwnd:" + congestionWindow
 //                + "; diff:" + (congestionWindow - bytesInFlight)
 //                + " (" + ((congestionWindow - bytesInFlight) / (congestionWindow / 100)) + "%). Cwnd limited? "+ cwndLimited);
-        log.getQLog().emitCongestionControlMetrics(congestionWindow, this.bytesInFlight);
     }
 
     @Override

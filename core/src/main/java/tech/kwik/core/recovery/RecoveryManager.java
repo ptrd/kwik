@@ -103,6 +103,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private final Clock clock;
     private final Role role;
     private final RttEstimator rttEstimater;
+    private final CongestionController congestionController;
     private final LossDetector[] lossDetectors = new LossDetector[PnSpace.values().length];
     private final Sender sender;
     private final Logger log;
@@ -123,6 +124,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         this.clock = clock;
         this.role = role;
         this.rttEstimater = rttEstimater;
+        this.congestionController = congestionController;
         for (PnSpace pnSpace: PnSpace.values()) {
             lossDetectors[pnSpace.ordinal()] = new LossDetector(clock ,this, rttEstimater, congestionController, () -> sender.flush(), logger.getQLog());
         }
@@ -256,6 +258,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         Instant lossTime = earliestLossTime != null? earliestLossTime.lossTime: null;
         if (lossTime != null) {
             lossDetectors[earliestLossTime.pnSpace.ordinal()].detectLostPackets();
+            reportRecoveryMetrics(false);
             sender.flush();
             setLossDetectionTimer();
         }
@@ -263,6 +266,17 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             sendProbe();
             // Calling setLossDetectionTimer here not necessary, because the event of sending the probe will trigger it anyway.
             // And if done here, time of last-ack-eliciting might not be set yet (because packets are sent async), leading to trouble.
+        }
+    }
+
+    private void reportRecoveryMetrics(boolean includeRttMetrics) {
+        long cwnd = congestionController.getWindowSize();
+        long bytesInFlight = congestionController.getBytesInFlight();
+        if (includeRttMetrics) {
+            log.getQLog().emitRecoveryMetrics(cwnd, bytesInFlight, rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
+        }
+        else {
+            log.getQLog ().emitCongestionControlMetrics(cwnd, bytesInFlight);
         }
     }
 
@@ -457,6 +471,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
                 }
             }
             lossDetectors[pnSpace.ordinal()].onAckReceived(ackFrame, timeReceived);
+            reportRecoveryMetrics(true);
         }
     }
 
@@ -464,6 +479,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         if (!hasBeenStopped) {
             if (packet.isInflightPacket()) {
                 lossDetectors[packet.getPnSpace().ordinal()].packetSent(packet, sent, packetLostCallback);
+                reportRecoveryMetrics(false);
                 setLossDetectionTimer();
             }
         }
