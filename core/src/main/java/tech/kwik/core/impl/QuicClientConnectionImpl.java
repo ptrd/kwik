@@ -1495,6 +1495,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 throw new IllegalArgumentException("Default stream receive buffer size must be larger than " + MIN_RECEIVER_BUFFER_SIZE + ".");
             }
             connectionProperties.setMaxBidirectionalStreamBufferSize(bufferSize);
+            connectionProperties.setMaxConnectionBufferSize(10 * bufferSize);
             return this;
         }
 

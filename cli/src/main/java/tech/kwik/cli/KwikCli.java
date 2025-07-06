@@ -69,7 +69,12 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static tech.kwik.core.impl.QuicClientConnectionImpl.DEFAULT_MAX_STREAM_DATA;
+import static tech.kwik.core.impl.QuicClientConnectionImpl.MIN_RECEIVER_BUFFER_SIZE;
 
 /**
  * Command line interface for Kwik client.
@@ -157,6 +162,8 @@ public class KwikCli {
         processQuantumReadinessTestArg(cmd, connectionBuilder);
 
         processInitialRttArg(cmd, connectionBuilder);
+
+        processBufferSizeArg(cmd, connectionBuilder);
 
         if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
             throw new IllegalArgumentException("Option --use0RTT is not yet supported by this HTTP3 implementation.");
@@ -531,6 +538,36 @@ public class KwikCli {
         }
     }
 
+    private void processBufferSizeArg(CommandLine cmd, QuicClientConnection.Builder connectionBuilder) {
+        if (cmd.hasOption("B")) {
+            String sizeSpecification = cmd.getOptionValue("B");
+            Matcher matcher = Pattern.compile("(\\d+)([KM])?").matcher(sizeSpecification);
+            if (matcher.matches()) {
+                int value = Integer.parseInt(matcher.group(1));
+                int unit = 1;
+                if (matcher.group(2) != null) {
+                    if (matcher.group(2).equals("K")) {
+                        unit = 1024;
+                    }
+                    else if (matcher.group(2).equals("M")) {
+                        unit = 1024 * 1024;
+                    }
+                }
+                long bufferSize = value * unit;
+                if (bufferSize < MIN_RECEIVER_BUFFER_SIZE || bufferSize > 100 * 1024 * 1024) {
+                    throw new IllegalArgumentException(String.format("Buffer size must be between %d and 100M.", MIN_RECEIVER_BUFFER_SIZE));
+                }
+                else {
+                    connectionBuilder.defaultStreamReceiveBufferSize(bufferSize);
+                    System.out.println("Receive buffer size set to " + bufferSize + " bytes.");
+                }
+            }
+            else {
+                throw new IllegalArgumentException("Invalid buffer size specification: " + sizeSpecification);
+            }
+        }
+    }
+
     private void executeRequest(String httpRequestPath, String outputFile, QuicClientConnection.Builder builder) throws IOException {
 
         if (httpVersion == HttpVersion.HTTP3) {
@@ -821,5 +858,6 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "keyManager", true, "client authentication key manager");
         cmdLineOptions.addOption(null, "keyManagerPassword", true, "password for client authentication key manager and key password");
         cmdLineOptions.addOption(null, "preferIPv6", false, "use IPv6 address if available");
+        cmdLineOptions.addOption("B", "receiveBuffer", true, String.format("receive buffer size, e.g. \"500K\" or \"5M\" (default is %dK)", DEFAULT_MAX_STREAM_DATA / 1024));
     }
 }
