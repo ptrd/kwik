@@ -100,6 +100,11 @@ import java.util.stream.Stream;
  */
 public class RecoveryManager implements FrameReceivedListener<AckFrame>, HandshakeStateListener {
 
+    private enum ProbeType {
+        Default,
+        SinglePing,
+        DoublePing
+    }
     private final Clock clock;
     private final Role role;
     private final RttEstimator rttEstimater;
@@ -108,6 +113,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private final Sender sender;
     private final Logger log;
     private final ScheduledExecutorService scheduler;
+    private final ProbeType probeType;
     private int receiverMaxAckDelay;
     private ScheduledFuture<?> lossDetectionFuture;  // Concurrency: guarded by scheduleLock
     private final Object scheduleLock = new Object();
@@ -135,6 +141,22 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         synchronized (scheduleLock) {
             lossDetectionFuture = new NullScheduledFuture();
         }
+        probeType = determineProbeType();
+    }
+
+    private ProbeType determineProbeType() {
+        String propValue = System.getProperty("tech.kwik.core.probe-type");
+        if (propValue != null) {
+            switch (propValue.toLowerCase()) {
+                case "single":
+                    log.recovery("Using PingFrame as probe");
+                    return ProbeType.SinglePing;
+                case "double":
+                    log.recovery("Using PaddingFrame as probe");
+                    return ProbeType.DoublePing;
+            }
+        }
+        return ProbeType.Default;
     }
 
     void setLossDetectionTimer() {
@@ -322,6 +344,22 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     private void sendOneOrTwoAckElicitingPackets(PnSpace pnSpace, int numberOfPackets) {
+        if (probeType == ProbeType.SinglePing) {
+            // Send a single PingFrame
+            log.recovery("Sending single PingFrame as probe");
+            repeatSend(numberOfPackets, () -> sender.sendProbe(List.of(new PingFrame()), pnSpace.relatedEncryptionLevel()));
+        }
+        else if (probeType == ProbeType.DoublePing) {
+            // Send two PingFrames
+            log.recovery("Sending two PingFrames as probe");
+            repeatSend(numberOfPackets, () -> sender.sendProbe(List.of(new PingFrame(), new PingFrame()), pnSpace.relatedEncryptionLevel()));
+        }
+        else {
+            sendProbesWithData(pnSpace, numberOfPackets);
+        }
+    }
+
+    private void sendProbesWithData(PnSpace pnSpace, int numberOfPackets) {
         if (pnSpace == PnSpace.Initial) {
             List<QuicFrame> framesToRetransmit = getFramesToRetransmit(PnSpace.Initial);
             if (!framesToRetransmit.isEmpty()) {
