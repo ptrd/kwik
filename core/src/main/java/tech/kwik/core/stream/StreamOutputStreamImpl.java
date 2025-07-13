@@ -204,7 +204,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                 }
             }
         }
-        if (sendBuffer.hasData() || retransmitBuffer.hasDataToRetransmit()) {
+        if (streamFrame != null && (sendBuffer.hasData() || retransmitBuffer.hasDataToRetransmit())) {
             synchronized (lock) {
                 sendRequestQueued = true;
             }
