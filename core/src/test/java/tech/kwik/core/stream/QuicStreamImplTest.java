@@ -1110,7 +1110,7 @@ class QuicStreamImplTest {
 
         // When
         quicStream.getOutputStream().close();
-        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendStreamFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1170,7 +1170,7 @@ class QuicStreamImplTest {
         quicStream.getInputStream().readAllBytes();
         // And
         quicStream.getOutputStream().close();
-        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendStreamFrame(1200);
 
         // Then
         verify(streamManager).streamClosed(eq(streamId));
@@ -1187,7 +1187,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().readAllBytes();
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendStreamFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1204,7 +1204,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().close();
-        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendStreamFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
@@ -1221,7 +1221,7 @@ class QuicStreamImplTest {
         // When
         quicStream.getInputStream().read(new byte[3]);
         quicStream.getOutputStream().write(new byte[10]);
-        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendFrame(1200);
+        ((StreamOutputStreamImpl) quicStream.getOutputStream()).sendStreamFrame(1200);
 
         // Then
         verify(streamManager, never()).streamClosed(anyInt());
