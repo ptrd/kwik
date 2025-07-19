@@ -95,12 +95,7 @@ public class LossDetector {
 
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
-        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers()
-                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
-                .map(pn -> packetSentLog.get(pn))
-                .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
-                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
-                .collect(Collectors.toList());
+        List<PacketStatus> newlyAcked = determineNewlyAcked(ackFrame);
 
         // Possible optimization: everything that follows only if newlyAcked not empty
 
@@ -118,6 +113,20 @@ public class LossDetector {
 
         // Cleanup
         newlyAcked.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
+    }
+
+    /**
+     * Determine which packets were newly acked by the given AckFrame and mark them as acked.
+     * @param ackFrame
+     * @return
+     */
+    private List<PacketStatus> determineNewlyAcked(AckFrame ackFrame) {
+        return ackFrame.getAckedPacketNumbers()
+                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
+                .map(pn -> packetSentLog.get(pn))
+                .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
+                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
+                .collect(Collectors.toList());
     }
 
     public synchronized void close() {
