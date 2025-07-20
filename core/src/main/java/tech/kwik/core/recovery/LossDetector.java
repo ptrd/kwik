@@ -26,10 +26,11 @@ import tech.kwik.core.packet.QuicPacket;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.SortedMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -45,7 +46,7 @@ public class LossDetector {
     private final QLog qLog;
     private final float kTimeThreshold = 9f/8f;
     private final int kPacketThreshold = 3;
-    private final Map<Long, PacketStatus> packetSentLog;
+    private final SortedMap<Long, PacketStatus> packetSentLog;
     private final AtomicInteger ackElicitingInFlight;
     private volatile long largestAcked = -1;
     private volatile long lost;
@@ -67,7 +68,7 @@ public class LossDetector {
         this.qLog = qLog;
 
         ackElicitingInFlight = new AtomicInteger();
-        packetSentLog = new ConcurrentHashMap<>();
+        packetSentLog = new ConcurrentSkipListMap<>();
     }
 
     public synchronized void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
@@ -182,22 +183,32 @@ public class LossDetector {
         // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
         // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame,
         //  and they have been sent but are not acknowledged, declared lost, or discarded along with old keys."
-        List<PacketStatus> lostPackets = packetSentLog.values().stream()
-                .filter(p -> p.inFlight())
-                .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
-                .collect(Collectors.toList());
+        Iterator<PacketStatus> iterator = packetSentLog.values().iterator();
+        List<PacketStatus> lostPackets = new ArrayList<>();
+        Instant earliestSentTime = null;
+        while (iterator.hasNext()) {
+            PacketStatus p = iterator.next();
+            if (p.packet().getPacketNumber() > largestAcked) {
+                break;  // No need to check further, because packets are ordered by packet number
+            }
+            if (p.inFlight()) {
+                if (pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime)) {
+                    lostPackets.add(p);
+                }
+                else {
+                    if (earliestSentTime == null || p.timeSent().isBefore(earliestSentTime)) {
+                        earliestSentTime = p.timeSent();
+                    }
+                }
+            }
+        }
+
         if (!lostPackets.isEmpty()) {
             declareLost(lostPackets);
         }
 
-        Optional<Instant> earliestSentTime = packetSentLog.values().stream()
-                .filter(p -> p.inFlight())
-                .filter(p -> p.packet().getPacketNumber() <= largestAcked)
-                .map(p -> p.timeSent())
-                .min(Instant::compareTo);
-
-        if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
-            lossTime = earliestSentTime.get().plusMillis(lossDelay);
+        if (earliestSentTime != null && earliestSentTime.isAfter(lostSendTime)) {
+            lossTime = earliestSentTime.plusMillis(lossDelay);
         }
         else {
             lossTime = null;
