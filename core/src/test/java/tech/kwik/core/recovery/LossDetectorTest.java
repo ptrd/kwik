@@ -79,7 +79,7 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(1L)), Instant.now());
         lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
 
         verify(congestionController, times(2)).registerAcked(any(List.class));
@@ -228,6 +228,7 @@ class LossDetectorTest extends RecoveryTests {
         // Given two packets are sent at the same time and only the last is acked, exactly after RTT
         lossDetector.packetSent(createPacket(6), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(9), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
         clock.fastForward(defaultRtt);
         lossDetector.onAckReceived(new AckFrame(8L), clock.instant());
 
@@ -238,7 +239,7 @@ class LossDetectorTest extends RecoveryTests {
         clock.fastForward(defaultRtt / 8 + 1);
         lossDetector.onAckReceived(new AckFrame(9L), clock.instant());
 
-        // Then the first packet is also acked (because by that time, it is old enough)
+        // Then the first packet is also declared lost (because by that time, it is old enough)
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 

@@ -28,7 +28,6 @@ import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.HandshakeState;
-import tech.kwik.core.impl.MoreArgumentMatchers;
 import tech.kwik.core.impl.PacketMatcherByPacketNumber;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.Version;
@@ -327,7 +326,7 @@ class RecoveryManagerTest extends RecoveryTests {
         recoveryManager.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         recoveryManager.onAckReceived(new AckFrame(1), PnSpace.App, Instant.now());
 
-        verify(congestionController, times(1)).registerAcked(argThat(MoreArgumentMatchers.emptyList()));
+        verify(congestionController, never()).registerAcked(anyList());
     }
 
     @Test

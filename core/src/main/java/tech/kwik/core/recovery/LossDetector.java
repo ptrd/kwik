@@ -99,8 +99,9 @@ public class LossDetector {
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
         List<PacketStatus> newlyAcked = determineNewlyAcked(ackFrame);
-
-        // Possible optimization: everything that follows only if newlyAcked not empty
+        if (newlyAcked.isEmpty()) {
+             return;
+        }
 
         int ackedAckEliciting = (int) newlyAcked.stream().filter(packetStatus -> packetStatus.packet().isAckEliciting()).count();
         assert ackedAckEliciting <= ackElicitingInFlight.get();
