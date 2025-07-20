@@ -1,5 +1,13 @@
 # Releases
 
+## 0.10.4 (2025-07-20)
+
+- fix: regression that could cause endless loop in sender
+- option (environment variable) to send probe as single (or double) ping frames
+- command line option to set default stream receiver buffer size
+- send RTT metrics to Qlog
+- let server watch memory usage and log warnings when exceeding threshold of 85%
+- log when stream gets blocked or unblocked
 
 ## 0.10.3 (2025-06-03)
 
