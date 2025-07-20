@@ -46,6 +46,8 @@ import java.util.List;
  */
 public class InteropServer {
 
+    static boolean suppressLoggingForTransferTest = false;
+
     private static void usageAndExit() {
         System.err.println("Usage: [--noRetry] keystore-file cert-alias keystore-password, key-password, port-number [www dir]");
         System.exit(1);
@@ -77,10 +79,10 @@ public class InteropServer {
 
         Logger log;
         File logDir = new File("/logs");
-        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite() && !testcase.equals("transfer")) {
+        if (logDir.exists() && logDir.isDirectory() && logDir.canWrite() && (!testcase.equals("transfer") || !suppressLoggingForTransferTest)) {
             log = new FileLogger(new File(logDir, "kwikserver.log"));
         }
-        else if (testcase.equals("transfer")) {
+        else if (suppressLoggingForTransferTest && testcase.equals("transfer")) {
             // Disable logger for testcase transfer, because it has significant impact on performance (and "transfer" is used for performance testing).
             log = new NullLogger();
         }
