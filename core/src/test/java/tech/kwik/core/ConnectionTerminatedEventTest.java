@@ -18,8 +18,8 @@
  */
 package tech.kwik.core;
 
-import tech.kwik.agent15.TlsConstants;
 import org.junit.jupiter.api.Test;
+import tech.kwik.agent15.TlsConstants;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.Mockito.mock;
@@ -29,7 +29,7 @@ class ConnectionTerminatedEventTest {
     @Test
     void testErrorDescriptionForFlowControlError() {
         // Given
-        var event = new ConnectionTerminatedEvent(mock(QuicConnection.class), ConnectionTerminatedEvent.CloseReason.ImmediateClose, true, (long) QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR.value, null);
+        var event = new ConnectionTerminatedEvent(mock(QuicConnection.class), ConnectionTerminatedEvent.CloseReason.ImmediateClose, true, (long) QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR.value, null, null);
 
         // When
         var description = event.errorDescription();
@@ -45,7 +45,7 @@ class ConnectionTerminatedEventTest {
                 ConnectionTerminatedEvent.CloseReason.ImmediateClose,
                 true,
                 (long) QuicConstants.TransportErrorCode.CRYPTO_ERROR.value + TlsConstants.AlertDescription.no_application_protocol.value,
-                null);
+                null, null);
 
         // When
         var description = event.errorDescription();
@@ -61,7 +61,7 @@ class ConnectionTerminatedEventTest {
                 ConnectionTerminatedEvent.CloseReason.ImmediateClose,
                 true,
                 null,
-                0x0107L);  // example from HTTP/3: H3_EXCESSIVE_LOAD
+                0x0107L, null);  // example from HTTP/3: H3_EXCESSIVE_LOAD
 
         // When
         var description = event.errorDescription();

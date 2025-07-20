@@ -637,7 +637,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
                 errorType == QUIC_LAYER_ERROR? error: null,
-                errorType == APPLICATION_ERROR? error: null));
+                errorType == APPLICATION_ERROR? error: null, errorReason));
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
@@ -730,7 +730,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
             emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, true,
                     closing.hasTransportError()? closing.getErrorCode(): null,
-                    closing.hasApplicationProtocolError()? closing.getErrorCode(): null));
+                    closing.hasApplicationProtocolError()? closing.getErrorCode(): null, closing.getReasonPhrase()));
 
             if (closing.hasError()) {
                 peerClosedWithError(closing);

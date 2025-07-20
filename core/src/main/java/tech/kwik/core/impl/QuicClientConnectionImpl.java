@@ -247,7 +247,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
         if (checkForStatelessResetToken(data)) {
-            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.StatelessReset, true, null, null));
+            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.StatelessReset, true, null, null, null));
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.3.1
             // "If the last 16 bytes of the datagram are identical in value to a stateless reset token, the endpoint
             //  MUST enter the draining period and not send any further packets on this connection."
