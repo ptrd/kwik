@@ -126,9 +126,9 @@ public class LossDetector {
     private List<PacketStatus> determineNewlyAcked(AckFrame ackFrame) {
         long smallestLoggedPacketNumber = packetSentLog.isEmpty() ? Long.MAX_VALUE : packetSentLog.firstKey();
         return ackFrame.getAckedPacketNumbers(smallestLoggedPacketNumber)
-                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
-                .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
+                .filter(packetStatus -> packetStatus != null)      // Could be null if the packet was already removed from the log
+                .filter(packetStatus -> !packetStatus.acked())     // Only keep the ones that are not acked yet
                 .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
                 .collect(Collectors.toList());
     }
