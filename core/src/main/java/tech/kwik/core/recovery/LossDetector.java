@@ -124,7 +124,8 @@ public class LossDetector {
      * @return
      */
     private List<PacketStatus> determineNewlyAcked(AckFrame ackFrame) {
-        return ackFrame.getAckedPacketNumbers()
+        long smallestLoggedPacketNumber = packetSentLog.isEmpty() ? Long.MAX_VALUE : packetSentLog.firstKey();
+        return ackFrame.getAckedPacketNumbers(smallestLoggedPacketNumber)
                 .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
                 .map(pn -> packetSentLog.get(pn))
                 .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.

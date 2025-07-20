@@ -26,6 +26,7 @@ import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -190,6 +191,68 @@ class AckFrameTest extends FrameTest {
         long ackDelay = VariableLengthInteger.parseLong(buffer);
         long expectedEncodedAckDelayValue = ackDelayInMillis * 1000 / senderAckDelayFactor;
         assertThat(ackDelay).isEqualTo(expectedEncodedAckDelayValue);
+    }
+    //endregion
+
+    //region get acked packet numbers
+    @Test
+    void getAckedPacketNumbersWithMinimumInRange1() {
+        // Given
+        AckFrame ackFrame = new AckFrame(new Range(5, 15));
+
+        // When
+        List<Long> packetNumbers = ackFrame.getAckedPacketNumbers(10).collect(Collectors.toList());
+
+        // Then
+        assertThat(packetNumbers).containsExactly(15L, 14L, 13L, 12L, 11L, 10L);
+    }
+
+    @Test
+    void getAckedPacketNumbersWithMinimumInRange2() {
+        // Given
+        AckFrame ackFrame = new AckFrame(List.of(new Range(25, 29), new Range(20, 23), new Range(5, 15)));
+
+        // When
+        List<Long> packetNumbers = ackFrame.getAckedPacketNumbers(21).collect(Collectors.toList());
+
+        // Then
+        assertThat(packetNumbers).containsExactly(29L, 28L, 27L, 26L, 25L, 23L, 22L, 21L);
+    }
+
+    @Test
+    void getAckedPacketNumbersWithMinimumBetweenRanges() {
+        // Given
+        AckFrame ackFrame = new AckFrame(List.of(new Range(5, 7), new Range(1,3)));
+
+        // When
+        List<Long> packetNumbers = ackFrame.getAckedPacketNumbers(4).collect(Collectors.toList());
+
+        // Then
+        assertThat(packetNumbers).containsExactly(7L, 6L, 5L);
+    }
+
+    @Test
+    void getAckedPacketNumbersWithMinimumOutsideRange1() {
+        // Given
+        AckFrame ackFrame = new AckFrame(List.of(new Range(5, 7), new Range(1,3)));
+
+        // When
+        List<Long> packetNumbers = ackFrame.getAckedPacketNumbers(8).collect(Collectors.toList());
+
+        // Then
+        assertThat(packetNumbers).isEmpty();
+    }
+
+    @Test
+    void getAckedPacketNumbersWithMinimumOutsideRange2() {
+        // Given
+        AckFrame ackFrame = new AckFrame(List.of(new Range(5, 7), new Range(1,3)));
+
+        // When
+        List<Long> packetNumbers = ackFrame.getAckedPacketNumbers(0).collect(Collectors.toList());
+
+        // Then
+        assertThat(packetNumbers).containsExactly(7L, 6L, 5L, 3L, 2L, 1L);
     }
     //endregion
 }

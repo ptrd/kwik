@@ -190,11 +190,21 @@ public class AckFrame extends QuicFrame {
     }
 
     /**
-     * Returns the acked packet numbers in reverse sorted order (so largest first)
+     * Returns the acked packet numbers in reverse sorted order (so the largest first)
      * @return
      */
     public Stream<Long> getAckedPacketNumbers() {
         return acknowledgedRanges.stream().flatMap(r -> r.stream());
+    }
+
+    /**
+     * Returns the acked packet numbers greater or equal the given minimum in reverse sorted order (so the largest first)
+     * @return
+     */
+    public Stream<Long> getAckedPacketNumbers(long minimum) {
+        return acknowledgedRanges.stream()
+                .filter(r -> r.getLargest() >= minimum)
+                .flatMap(r -> r.stream(minimum));
     }
 
     /**
