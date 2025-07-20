@@ -75,9 +75,11 @@ public class LossDetector {
             return;
         }
 
-        if (packet.isInflightPacket()) {  // Redundant: caller checked
-            congestionController.registerInFlight(packet);
-        }
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
+        // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame, and ..."
+        assert packet.isInflightPacket();
+
+        congestionController.registerInFlight(packet);
 
         if (packet.isAckEliciting()) {
             ackElicitingInFlight.getAndAdd(1);
@@ -172,21 +174,17 @@ public class LossDetector {
         assert(lossDelay > 0);  // Minimum time of kGranularity before packets are deemed lost
         Instant lostSendTime = Instant.now(clock).minusMillis(lossDelay);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1
-        // "A packet is declared lost if it meets all the following conditions:
-        //   o  The packet is unacknowledged, in-flight, and was sent prior to an
-        //      acknowledged packet.
-        //   o  Either its packet number is kPacketThreshold smaller than an
-        //      acknowledged packet (Section 6.1.1), or it was sent long enough in
-        //      the past (Section 6.1.2)."
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-2
-        // "In-flight:  Packets are considered in-flight when they have been sent
-        //      and neither acknowledged nor declared lost, and they are not ACK-
-        //      only."
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.1
+        // "A packet is declared lost if it meets all of the following conditions:
+        //  o  The packet is unacknowledged, in flight, and was sent prior to an acknowledged packet.
+        //  o  The packet was sent kPacketThreshold packets before an acknowledged packet (Section 6.1.1),
+        //     or it was sent long enough in the past (Section 6.1.2)."
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
+        // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame,
+        //  and they have been sent but are not acknowledged, declared lost, or discarded along with old keys."
         List<PacketStatus> lostPackets = packetSentLog.values().stream()
                 .filter(p -> p.inFlight())
                 .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
-                .filter(p -> !p.packet().isAckOnly())
                 .collect(Collectors.toList());
         if (!lostPackets.isEmpty()) {
             declareLost(lostPackets);
@@ -195,7 +193,6 @@ public class LossDetector {
         Optional<Instant> earliestSentTime = packetSentLog.values().stream()
                 .filter(p -> p.inFlight())
                 .filter(p -> p.packet().getPacketNumber() <= largestAcked)
-                .filter(p -> !p.packet().isAckOnly())
                 .map(p -> p.timeSent())
                 .min(Instant::compareTo);
 
@@ -224,7 +221,6 @@ public class LossDetector {
     List<QuicPacket> unAcked() {
         return packetSentLog.values().stream()
                 .filter(p -> p.inFlight())
-                .filter(p -> !p.packet().isAckOnly())
                 .map(p -> p.packet())
                 .collect(Collectors.toList());
     }
@@ -232,7 +228,6 @@ public class LossDetector {
     // For debugging only
     List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
-                .filter(p -> !p.packet().isAckOnly())
                 .filter(p -> p.inFlight())
                 .collect(Collectors.toList());
     }

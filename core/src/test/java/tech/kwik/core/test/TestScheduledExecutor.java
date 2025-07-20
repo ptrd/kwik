@@ -156,6 +156,10 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
         return commands;
     }
 
+    public List<ScheduledAction> getScheduledActions() {
+        return scheduledActions;
+    }
+
     private static class ScheduledAction {
         final Instant scheduledTime;
         final Runnable command;
