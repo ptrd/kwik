@@ -3,6 +3,7 @@ module tech.kwik.core {
     requires at.favre.lib.hkdf;
     requires io.whitfin.siphash;
     requires java.management;
+    requires java.compiler;
 
     exports tech.kwik.core;
     exports tech.kwik.core.concurrent;
