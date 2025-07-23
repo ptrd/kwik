@@ -76,6 +76,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         Failed,
         Error;
 
+        /**
+         * Returns true if the connection is closing or closed in the broadest sense,
+         * i.e. including (handshake) Failed and Error states.
+         * @return
+         */
         public boolean closingOrDraining() {
             return this == Closing || this == Draining || this == Closed || this == Failed || this == Error;
         }
@@ -573,6 +578,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (connectionState == Status.Closing || connectionState == Status.Draining) {
             return;
         }
+        connectionState = Status.Closing;
 
         emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
 
@@ -630,10 +636,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * @param errorReason
      */
     protected void immediateCloseWithError(long error, ErrorType errorType, String errorReason) {
-        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+        if (connectionState.closingOrDraining()){
             log.debug("Immediate close ignored because already closing");
             return;
         }
+        connectionState = Status.Closing;
 
         emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
                 errorType == QUIC_LAYER_ERROR? error: null,
@@ -643,8 +650,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
         sendConnectionClose(error, errorType, errorReason);
-        // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
-        connectionState = Status.Closing;
 
         getStreamManager().abortAll();
 
