@@ -47,7 +47,7 @@ public class QLogFrontEnd implements QLog {
         String qlogdirEnvVar = System.getenv("QLOGDIR");
         if (qlogdirEnvVar != null && !qlogdirEnvVar.isBlank()) {
             connectionHandle = randomGenerator.nextLong();
-            eventQueue = new QLogBackEnd().getQueue();
+            eventQueue = QLogBackEnd.getInstance().getQueue();
             File qlogDir = new File(qlogdirEnvVar);
             if (!qlogDir.exists()) {
                 qlogDir.mkdirs();

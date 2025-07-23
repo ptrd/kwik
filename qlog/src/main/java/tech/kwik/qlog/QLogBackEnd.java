@@ -27,13 +27,20 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 
 public class QLogBackEnd {
 
+    static volatile QLogBackEnd instance;
     private final BlockingQueue<QLogEvent> queue;
     private Map<Long, ConnectionQLog> connections;
+
+    public static QLogBackEnd getInstance() {
+        if (instance == null) {
+            instance = new QLogBackEnd();
+        }
+        return instance;
+    }
 
     public QLogBackEnd() {
         this.queue = new LinkedBlockingQueue<>();
@@ -53,7 +60,7 @@ public class QLogBackEnd {
     private void generateConnectionLog() {
         while (true) {
             try {
-                QLogEvent event = queue.poll(63_000, TimeUnit.MILLISECONDS);   // Should be greater than max idle-timeout
+                QLogEvent event = queue.take();
                 if (event != null) {
                     long key = event.getConnectionHandle();
                     if (event instanceof ConnectionCreatedEvent) {
@@ -71,10 +78,6 @@ public class QLogBackEnd {
                     if (event instanceof ConnectionTerminatedEvent) {
                         connections.remove(key);
                     }
-                }
-                else {
-                    connections.values().stream().forEach(log -> log.close());
-                    connections.clear();
                 }
             }
             catch (IOException | InterruptedException e) {
