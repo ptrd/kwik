@@ -836,6 +836,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     @Override
     protected void postTerminateHook() {
         socket.close();
+        super.postTerminateHook();
     }
 
     public void changeAddress() {

@@ -616,6 +616,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         closeCallback.accept(this);
         String statsSummary = getStats().toString().replace("\n", "    ");
         log.info(String.format("Stats for connection %s: %s", Bytes.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
+        super.postTerminateHook();
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {

@@ -836,7 +836,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     /**
      * Called on sender thread after the sender is shut down (and for example, connection close frame is sent).
      */
-    protected void postTerminateHook() {}
+    protected void postTerminateHook() {
+        callbackThread.shutdown();
+    }
 
     protected int quicError(TlsProtocolException tlsError) {
         if (tlsError instanceof ErrorAlert) {
