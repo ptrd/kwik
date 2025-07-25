@@ -662,9 +662,8 @@ class QuicConnectionImplTest {
             streamManager = mock(StreamManager.class);
         }
 
-       @Override
-        protected void terminate() {
-            super.terminate();
+        @Override
+        protected void preTerminateHook() {
             terminated = true;
         }
 

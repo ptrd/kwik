@@ -824,19 +824,18 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    /**
-     * Closes the connection by discarding all connection state. Do not call directly, should be called after
-     * closing state or draining state ends.
-     */
     @Override
-    protected void terminate() {
-        super.terminate();
+    protected void preTerminateHook() {
         handshakeFinishedCondition.countDown();
         receiver.shutdown();
-        socket.close();
         if (receiverThread != null) {
             receiverThread.interrupt();
         }
+    }
+
+    @Override
+    protected void postTerminateHook() {
+        socket.close();
     }
 
     public void changeAddress() {

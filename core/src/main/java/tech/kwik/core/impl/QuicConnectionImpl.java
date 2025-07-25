@@ -821,18 +821,22 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * Closes the connection by discarding all connection state. Do not call directly, should be called after
      * closing state or draining state ends.
      */
-    protected void terminate() {
-        terminate(null);
-    }
-
-    protected void terminate(Runnable postSenderShutdownAction) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
+    protected final void terminate() {
+        preTerminateHook();
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "Once its closing or draining state ends, an endpoint SHOULD discard all connection state."
         idleTimer.shutdown();
-        getSender().shutdown(postSenderShutdownAction);
+        getSender().shutdown(this::postTerminateHook);
         connectionState = Status.Closed;
         scheduler.shutdown();
     }
+
+    protected void preTerminateHook() {}
+
+    /**
+     * Called on sender thread after the sender is shut down (and for example, connection close frame is sent).
+     */
+    protected void postTerminateHook() {}
 
     protected int quicError(TlsProtocolException tlsError) {
         if (tlsError instanceof ErrorAlert) {

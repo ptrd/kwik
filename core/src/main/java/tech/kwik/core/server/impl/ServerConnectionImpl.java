@@ -604,14 +604,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super.connectionError(cause);
     }
 
+    /**
+     * Trivial (do nothing) override to make method accessible in this package.
+     */
     @Override
-    protected void terminate() {
-        super.terminate(() -> {
-            String statsSummary = getStats().toString().replace("\n", "    ");
-            log.info(String.format("Stats for connection %s: %s", Bytes.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
-        });
+    protected void preTerminateHook() {}
+
+    @Override
+    protected void postTerminateHook() {
         log.getQLog().emitConnectionTerminatedEvent();
         closeCallback.accept(this);
+        String statsSummary = getStats().toString().replace("\n", "    ");
+        log.info(String.format("Stats for connection %s: %s", Bytes.bytesToHex(connectionIdManager.getInitialConnectionId()), statsSummary));
     }
 
     private void validateAndProcess(TransportParameters transportParameters) throws TransportError {
