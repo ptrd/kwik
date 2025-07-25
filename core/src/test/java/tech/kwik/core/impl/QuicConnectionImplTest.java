@@ -657,7 +657,7 @@ class QuicConnectionImplTest {
         public boolean terminated;
 
         NonAbstractQuicConnection() {
-            super(Version.getDefault(), Role.Server, null, new NullLogger(), null);
+            super(Version.getDefault(), Role.Server, null, null, "", new NullLogger());
             idleTimer = new IdleTimer(this, log);
             streamManager = mock(StreamManager.class);
         }

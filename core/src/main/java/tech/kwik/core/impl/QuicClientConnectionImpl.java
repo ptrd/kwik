@@ -162,7 +162,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
-        super(originalVersion, Role.Client, secretsFile, log, connectionProperties);
+        super(originalVersion, Role.Client, secretsFile, connectionProperties, "", log);
         this.applicationProtocol = applicationProtocol;
         this.connectTimeout = connectTimeout;
         this.connectionProperties = connectionProperties;

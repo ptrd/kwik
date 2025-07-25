@@ -151,7 +151,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ExecutorService datagramHandlerExecutor;
 
 
-    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log, ConnectionConfig settings) {
+    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, ConnectionConfig settings, String id, Logger log) {
         this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
@@ -163,8 +163,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
-        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
-        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callback-executor"));
+        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler" + id));
+        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callbacks-" + id));
         currentEncryptionLevel = Initial;
     }
 
