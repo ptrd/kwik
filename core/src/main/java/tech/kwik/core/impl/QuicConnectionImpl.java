@@ -70,6 +70,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         Created,
         Handshaking,
         Connected,
+        CloseRequested,
         Closing,
         Draining,
         Closed,
@@ -82,7 +83,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
          * @return
          */
         public boolean closingOrDraining() {
-            return this == Closing || this == Draining || this == Closed || this == Failed || this == Error;
+            return this == Closing || this == CloseRequested || this == Draining || this == Closed || this == Failed || this == Error;
         }
 
         public boolean isClosing() {
@@ -575,7 +576,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
-        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+        if (connectionState.closingOrDraining()) {
             return;
         }
         connectionState = Status.Closing;
@@ -640,7 +641,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             log.debug("Immediate close ignored because already closing");
             return;
         }
-        connectionState = Status.Closing;
+        connectionState = Status.CloseRequested;
 
         emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
                 errorType == QUIC_LAYER_ERROR? error: null,
@@ -650,6 +651,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
         getSender().stop();
         sendConnectionClose(error, errorType, errorReason);
+        // "After sending a CONNECTION_CLOSE frame, an endpoint immediately enters the closing state;"
+        connectionState = Status.Closing;
 
         getStreamManager().abortAll();
 
