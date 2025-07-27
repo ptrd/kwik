@@ -19,12 +19,15 @@
 package tech.kwik.core.frame;
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.generic.IntegerTooLargeException;
+import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -191,6 +194,52 @@ class AckFrameTest extends FrameTest {
         long ackDelay = VariableLengthInteger.parseLong(buffer);
         long expectedEncodedAckDelayValue = ackDelayInMillis * 1000 / senderAckDelayFactor;
         assertThat(ackDelay).isEqualTo(expectedEncodedAckDelayValue);
+    }
+
+    @Test
+    void ackFrameWithLargeNumberOfRangesShouldDiscardSmallestToFitInFrame() throws TransportError, InvalidIntegerEncodingException, IntegerTooLargeException {
+        // Given
+        List<Range> ranges = new ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            ranges.add(new Range(10000 - 7 * i, 10000 - 7 * i + 2));
+        }
+        AckFrame ackFrame = new AckFrame(ranges);
+        Range firstRange = ranges.get(0);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(1500);
+        ackFrame.serialize(buffer);
+
+        // Then
+        buffer.flip();
+        AckFrame parsedFrame = new AckFrame().parse(buffer, mock(Logger.class));
+        assertThat(parsedFrame.getAcknowledgedRanges().size()).isLessThan(ranges.size());
+        assertThat(parsedFrame.getAcknowledgedRanges().get(0)).isEqualTo(firstRange);
+
+        assertThat(ackFrame.getAcknowledgedRanges().size()).isEqualTo(parsedFrame.getAcknowledgedRanges().size());
+    }
+
+    @Test
+    void ackFrameWithHugeNumberOfRangesShouldDiscardSmallestToFitInFrame() throws TransportError, InvalidIntegerEncodingException, IntegerTooLargeException {
+        // Given
+        List<Range> ranges = new ArrayList<>();
+        for (int i = 0; i < 16385; i++) {  // range count will be 16384 which is the smallest int not fitting an 2 byte var int encoding
+            ranges.add(new Range(100000 - 7 * i, 100000 - 7 * i + 2));
+        }
+        AckFrame ackFrame = new AckFrame(ranges);
+        Range firstRange = ranges.get(0);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(1500);
+        ackFrame.serialize(buffer);
+
+        // Then
+        buffer.flip();
+        AckFrame parsedFrame = new AckFrame().parse(buffer, mock(Logger.class));
+        assertThat(parsedFrame.getAcknowledgedRanges().size()).isLessThan(ranges.size());
+        assertThat(parsedFrame.getAcknowledgedRanges().get(0)).isEqualTo(firstRange);
+
+        assertThat(ackFrame.getAcknowledgedRanges().size()).isEqualTo(parsedFrame.getAcknowledgedRanges().size());
     }
     //endregion
 

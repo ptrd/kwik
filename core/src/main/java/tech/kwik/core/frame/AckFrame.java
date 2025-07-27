@@ -92,10 +92,12 @@ public class AckFrame extends QuicFrame {
         buffer.put((byte) 0x02);
         VariableLengthInteger.encode(largestAcknowledged, buffer);
         VariableLengthInteger.encode(ackDelay, buffer);
-        VariableLengthInteger.encode(ackRanges.size() - 1, buffer);
+        int ackRangeCountFieldPosition = buffer.position();
+        int ackRangeCountFieldLength = VariableLengthInteger.encode(ackRanges.size() - 1, buffer);
         VariableLengthInteger.encode(firstRange.size() - 1, buffer);
 
         long smallest = firstRange.getSmallest();
+        int rangesAdded = 0;
         while (rangeIterator.hasNext()) {
             Range next = rangeIterator.next();
             // https://www.rfc-editor.org/rfc/rfc9000.html#name-ack-frames
@@ -107,10 +109,27 @@ public class AckFrame extends QuicFrame {
             int ackRangeLength = next.size() - 1;
             VariableLengthInteger.encode(gap, buffer);
             VariableLengthInteger.encode(ackRangeLength, buffer);
+            rangesAdded++;
 
             smallest = next.getSmallest();
+
+            if (buffer.limit() - buffer.position() < 2 * 8) {
+                // Not enough space left for the next range, so we stop here.
+                break;
+            }
         }
 
+        if (rangesAdded < acknowledgedRanges.size() - 1) {
+            // Correct ACK Range Count field, because we did not serialize all ranges.
+            int lastPosition = buffer.position();
+            buffer.position(ackRangeCountFieldPosition);
+            VariableLengthInteger.encode(rangesAdded, buffer, ackRangeCountFieldLength);
+            buffer.position(lastPosition);
+            // Discard all ranges that are not serialized.
+            List<Range> retainedRange = acknowledgedRanges.subList(0, rangesAdded + 1);
+            // Create a copy of the list, because the original list is immutable and despite the sublist operation, will retain all used memory!
+            acknowledgedRanges = new ArrayList<>(retainedRange);
+        }
         frameBytes = new byte[buffer.position()];
         buffer.flip();
         buffer.get(frameBytes);
