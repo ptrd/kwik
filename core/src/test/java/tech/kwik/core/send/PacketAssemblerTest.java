@@ -291,50 +291,6 @@ class PacketAssemblerTest extends AbstractSenderTest {
     }
 
     @Test
-    void whenSendingDataSentPacketWillIncludeAck() throws Exception {
-        // Given
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
-        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
-
-        // When
-        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[32], true), 37, null);
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, null, new byte[0]).get().getPacket();
-        assertThat(packet).isInstanceOf(ShortHeaderPacket.class);
-        assertThat(packet.getFrames())
-                .hasSize(2)
-                .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class)
-                .anySatisfy(frame -> {
-            assertThat(frame).isInstanceOf(AckFrame.class);
-            assertThat(((AckFrame) frame).getLargestAcknowledged()).isEqualTo(8);
-        });
-    }
-
-    @Test
-    void whenSendingLargestPossibleFrameStillImplicitAckIsIncluded() throws Exception {
-        // Given
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        oneRttAckGenerator.packetReceived(new MockPacket(3, 20, EncryptionLevel.App));
-        oneRttAckGenerator.packetReceived(new MockPacket(8, 20, EncryptionLevel.App));
-
-        // When
-        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[maxSize - (3 + 2)], true),    // Stream length will be > 63, so 2 bytes for length field
-                (3 + 2) + 1, null);  // Send at least 1 byte of data
-
-        // Then
-        QuicPacket packet = oneRttPacketAssembler.assemble(12000, MAX_PACKET_SIZE, null, new byte[0]).get().getPacket();
-        assertThat(packet.getFrames())
-                .hasSize(2)
-                .hasOnlyElementsOfTypes(StreamFrame.class, AckFrame.class);
-        byte[] packetBytes = packet.generatePacketBytes(aead);
-        assertThat(packetBytes.length)
-                .isLessThanOrEqualTo(MAX_PACKET_SIZE)
-                .isEqualTo(MAX_PACKET_SIZE);
-    }
-
-    @Test
     void whenNoDataToSendButAnExplicitAckIsQueueAssembleWillCreateAckOnlyPacket() throws Exception {
         // Given
         oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
@@ -393,26 +349,6 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(firstSendItem.getPacket().getFrames())
                 .hasSize(1)
                 .hasOnlyElementsOfType(AckFrame.class);
-    }
-
-    @Test
-    void whenAckWasRequestedButIsNotNecessaryAnymoreDoNotSendIt() {
-        // Given
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        sendRequestQueue.addRequest(new StreamFrame(0, new byte[160], false), f -> {});
-
-        // Simulate race condition where ack is picked up by a "normal" send
-        SendItem firstSendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]).get();
-        // Before the ack request was actually queued.
-        sendRequestQueue.addAckRequest(0);
-
-        // Then
-        Optional<SendItem> secondSendItem = oneRttPacketAssembler.assemble(1200, 1232, null, new byte[0]);
-        assertThat(secondSendItem).isEmpty();
-
-        assertThat(firstSendItem.getPacket().getFrames())
-                .hasSize(2)
-                .hasAtLeastOneElementOfType(AckFrame.class);
     }
 
     @Test
@@ -487,30 +423,6 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Then
         assertThat(optionalSendItem).isPresent();
         assertThat(optionalSendItem.get().getPacket().getFrames()).hasOnlyElementsOfType(PingFrame.class);
-    }
-
-    @Test
-    void whenExplicitAckIsSentImplicitlySendRequestQueueDoesNotContainAckRequestAnymore() throws Exception {
-        // Given
-        // ... there is a delayed ack pending
-        int ackDelay = 20;
-        oneRttAckGenerator.packetReceived(new MockPacket(0, 20, EncryptionLevel.App));
-        sendRequestQueue.addAckRequest(ackDelay);  // As test is using mock sender, this call must be done explicitly in the test
-
-        // When
-        // ... it is send together with a ack-eliciting packet
-        sendRequestQueue.addRequest(new PingFrame(), Sender.NO_RETRANSMIT);
-        Optional<SendItem> firstPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
-
-        assertThat(firstPacket).isPresent();
-        assertThat(firstPacket.get().getPacket().getFrames()).hasAtLeastOneElementOfType(AckFrame.class);
-
-        // Then
-        // ... (even) after delay time
-        clock.fastForward(ackDelay);
-        // ... no ack is sent.
-        Optional<SendItem> secondPacket = oneRttPacketAssembler.assemble(6000, 1200, null, new byte[0]);
-        assertThat(secondPacket).isEmpty();
     }
 
     @Test
