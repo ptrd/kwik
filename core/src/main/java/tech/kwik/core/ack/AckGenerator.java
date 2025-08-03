@@ -18,10 +18,10 @@
  */
 package tech.kwik.core.ack;
 
+import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.Range;
-import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.send.Sender;
@@ -103,9 +103,7 @@ public class AckGenerator {
      */
     public synchronized void process(QuicFrame receivedAck) {
         // Find max packet number that had an ack sent with it...
-        Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers()
-                .filter(pn -> ackSentWithPacket.containsKey(pn))
-                .findFirst();
+        Optional<Long> largestWithAck = findLargest((AckFrame) receivedAck);
 
         if (largestWithAck.isPresent()) {
             // ... and for that max pn, all packets that where acked by it don't need to be acked again.
@@ -114,8 +112,19 @@ public class AckGenerator {
 
             // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
             // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
-            ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
+            removeAndBefore(largestWithAck.get());
         }
+    }
+
+    private Optional<Long> findLargest(AckFrame receivedAck) {
+        Optional<Long> largestWithAck = receivedAck.getAckedPacketNumbers()
+                .filter(pn -> ackSentWithPacket.containsKey(pn))
+                .findFirst();
+        return largestWithAck;
+    }
+
+    private void removeAndBefore(Long largestWithAck) {
+        ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck);
     }
 
     /**
