@@ -1320,19 +1320,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
     }
 
-    protected void setTrustStore(KeyStore customTrustStore) throws KeyStoreException {
-        try {
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("PKIX");
-            trustManagerFactory.init(customTrustStore);
-            X509TrustManager trustManager = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
-            tlsEngine.setTrustManager(trustManager);
-        }
-        catch (NoSuchAlgorithmException e) {
-            // Inappropriate runtime environment (fairly impossible, because PKIX is required to be supported by JDK)
-            throw new QuicRuntimeException(e);
-        }
-    }
-
     protected void setTrustManager(X509TrustManager customTrustManager) {
         tlsEngine.setTrustManager(customTrustManager);
     }
@@ -1389,7 +1376,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private DatagramSocketFactory socketFactory;
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
-        private KeyStore customTrustStore;
         private X509TrustManager customTrustManager;
         private KeyStore keyManager;
         private String keyPassword;
@@ -1423,15 +1409,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 quicConnection.trustAnyServerCertificate();
             }
 
-            if (customTrustStore != null) {
-                try {
-                    quicConnection.setTrustStore(customTrustStore);
-                }
-                catch (KeyStoreException e) {
-                    // Should be thrown as checked exception, but would require (incompatible) interface change.
-                    throw new RuntimeException(e);
-                }
-            }
             if (customTrustManager != null) {
                 quicConnection.setTrustManager(customTrustManager);
             }
@@ -1473,9 +1450,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
             if (keyManager != null && keyPassword == null) {
                 throw new IllegalArgumentException("Key password must be set when key manager is set");
-            }
-            if (customTrustStore != null && customTrustManager != null) {
-                throw new IllegalArgumentException("Cannot set both custom trust store and custom trust manager");
             }
         }
 
@@ -1640,7 +1614,19 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder customTrustStore(KeyStore customTrustStore) {
-            this.customTrustStore = customTrustStore;
+            try {
+                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("PKIX");
+                trustManagerFactory.init(customTrustStore);
+                customTrustManager = (X509TrustManager) trustManagerFactory.getTrustManagers()[0];
+            }
+            catch (NoSuchAlgorithmException e) {
+                // Inappropriate runtime environment (fairly impossible, because PKIX is required to be supported by JDK)
+                throw new QuicRuntimeException(e);
+            }
+            catch (KeyStoreException e) {
+                // Should be thrown as checked exception, but would require (incompatible) interface change.
+                throw new RuntimeException(e);
+            }
             return this;
         }
 

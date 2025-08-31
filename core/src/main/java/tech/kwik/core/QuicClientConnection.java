@@ -138,8 +138,24 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder noServerCertificateCheck();
 
+        /**
+         * Sets the custom trust store that will be used to validate the server's certificate.
+         * If not set, the default trust store of the Java runtime environment will be used.
+         * This is an alternative for calling {@link #customTrustManager(X509TrustManager)}, under the hood both
+         * methods achieve the same result.
+         * @param customTrustStore
+         * @return  the builder
+         */
         Builder customTrustStore(KeyStore customTrustStore);
 
+        /**
+         * Sets the custom trust manager that will be used to validate the server's certificate.
+         * If not set, the default trust store of the Java runtime environment will be used.
+         * This is an alternative for calling {@link #customTrustStore(KeyStore)}, under the hood both
+         * methods achieve the same result.
+         * @param customTrustManager
+         * @return  the builder
+         */
         Builder customTrustManager(X509TrustManager customTrustManager);
 
         Builder quantumReadinessTest(int nrOfDummyBytes);
