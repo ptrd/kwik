@@ -1333,6 +1333,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
+    protected void setTrustManager(X509TrustManager customTrustManager) {
+        tlsEngine.setTrustManager(customTrustManager);
+    }
+
     private void setKeyManager(KeyStore keyManager) {
         this.keyManager = keyManager;
     }
@@ -1386,6 +1390,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
         private KeyStore customTrustStore;
+        private X509TrustManager customTrustManager;
         private KeyStore keyManager;
         private String keyPassword;
         private boolean enableDatagramExtension;
@@ -1427,6 +1432,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     throw new RuntimeException(e);
                 }
             }
+            if (customTrustManager != null) {
+                quicConnection.setTrustManager(customTrustManager);
+            }
 
             if (keyManager != null) {
                 quicConnection.setKeyManager(keyManager);
@@ -1465,6 +1473,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
             if (keyManager != null && keyPassword == null) {
                 throw new IllegalArgumentException("Key password must be set when key manager is set");
+            }
+            if (customTrustStore != null && customTrustManager != null) {
+                throw new IllegalArgumentException("Cannot set both custom trust store and custom trust manager");
             }
         }
 
@@ -1630,6 +1641,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder customTrustStore(KeyStore customTrustStore) {
             this.customTrustStore = customTrustStore;
+            return this;
+        }
+
+        @Override
+        public Builder customTrustManager(X509TrustManager customTrustManager) {
+            this.customTrustManager = customTrustManager;
             return this;
         }
 

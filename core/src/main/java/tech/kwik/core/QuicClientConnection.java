@@ -18,10 +18,11 @@
  */
 package tech.kwik.core;
 
+import tech.kwik.agent15.TlsConstants;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.log.Logger;
-import tech.kwik.agent15.TlsConstants;
 
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
@@ -138,6 +139,8 @@ public interface QuicClientConnection extends QuicConnection {
         Builder noServerCertificateCheck();
 
         Builder customTrustStore(KeyStore customTrustStore);
+
+        Builder customTrustManager(X509TrustManager customTrustManager);
 
         Builder quantumReadinessTest(int nrOfDummyBytes);
 
