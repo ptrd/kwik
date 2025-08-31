@@ -1,5 +1,9 @@
 # Releases
 
+## 0.10.5 (2025-08-31)
+
+- added another method to client connection builder to set trust manager 
+
 ## 0.10.4 (2025-07-20)
 
 - fix: regression that could cause endless loop in sender
