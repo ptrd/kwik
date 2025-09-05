@@ -190,7 +190,9 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             bufferedInitialPackets.add(initialPacket);
             bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
-                if (initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
+                String propValue = System.getProperty("tech.kwik.core.min-crypto-data-check");
+                boolean checkEnabled = propValue == null || !propValue.equalsIgnoreCase("disabled");
+                if (checkEnabled && initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
                     throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
                 }
                 return;
