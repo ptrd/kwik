@@ -191,7 +191,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
                 if (initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
-                    throw new UnacceptablePacketException();
+                    throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
                 }
                 return;
             }
@@ -262,7 +262,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         boolean acceptableFrames = (frames.stream().allMatch(f -> f instanceof CryptoFrame || f instanceof PingFrame || f instanceof Padding));
         int nrOfPingFrames = (int) frames.stream().filter(f -> f instanceof PingFrame).count();
         if (!acceptableFrames || nrOfPingFrames > 12) {  // Chrome often sends multiple PING frames in the first flight
-            throw new UnacceptablePacketException();
+            throw new UnacceptablePacketException("Initial packet contains unacceptable frames");
         }
     }
 

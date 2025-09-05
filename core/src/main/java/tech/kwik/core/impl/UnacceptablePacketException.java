@@ -19,4 +19,8 @@
 package tech.kwik.core.impl;
 
 public class UnacceptablePacketException extends Exception {
+
+    public UnacceptablePacketException(String message) {
+        super(message);
+    }
 }
