@@ -32,6 +32,9 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.SysOutLogger;
 import tech.kwik.h09.client.Http09Client;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -52,11 +55,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.security.KeyFactory;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
@@ -496,11 +495,16 @@ public class KwikCli {
         if (cmd.hasOption("keyManager")) {
             try {
                 String keyStorePassword = cmd.hasOption("keyManagerPassword")? cmd.getOptionValue("keyManagerPassword"): "";
-                builder.clientKeyManager(KeyStore.getInstance(new File(cmd.getOptionValue("keyManager")), keyStorePassword.toCharArray()));
-                // Same password for key manager and key
-                builder.clientKey(keyStorePassword);
+                KeyStore keyStore = KeyStore.getInstance(new File(cmd.getOptionValue("keyManager")), keyStorePassword.toCharArray());
+                KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                keyManagerFactory.init(keyStore, keyStorePassword.toCharArray());
+                KeyManager keyManager = keyManagerFactory.getKeyManagers()[0];
+                if (keyManager instanceof X509ExtendedKeyManager) {
+                    builder.clientKeyManager((X509ExtendedKeyManager) keyManager);
+                }
             }
-            catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+            catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException |
+                   UnrecoverableKeyException e) {
                 throw new IllegalArgumentException("Error while reading client key manager", e);
             }
         }

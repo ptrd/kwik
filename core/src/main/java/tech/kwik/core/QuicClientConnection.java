@@ -22,6 +22,7 @@ import tech.kwik.agent15.TlsConstants;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.log.Logger;
 
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -163,6 +164,17 @@ public interface QuicClientConnection extends QuicConnection {
         Builder clientCertificate(X509Certificate certificate);
 
         Builder clientCertificateKey(PrivateKey privateKey);
+
+        /**
+         * Sets the key manager that will be used to authenticate the client to the server. The key manager should
+         * contain the client's private key(s) and certificate(s) it wants to use for authentication.
+         * The first certificate whose issuer corresponds to one of the authorities indicated by the server is used.
+         * If none matches or if the server did not send the "certificate_authorities" extension, the first certificate
+         * in the key store is used.
+         * @param   keyManager
+         * @return  the builder
+         */
+        Builder clientKeyManager(X509ExtendedKeyManager keyManager);
 
         /**
          * Sets the key manager that will be used to authenticate the client to the server. The key manager should

@@ -1671,6 +1671,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         @Override
+        public Builder clientKeyManager(X509ExtendedKeyManager keyManager) {
+            this.keyManager = keyManager;
+            return this;
+        }
+
+        @Override
         public Builder clientKeyManager(KeyStore keyManager) {
             this.keyStore = keyManager;
             if (keyStore != null && keyPassword != null) {
