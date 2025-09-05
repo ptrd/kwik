@@ -55,7 +55,10 @@ import tech.kwik.core.tls.QuicTransportParametersExtension;
 import tech.kwik.core.util.Bytes;
 import tech.kwik.core.util.InetTools;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.*;
@@ -65,6 +68,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,8 +134,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile TransportParameters transportParams;
     private final X509Certificate clientCertificate;
     private final PrivateKey clientCertificateKey;
-    private KeyStore keyManager;
-    private String keyManagerPrivateKeyPassword;
+    private X509ExtendedKeyManager keyManager;
     private final ConnectionIdManager connectionIdManager;
     private final Version originalVersion;
     private final Version preferredVersion;
@@ -569,7 +572,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
         if (keyManager != null) {
             tlsEngine.setClientCertificateCallback(authorities ->
-                new CertificateSelector(keyManager, keyManagerPrivateKeyPassword, log).selectCertificate(authorities, true));
+                new CertificateSelector(keyManager, log).selectCertificate(authorities, true));
         }
     }
 
@@ -1324,12 +1327,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine.setTrustManager(customTrustManager);
     }
 
-    private void setKeyManager(KeyStore keyManager) {
+    private void setKeyManager(X509ExtendedKeyManager keyManager) {
         this.keyManager = keyManager;
-    }
-
-    private void setKeyManagerPrivateKeyPassword(String keyPassword) {
-        this.keyManagerPrivateKeyPassword = keyPassword;
     }
 
     private void enableQuantumReadinessTest(int nrDummyBytes) {
@@ -1377,9 +1376,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private long connectTimeoutInMillis = DEFAULT_CONNECT_TIMEOUT_IN_MILLIS;
         private String applicationProtocol = "";
         private X509TrustManager customTrustManager;
-        private KeyStore keyManager;
+        private KeyStore keyStore;
         private String keyPassword;
         private boolean enableDatagramExtension;
+        private X509ExtendedKeyManager keyManager;
 
         private BuilderImpl() {
             connectionProperties.setMaxIdleTimeout(DEFAULT_MAX_IDLE_TIMEOUT);
@@ -1415,7 +1415,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             if (keyManager != null) {
                 quicConnection.setKeyManager(keyManager);
-                quicConnection.setKeyManagerPrivateKeyPassword(keyPassword);
             }
 
             if (quantumReadinessTest != null) {
@@ -1442,14 +1441,31 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (initialRtt != null && initialRtt < 1) {
                 throw new IllegalArgumentException("Initial RTT must be larger than 0.");
             }
-            if (clientCertificate != null && keyManager != null) {
+            if (clientCertificate != null && keyStore != null) {
                 throw new IllegalArgumentException("Cannot set both client certificate and key manager");
             }
             if (clientCertificate != null && clientCertificateKey == null) {
                 throw new IllegalArgumentException("Client certificate key must be set when client certificate is set");
             }
-            if (keyManager != null && keyPassword == null) {
+            if (keyStore != null && keyPassword == null) {
                 throw new IllegalArgumentException("Key password must be set when key manager is set");
+            }
+        }
+
+        private void readKeyStore() {
+            if (keyStore != null && keyPassword != null) {
+                try {
+                    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                    keyManagerFactory.init(keyStore, keyPassword.toCharArray());
+                    KeyManager keyManagerFromKeyStore = keyManagerFactory.getKeyManagers()[0];
+                    if (keyManagerFromKeyStore instanceof X509ExtendedKeyManager) {
+                        this.keyManager = (X509ExtendedKeyManager) keyManagerFromKeyStore;
+                    }
+                }
+                catch (NoSuchAlgorithmException | KeyStoreException | UnrecoverableKeyException e) {
+                    // Should be thrown as checked exception, but would require (incompatible) interface change.
+                    throw new RuntimeException(e);
+                }
             }
         }
 
@@ -1656,13 +1672,19 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
         @Override
         public Builder clientKeyManager(KeyStore keyManager) {
-            this.keyManager = keyManager;
+            this.keyStore = keyManager;
+            if (keyStore != null && keyPassword != null) {
+                readKeyStore();
+            }
             return this;
         }
 
         @Override
         public Builder clientKey(String keyPassword) {
             this.keyPassword = keyPassword;
+            if (keyStore != null && keyPassword != null) {
+                readKeyStore();
+            }
             return this;
         }
 

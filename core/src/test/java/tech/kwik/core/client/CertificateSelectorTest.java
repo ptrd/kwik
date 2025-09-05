@@ -18,10 +18,13 @@
  */
 package tech.kwik.core.client;
 
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.test.TestCertificates;
-import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.security.auth.x500.X500Principal;
 import java.security.KeyStore;
 import java.security.PrivateKey;
@@ -49,7 +52,7 @@ class CertificateSelectorTest {
                 .withCertificate(endEntityCertificate2, endEntityCertificate2Key)
                 .build();
 
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA2");
@@ -69,7 +72,7 @@ class CertificateSelectorTest {
         KeyStore keyStore = new KeyStoreBuilder()
                 .withCertificate(endEntityCertificate2, endEntityCertificate2Key)
                 .build();
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
         X500Principal authority = new X500Principal("CN=SampleCA1");
         X500Principal issuer = endEntityCertificate2.getIssuerX500Principal();
 
@@ -89,7 +92,7 @@ class CertificateSelectorTest {
                         TestCertificates.getEndEntityCertificate1_1(), TestCertificates.getSubCACertificate1())
                 .build();
 
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA1");
@@ -106,7 +109,7 @@ class CertificateSelectorTest {
                         TestCertificates.getEndEntityCertificate1_1())
                 .build();
 
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA1");
@@ -124,7 +127,7 @@ class CertificateSelectorTest {
                 .withCertificate(endEntityCertificate1, endEntityCertificate1Key)
                 .build();
 
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleCA9");
@@ -140,7 +143,7 @@ class CertificateSelectorTest {
         KeyStore keyStore = new KeyStoreBuilder()
                 .withCertificate(TestCertificates.getEcCErt(), TestCertificates.getEcCertKey())
                 .build();
-        var certificateSelector = new CertificateSelector(keyStore, "", mock(Logger.class));
+        var certificateSelector = new CertificateSelector(getKeyManager(keyStore), mock(Logger.class));
 
         // When
         X500Principal authority = new X500Principal("CN=SampleECRoot");
@@ -148,5 +151,12 @@ class CertificateSelectorTest {
 
         // Then
         assertThat(certificateWithKey).isNotNull();
+    }
+
+    private X509ExtendedKeyManager getKeyManager(KeyStore keyStore) throws Exception {
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        keyManagerFactory.init(keyStore, "".toCharArray());
+        KeyManager keyManager = keyManagerFactory.getKeyManagers()[0];
+        return (X509ExtendedKeyManager) keyManager;
     }
 }

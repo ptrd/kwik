@@ -18,70 +18,56 @@
  */
 package tech.kwik.core.client;
 
-import tech.kwik.core.log.Logger;
 import tech.kwik.agent15.engine.CertificateWithPrivateKey;
+import tech.kwik.core.log.Logger;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.X509ExtendedKeyManager;
 import javax.security.auth.x500.X500Principal;
-import java.security.*;
+import java.security.Key;
+import java.security.Principal;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.util.Collections;
 import java.util.List;
 
 
 public class CertificateSelector {
 
-    private KeyStore keyStore;
-    private final String keyPassword;
+    private X509ExtendedKeyManager keyManager;
     private final Logger log;
 
-    public CertificateSelector(KeyStore keyManager, String keyPassword, Logger log) {
-        this.keyStore = keyManager;
-        this.keyPassword = keyPassword;
+    public CertificateSelector(X509ExtendedKeyManager keyManager, Logger log) {
+        this.keyManager = keyManager;
         this.log = log;
     }
 
     public CertificateWithPrivateKey selectCertificate(List<X500Principal> authorities, boolean fallback) {
         CertificateWithPrivateKey result = null;
-        try {
-            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            keyManagerFactory.init(keyStore, keyPassword.toCharArray());
-            KeyManager keyManager = keyManagerFactory.getKeyManagers()[0];
-            if (keyManager instanceof X509ExtendedKeyManager) {
-                X509ExtendedKeyManager x509KeyManager = (X509ExtendedKeyManager) keyManager;
-
-                Principal[] issuers = authorities.toArray(new Principal[0]);
-                String clientAlias = x509KeyManager.chooseEngineClientAlias(new String[]{"RSA", "EC"}, issuers, null);
-                if (clientAlias != null) {
-                    X509Certificate certificate = x509KeyManager.getCertificateChain(clientAlias)[0];
-                    Key key = x509KeyManager.getPrivateKey(clientAlias);
-                    result = new CertificateWithPrivateKey(certificate, (PrivateKey) key);
-                }
-                else {
-                    log.warn("No client certificate found in key store signed by one of the requested authorities: " + authorities);
-                }
+            Principal[] issuers = authorities.toArray(new Principal[0]);
+            String clientAlias = keyManager.chooseEngineClientAlias(new String[]{"RSA", "EC"}, issuers, null);
+            if (clientAlias != null) {
+                X509Certificate certificate = keyManager.getCertificateChain(clientAlias)[0];
+                Key key = keyManager.getPrivateKey(clientAlias);
+                result = new CertificateWithPrivateKey(certificate, (PrivateKey) key);
             }
             else {
-                log.warn("Key manager is not an X509ExtendedKeyManager");
+                log.warn("No client certificate found in key store signed by one of the requested authorities: " + authorities);
             }
 
             if (result == null && fallback) {
                 // Fallback to the first certificate in the key store.
-                if (!Collections.list(keyStore.aliases()).isEmpty()) {
-                    String alias = Collections.list(keyStore.aliases()).get(0);
-                    result = new CertificateWithPrivateKey((X509Certificate) keyStore.getCertificate(alias),
-                            (PrivateKey) keyStore.getKey(alias, keyPassword.toCharArray()));
+                String[] clientAliases = keyManager.getClientAliases("RSA", null);
+                if (clientAliases == null || clientAliases.length == 0) {
+                    clientAliases = keyManager.getClientAliases("EC", null);
+                }
+                if (clientAliases != null && clientAliases.length > 0) {
+                    String alias = clientAliases[0];
+                    result = new CertificateWithPrivateKey(keyManager.getCertificateChain(alias)[0], keyManager.getPrivateKey(alias));
                 }
                 else {
                     log.error("No client certificate found in key store");
                 }
             }
-        }
-        catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
-            log.error("Failed to extract client certificate from key store", e);
-        }
+
         return result;
     }
 }
