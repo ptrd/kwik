@@ -1,5 +1,10 @@
 # Releases
 
+## 0.10.6 (2025-09-06)
+
+- added another method to client connection builder to set key manager
+- added system property to disable the check that initial packets should contain considerable amount of crypto data
+
 ## 0.10.5 (2025-08-31)
 
 - added another method to client connection builder to set trust manager 
