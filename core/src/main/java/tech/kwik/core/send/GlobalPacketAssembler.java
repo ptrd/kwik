@@ -20,13 +20,12 @@ package tech.kwik.core.send;
 
 import tech.kwik.core.ack.AckGenerator;
 import tech.kwik.core.ack.GlobalAckGenerator;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PathResponseFrame;
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.impl.VersionHolder;
-import tech.kwik.core.packet.InitialPacket;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -120,36 +119,42 @@ public class GlobalPacketAssembler {
         }
 
         if (hasInitial && size < 1200) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-14
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-14.1
             // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
-            //  allowed maximum datagram size of 1200 bytes... "
+            //  allowed maximum datagram size of 1200 bytes by adding PADDING frames to the Initial packet or by coalescing
+            //  the Initial packet; see Section 12.2."
             // "Similarly, a server MUST expand the payload of all UDP datagrams carrying ack-eliciting Initial packets
             //  to at least the smallest allowed maximum datagram size of 1200 bytes."
-            int requiredPadding = 1200 - size;
-            packets.stream()
-                    .map(item -> item.getPacket())
-                    .filter(p -> p instanceof InitialPacket)
-                    .findFirst()
-                    .ifPresent(initial -> initial.addFrame(new Padding(requiredPadding)));
-            size += requiredPadding;
+            size += addPadding(packets, size, 1200);
         }
 
         if (hasPathChallengeOrResponse && size < 1200) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-8.2.1
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
             // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
-            //  maximum datagram size of 1200 bytes."
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-8.2.2
+            //  maximum datagram size of 1200 bytes, unless the anti-amplification limit for the path does not permit
+            //  sending a datagram of this size."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.2
             // "An endpoint MUST expand datagrams that contain a PATH_RESPONSE frame to at least the smallest allowed
-            // maximum datagram size of 1200 bytes."
-            int requiredPadding = 1200 - size;
-            packets.stream()
-                    .map(item -> item.getPacket())
-                    .findFirst()
-                    .ifPresent(packet -> packet.addFrame(new Padding(requiredPadding)));
-            size += requiredPadding;
+            //  maximum datagram size of 1200 bytes."
+            size += addPadding(packets, size, 1200);
         }
 
         return packets;
+    }
+
+    protected int addPadding(List<SendItem> packets, int currentSize, int requiredMinimumSize) {
+        int requiredPadding = requiredMinimumSize - currentSize;
+        if (requiredPadding > 0) {
+            packets.stream()
+                    .map(item -> item.getPacket())
+                    .findFirst()
+                    // It doesn't matter to which packet the padding is added.
+                    .ifPresent(packet -> packet.addFrame(new Padding(requiredPadding)));
+            return requiredPadding;
+        }
+        else {
+            return 0;
+        }
     }
 
     public Optional<Instant> nextDelayedSendTime() {
