@@ -24,11 +24,7 @@ import org.junit.jupiter.api.Test;
 import tech.kwik.core.ack.GlobalAckGenerator;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.MaxDataFrame;
-import tech.kwik.core.frame.PathResponseFrame;
-import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.MockPacket;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.impl.VersionHolder;
@@ -314,6 +310,18 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
         int datagramLength = packets.stream().mapToInt(p -> p.getPacket().estimateLength(0)).sum();
         assertThat(datagramLength).isGreaterThanOrEqualTo(1200);
+    }
+
+    @Test
+    void packetContainingPathChallengeMustBeExpandNotGreaterThanAmplificationLimit() {
+        globalPacketAssembler.enableAppLevel();
+        sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), f -> {});
+
+        int maxDatagramSize = 500;
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, maxDatagramSize, new byte[0], new byte[0]);
+
+        assertThat(packets).hasSize(1);
+        assertThat(packets.get(0).getPacket().estimateLength(0)).isLessThanOrEqualTo(maxDatagramSize);
     }
     //endregion
 

@@ -136,7 +136,9 @@ public class GlobalPacketAssembler {
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.2
             // "An endpoint MUST expand datagrams that contain a PATH_RESPONSE frame to at least the smallest allowed
             //  maximum datagram size of 1200 bytes."
-            size += addPadding(packets, size, 1200);
+            // "However, an endpoint MUST NOT expand the datagram containing the PATH_RESPONSE if the resulting data
+            //  exceeds the anti-amplification limit."
+            size += addPadding(packets, size, Integer.min(1200, maxDatagramSize));
         }
 
         return packets;
