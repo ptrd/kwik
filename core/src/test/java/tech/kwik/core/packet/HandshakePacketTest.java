@@ -220,6 +220,22 @@ class HandshakePacketTest {
     }
 
     @Test
+    void estimatedLengthWithLargePacketNumberAndPayloadAroundMinVariableIntegerLength() throws Exception {
+        byte[] srcCid = new byte[4];
+        byte[] destCid = new byte[8];
+        QuicFrame payload = new StreamFrame(0, new byte[41], true);
+        QuicPacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, payload);
+        packet.setPacketNumber(15087995);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
+    @Test
     void estimatedLengthWithMinimalLengthPacket() throws Exception {
         byte[] srcCid = new byte[0];
         byte[] destCid = new byte[0];

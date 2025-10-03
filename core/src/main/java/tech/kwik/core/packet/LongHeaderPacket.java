@@ -156,11 +156,14 @@ public abstract class LongHeaderPacket extends QuicPacket {
                 + 1 + destinationConnectionId.length
                 + 1 + sourceConnectionId.length
                 + estimateAdditionalFieldsLength()
-                + (unencryptedPayloadSize + 1 + 16 > 63? 2: 1)
-                + computePacketNumberSize(packetNumber)
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+                // "Length: This is the length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes, encoded as a variable-length integer"
+                // "Packet Payload: This is the payload of the packet -- containing a sequence of frames -- that is protected using packet protection."
+                + (packetNumberSize + unencryptedPayloadSize + 16 > 63? 2: 1)
+                + packetNumberSize
                 + unencryptedPayloadSize
                 + padding
-                // https://www.rfc-editor.org/rfc/rfc9001.html#name-header-protection-sample
+                // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.2
                 // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
                 + 16;
     }
