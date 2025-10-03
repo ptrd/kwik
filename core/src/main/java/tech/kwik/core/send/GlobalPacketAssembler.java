@@ -144,13 +144,33 @@ public class GlobalPacketAssembler {
         return packets;
     }
 
-    protected int addPadding(List<SendItem> packets, int currentSize, int requiredMinimumSize) {
-        int requiredPadding = requiredMinimumSize - currentSize;
+    protected int addPadding(List<SendItem> packets, int currentEstimatedSize, int requiredMinimumSize) {
+        assert packets.size() > 0;
+        final int proposedPadding = requiredMinimumSize - currentEstimatedSize;
+
+        int expectedSizeWithPadding =
+                // It doesn't matter to which packet the padding is added, take the first (that is guaranteed to exist)
+                packets.get(0).getPacket().estimateLength(proposedPadding) +
+                packets.stream()
+                        .skip(1)
+                        .map(item -> item.getPacket())
+                        .mapToInt(p -> p.estimateLength(0))
+                        .sum();
+
+        int requiredPadding;
+        if (expectedSizeWithPadding > requiredMinimumSize) {
+            // Can happen due to padding causing the length field of a long header packet to increase (by 1)
+            requiredPadding = proposedPadding - (expectedSizeWithPadding - requiredMinimumSize);
+        }
+        else {
+            requiredPadding = proposedPadding;
+        }
+
         if (requiredPadding > 0) {
             packets.stream()
                     .map(item -> item.getPacket())
                     .findFirst()
-                    // It doesn't matter to which packet the padding is added.
+                    // It doesn't matter to which packet the padding is added, take the first (that is guaranteed to exist)
                     .ifPresent(packet -> packet.addFrame(new Padding(requiredPadding)));
             return requiredPadding;
         }
