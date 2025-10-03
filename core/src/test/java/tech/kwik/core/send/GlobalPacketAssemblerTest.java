@@ -155,6 +155,28 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     }
 
     @Test
+    void edgeCaseWhereAssemblerFailsToGeneratePacketOfExactlyRequestedSize() {
+        // Given
+        globalPacketAssembler.enableAppLevel();
+        int maximumSize = 88;
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), f -> {});
+        sendRequestQueues[EncryptionLevel.Handshake.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[34]), f -> {});
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, maximumSize, new byte[8], new byte[8]);
+
+        // Then
+        int datagramLength = packets.stream()
+                .mapToInt(p -> p.getPacket().generatePacketBytes(levelKeys[p.getPacket().getEncryptionLevel().ordinal()]).length)
+                .sum();
+        assertThat(datagramLength).isLessThanOrEqualTo(maximumSize);
+        // Because it is a Handshake packet with a PathChallenge frame, it should be padded to the maximum size.
+        // However, assemble fails to do so, because the value of the length field is exactly 63, which means that
+        // adding one byte of padding will increase the length of the packet by 2 (1 byte for the padding frame, 1 byte extra for the length field).
+        assertThat(datagramLength).isNotEqualTo(maximumSize);
+    }
+
+    @Test
     void nonInitialPacketHasMiniumSize() {
         globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
