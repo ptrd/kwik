@@ -235,6 +235,24 @@ class HandshakePacketTest {
         assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
     }
 
+    @Test
+    void estimatedLengthWithPayloadLengthJustBelowMinVariableIntegerLength() throws Exception {
+        byte[] srcCid = new byte[0];
+        byte[] destCid = new byte[0];
+        QuicFrame payload = new CryptoFrame(Version.getDefault(), new byte[57]);
+        int payloadLength = payload.getFrameLength();
+        assertThat(payloadLength).isLessThan(64).isGreaterThan(48); // Just to be sure the test is valid: length + 16 must be > 63 and length < 63
+        HandshakePacket packet = new HandshakePacket(Version.getDefault(), srcCid, destCid, payload);
+        packet.setPacketNumber(1);
+
+        int estimatedLength = packet.estimateLength(0);
+
+        int actualLength = packet.generatePacketBytes(TestUtils.createKeys()).length;
+
+        assertThat(actualLength).isLessThanOrEqualTo(estimatedLength);  // By contract!
+        assertThat(actualLength).isEqualTo(estimatedLength);            // In practice
+    }
+
     // Utility method to generate an encrypted and protected Handshake packet
     void generateHandshakePacket() throws Exception {
         HandshakePacket handshakePacket = new HandshakePacket(Version.getDefault(), new byte[]{ 0x0e, 0x0e, 0x0e, 0x0e }, new byte[]{ 0x0d, 0x0d, 0x0d, 0x0d }, new PingFrame());

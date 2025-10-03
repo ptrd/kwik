@@ -149,16 +149,16 @@ public abstract class LongHeaderPacket extends QuicPacket {
     @Override
     public int estimateLength(int additionalPayload) {
         int packetNumberSize = computePacketNumberSize(packetNumber);
-        int payloadSize = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
-        int padding = Integer.max(0,4 - packetNumberSize - payloadSize);
+        int unencryptedPayloadSize = getFrames().stream().mapToInt(f -> f.getFrameLength()).sum() + additionalPayload;
+        int padding = Integer.max(0,4 - packetNumberSize - unencryptedPayloadSize);
         return 1
                 + 4
                 + 1 + destinationConnectionId.length
                 + 1 + sourceConnectionId.length
                 + estimateAdditionalFieldsLength()
-                + (payloadSize + 1 > 63? 2: 1)
+                + (unencryptedPayloadSize + 1 + 16 > 63? 2: 1)
                 + computePacketNumberSize(packetNumber)
-                + payloadSize
+                + unencryptedPayloadSize
                 + padding
                 // https://www.rfc-editor.org/rfc/rfc9001.html#name-header-protection-sample
                 // "The ciphersuites defined in [TLS13] - (...) - have 16-byte expansions..."
@@ -202,8 +202,8 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     protected abstract int estimateAdditionalFieldsLength();
 
-    private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int payloadSize) {
-        int packetLength = payloadSize + 16 + packetNumberLength;   // 16 is what encryption adds, note that final length is larger due to adding packet length
+    private void addLength(ByteBuffer packetBuffer, int packetNumberLength, int unencryptedPayloadSize) {
+        int packetLength = packetNumberLength + unencryptedPayloadSize + 16;   // 16 is what encryption adds, note that final length is larger due to adding packet length
         VariableLengthInteger.encode(packetLength, packetBuffer);
     }
 
