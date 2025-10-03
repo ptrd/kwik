@@ -151,7 +151,7 @@ public class GlobalPacketAssembler {
         int expectedSizeWithPadding =
                 // It doesn't matter to which packet the padding is added, take the first (that is guaranteed to exist)
                 packets.get(0).getPacket().estimateLength(proposedPadding) +
-                packets.stream()
+                packets.stream()  // And add the size of the coalesced packets (if any)
                         .skip(1)
                         .map(item -> item.getPacket())
                         .mapToInt(p -> p.estimateLength(0))
@@ -161,6 +161,11 @@ public class GlobalPacketAssembler {
         if (expectedSizeWithPadding > requiredMinimumSize) {
             // Can happen due to padding causing the length field of a long header packet to increase (by 1)
             requiredPadding = proposedPadding - (expectedSizeWithPadding - requiredMinimumSize);
+        }
+        else if (expectedSizeWithPadding < requiredMinimumSize) {
+            // Can happen with very small packets, that already had padding to have minimum size (required by AEAD encryption):
+            // when more padding is added, the "initial" padding is no longer needed, causing the packet to shrink
+            requiredPadding = proposedPadding + (requiredMinimumSize - expectedSizeWithPadding);
         }
         else {
             requiredPadding = proposedPadding;

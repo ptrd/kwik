@@ -138,6 +138,23 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     }
 
     @Test
+    void sizeOfPaddedInitialWithOnlySmallFrameShouldNotBeLessThanRequiredMin() {
+        // Given
+        QuicFrame smallestFrame = new PingFrame();
+        int minimalMaxSize = 1200;
+        sendRequestQueues[Initial.ordinal()].addRequest(smallestFrame, f -> {});
+
+        // When
+        List<SendItem> packets = globalPacketAssembler.assemble(6000, minimalMaxSize, new byte[8], new byte[8]);
+
+        // Then
+        int datagramLength = packets.stream()
+                .mapToInt(p -> p.getPacket().generatePacketBytes(levelKeys[Initial.ordinal()]).length)
+                .sum();
+        assertThat(datagramLength).isEqualTo(1200);
+    }
+
+    @Test
     void nonInitialPacketHasMiniumSize() {
         globalPacketAssembler.enableAppLevel();
         sendRequestQueues[EncryptionLevel.App.ordinal()].addRequest(new CryptoFrame(Version.getDefault(), new byte[36]), f -> {});
