@@ -27,8 +27,11 @@ if [ -f $distro ]; then
 	if [ ! -f libs/flupke.jar ]; then
 	    echo "No flupke jar found in libs directory; http requests will use HTTP 0.9!"
 	    echo
+	elif [ ! -f libs/qpack-2.0.1.jar ]; then
+	    echo "No qpack-2.0.1 jar found in libs directory; http requests will use HTTP 0.9!"
+	    echo
 	else
-	    sed -i '' 's@CLASSPATH=$APP_HOME@CLASSPATH=libs/flupke.jar:$APP_HOME@' dist/kwik-cli-*/bin/kwik-cli
+	    sed -i '' 's@CLASSPATH=$APP_HOME@CLASSPATH=libs/flupke.jar:libs/qpack-2.0.1.jar:$APP_HOME@' dist/kwik-cli-*/bin/kwik-cli
 	fi
     fi
     echo 
