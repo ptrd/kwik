@@ -216,6 +216,7 @@ class AckFrameTest extends FrameTest {
         assertThat(parsedFrame.getAcknowledgedRanges().size()).isLessThan(ranges.size());
         assertThat(parsedFrame.getAcknowledgedRanges().get(0)).isEqualTo(firstRange);
 
+        // Original frame should have dropped the discarded ranges also: must keep track of what was actually sent
         assertThat(ackFrame.getAcknowledgedRanges().size()).isEqualTo(parsedFrame.getAcknowledgedRanges().size());
     }
 
@@ -223,7 +224,10 @@ class AckFrameTest extends FrameTest {
     void ackFrameWithHugeNumberOfRangesShouldDiscardSmallestToFitInFrame() throws TransportError, InvalidIntegerEncodingException, IntegerTooLargeException {
         // Given
         List<Range> ranges = new ArrayList<>();
-        for (int i = 0; i < 16385; i++) {  // range count will be 16384 which is the smallest int not fitting an 2 byte var int encoding
+        // Range count of 16384 is the smallest int not fitting an 2 byte var int encoding
+        // So when ranges are discarded, the size of the ack range count field could shrink from 3 to 2 bytes....
+        int originalRangeCount = 16384;
+        for (int i = 0; i <= originalRangeCount; i++) {
             ranges.add(new Range(100000 - 7 * i, 100000 - 7 * i + 2));
         }
         AckFrame ackFrame = new AckFrame(ranges);
@@ -239,6 +243,7 @@ class AckFrameTest extends FrameTest {
         assertThat(parsedFrame.getAcknowledgedRanges().size()).isLessThan(ranges.size());
         assertThat(parsedFrame.getAcknowledgedRanges().get(0)).isEqualTo(firstRange);
 
+        // Original frame should have dropped the discarded ranges also: must keep track of what was actually sent
         assertThat(ackFrame.getAcknowledgedRanges().size()).isEqualTo(parsedFrame.getAcknowledgedRanges().size());
     }
     //endregion
