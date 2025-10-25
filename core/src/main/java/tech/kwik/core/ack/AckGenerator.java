@@ -44,7 +44,7 @@ public class AckGenerator {
     private List<Range> rangesToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
     private Instant newPacketsToAcknowlegdeSince;
-    private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
+    private SortedMap<Long, AckFrame> ackSentWithPacket = new TreeMap<>();
     private int acksNotSend = 0;
 
     public AckGenerator(PnSpace pnSpace, Sender sender) {
@@ -117,10 +117,16 @@ public class AckGenerator {
     }
 
     private Optional<Long> findLargest(AckFrame receivedAck) {
-        Optional<Long> largestWithAck = receivedAck.getAckedPacketNumbers()
+        if (ackSentWithPacket.isEmpty()) {
+            return Optional.empty();
+        }
+
+        long min = ackSentWithPacket.firstKey();
+        long max = ackSentWithPacket.lastKey();
+        return receivedAck.getAckedPacketNumbers(min)
+                .filter(pn -> pn <= max)
                 .filter(pn -> ackSentWithPacket.containsKey(pn))
                 .findFirst();
-        return largestWithAck;
     }
 
     private void removeAndBefore(Long largestWithAck) {
