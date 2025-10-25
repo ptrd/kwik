@@ -559,7 +559,7 @@ abstract public class QuicPacket {
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-2
     // "ACK-only:  Any packet containing only one or more ACK frame(s)."
     public boolean isAckOnly() {
-        return frames.stream().allMatch(frame -> frame instanceof AckFrame);
+        return frames.stream().allMatch(frame -> frame instanceof AckFrame) && !frames.isEmpty();
     }
 
     // https://www.rfc-editor.org/rfc/rfc9002.html#section-2

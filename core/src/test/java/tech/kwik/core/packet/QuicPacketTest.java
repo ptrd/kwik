@@ -19,7 +19,9 @@
 package tech.kwik.core.packet;
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.DatagramFrame;
+import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
@@ -293,4 +295,36 @@ class QuicPacketTest {
         // Then
         assertThat(packet.getFrames()).hasOnlyElementsOfType(DatagramFrame.class);
     }
+
+    //region packet properties
+    @Test
+    void packetWithOnlyAnAckIsAckOnly() throws Exception {
+        // Given
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+        packet.addFrame(new AckFrame(8));
+
+        // When / Then
+        assertThat(packet.isAckOnly()).isTrue();
+    }
+
+    @Test
+    void packetWithAckAndNonAckIsNotAckOnly() throws Exception {
+        // Given
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+        packet.addFrame(new AckFrame(8));
+        packet.addFrame(new StreamFrame(1, new byte[58], true));
+
+        // When / Then
+        assertThat(packet.isAckOnly()).isFalse();
+    }
+
+    @Test
+    void emptyPacketIsNotAckOnly() throws Exception {
+        // Given
+        QuicPacket packet = new ShortHeaderPacket(Version.getDefault());
+
+        // When / Then
+        assertThat(packet.isAckOnly()).isFalse();
+    }
+    //endregion
 }
