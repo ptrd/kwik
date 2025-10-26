@@ -18,24 +18,25 @@
  */
 package tech.kwik.core.send;
 
+import org.assertj.core.data.Percentage;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.ack.GlobalAckGenerator;
 import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.MockPacket;
 import tech.kwik.core.common.PnSpace;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.MaxDataFrame;
 import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.impl.MockPacket;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
+import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
-import org.assertj.core.data.Percentage;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -51,7 +52,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
 
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new GlobalAckGenerator(mock(Sender.class));
+        ackGenerator = new GlobalAckGenerator(mock(Sender.class), mock(RttProvider.class));
         sendRequestQueues = new SendRequestQueue[4];
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue(EncryptionLevel.values()[i]);

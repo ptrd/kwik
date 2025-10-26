@@ -33,6 +33,7 @@ import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
+import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.test.TestClock;
 
 import java.util.List;
@@ -64,11 +65,11 @@ class PacketAssemblerTest extends AbstractSenderTest {
         clock = new TestClock();
         sendRequestQueue = new SendRequestQueue(clock, null);
         VersionHolder version = new VersionHolder(Version.getDefault());
-        initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class));
+        initialAckGenerator = new AckGenerator(PnSpace.Initial, mock(Sender.class), mock(RttProvider.class));
         initialPacketAssembler = new InitialPacketAssembler(version, sendRequestQueue, initialAckGenerator);
-        handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class));
+        handshakeAckGenerator = new AckGenerator(PnSpace.Handshake, mock(Sender.class), mock(RttProvider.class));
         handshakePacketAssembler = new PacketAssembler(version, EncryptionLevel.Handshake, sendRequestQueue, handshakeAckGenerator);
-        oneRttAckGenerator = new AckGenerator(clock, PnSpace.App, mock(Sender.class));
+        oneRttAckGenerator = new AckGenerator(clock, PnSpace.App, mock(Sender.class), mock(RttProvider.class));
         oneRttPacketAssembler = new PacketAssembler(version, EncryptionLevel.App, sendRequestQueue, oneRttAckGenerator);
     }
     //endregion

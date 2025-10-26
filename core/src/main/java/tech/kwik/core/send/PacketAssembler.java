@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import static tech.kwik.core.common.EncryptionLevel.App;
+
 /**
  * Assembles QUIC packets for a given encryption level, based on "send requests" that are previously queued.
  * These send requests either contain a frame, or can produce a frame to be sent.
@@ -150,6 +152,15 @@ public class PacketAssembler {
             callbacks.add(EMPTY_CALLBACK);
         }
 
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.2.4
+        // "A receiver that sends only non-ack-eliciting packets, such as ACK frames, might not receive an acknowledgment
+        //  for a long period of time. (...) In such a case, a receiver could send a PING (...) to elicit an ACK from the peer."
+        if (packet.isAckOnly() && level == App) {
+            if (ackGenerator.wantsAckFromPeer()) {
+                packet.addFrame(new PingFrame());
+                callbacks.add(EMPTY_CALLBACK);
+            }
+        }
         Optional<SendItem> assembledItem;
         if (packet.getFrames().isEmpty()) {
             // Nothing could be added, discard packet and mark packet number as not used

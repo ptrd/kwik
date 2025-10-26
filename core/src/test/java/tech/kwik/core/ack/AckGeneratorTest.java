@@ -18,19 +18,21 @@
  */
 package tech.kwik.core.ack;
 
-import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.impl.MockPacket;
-import tech.kwik.core.common.PnSpace;
-import tech.kwik.core.impl.Version;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.Range;
-import tech.kwik.core.packet.RetryPacket;
-import tech.kwik.core.packet.VersionNegotiationPacket;
-import tech.kwik.core.send.Sender;
-import tech.kwik.core.test.TestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.common.EncryptionLevel;
+import tech.kwik.core.common.PnSpace;
+import tech.kwik.core.frame.AckFrame;
+import tech.kwik.core.frame.Range;
+import tech.kwik.core.impl.MockPacket;
+import tech.kwik.core.impl.Version;
+import tech.kwik.core.packet.RetryPacket;
+import tech.kwik.core.packet.VersionNegotiationPacket;
+import tech.kwik.core.recovery.RttProvider;
+import tech.kwik.core.send.Sender;
+import tech.kwik.core.test.TestClock;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -43,12 +45,14 @@ class AckGeneratorTest {
     private TestClock clock;
     private AckGenerator ackGenerator;
     private Sender sender;
+    private RttProvider rttProvider;
 
     @BeforeEach
     void initObjectUnderTest() {
         clock = new TestClock();
         sender = mock(Sender.class);
-        ackGenerator = new AckGenerator(clock, PnSpace.App, sender);
+        rttProvider = mock(RttProvider.class);
+        ackGenerator = new AckGenerator(clock, PnSpace.App, sender, rttProvider);
     }
 
     @Test
@@ -328,11 +332,109 @@ class AckGeneratorTest {
         assertThat(ackedRanges).containsExactly(range(15, 19), range(7, 10), range(1));
     }
 
-    Range range(int from, int to) {
+    //region needs an ack
+    @Test
+    void shouldWantAckWhenTimeSinceLastCleanupWasLongEnoughInThePast() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+        clock.fastForward(100);
+
+        // When
+        ackGenerator.process(new AckFrame(1));
+        clock.fastForward(21);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isTrue();
+    }
+
+    @Test
+    void whenTimeSinceLastCleanupSmallerThenRtt() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+        clock.fastForward(100);
+
+        // When
+        ackGenerator.process(new AckFrame(1));
+        clock.fastForward(19);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isFalse();
+    }
+
+    @Test
+    void whenTimeSinceLastCleanupGreaterThenTinyRttButLessThenMinDuration() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+
+        when(rttProvider.getSmoothedRtt()).thenReturn(3);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+        clock.fastForward(100);
+
+        // When
+        ackGenerator.process(new AckFrame(1));
+        clock.fastForward(9);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isFalse();
+    }
+
+    @Test
+    void shouldWantAckWhenLastAckElicitingSentOlderThanThreshold() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+
+        ackGenerator.process(new AckFrame(1));
+
+        // When
+        clock.fastForward(31);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isTrue();
+    }
+
+    @Test
+    void wantsAckReturnsFalseWhenLastAckElicitingSentTooRecent() {
+        // Given
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+
+        ackGenerator.process(new AckFrame(1));
+
+        clock.fastForward(30);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isFalse();
+    }
+    //endregion
+
+    //region helpers
+    private Range range(int from, int to) {
         return new Range(from, to);
     }
 
-    Range range(int single) {
+    private Range range(int single) {
         return new Range(single, single);
     }
+    //endregion
 }

@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 
-public class RttEstimator {
+public class RttEstimator implements RttProvider {
 
     private static final int NOT_SET = -1;
 
@@ -96,6 +96,7 @@ public class RttEstimator {
         log.debug("RTT: " + previousSmoothed + " + " + rttSample + " -> " + smoothedRtt);
     }
 
+    @Override
     public int getSmoothedRtt() {
         if (smoothedRtt == NOT_SET) {
             return initialRtt;
