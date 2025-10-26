@@ -604,7 +604,6 @@ public class KwikCli {
                     HttpResponse<String> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                     done = Instant.now();
                     size = httpResponse.body().length();
-                    response = httpResponse.toString();
                     // Wait a little to let logger catch up, so output is printed nicely after all the handshake logging....
                     try {
                         Thread.sleep(500);
@@ -612,13 +611,14 @@ public class KwikCli {
                     catch (InterruptedException e) {}
 
                     System.out.println("Server returns: \n" +
-                            "Status code " + httpResponse.statusCode() + "\n" +
+                            "Status code: " + httpResponse.statusCode() + "\n" +
+                            "Headers: \n" +
                             httpResponse.headers().map() + "\n" +
-                            httpResponse.body());
+                            "Body (" + size + " bytes): " + printIfPrintable(httpResponse.body()));
                 }
                 Duration duration = Duration.between(start, done);
                 String speed = String.format("%.2f", ((float) size) / duration.toMillis() / 1000);
-                System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s) : %s", ((float) duration.toMillis())/1000, speed, response));
+                System.out.println(String.format("Get requested finished in %.2f sec (%s MB/s).", ((float) duration.toMillis())/1000, speed));
             }
             catch (InterruptedException interruptedException) {
                 System.out.println("HTTP request is interrupted");
@@ -647,6 +647,22 @@ public class KwikCli {
             storeNewSessionTickets(quicConnection, newSessionTicketsFilename);
         }
         quicConnection.close();
+    }
+
+    private String printIfPrintable(String body) {
+        boolean notPrintable = body.chars().limit(64).anyMatch(c -> (c < 32 || c > 126) && c != 10 && c != 13 && c != 9);
+        if (notPrintable) {
+            return "[binary data]";
+        }
+        else {
+            if (body.length() > 64) {
+                return body.substring(0, 64) + "\n...[truncated, total " + body.length() + " bytes]...";
+            }
+            else {
+                return body;
+            }
+        }
+
     }
 
     private static boolean loadHttp3ClientClass() {
