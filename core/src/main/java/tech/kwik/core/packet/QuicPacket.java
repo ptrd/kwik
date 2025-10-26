@@ -238,7 +238,7 @@ abstract public class QuicPacket {
         //   reconstructed QUIC packet number in network byte order are left-
         //   padded with zeros to the size of the IV.  The exclusive OR of the
         //   padded packet number and the IV forms the AEAD nonce"
-        byte[] writeIV = aead.getWriteIV();
+        byte[] writeIV = aead.getIv();
         ByteBuffer nonceInput = ByteBuffer.allocate(writeIV.length);
         for (int i = 0; i < nonceInput.capacity() - 8; i++)
             nonceInput.put((byte) 0x00);
@@ -261,7 +261,7 @@ abstract public class QuicPacket {
             aead.checkKeyPhase(((ShortHeaderPacket) this).keyPhaseBit);
         }
 
-        byte[] writeIV = aead.getWriteIV();
+        byte[] writeIV = aead.getIv();
         byte[] nonce = new byte[12];
         int i = 0;
         for (byte b : nonceInput.array())

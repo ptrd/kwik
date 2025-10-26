@@ -43,18 +43,18 @@ public class TestUtils {
     public static Aead createKeys() throws Exception {
         Aes128Gcm keys = mock(Aes128Gcm.class);
         when(keys.getHp()).thenReturn(new byte[16]);
-        when(keys.getWriteIV()).thenReturn(new byte[12]);
-        Aes128Gcm dummyKeys = new Aes128Gcm(Version.getDefault(), new byte[16], null, mock(Logger.class));
+        when(keys.getIv()).thenReturn(new byte[12]);
+        Aes128Gcm dummyKeys = new Aes128Gcm(Version.getDefault(), Role.Client, true, new byte[16], null, mock(Logger.class));
         FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("hp"), new byte[16]);
         Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
         when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
-        FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("writeKey"), new byte[16]);
-        Cipher wCipher = dummyKeys.getWriteCipher();
+        FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("key"), new byte[16]);
+        Cipher wCipher = dummyKeys.getCipher();
         // The Java implementation of this cipher (GCM), prevents re-use with the same iv.
         // As various tests often use the same packet numbers (used for creating the nonce), the cipher must be re-initialized for each test.
         // Still, a consequence is that generatePacketBytes cannot be called twice on the same packet.
-        when(keys.getWriteCipher()).thenReturn(wCipher);
-        when(keys.getWriteKeySpec()).thenReturn(dummyKeys.getWriteKeySpec());
+        when(keys.getCipher()).thenReturn(wCipher);
+        when(keys.getKeySpec()).thenReturn(dummyKeys.getKeySpec());
 
         when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
         when(keys.aeadDecrypt(any(), any(), any())).thenCallRealMethod();

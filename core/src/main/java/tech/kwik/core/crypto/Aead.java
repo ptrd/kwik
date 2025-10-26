@@ -27,11 +27,9 @@ import tech.kwik.core.impl.DecryptionException;
  */
 public interface Aead {
 
-    void computeKeys(byte[] trafficSecret);
-
     byte[] createHeaderProtectionMask(byte[] sample);
 
-    byte[] getWriteIV();
+    byte[] getIv();
 
     byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce);
 
@@ -44,32 +42,43 @@ public interface Aead {
      * failed or succeeded).
      * @param keyPhaseBit
      */
-    void checkKeyPhase(short keyPhaseBit);
+    default void checkKeyPhase(short keyPhaseBit) {}
 
     /**
-     * Compute new keys. Note that depending on the role of this Keys object, computing new keys concerns updating
-     * the write secrets (role that initiates the key update) or the read secrets (role that responds to the key update).
+     * Compute new keys.
      * @param selfInitiated        true when this role initiated the key update, so updating write secrets.
      */
-    void computeKeyUpdate(boolean selfInitiated);
+    default void computeKeyUpdate(boolean selfInitiated) {}
+
+    /**
+     * Compute the next application traffic secret for a key update.
+     * @return
+     */
+    byte[] computeNextApplicationTrafficSecret();
 
     /**
      * Confirm that, if a key update was in progress, it has been successful and thus the new keys can (and should) be
      * used for decrypting all incoming packets.
      */
-    void confirmKeyUpdateIfInProgress();
+    default void confirmKeyUpdateIfInProgress() {}
 
     /**
      * Confirm that, if a key update was in progress, it has been unsuccessful and thus the new keys should not be
      * used for decrypting all incoming packets.
      */
-    void cancelKeyUpdateIfInProgress();
+    default void cancelKeyUpdateIfInProgress() {}
 
-    short getKeyPhase();
+    default short getKeyPhase() {
+        return 0;
+    }
 
-    int getKeyUpdateCounter();
+    default int getKeyUpdateCounter() {
+        return 0;
+    }
 
-    void setPeerAead(Aead peerAead);
+    default void setPeerAead(Aead peerAead) {}
 
     byte[] getTrafficSecret();
+
+    byte[] getHp();
 }

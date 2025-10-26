@@ -48,8 +48,8 @@ import java.util.Arrays;
  */
 public class ChaCha20 extends BaseAeadImpl {
 
-    public ChaCha20(Version quicVersion, Role server, Logger log) {
-        super(quicVersion, server, log);
+    public ChaCha20(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
+        super(quicVersion, nodeRole, initial, secret, hp, log);
     }
 
     @Override
@@ -84,41 +84,33 @@ public class ChaCha20 extends BaseAeadImpl {
     }
 
     @Override
-    public SecretKeySpec getWriteKeySpec() {
-        if (possibleKeyUpdateInProgresss) {
-            if (newWriteKeySpec == null) {
-                newWriteKeySpec = new SecretKeySpec(newKey, "ChaCha20-Poly1305");
-            }
-            return newWriteKeySpec;
+    public SecretKeySpec getKeySpec() {
+        if (keySpec == null) {
+            keySpec = new SecretKeySpec(key, "ChaCha20-Poly1305");
         }
-        else {
-            if (writeKeySpec == null) {
-                writeKeySpec = new SecretKeySpec(writeKey, "ChaCha20-Poly1305");
-            }
-            return writeKeySpec;
-        }
+        return keySpec;
     }
 
     @Override
-    public Cipher getWriteCipher() {
-        if (writeCipher == null) {
+    public Cipher getCipher() {
+        if (cipher == null) {
             try {
-                writeCipher = Cipher.getInstance("ChaCha20-Poly1305");
+                cipher = Cipher.getInstance("ChaCha20-Poly1305");
             }
             catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
                 // Inappropriate runtime environment
                 throw new QuicRuntimeException(e);
             }
         }
-        return writeCipher;
+        return cipher;
     }
 
     @Override
     public byte[] aeadEncrypt(byte[] associatedData, byte[] message, byte[] nonce) {
         try {
-            Cipher aeadCipher = getWriteCipher();
+            Cipher aeadCipher = getCipher();
             IvParameterSpec chacha20poly1305Spec = new IvParameterSpec(nonce);
-            Key key = getWriteKeySpec();
+            Key key = getKeySpec();
             aeadCipher.init(Cipher.ENCRYPT_MODE, key, chacha20poly1305Spec);
             aeadCipher.updateAAD(associatedData);
             return aeadCipher.doFinal(message);
@@ -132,9 +124,9 @@ public class ChaCha20 extends BaseAeadImpl {
     @Override
     public byte[] aeadDecrypt(byte[] associatedData, byte[] message, byte[] nonce) throws DecryptionException {
         try {
-            Cipher aeadCipher = getWriteCipher();
+            Cipher aeadCipher = getCipher();
             IvParameterSpec chacha20poly1305Spec = new IvParameterSpec(nonce);
-            Key key = getWriteKeySpec();
+            Key key = getKeySpec();
             aeadCipher.init(Cipher.DECRYPT_MODE, key, chacha20poly1305Spec);
             aeadCipher.updateAAD(associatedData);
             return aeadCipher.doFinal(message);

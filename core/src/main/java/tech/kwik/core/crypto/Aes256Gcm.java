@@ -32,8 +32,8 @@ import tech.kwik.core.log.Logger;
  */
 public class Aes256Gcm extends Aes128Gcm {
 
-    public Aes256Gcm(Version quicVersion, Role nodeRole, Logger log) {
-        super(quicVersion, nodeRole, log);
+    public Aes256Gcm(Version quicVersion, Role nodeRole, boolean initial, byte[] secret, byte[] hp, Logger log) {
+        super(quicVersion, nodeRole, initial, secret, hp, log);
     }
 
     @Override
