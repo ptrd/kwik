@@ -115,6 +115,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile boolean lastDelayWasZero = false;
     private volatile int antiAmplificationLimit = -1;
     private volatile Runnable shutdownHook;
+    private volatile Instant lastestAckElicitingTime;
 
 
     public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -136,11 +137,13 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             int levelIndex = level.ordinal();
             sendRequestQueue[levelIndex] = new SendRequestQueue(clock, level);
         });
-        globalAckGenerator = new GlobalAckGenerator(this);
+
+        rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
+        globalAckGenerator = new GlobalAckGenerator(this, rttEstimater);
         packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
+        lastestAckElicitingTime = clock.instant();
 
         congestionController = new NewRenoCongestionController(log, this);
-        rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
 
         recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
@@ -441,6 +444,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 });
 
         List<QuicPacket> packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        if (packetsSent.stream().anyMatch(p -> p.isAckEliciting())) {
+            lastestAckElicitingTime = timeSent;
+        }
         log.sent(timeSent, packetsSent);
         dataSent += countDataBytes(packetsSent);
         qlog.emitPacketSentEvent(packetsSent, timeSent);
@@ -466,6 +472,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         byte[] srcCid = connection.getSourceConnectionId();
         byte[] destCid = connection.getDestinationConnectionId();
         return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, srcCid, destCid);
+    }
+
+    @Override
+    public Instant lastAckElicitingSent() {
+        return lastestAckElicitingTime;
     }
 
     private Instant earliest(Instant instant1, Instant instant2) {

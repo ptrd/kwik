@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.stream;
 
+import tech.kwik.core.StreamClosedException;
 import tech.kwik.core.frame.MaxStreamDataFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.StopSendingFrame;
@@ -158,7 +159,7 @@ class StreamInputStreamImpl extends StreamInputStream {
         long waitPeriod = waitForNextFrameTimeout;
         while (true) {
             if (aborted || closed || reset) {
-                throw new IOException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
+                throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
             }
 
             synchronized (addMonitor) {

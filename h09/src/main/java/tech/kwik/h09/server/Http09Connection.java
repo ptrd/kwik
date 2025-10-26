@@ -22,9 +22,10 @@ import tech.kwik.core.KwikVersion;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.QuicStream;
+import tech.kwik.core.StreamClosedException;
+import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.h09.io.LimitExceededException;
 import tech.kwik.h09.io.LimitedInputStream;
-import tech.kwik.core.server.ApplicationProtocolConnection;
 
 import java.io.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -54,29 +55,26 @@ public class Http09Connection implements ApplicationProtocolConnection {
     }
 
     void handleRequest(QuicStream quicStream) {
-        try {
-            InputStream inputStream = quicStream.getInputStream();
+        try (InputStream inputStream = quicStream.getInputStream();
+             OutputStream outputStream = quicStream.getOutputStream()) {
             String fileName = extractPathFromRequest(inputStream);
-            inputStream.close();
             if (fileName != null) {
                 File file = getFileInWwwDir(fileName);
-                OutputStream outputStream = quicStream.getOutputStream();
                 if (file != null && file.exists() && file.isFile() && file.canRead()) {
-                    FileInputStream fileInputStream = new FileInputStream(file);
-                    fileInputStream.transferTo(outputStream);
-                    fileInputStream.close();
-                }
-                else if (fileName.equals("version") || fileName.equals("version.txt")) {
-                    OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
-                    outputStreamWriter.write("Kwik version/build number: " + KwikVersion.getVersion() + "\n");
-                    outputStreamWriter.close();
+                    try (FileInputStream fileInputStream = new FileInputStream(file)) {
+                        fileInputStream.transferTo(outputStream);
+                    }
                 }
                 else {
-                    OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
-                    outputStreamWriter.write("404: file '" + fileName + "' not found\n");
-                    outputStreamWriter.close();
+                    try (OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream)) {
+                        if (fileName.equals("version") || fileName.equals("version.txt")) {
+                            outputStreamWriter.write("Kwik version/build number: " + KwikVersion.getVersion() + "\n");
+                        }
+                        else {
+                            outputStreamWriter.write("404: file '" + fileName + "' not found\n");
+                        }
+                    }
                 }
-                outputStream.close();
             }
             else {
                 System.out.println("Error: cannot extract file name");
@@ -87,6 +85,9 @@ public class Http09Connection implements ApplicationProtocolConnection {
             // quicStream.closeInput(962);
             // quicStream.resetStream(785);
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, "Request too large");
+        }
+        catch (StreamClosedException e) {
+            // Bad luck, the stream was closed while we were reading from it.
         }
         catch (IOException e) {
             connection.close(QuicConstants.TransportErrorCode.APPLICATION_ERROR, e.getMessage());

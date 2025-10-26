@@ -31,7 +31,7 @@ import java.util.Optional;
 public class NullAckGenerator extends AckGenerator {
 
     public NullAckGenerator() {
-        super(null, null);
+        super(null, null, null);
     }
 
     @Override
@@ -56,5 +56,8 @@ public class NullAckGenerator extends AckGenerator {
     public synchronized Optional<AckFrame> generateAckForPacket(long packetNumber) {
         throw new IllegalStateException();
     }
-}
 
+    public boolean wantsAckFromPeer() {
+        return false;
+    }
+}

@@ -182,12 +182,13 @@ public class VariableLengthInteger {
     }
 
     public static int encode(int value, ByteBuffer buffer) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
-        // | 2Bit | Length | Usable Bits | Range                 |
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-16
+        // | 2MSB | Length | Usable Bits | Range                 |
         // +------+--------+-------------+-----------------------+
         // | 00   | 1      | 6           | 0-63                  |
         // | 01   | 2      | 14          | 0-16383               |
         // | 10   | 4      | 30          | 0-1073741823          |
+        // | 11   | 8      | 62          | 0-4611686018427387903 |
         if (value <= 63) {
             buffer.put((byte) value);
             return 1;
@@ -203,11 +204,48 @@ public class VariableLengthInteger {
             buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0x80));
             return 4;
         }
-        else {
+        else {  // int value is always < 4611686018427387903
             int initialPosition = buffer.position();
             buffer.putLong(value);
             buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0xc0));
             return 8;
+        }
+    }
+
+    public static int encode(int value, ByteBuffer buffer, int requiredEncodingLength) {
+        if (requiredEncodingLength != 1 && requiredEncodingLength != 2 && requiredEncodingLength != 4 && requiredEncodingLength != 8) {
+            throw new IllegalArgumentException();
+        }
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-16
+        // | 2MSB | Length | Usable Bits | Range                 |
+        // +------+--------+-------------+-----------------------+
+        // | 00   | 1      | 6           | 0-63                  |
+        // | 01   | 2      | 14          | 0-16383               |
+        // | 10   | 4      | 30          | 0-1073741823          |
+        // | 11   | 8      | 62          | 0-4611686018427387903 |
+        if (value <= 63 && requiredEncodingLength == 1) {
+            buffer.put((byte) value);
+            return 1;
+        }
+        else if (value <= 16383 && requiredEncodingLength == 2) {
+            buffer.put((byte) ((value / 256) | 0x40));
+            buffer.put((byte) (value % 256));
+            return 2;
+        }
+        else if (value <= 1073741823 && requiredEncodingLength == 4) {
+            int initialPosition = buffer.position();
+            buffer.putInt(value);
+            buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0x80));
+            return 4;
+        }
+        else if (value <= 4611686018427387903L && requiredEncodingLength == 8) {
+            int initialPosition = buffer.position();
+            buffer.putLong(value);
+            buffer.put(initialPosition, (byte) (buffer.get(initialPosition) | (byte) 0xc0));
+            return 8;
+        }
+        else {
+            throw new IllegalArgumentException("value cannot be encoded in variable-length integer with required length " + requiredEncodingLength);
         }
     }
 
@@ -216,8 +254,12 @@ public class VariableLengthInteger {
             return encode((int) value, buffer);
         }
         // https://tools.ietf.org/html/draft-ietf-quic-transport-20#section-16
-        // | 2Bit | Length | Usable Bits | Range                 |
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-16
+        // | 2MSB | Length | Usable Bits | Range                 |
         // +------+--------+-------------+-----------------------+
+        // ...
+        // ...
+        // ...
         // | 11   | 8      | 62          | 0-4611686018427387903 |
         else if (value <= 4611686018427387903L) {
             int initialPosition = buffer.position();

@@ -18,9 +18,9 @@
  */
 package tech.kwik.core.server.impl;
 
-import tech.kwik.core.log.SysOutLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.log.SysOutLogger;
 
 import java.time.Duration;
 import java.util.List;
@@ -71,7 +71,7 @@ class ServerConnectionRegistryImplTest {
         serverConnectionRegistry.removeConnection(serverConnection);
 
         // Then
-        verify(serverConnection, never()).terminate();
+        verify(serverConnection, never()).preTerminateHook();
     }
 
     @Test

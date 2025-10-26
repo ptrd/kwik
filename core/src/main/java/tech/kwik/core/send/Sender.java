@@ -18,10 +18,11 @@
  */
 package tech.kwik.core.send;
 
-import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
+import tech.kwik.core.frame.QuicFrame;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -129,4 +130,10 @@ public interface Sender {
      * Notifies the sender that queued frames and packets should be sent as soon as possible.
      */
     void flush();
+
+    /**
+     * Returns the time the last ack-eliciting packet was sent.
+     * @return
+     */
+    Instant lastAckElicitingSent();
 }

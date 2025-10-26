@@ -32,6 +32,7 @@ public class ConnectionTerminatedEvent {
     private final boolean closedByPeer;
     private final Long transportErrorCode;
     private final Long applicationErrorCode;
+    private final String errorDescription;
 
     // https://www.rfc-editor.org/rfc/rfc9000.html#section-10
     // "An established QUIC connection can be terminated in one of three ways: idle timeout (Section 10.1),
@@ -43,12 +44,13 @@ public class ConnectionTerminatedEvent {
         ConnectionLost   // not in the RFC, but used in the implementation to indicate that the connection was lost (probes were not answered)
     }
 
-    public ConnectionTerminatedEvent(QuicConnection connection, CloseReason closeReason, boolean closedByPeer, Long transportErrorCode, Long applicationErrorCode) {
+    public ConnectionTerminatedEvent(QuicConnection connection, CloseReason closeReason, boolean closedByPeer, Long transportErrorCode, Long applicationErrorCode, String error) {
         this.connection = connection;
         this.closeReason = closeReason;
         this.closedByPeer = closedByPeer;
         this.transportErrorCode = transportErrorCode != null && transportErrorCode != NO_ERROR.value ? transportErrorCode : null;
         this.applicationErrorCode = applicationErrorCode;
+        this.errorDescription = error;
     }
 
     public ConnectionTerminatedEvent(QuicConnection connection, CloseReason closeReason, boolean closedByPeer) {
@@ -57,6 +59,7 @@ public class ConnectionTerminatedEvent {
         this.closedByPeer = closedByPeer;
         this.transportErrorCode = null;
         this.applicationErrorCode = null;
+        this.errorDescription = null;
     }
 
     public QuicConnection connection() {
@@ -128,11 +131,11 @@ public class ConnectionTerminatedEvent {
                 return "Transport error: CRYPTO_ERROR (" + alertFromValue((int) (transportErrorCode - 0x0100)) + ")";
             }
             else {
-                return "Transport error: " + QuicConstants.TransportErrorCode.fromValue(transportErrorCode);
+                return "Transport error: " + QuicConstants.TransportErrorCode.fromValue(transportErrorCode) + (errorDescription != null ? " (" + errorDescription + ")" : "");
             }
         }
         else if (hasApplicationError()) {
-            return "Application error: " + applicationErrorCode;
+            return "Application error: " + applicationErrorCode + (errorDescription != null ? " (" + errorDescription + ")" : "");
         }
         else {
             return "No error";

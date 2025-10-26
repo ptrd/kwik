@@ -26,10 +26,11 @@ import tech.kwik.core.packet.QuicPacket;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.SortedMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -45,7 +46,7 @@ public class LossDetector {
     private final QLog qLog;
     private final float kTimeThreshold = 9f/8f;
     private final int kPacketThreshold = 3;
-    private final Map<Long, PacketStatus> packetSentLog;
+    private final SortedMap<Long, PacketStatus> packetSentLog;
     private final AtomicInteger ackElicitingInFlight;
     private volatile long largestAcked = -1;
     private volatile long lost;
@@ -67,7 +68,7 @@ public class LossDetector {
         this.qLog = qLog;
 
         ackElicitingInFlight = new AtomicInteger();
-        packetSentLog = new ConcurrentHashMap<>();
+        packetSentLog = new ConcurrentSkipListMap<>();
     }
 
     public synchronized void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> lostPacketCallback) {
@@ -75,9 +76,11 @@ public class LossDetector {
             return;
         }
 
-        if (packet.isInflightPacket()) {  // Redundant: caller checked
-            congestionController.registerInFlight(packet);
-        }
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
+        // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame, and ..."
+        assert packet.isInflightPacket();
+
+        congestionController.registerInFlight(packet);
 
         if (packet.isAckEliciting()) {
             ackElicitingInFlight.getAndAdd(1);
@@ -95,14 +98,10 @@ public class LossDetector {
 
         largestAcked = Long.max(largestAcked, ackFrame.getLargestAcknowledged());
 
-        List<PacketStatus> newlyAcked = ackFrame.getAckedPacketNumbers()
-                .filter(pn -> packetSentLog.containsKey(pn) && !packetSentLog.get(pn).acked())
-                .map(pn -> packetSentLog.get(pn))
-                .filter(packetStatus -> packetStatus != null)      // Could be null when reset is executed concurrently.
-                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
-                .collect(Collectors.toList());
-
-        // Possible optimization: everything that follows only if newlyAcked not empty
+        List<PacketStatus> newlyAcked = determineNewlyAcked(ackFrame);
+        if (newlyAcked.isEmpty()) {
+             return;
+        }
 
         int ackedAckEliciting = (int) newlyAcked.stream().filter(packetStatus -> packetStatus.packet().isAckEliciting()).count();
         assert ackedAckEliciting <= ackElicitingInFlight.get();
@@ -118,6 +117,21 @@ public class LossDetector {
 
         // Cleanup
         newlyAcked.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
+    }
+
+    /**
+     * Determine which packets were newly acked by the given AckFrame and mark them as acked.
+     * @param ackFrame
+     * @return
+     */
+    private List<PacketStatus> determineNewlyAcked(AckFrame ackFrame) {
+        long smallestLoggedPacketNumber = packetSentLog.isEmpty() ? Long.MAX_VALUE : packetSentLog.firstKey();
+        return ackFrame.getAckedPacketNumbers(smallestLoggedPacketNumber)
+                .map(pn -> packetSentLog.get(pn))
+                .filter(packetStatus -> packetStatus != null)      // Could be null if the packet was already removed from the log
+                .filter(packetStatus -> !packetStatus.acked())     // Only keep the ones that are not acked yet
+                .filter(packetStatus -> packetStatus.setAcked())   // Only keep the ones that actually got set to acked
+                .collect(Collectors.toList());
     }
 
     public synchronized void close() {
@@ -163,35 +177,40 @@ public class LossDetector {
         assert(lossDelay > 0);  // Minimum time of kGranularity before packets are deemed lost
         Instant lostSendTime = Instant.now(clock).minusMillis(lossDelay);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1
-        // "A packet is declared lost if it meets all the following conditions:
-        //   o  The packet is unacknowledged, in-flight, and was sent prior to an
-        //      acknowledged packet.
-        //   o  Either its packet number is kPacketThreshold smaller than an
-        //      acknowledged packet (Section 6.1.1), or it was sent long enough in
-        //      the past (Section 6.1.2)."
-        // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-2
-        // "In-flight:  Packets are considered in-flight when they have been sent
-        //      and neither acknowledged nor declared lost, and they are not ACK-
-        //      only."
-        List<PacketStatus> lostPackets = packetSentLog.values().stream()
-                .filter(p -> p.inFlight())
-                .filter(p -> pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime))
-                .filter(p -> !p.packet().isAckOnly())
-                .collect(Collectors.toList());
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.1
+        // "A packet is declared lost if it meets all of the following conditions:
+        //  o  The packet is unacknowledged, in flight, and was sent prior to an acknowledged packet.
+        //  o  The packet was sent kPacketThreshold packets before an acknowledged packet (Section 6.1.1),
+        //     or it was sent long enough in the past (Section 6.1.2)."
+        // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
+        // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame,
+        //  and they have been sent but are not acknowledged, declared lost, or discarded along with old keys."
+        Iterator<PacketStatus> iterator = packetSentLog.values().iterator();
+        List<PacketStatus> lostPackets = new ArrayList<>();
+        Instant earliestSentTime = null;
+        while (iterator.hasNext()) {
+            PacketStatus p = iterator.next();
+            if (p.packet().getPacketNumber() > largestAcked) {
+                break;  // No need to check further, because packets are ordered by packet number
+            }
+            if (p.inFlight()) {
+                if (pnTooOld(p) || sentTimeTooLongAgo(p, lostSendTime)) {
+                    lostPackets.add(p);
+                }
+                else {
+                    if (earliestSentTime == null || p.timeSent().isBefore(earliestSentTime)) {
+                        earliestSentTime = p.timeSent();
+                    }
+                }
+            }
+        }
+
         if (!lostPackets.isEmpty()) {
             declareLost(lostPackets);
         }
 
-        Optional<Instant> earliestSentTime = packetSentLog.values().stream()
-                .filter(p -> p.inFlight())
-                .filter(p -> p.packet().getPacketNumber() <= largestAcked)
-                .filter(p -> !p.packet().isAckOnly())
-                .map(p -> p.timeSent())
-                .min(Instant::compareTo);
-
-        if (earliestSentTime.isPresent() && earliestSentTime.get().isAfter(lostSendTime)) {
-            lossTime = earliestSentTime.get().plusMillis(lossDelay);
+        if (earliestSentTime != null && earliestSentTime.isAfter(lostSendTime)) {
+            lossTime = earliestSentTime.plusMillis(lossDelay);
         }
         else {
             lossTime = null;
@@ -215,7 +234,6 @@ public class LossDetector {
     List<QuicPacket> unAcked() {
         return packetSentLog.values().stream()
                 .filter(p -> p.inFlight())
-                .filter(p -> !p.packet().isAckOnly())
                 .map(p -> p.packet())
                 .collect(Collectors.toList());
     }
@@ -223,7 +241,6 @@ public class LossDetector {
     // For debugging only
     List<PacketInfo> getInFlight() {
         return packetSentLog.values().stream()
-                .filter(p -> !p.packet().isAckOnly())
                 .filter(p -> p.inFlight())
                 .collect(Collectors.toList());
     }

@@ -30,6 +30,7 @@ import tech.kwik.core.impl.Version;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
+import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 
@@ -49,7 +50,7 @@ class GlobalPacketAssemblerTest extends AbstractSenderTest {
     //region setup
     @BeforeEach
     void initObjectUnderTest() {
-        ackGenerator = new GlobalAckGenerator(mock(Sender.class));
+        ackGenerator = new GlobalAckGenerator(mock(Sender.class), mock(RttProvider.class));
         sendRequestQueues = new SendRequestQueue[4];
         for (int i = 0; i < 4; i++) {
             sendRequestQueues[i] = new SendRequestQueue(EncryptionLevel.values()[i]);

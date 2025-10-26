@@ -19,10 +19,10 @@
 package tech.kwik.core.send;
 
 import tech.kwik.core.ack.AckGenerator;
+import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.QuicPacket;
@@ -33,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+
+import static tech.kwik.core.common.EncryptionLevel.App;
 
 /**
  * Assembles QUIC packets for a given encryption level, based on "send requests" that are previously queued.
@@ -103,17 +105,6 @@ public class PacketAssembler {
             }
         }
 
-        int optionalAckSize = 0;
-        if (ackFrame == null && requestQueue.hasRequests()) {
-            // If there is no explicit ack, but there is something to send, ack should be included if possible
-            if (ackGenerator.hasAckToSend()) {
-                ackFrame = ackGenerator.generateAck().orElse(null);
-                if (ackFrame != null) {
-                    optionalAckSize = ackFrame.getFrameLength();
-                }
-            }
-        }
-
         if (requestQueue.hasProbeWithData()) {
             List<QuicFrame> probeData = requestQueue.getProbe();
             // Probe is not limited by congestion control, but it is limited by max packet size.
@@ -135,14 +126,8 @@ public class PacketAssembler {
             int estimatedSize = packet.estimateLength(1000) - 1000;  // Estimate length if large frame would have been added; this will give upper limit of packet overhead.
 
             while (estimatedSize < available) {
-                // First try to find a frame that will leave space for optional frame (if any)
-                int proposedSize = available - estimatedSize - optionalAckSize;
+                int proposedSize = available - estimatedSize;
                 Optional<SendRequest> next = requestQueue.next(proposedSize);
-                if (next.isEmpty() && optionalAckSize > 0) {
-                    // The optional ack does not fit, try without
-                    proposedSize = available - estimatedSize;
-                    next = requestQueue.next(proposedSize);
-                }
                 if (next.isEmpty()) {
                     // Nothing fits within available space
                     break;
@@ -156,17 +141,6 @@ public class PacketAssembler {
                     estimatedSize += nextFrame.getFrameLength();
                     packet.addFrame(nextFrame);
                     callbacks.add(next.get().getLostCallback());
-
-                    // If there was an optional ack (which was not added yet)...
-                    if (optionalAckSize > 0 && estimatedSize + optionalAckSize <= available) {
-                        // ..., add it now (now that it is certain there will be at least one non-ack frame)
-                        packet.addFrame(ackFrame);
-                        callbacks.add(EMPTY_CALLBACK);
-                        ackGenerator.registerAckSendWithPacket(ackFrame, packet.getPacketNumber());
-                        estimatedSize += ackFrame.getFrameLength();
-                        // Adding once will do ;-)
-                        optionalAckSize = 0;
-                    }
                 }
             }
         }
@@ -178,6 +152,15 @@ public class PacketAssembler {
             callbacks.add(EMPTY_CALLBACK);
         }
 
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.2.4
+        // "A receiver that sends only non-ack-eliciting packets, such as ACK frames, might not receive an acknowledgment
+        //  for a long period of time. (...) In such a case, a receiver could send a PING (...) to elicit an ACK from the peer."
+        if (packet.isAckOnly() && level == App) {
+            if (ackGenerator.wantsAckFromPeer()) {
+                packet.addFrame(new PingFrame());
+                callbacks.add(EMPTY_CALLBACK);
+            }
+        }
         Optional<SendItem> assembledItem;
         if (packet.getFrames().isEmpty()) {
             // Nothing could be added, discard packet and mark packet number as not used

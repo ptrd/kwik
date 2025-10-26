@@ -26,11 +26,7 @@ import org.mockito.stubbing.Answer;
 import tech.kwik.core.cc.CongestionController;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
-import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.Padding;
-import tech.kwik.core.frame.PingFrame;
-import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.HandshakeState;
 import tech.kwik.core.impl.PacketMatcherByPacketNumber;
 import tech.kwik.core.impl.Role;
@@ -46,7 +42,6 @@ import tech.kwik.core.test.TestScheduledExecutor;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -61,6 +56,8 @@ class RecoveryManagerTest extends RecoveryTests {
     private Sender probeSender;
     private RttEstimator rttEstimator;
     private TestClock clock;
+    private TestScheduledExecutor scheduler;
+    private CongestionController congestionController;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -74,8 +71,9 @@ class RecoveryManagerTest extends RecoveryTests {
         // logger = new SysOutLogger();
         // logger.logRecovery(true);
         clock = new TestClock();
-        recoveryManager = new RecoveryManager(clock, Role.Client, rttEstimator, mock(CongestionController.class), probeSender, logger);
-        ScheduledExecutorService scheduler = new TestScheduledExecutor(clock);
+        congestionController = mock(CongestionController.class);
+        recoveryManager = new RecoveryManager(clock, Role.Client, rttEstimator, congestionController, probeSender, logger);
+        scheduler = new TestScheduledExecutor(clock);
         FieldSetter.setField(recoveryManager, recoveryManager.getClass().getDeclaredField("scheduler"), scheduler);
     }
 
@@ -320,6 +318,74 @@ class RecoveryManagerTest extends RecoveryTests {
         assertThat(framesToRetransmit).isNotEmpty();
         assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PingFrame.class);
         assertThat(framesToRetransmit).hasAtLeastOneElementOfType(CryptoFrame.class);
+    }
+
+    @Test
+    void congestionControllerRegisterAckedNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        recoveryManager.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        recoveryManager.onAckReceived(new AckFrame(1), PnSpace.App, Instant.now());
+
+        verify(congestionController, never()).registerAcked(anyList());
+    }
+
+    @Test
+    void congestionControllerRegisterLostNotCalledWithAckOnlyPacket() {
+        QuicPacket packet = createPacket(1, new AckFrame(10));
+        recoveryManager.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+        recoveryManager.onAckReceived(new AckFrame(4), PnSpace.App, Instant.now());
+
+        verify(congestionController, times(0)).registerLost(anyList());
+    }
+
+    @Test
+    void ackOnlyPacketCannotBeDeclaredLost() {
+        QuicPacket ackOnlyPacket = createPacket(1, new AckFrame(0));
+        recoveryManager.packetSent(ackOnlyPacket, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
+
+        List<QuicPacket> packets = createPackets(2, 3, 4);
+        packets.forEach(p ->
+                recoveryManager.packetSent(p, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket)));
+
+        recoveryManager.onAckReceived(new AckFrame(new Range(2L, 4L)), PnSpace.App, Instant.now());
+
+        verify(lostPacketHandler, never()).process(any(QuicPacket.class));
+    }
+
+    @Test
+    void ackOnlyPacketShouldNotSetLossTime() {
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
+        recoveryManager.packetSent(createPacket(1, new AckFrame(1)), Instant.now(), p -> {});
+        recoveryManager.packetSent(createPacket(2), Instant.now(), p -> {});
+
+        recoveryManager.onAckReceived(new AckFrame(new Range(2L)), PnSpace.App, Instant.now());
+
+        assertThat(scheduler.getScheduledActions()).isEmpty();
+    }
+
+    @Test
+    void packetWithConnectionCloseOnlyDoesNotIncreaseBytesInFlight() {
+        recoveryManager.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        verify(congestionController, never()).registerInFlight(any(QuicPacket.class));
+    }
+
+    @Test
+    void ackPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
+        recoveryManager.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.App, Instant.now());
+
+        verify(congestionController, never()).registerAcked(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
+    }
+
+    @Test
+    void lostPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
+        recoveryManager.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        recoveryManager.packetSent(createPacket(1, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        recoveryManager.packetSent(createPacket(2, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        recoveryManager.packetSent(createPacket(9, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
+        recoveryManager.onAckReceived(new AckFrame(9), PnSpace.App, Instant.now());
+
+        verify(congestionController, never()).registerLost(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
     }
 
     /**

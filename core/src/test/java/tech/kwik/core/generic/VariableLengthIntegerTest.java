@@ -26,9 +26,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-import static tech.kwik.core.test.ByteUtils.hexToBytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static tech.kwik.core.test.ByteUtils.hexToBytes;
 
 
 class VariableLengthIntegerTest {
@@ -277,6 +277,88 @@ class VariableLengthIntegerTest {
         assertThatThrownBy(() ->
                 VariableLengthInteger.parse(wrap((byte) 0xc2))
         ).isInstanceOf(InvalidIntegerEncodingException.class);
+    }
+
+    @Test
+    void fixedOneByteEncoding() {
+        // Given
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+
+        // When
+        int encodedSize = VariableLengthInteger.encode(37, buffer, 1);
+
+        // Then
+        assertThat(encodedSize).isEqualTo(1);
+        assertThat(buffer.get(0)).isEqualTo((byte) 37);
+    }
+
+    @Test
+    void fixedOneByteEncodingCannotHoldValueLargerThan63() {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.encode(64, ByteBuffer.allocate(8), 1)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void encodeOneByteIntInTwoBytes() throws InvalidIntegerEncodingException {
+        // Given
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+
+        // When
+        int encodedSize = VariableLengthInteger.encode(37, buffer, 2);
+
+        assertThat(encodedSize).isEqualTo(2);
+        assertThat(buffer.position()).isEqualTo(2);
+        buffer.flip();
+        assertThat(buffer.get()).isEqualTo((byte) 0x40);
+        assertThat(buffer.get()).isEqualTo((byte) 0x25);
+        buffer.rewind();
+        assertThat(VariableLengthInteger.parse(buffer)).isEqualTo(37);
+    }
+
+    @Test
+    void fixedOneByteEncodingCannotHoldValueLargerThan16383() {
+        assertThatThrownBy(() ->
+                VariableLengthInteger.encode(16384, ByteBuffer.allocate(8), 2)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void encodeTwoByteIntInFourBytes() throws InvalidIntegerEncodingException {
+        // Given
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+
+        // When
+        int encodedSize = VariableLengthInteger.encode(15293, buffer, 4);
+
+        assertThat(encodedSize).isEqualTo(4);
+        assertThat(buffer.position()).isEqualTo(4);
+        buffer.flip();
+        assertThat(buffer.get()).isEqualTo((byte) 0x80);
+        assertThat(buffer.get()).isEqualTo((byte) 0x00);
+        assertThat(buffer.get()).isEqualTo((byte) 0x3b);
+        assertThat(buffer.get()).isEqualTo((byte) 0xbd);
+        buffer.rewind();
+        assertThat(VariableLengthInteger.parse(buffer)).isEqualTo(15293);
+    }
+
+    @Test
+    void encodeOneByteIntInFourBytes() throws InvalidIntegerEncodingException {
+        // Given
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+
+        // When
+        int encodedSize = VariableLengthInteger.encode(56, buffer, 4);
+
+        assertThat(encodedSize).isEqualTo(4);
+        assertThat(buffer.position()).isEqualTo(4);
+        buffer.flip();
+        assertThat(buffer.get()).isEqualTo((byte) 0x80);
+        assertThat(buffer.get()).isEqualTo((byte) 0x00);
+        assertThat(buffer.get()).isEqualTo((byte) 0x00);
+        assertThat(buffer.get()).isEqualTo((byte) 0x38);
+        buffer.rewind();
+        assertThat(VariableLengthInteger.parse(buffer)).isEqualTo(56);
     }
 
     private ByteBuffer wrap(byte... bytes) throws Exception {

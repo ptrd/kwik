@@ -28,6 +28,7 @@ import tech.kwik.core.log.Logger;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static tech.kwik.core.common.EncryptionLevel.App;
 
@@ -50,9 +51,8 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     // Closed indicates whether the OutputStream is closed, meaning that no more bytes can be written by caller.
     // Thread safety: only use by caller
     private boolean closed;
-    // Send request queued indicates whether a request to send a stream frame is queued with the sender. Is used to avoid multiple requests being queued.
-    // Thread safety: read/set by caller and by sender thread, so must be synchronized; guarded by lock
-    private volatile boolean sendRequestQueued;
+    // Number of send requests that is queued, used to avoid multiple requests being queued (one is enough).
+    private final AtomicInteger sendRequestsQueued;
     // Reset indicates whether the OutputStream has been reset.
     private volatile boolean reset;
     private volatile long resetErrorCode;
@@ -69,6 +69,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         maxBufferSize = sendBuffer.getMaxSize();
         retransmitBuffer = new RetransmitBuffer();
         flowController.streamOpened(quicStream);
+        sendRequestsQueued = new AtomicInteger(0);
 
         flowController.register(quicStream, this);
     }
@@ -109,11 +110,15 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
             throw new InterruptedIOException(msg);
         }
 
-        synchronized (lock) {
-            if (!sendRequestQueued) {
-                sendRequestQueued = true;
-                quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
-            }
+        scheduleSendStreamFrameRequest(true);
+    }
+
+    private void scheduleSendStreamFrameRequest(boolean flush) {
+        int queued = sendRequestsQueued.get();
+        if (queued == 0) {
+            // This is a race condition, but not a problem when one superfluous send request is queued.
+            quicStream.connection.send(this::sendStreamFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, flush);
+            sendRequestsQueued.incrementAndGet();
         }
     }
 
@@ -135,12 +140,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         if (!closed && !aborted && !reset) {
             sendBuffer.close();
             closed = true;
-            synchronized (lock) {
-                if (!sendRequestQueued) {
-                    sendRequestQueued = true;
-                    quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
-                }
-            }
+            scheduleSendStreamFrameRequest(true);
         }
     }
 
@@ -153,13 +153,12 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         }
     }
 
-    QuicFrame sendFrame(int maxFrameSize) {
+    QuicFrame sendStreamFrame(int maxFrameSize) {
         if (reset) {
             return null;
         }
-        synchronized (lock) {
-            sendRequestQueued = false;
-        }
+        // As this class always queues a send stream frame request by registering a callback, the callback can be used to keep track of the number of requests that are actually queued.
+        sendRequestsQueued.decrementAndGet();
 
         StreamFrame streamFrame = null;
         if (retransmitBuffer.hasDataToRetransmit()) {
@@ -198,18 +197,15 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                     // https://www.rfc-editor.org/rfc/rfc9000.html#name-data-flow-control
                     // "A sender SHOULD send a STREAM_DATA_BLOCKED or DATA_BLOCKED frame to indicate to the receiver
                     //  that it has data to write but is blocked by flow control limits."
-                    quicStream.connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(quicStream.streamId), App, this::retransmitSendBlockReason, true);
+                    quicStream.connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(quicStream.streamId), App, this::retransmitBlockReason, true);
                     // As the stream is blocked, no need to queue a new send request.
                     return null;
                 }
             }
         }
         if (streamFrame != null && (sendBuffer.hasData() || retransmitBuffer.hasDataToRetransmit())) {
-            synchronized (lock) {
-                sendRequestQueued = true;
-            }
             // There is more to send, so queue a new send request.
-            quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
+            scheduleSendStreamFrameRequest(true);
         }
 
         return streamFrame;
@@ -225,7 +221,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         log.stream(quicStream + " unblocked at " + currentOffset);
         // Stream might have been blocked (or it might have filled the flow control window exactly), queue send request
         // and let sendFrame method determine whether there is more to send or not.
-        quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, false);  // No need to flush, as this is called while processing received message
+        scheduleSendStreamFrameRequest(false);  // No need to flush, as this is called while processing received message
     }
 
     void interruptBlockingThread() {
@@ -253,15 +249,15 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         return frame;
     }
 
-    private void retransmitSendBlockReason(QuicFrame quicFrame) {
-        quicStream.connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(quicStream.streamId), App, this::retransmitSendBlockReason, true);
+    private void retransmitBlockReason(QuicFrame quicFrame) {
+        quicStream.connection.send(this::sendBlockReason, StreamDataBlockedFrame.getMaxSize(quicStream.streamId), App, this::retransmitBlockReason, true);
     }
 
     private void retransmitStreamFrame(QuicFrame frame) {
         assert (frame instanceof StreamFrame);
         if (!reset) {
             retransmitBuffer.add((StreamFrame) frame);
-            quicStream.connection.send(this::sendFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, true);
+            scheduleSendStreamFrameRequest(true);
         }
     }
 
@@ -269,6 +265,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         return App;
     }
 
+    // Very confusing name: this has nothing to do with resetting the stream as the reset method does!
     protected void resetOutputStream() {
         closed = false;
         // TODO: this is currently not thread safe, see comment in EarlyDataStream how to fix.
@@ -278,7 +275,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private void restart() {
         currentOffset = 0;
         sendBuffer.clear();
-        sendRequestQueued = false;
+        sendRequestsQueued.set(0);
     }
 
     /**

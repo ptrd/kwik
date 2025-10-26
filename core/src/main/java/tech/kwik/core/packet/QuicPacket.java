@@ -559,12 +559,13 @@ abstract public class QuicPacket {
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-2
     // "ACK-only:  Any packet containing only one or more ACK frame(s)."
     public boolean isAckOnly() {
-        return frames.stream().allMatch(frame -> frame instanceof AckFrame);
+        return frames.stream().allMatch(frame -> frame instanceof AckFrame) && !frames.isEmpty();
     }
 
-    // https://tools.ietf.org/html/draft-ietf-quic-recovery-33#section-2
-    // "In-flight:  Packets are considered in-flight when they are ack-eliciting or contain a PADDING frame, and they
-    //  have been sent but are not acknowledged, declared lost, or abandoned along with old keys."
+    // https://www.rfc-editor.org/rfc/rfc9002.html#section-2
+    // "Packets are considered in flight when they are ack-eliciting or contain a PADDING frame, and
+    //  they have been sent but are not acknowledged, declared lost, or discarded along with old keys."
+    //
     // This method covers only the first part, which can be derived from the packet.
     public boolean isInflightPacket() {
         return frames.stream().anyMatch(frame -> frame.isAckEliciting() || frame instanceof Padding);

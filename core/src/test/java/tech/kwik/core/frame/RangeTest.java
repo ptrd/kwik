@@ -51,6 +51,41 @@ class RangeTest {
     }
 
     @Test
+    void streamWithMinShouldListAllNumbersInRangeNotSmallerThanMin() {
+        var range = new Range(3L, 7L);
+
+        assertThat(range.stream(5).toArray()).isEqualTo(new Long[] { 7L, 6L, 5L });
+    }
+
+    @Test
+    void streamWithMinOutsideRangeShouldListAllNumbersInRange() {
+        var range = new Range(3L, 7L);
+
+        assertThat(range.stream(1).toArray()).isEqualTo(new Long[] { 7L, 6L, 5L, 4L, 3L });
+    }
+
+    @Test
+    void streamWithMinLargerThanRangeShouldListNone() {
+        var range = new Range(3L, 7L);
+
+        assertThat(range.stream(8)).isEmpty();
+    }
+
+    @Test
+    void streamWithMinMatchingLargestInRangeShouldReturnLargest() {
+        var range = new Range(3L, 7L);
+
+        assertThat(range.stream(7).toArray()).isEqualTo(new Long[] { 7L });
+    }
+
+    @Test
+    void streamWithMinMatchingSmallestInRangeShouldReturnWholeRange() {
+        var range = new Range(3L, 7L);
+
+        assertThat(range.stream(3).toArray()).isEqualTo(new Long[] { 7L, 6L, 5L, 4L, 3L });
+    }
+
+    @Test
     void extendEmptyRangeList() {
         var rangeList = createRangeList();
 

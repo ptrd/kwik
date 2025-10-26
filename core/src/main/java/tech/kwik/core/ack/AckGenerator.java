@@ -18,12 +18,13 @@
  */
 package tech.kwik.core.ack;
 
+import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.Range;
-import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.send.Sender;
 
 import java.time.Clock;
@@ -37,24 +38,30 @@ import java.util.*;
  */
 public class AckGenerator {
 
+    private static final long MIN_TIME_BETWEEN_CLEANUPS_MS = 10;
+
     private final Clock clock;
     private final Version quicVersion = Version.getDefault();
     private final PnSpace pnSpace;
     private final Sender sender;
+    private final RttProvider rttProvider;
     private List<Range> rangesToAcknowledge = new ArrayList<>();
     private boolean newPacketsToAcknowledge;
     private Instant newPacketsToAcknowlegdeSince;
-    private Map<Long, AckFrame> ackSentWithPacket = new HashMap<>();
+    private SortedMap<Long, AckFrame> ackSentWithPacket = new TreeMap<>();
     private int acksNotSend = 0;
+    private volatile Instant lastAckRangesCleanup;
 
-    public AckGenerator(PnSpace pnSpace, Sender sender) {
-        this(Clock.systemUTC(), pnSpace, sender);
+    public AckGenerator(PnSpace pnSpace, Sender sender, RttProvider rttProvider) {
+        this(Clock.systemUTC(), pnSpace, sender, rttProvider);
     }
 
-    public AckGenerator(Clock clock, PnSpace pnSpace, Sender sender) {
+    public AckGenerator(Clock clock, PnSpace pnSpace, Sender sender, RttProvider rttProvider) {
         this.clock = clock;
         this.pnSpace = pnSpace;
         this.sender = sender;
+        this.rttProvider = rttProvider;
+        lastAckRangesCleanup = clock.instant();
     }
 
     public synchronized boolean hasAckToSend() {
@@ -103,9 +110,7 @@ public class AckGenerator {
      */
     public synchronized void process(QuicFrame receivedAck) {
         // Find max packet number that had an ack sent with it...
-        Optional<Long> largestWithAck = ((AckFrame) receivedAck).getAckedPacketNumbers()
-                .filter(pn -> ackSentWithPacket.containsKey(pn))
-                .findFirst();
+        Optional<Long> largestWithAck = findLargest((AckFrame) receivedAck);
 
         if (largestWithAck.isPresent()) {
             // ... and for that max pn, all packets that where acked by it don't need to be acked again.
@@ -114,8 +119,27 @@ public class AckGenerator {
 
             // And for all earlier sent packets (smaller packet numbers), the sent ack's can be discarded because
             // their ranges are a subset of the ones from the latestAcknowledgedAck and thus are now implicitly acked.
-            ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck.get());
+            removeAndBefore(largestWithAck.get());
+
+            lastAckRangesCleanup = clock.instant();
         }
+    }
+
+    private Optional<Long> findLargest(AckFrame receivedAck) {
+        if (ackSentWithPacket.isEmpty()) {
+            return Optional.empty();
+        }
+
+        long min = ackSentWithPacket.firstKey();
+        long max = ackSentWithPacket.lastKey();
+        return receivedAck.getAckedPacketNumbers(min)
+                .filter(pn -> pn <= max)
+                .filter(pn -> ackSentWithPacket.containsKey(pn))
+                .findFirst();
+    }
+
+    private void removeAndBefore(Long largestWithAck) {
+        ackSentWithPacket.keySet().removeIf(key -> key <= largestWithAck);
     }
 
     /**
@@ -199,6 +223,25 @@ public class AckGenerator {
         newPacketsToAcknowledge = false;
         newPacketsToAcknowlegdeSince = null;
         acksNotSend = 0;
+    }
+
+    public boolean wantsAckFromPeer() {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.2.4
+        // "A receiver that sends only non-ack-eliciting packets, such as ACK frames, might not receive an acknowledgment
+        //  for a long period of time. This could cause the receiver to maintain state for a large number of ACK frames
+        //  for a long period of time, and ACK frames it sends could be unnecessarily large. In such a case, a receiver
+        //  could send a PING or other small ack-eliciting frame occasionally, such as once per round trip, to elicit
+        //  an ACK from the peer."
+        long timeSinceLastCleanup = Duration.between(lastAckRangesCleanup, clock.instant()).toMillis();
+        if (timeSinceLastCleanup > MIN_TIME_BETWEEN_CLEANUPS_MS) {
+            int rtt = rttProvider.getSmoothedRtt();
+            if (timeSinceLastCleanup > rtt) {
+                if (Duration.between(sender.lastAckElicitingSent(), clock.instant()).toMillis() > 1.5 * rtt) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 

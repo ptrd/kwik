@@ -18,27 +18,24 @@
  */
 package tech.kwik.core.recovery;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import tech.kwik.core.cc.CongestionControlEventListener;
 import tech.kwik.core.cc.CongestionController;
 import tech.kwik.core.cc.NewRenoCongestionController;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.AckFrame;
-import tech.kwik.core.frame.ConnectionCloseFrame;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.Range;
 import tech.kwik.core.impl.MockPacket;
-import tech.kwik.core.impl.MoreArgumentMatchers;
 import tech.kwik.core.impl.PacketMatcherByPacketNumber;
-import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.log.NullQLog;
 import tech.kwik.core.packet.PacketInfo;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
@@ -82,28 +79,10 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.packetSent(packets.get(1), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(packets.get(2), Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
 
-        lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
+        lossDetector.onAckReceived(new AckFrame(new Range(1L)), Instant.now());
         lossDetector.onAckReceived(new AckFrame(new Range(1L, 2L)), Instant.now());
 
         verify(congestionController, times(2)).registerAcked(any(List.class));
-    }
-
-    @Test
-    void congestionControllerRegisterAckedNotCalledWithAckOnlyPacket() {
-        QuicPacket packet = createPacket(1, new AckFrame(10));
-        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
-        lossDetector.onAckReceived(new AckFrame(1), Instant.now());
-
-        verify(congestionController, times(1)).registerAcked(argThat(MoreArgumentMatchers.emptyList()));
-    }
-
-    @Test
-    void congestionControllerRegisterLostNotCalledWithAckOnlyPacket() {
-        QuicPacket packet = createPacket(1, new AckFrame(10));
-        lossDetector.packetSent(packet, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
-        lossDetector.onAckReceived(new AckFrame(4), Instant.now());
-
-        verify(congestionController, times(0)).registerLost(anyList());
     }
 
     @Test
@@ -206,20 +185,6 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
-    void ackOnlyPacketCannotBeDeclaredLost() {
-        QuicPacket ackOnlyPacket = createPacket(1, new AckFrame());
-        lossDetector.packetSent(ackOnlyPacket, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket));
-
-        List<QuicPacket> packets = createPackets(2, 3, 4);
-        packets.forEach(p ->
-                lossDetector.packetSent(p, Instant.now(), lostPacket -> lostPacketHandler.process(lostPacket)));
-
-        lossDetector.onAckReceived(new AckFrame(new Range(2L, 4L)), Instant.now());
-
-        verify(lostPacketHandler, never()).process(any(QuicPacket.class));
-    }
-
-    @Test
     void packetTooOldIsDeclaredLost() {
         // Given second packets is sent (a little) more than 9/8 rtt
         int timeDiff = (defaultRtt * 9 / 8) + 1;
@@ -263,6 +228,7 @@ class LossDetectorTest extends RecoveryTests {
         // Given two packets are sent at the same time and only the last is acked, exactly after RTT
         lossDetector.packetSent(createPacket(6), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
         lossDetector.packetSent(createPacket(8), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(9), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
         clock.fastForward(defaultRtt);
         lossDetector.onAckReceived(new AckFrame(8L), clock.instant());
 
@@ -273,7 +239,7 @@ class LossDetectorTest extends RecoveryTests {
         clock.fastForward(defaultRtt / 8 + 1);
         lossDetector.onAckReceived(new AckFrame(9L), clock.instant());
 
-        // Then the first packet is also acked (because by that time, it is old enough)
+        // Then the first packet is also declared lost (because by that time, it is old enough)
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(6)));
     }
 
@@ -318,15 +284,6 @@ class LossDetectorTest extends RecoveryTests {
         assertThat(lossDetector.getLossTime()).isNull();
     }
 
-    @Test
-    void ackOnlyPacketShouldNotSetLossTime() {
-        lossDetector.packetSent(createPacket(1, new AckFrame(1)), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(2), Instant.now(), p -> {});
-
-        lossDetector.onAckReceived(new AckFrame(new Range(2L)), Instant.now());
-
-        assertThat(lossDetector.getLossTime()).isNull();
-    }
     //endregion
 
     //region acks
@@ -356,13 +313,6 @@ class LossDetectorTest extends RecoveryTests {
         lossDetector.onAckReceived(new AckFrame(3), clock.instant());  // So 2 will be lost.
 
         // Then the lost packet is not considered un-acknowlegded.
-        assertThat(lossDetector.unAcked()).isEmpty();
-    }
-
-    @Test
-    void nonAckElicitingIsNotDetectedAsUnacked() {
-        lossDetector.packetSent(createPacket(2, new AckFrame(0)), Instant.now(), p -> {});
-
         assertThat(lossDetector.unAcked()).isEmpty();
     }
 
@@ -440,31 +390,6 @@ class LossDetectorTest extends RecoveryTests {
     //endregion
 
     //region bytes in flight
-    @Test
-    void packetWithConnectionCloseOnlyDoesNotIncreaseBytesInFlight() {
-        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        verify(congestionController, never()).registerInFlight(any(QuicPacket.class));
-    }
-
-    @Test
-    void ackPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
-        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        lossDetector.onAckReceived(new AckFrame(0), Instant.now());
-
-        verify(congestionController, never()).registerAcked(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
-    }
-
-    @Test
-    void lostPacketWithConnectionCloseOnlyDoesNotDecreaseBytesInFlight() {
-        lossDetector.packetSent(createPacket(0, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(1, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(2, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        lossDetector.packetSent(createPacket(9, new ConnectionCloseFrame(Version.getDefault())), Instant.now(), p -> {});
-        lossDetector.onAckReceived(new AckFrame(9), Instant.now());
-
-        verify(congestionController, never()).registerLost(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
-    }
-
     @Test
     void packetWithPaddingOnlyDoesIncreaseBytesInFlight() {
         lossDetector.packetSent(createPacket(0, new Padding(99)), Instant.now(), p -> {});

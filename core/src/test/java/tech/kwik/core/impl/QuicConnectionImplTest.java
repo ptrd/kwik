@@ -657,14 +657,13 @@ class QuicConnectionImplTest {
         public boolean terminated;
 
         NonAbstractQuicConnection() {
-            super(Version.getDefault(), Role.Server, null, new NullLogger(), null);
+            super(Version.getDefault(), Role.Server, null, null, "", new NullLogger());
             idleTimer = new IdleTimer(this, log);
             streamManager = mock(StreamManager.class);
         }
 
-       @Override
-        protected void terminate() {
-            super.terminate();
+        @Override
+        protected void preTerminateHook() {
             terminated = true;
         }
 

@@ -242,8 +242,29 @@ public class Range {
         return from;
     }
 
+    /**
+     * Returns a stream that lists all the numbers in the range in descending order (starting with the largest).
+     * @return
+     */
     public Stream<Long> stream() {
         return Stream.generate(new StreamElementGenerator()).limit(size());
+    }
+
+    /**
+     * Returns a stream that lists all the numbers in the range greater or equal the given minimum, in descending order.
+     * @return
+     */
+    public Stream<Long> stream(long minimum) {
+        if (minimum > to) {
+            return Stream.empty();
+        }
+        else {
+            if (minimum < from) {
+                minimum = from;
+            }
+            long count = to - minimum + 1;
+            return Stream.generate(new StreamElementGenerator()).limit(count);
+        }
     }
 
     private class StreamElementGenerator implements Supplier<Long> {

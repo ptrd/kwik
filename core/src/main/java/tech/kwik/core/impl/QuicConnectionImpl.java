@@ -70,14 +70,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         Created,
         Handshaking,
         Connected,
+        CloseRequested,
         Closing,
         Draining,
         Closed,
         Failed,
         Error;
 
+        /**
+         * Returns true if the connection is closing or closed in the broadest sense,
+         * i.e. including (handshake) Failed and Error states.
+         * @return
+         */
         public boolean closingOrDraining() {
-            return this == Closing || this == Draining || this == Closed || this == Failed || this == Error;
+            return this == Closing || this == CloseRequested || this == Draining || this == Closed || this == Failed || this == Error;
         }
 
         public boolean isClosing() {
@@ -145,7 +151,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ExecutorService datagramHandlerExecutor;
 
 
-    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, Logger log, ConnectionConfig settings) {
+    protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, ConnectionConfig settings, String id, Logger log) {
         this.quicVersion = new VersionHolder(originalVersion);
         this.role = role;
         this.log = log;
@@ -157,8 +163,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
-        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler"));
-        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callback-executor"));
+        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler" + id));
+        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callbacks-" + id));
         currentEncryptionLevel = Initial;
     }
 
@@ -570,9 +576,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
-        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+        if (connectionState.closingOrDraining()) {
             return;
         }
+        connectionState = Status.Closing;
 
         emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
 
@@ -630,14 +637,15 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * @param errorReason
      */
     protected void immediateCloseWithError(long error, ErrorType errorType, String errorReason) {
-        if (connectionState == Status.Closing || connectionState == Status.Draining) {
+        if (connectionState.closingOrDraining()){
             log.debug("Immediate close ignored because already closing");
             return;
         }
+        connectionState = Status.CloseRequested;
 
         emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, false,
                 errorType == QUIC_LAYER_ERROR? error: null,
-                errorType == APPLICATION_ERROR? error: null));
+                errorType == APPLICATION_ERROR? error: null, errorReason));
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "An endpoint sends a CONNECTION_CLOSE frame (Section 19.19) to terminate the connection immediately."
@@ -730,7 +738,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (!connectionState.closingOrDraining()) {  // Can occur due to race condition (both peers closing simultaneously)
             emit(new ConnectionTerminatedEvent(this, CloseReason.ImmediateClose, true,
                     closing.hasTransportError()? closing.getErrorCode(): null,
-                    closing.hasApplicationProtocolError()? closing.getErrorCode(): null));
+                    closing.hasApplicationProtocolError()? closing.getErrorCode(): null, closing.getReasonPhrase()));
 
             if (closing.hasError()) {
                 peerClosedWithError(closing);
@@ -813,17 +821,23 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
      * Closes the connection by discarding all connection state. Do not call directly, should be called after
      * closing state or draining state ends.
      */
-    protected void terminate() {
-        terminate(null);
-    }
-
-    protected void terminate(Runnable postSenderShutdownAction) {
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.2
+    protected final void terminate() {
+        preTerminateHook();
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2
         // "Once its closing or draining state ends, an endpoint SHOULD discard all connection state."
         idleTimer.shutdown();
-        getSender().shutdown(postSenderShutdownAction);
+        getSender().shutdown(this::postTerminateHook);
         connectionState = Status.Closed;
         scheduler.shutdown();
+    }
+
+    protected void preTerminateHook() {}
+
+    /**
+     * Called on sender thread after the sender is shut down (and for example, connection close frame is sent).
+     */
+    protected void postTerminateHook() {
+        callbackThread.shutdown();
     }
 
     protected int quicError(TlsProtocolException tlsError) {

@@ -165,7 +165,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                                      List<TlsConstants.CipherSuite> cipherSuites,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
-        super(originalVersion, Role.Client, secretsFile, log, connectionProperties);
+        super(originalVersion, Role.Client, secretsFile, connectionProperties, "", log);
         this.applicationProtocol = applicationProtocol;
         this.connectTimeout = connectTimeout;
         this.connectionProperties = connectionProperties;
@@ -250,7 +250,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     boolean handleUnprotectPacketFailure(ByteBuffer data, Exception unprotectException) {
         if (checkForStatelessResetToken(data)) {
-            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.StatelessReset, true, null, null));
+            emit(new ConnectionTerminatedEvent(this, ConnectionTerminatedEvent.CloseReason.StatelessReset, true, null, null, null));
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.3.1
             // "If the last 16 bytes of the datagram are identical in value to a stateless reset token, the endpoint
             //  MUST enter the draining period and not send any further packets on this connection."
@@ -827,19 +827,19 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    /**
-     * Closes the connection by discarding all connection state. Do not call directly, should be called after
-     * closing state or draining state ends.
-     */
     @Override
-    protected void terminate() {
-        super.terminate();
+    protected void preTerminateHook() {
         handshakeFinishedCondition.countDown();
         receiver.shutdown();
-        socket.close();
         if (receiverThread != null) {
             receiverThread.interrupt();
         }
+    }
+
+    @Override
+    protected void postTerminateHook() {
+        socket.close();
+        super.postTerminateHook();
     }
 
     public void changeAddress() {
