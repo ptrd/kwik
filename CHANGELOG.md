@@ -1,5 +1,10 @@
 # Releases
 
+## 0.10.7 (2025-10-30)
+
+- several performance improvements
+- fix a few issues w.r.t. exact packet length, which caused Kwik to fail to connect with servers that use a `max_udp_payload_size ` of 1200.
+
 ## 0.10.6 (2025-09-06)
 
 - added another method to client connection builder to set key manager
