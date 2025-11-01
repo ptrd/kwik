@@ -582,14 +582,14 @@ public class ServerConnectorImpl implements ServerConnector {
 
         @Override
         public ServerConnector build() throws SocketException, CertificateException {
-            if (port == 0) {
-                throw new IllegalStateException("port number not set");
-            }
             if (certificateFile == null && keyStore == null) {
                 throw new IllegalStateException("server certificate not set");
             }
 
-            if (socket == null) {
+            if (socket == null || socket.getLocalPort() == 0) {
+                if (port == 0) {
+                    throw new IllegalStateException("port number not set");
+                }
                 socket = new DatagramSocket(port);
             }
 
