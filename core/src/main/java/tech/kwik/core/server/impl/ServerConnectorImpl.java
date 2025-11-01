@@ -582,7 +582,7 @@ public class ServerConnectorImpl implements ServerConnector {
 
         @Override
         public ServerConnector build() throws SocketException, CertificateException {
-            if (port == 0) {
+            if (socket == null && port == 0) {
                 throw new IllegalStateException("port number not set");
             }
             if (certificateFile == null && keyStore == null) {

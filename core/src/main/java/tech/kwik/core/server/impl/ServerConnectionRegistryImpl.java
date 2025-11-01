@@ -125,7 +125,7 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     }
 
     /**
-     * Logs the entire connection table. For debugging purposed only.
+     * Logs the entire connection table. For debugging purposes only.
      */
     void logConnectionTable() {
         log.info("Connection table: \n" +
