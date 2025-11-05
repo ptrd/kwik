@@ -24,8 +24,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Creates daemon threads. Java's default thread factory used in executors creates non-daemon threads that
- * prevent JVM from shutting down.
+ * Creates daemon threads. Java's default thread factory used in executors creates non-daemon
+ * threads that prevent JVM from shutting down.
  */
 public class DaemonThreadFactory implements ThreadFactory {
 
