@@ -31,7 +31,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
-
+import java.util.Optional;
 
 /**
  * A sample server that runs a very simple echo protocol on top of QUIC.
@@ -88,7 +88,7 @@ public class EchoServer {
     }
 
     private static void registerProtocolHandler(ServerConnector serverConnector, Logger log) {
-           serverConnector.registerApplicationProtocol("echo", new EchoProtocolConnectionFactory(log));
+           serverConnector.registerApplicationProtocol(new EchoProtocolConnectionFactory(log));
     }
 
     /**
@@ -100,6 +100,11 @@ public class EchoServer {
         public EchoProtocolConnectionFactory(Logger log) {
             this.log = log;
         }
+		
+		@Override
+		public Optional<String> protocol() {
+			return Optional.of("echo");
+		}
 
         @Override
         public ApplicationProtocolConnection createConnection(String protocol, QuicConnection quicConnection) {
