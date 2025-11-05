@@ -15,12 +15,10 @@ public class VirtualExecutor {
 
   private static final boolean SUPPORTED = Runtime.version().feature() >= 24;
 
-  // 1. Static field to cache the MethodHandle
   private static MethodHandle handle;
 
   static {
     try {
-      // Find and cache the MethodHandle
       handle =
               MethodHandles.publicLookup()
                       .findStatic(
@@ -28,7 +26,7 @@ public class VirtualExecutor {
                               "newThreadPerTaskExecutor",
                               MethodType.methodType(ExecutorService.class, ThreadFactory.class));
     } catch (Exception __) {
-      // of no consequence
+      // failing is of no consequence
     }
   }
 
