@@ -675,6 +675,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         return initialClientAddress.getAddress();
     }
 
+    @Override
+    public InetSocketAddress getInitialRemoteAddress() {
+        return initialClientAddress;
+    }
+
     private class TlsMessageSender implements ServerMessageSender {
         @Override
         public void send(ServerHello sh) {
