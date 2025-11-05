@@ -22,6 +22,7 @@ import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
+import tech.kwik.core.concurrent.VirtualExecutor;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -58,8 +59,10 @@ public class Http09Client extends HttpClient {
     public Http09Client(QuicClientConnection quicConnection, boolean with0RTT) {
         this.quicConnection = quicConnection;
         this.with0RTT = with0RTT;
-
-        executorService = Executors.newCachedThreadPool(new DaemonThreadFactory("http09"));
+        this.executorService =
+                VirtualExecutor.supported()
+                        ? VirtualExecutor.createExecutor("http09")
+                        : Executors.newCachedThreadPool(new DaemonThreadFactory("http09"));
     }
 
     @Override
