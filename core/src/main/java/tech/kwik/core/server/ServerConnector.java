@@ -35,7 +35,20 @@ import java.util.Set;
  */
 public interface ServerConnector extends AutoCloseable {
 
+	/**
+	 * Register the provided protocol connection factory with this connector, using the provided protocol.
+	 * @param protocol
+	 * @param protocolConnectionFactory
+	 */
     void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory);
+	
+	/**
+	 * Register the provided protocol connection factory with this connector, using its default protocol.
+	 * @see #registerApplicationProtocol(String, ApplicationProtocolConnectionFactory)
+	 * @throws IllegalStateException if the provided factory lacks a default protocol
+	 * @param protocolConnectionFactory
+	 */
+	void registerApplicationProtocol(ApplicationProtocolConnectionFactory protocolConnectionFactory);
 
     Set<String> getRegisteredApplicationProtocols();
 

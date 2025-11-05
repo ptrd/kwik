@@ -170,10 +170,19 @@ public class ServerConnectorImpl implements ServerConnector {
                 .build();
     }
 
+	@Override
     public void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory) {
         applicationProtocolRegistry.registerApplicationProtocol(protocol, protocolConnectionFactory);
     }
+	
+	@Override
+    public void registerApplicationProtocol(ApplicationProtocolConnectionFactory protocolConnectionFactory) {
+		String protocol = protocolConnectionFactory.protocol()
+				.orElseThrow(() -> new IllegalStateException("ApplicationProtocolConnectionFactory lacks a default protocol"));
+        applicationProtocolRegistry.registerApplicationProtocol(protocol, protocolConnectionFactory);
+    }
 
+	@Override
     public Set<String> getRegisteredApplicationProtocols() {
         return applicationProtocolRegistry.getRegisteredApplicationProtocols();
     }
