@@ -27,8 +27,8 @@ public interface ApplicationProtocolConnectionFactory extends ApplicationProtoco
 
     /**
      * Create a new connection for the given protocol.
-     * If, for some reason, the application protocol connection cannot be created, this method should may return null,
-     * but in that case it _must_ close the underlying QUIC connection.
+     * If, for some reason, the application protocol connection cannot be created, this method may
+     * return {@code null}, but in that case it <i>must</i> close the underlying QUIC connection.
      * @param protocol
      * @param quicConnection
      * @return
