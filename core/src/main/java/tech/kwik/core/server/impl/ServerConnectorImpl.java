@@ -180,6 +180,7 @@ public class ServerConnectorImpl implements ServerConnector {
         return applicationProtocolRegistry.getRegisteredApplicationProtocols();
     }
 
+    @Override
     public void start() {
         acceptingNewConnections = true;
         receiver.start();
