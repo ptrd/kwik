@@ -170,10 +170,12 @@ public class ServerConnectorImpl implements ServerConnector {
                 .build();
     }
 
+    @Override
     public void registerApplicationProtocol(String protocol, ApplicationProtocolConnectionFactory protocolConnectionFactory) {
         applicationProtocolRegistry.registerApplicationProtocol(protocol, protocolConnectionFactory);
     }
 
+    @Override
     public Set<String> getRegisteredApplicationProtocols() {
         return applicationProtocolRegistry.getRegisteredApplicationProtocols();
     }
