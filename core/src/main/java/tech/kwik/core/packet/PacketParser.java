@@ -84,7 +84,9 @@ public abstract class PacketParser {
                 }
                 if (!handleUnprotectPacketFailureFunction.apply(data, cannotParse)) {
                     if (cannotParse instanceof  MissingKeysException) {
-                        log.warn("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse.getMessage() + ")");
+                        if (((MissingKeysException) cannotParse).getMissingKeysCause() != MissingKeysException.Cause.DiscardedKeys) {
+                            log.warn("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse.getMessage() + ")");
+                        }
                     }
                     else {
                         log.error("Discarding packet (" + nrOfPacketBytes + " bytes) that cannot be decrypted (" + cannotParse + ")");
