@@ -1,5 +1,11 @@
 # Releases
 
+## 0.10.8 (2025-11-18)
+
+- suppress warning message when packet can not be decrypted because of discarded keys
+- added method to retrieve initial client address including port number
+- fix: server connector builder should allow that port is not set when socket was set
+
 ## 0.10.7 (2025-10-30)
 
 - several performance improvements
