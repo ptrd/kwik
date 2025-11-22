@@ -92,12 +92,14 @@ services trying to spy on you, using Kwik is probably not the best idea.
 
 ### Maven
 
+[![Maven Central](https://img.shields.io/maven-central/v/tech.kwik/kwik.svg?label=Maven%20Central)](https://mvnrepository.com/artifact/tech.kwik/kwik)
+
 Kwik is available in the Maven Central Repository. To use it in your project, add the following dependency to your pom.xml:
 
     <dependency>
         <groupId>tech.kwik</groupId>
         <artifactId>kwik</artifactId>
-        <version>0.10.7</version>
+        <version>${kwik.version}</version>
     </dependency>
 
 Check [Maven Central](https://central.sonatype.com/artifact/tech.kwik/kwik/versions) to find the version number of the latest greatest.
