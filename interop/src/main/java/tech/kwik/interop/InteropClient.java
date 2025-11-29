@@ -71,13 +71,18 @@ public class InteropClient {
 
 
     public static void main(String[] args) throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException {
+        WatchDog watcher = new WatchDog(5 * 60 + 5);
+        watcher.start();
+
         File logDir = new File("/logs");   // Interop runner runs in docker container and is expected to write logs to /logs
         String logFile = (logDir.exists()? "/logs/": "./") + "kwik_client.log";
         try {
             logger = new FileLogger(new File(logFile));
             logger.logInfo(true);
             logger.logWarning(true);
-        } catch (IOException e) {
+            System.out.println("Logging to " + logFile);
+        }
+        catch (IOException e) {
             System.out.println("Cannot open log file " + logFile);
             System.exit(1);
         }
@@ -142,11 +147,15 @@ public class InteropClient {
             else if (testCase.equals(TC_KEYUPDATE)) {
                 testKeyUpdate(downloadUrls, builder);
             }
-        } catch (MalformedURLException | URISyntaxException e) {
+        }
+        catch (MalformedURLException | URISyntaxException e) {
             System.out.println("Invalid argument: cannot parse URL '" + args[currentArg] + "'");
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             System.out.println("I/O Error: " + e);
         }
+
+        watcher.end();
     }
 
     private static void testTransfer(List<URL> downloadUrls, QuicClientConnectionImpl.Builder builder) throws IOException, URISyntaxException {
@@ -169,11 +178,14 @@ public class InteropClient {
                             }))
                     .get(5, TimeUnit.MINUTES);
             logger.info("Downloaded " + downloadUrls);
-        } catch (InterruptedException e) {
+        }
+        catch (InterruptedException e) {
             logger.error("download tasks interrupted", e);
-        } catch (ExecutionException e) {
+        }
+        catch (ExecutionException e) {
             logger.error("download tasks failed", e);
-        } catch (TimeoutException e) {
+        }
+        catch (TimeoutException e) {
             logger.error("download tasks timed out...", e);
         }
 
