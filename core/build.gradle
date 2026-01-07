@@ -8,7 +8,7 @@ dependencies {
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
     implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
 
-    implementation group: 'com.io7m.repackage.io.whitfin', name: 'io.whitfin.siphash', version: '2.0.1'
+    implementation group: 'io.whitfin', name: 'siphash', version: '3.0.0'
 }
 
 task includeVersion {

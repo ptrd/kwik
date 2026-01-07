@@ -18,15 +18,15 @@
  */
 package tech.kwik.core.util;
 
-import io.whitfin.siphash.SipHasher;
-import io.whitfin.siphash.SipHasherContainer;
+import io.whitfin.siphash.SipHash;
+import io.whitfin.siphash.SipHashContext;
 
 public class SecureHash {
 
-    private final SipHasherContainer container;
+    private final SipHashContext container;
 
     public SecureHash(byte[] key) {
-        container = SipHasher.container(key);
+        container = SipHash.context(key);
     }
 
     public int generateHashCode(byte[] dcid) {
