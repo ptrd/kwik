@@ -221,7 +221,7 @@ abstract public class QuicPacket {
     protected void checkReservedBits(byte decryptedFlags) throws TransportError {}
 
     byte[] createHeaderProtectionMask(byte[] sample, Aead aead) {
-        return createHeaderProtectionMask(sample, 4, aead);
+        return aead.createHeaderProtectionMask(sample);
     }
 
     byte[] createHeaderProtectionMask(byte[] ciphertext, int encodedPacketNumberLength, Aead aead) {
