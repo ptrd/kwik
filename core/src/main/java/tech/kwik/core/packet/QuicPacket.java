@@ -105,44 +105,46 @@ abstract public class QuicPacket {
         }
     }
 
-    void parsePacketNumberAndPayload(ByteBuffer buffer, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException, TransportError {
+    void parsePacketNumberAndPayload(ByteBuffer buffer, int packetStartPosition, byte flags, int remainingLength, Aead aead, long largestPacketNumber, Logger log) throws DecryptionException, InvalidPacketException, TransportError {
         if (buffer.remaining() < remainingLength) {
             throw new InvalidPacketException();
         }
 
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
-        // "When removing packet protection, an endpoint
-        //   first removes the header protection."
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.3
+        // "When processing packets, an endpoint first removes the header protection."
 
-        int currentPosition = buffer.position();
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
-        // "The same number of bytes are always sampled, but an allowance needs
-        //   to be made for the endpoint removing protection, which will not know
-        //   the length of the Packet Number field.  In sampling the packet
-        //   ciphertext, the Packet Number field is assumed to be 4 bytes long
-        //   (its maximum possible encoded length)."
+        int packetNumberStartPosition = buffer.position();
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.2
+        // "The header protection algorithm uses (...) a sample of the ciphertext from the packet Payload field."
+        // "The same number of bytes are always sampled, but an allowance needs to be made for the removal of protection
+        //  by a receiving endpoint, which will not know the length of the Packet Number field. The sample of ciphertext
+        //  is taken starting from an offset of 4 bytes after the start of the Packet Number field. "
         if (buffer.remaining() < 4) {
             throw new InvalidPacketException();
         }
-        buffer.position(currentPosition + 4);
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.2:
-        // "This algorithm samples 16 bytes from the packet ciphertext."
+        buffer.position(packetNumberStartPosition + 4);
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.3
+        // "This algorithm samples 16 bytes from the packet ciphertext. "
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.4
+        // "This uses (...) 16 bytes sampled from the packet protection output."
         if (buffer.remaining() < 16) {
             throw new InvalidPacketException();
         }
         byte[] sample = new byte[16];
         buffer.get(sample);
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
-        // "Header protection is applied after packet protection is applied (see
-        //   Section 5.3).  The ciphertext of the packet is sampled and used as
-        //   input to an encryption algorithm."
+        buffer.position(packetNumberStartPosition);
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.1
+        // "Header protection is applied after packet protection is applied (see Section 5.3). The ciphertext of the
+        //  packet is sampled and used as input to an encryption algorithm. "
         byte[] mask = createHeaderProtectionMask(sample, aead);
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1
-        // "The output of this algorithm is a 5 byte mask which is applied to the
-        //   protected header fields using exclusive OR.  The least significant
-        //   bits of the first byte of the packet are masked by the least
-        //   significant bits of the first mask byte"
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.1
+        // "The output of this algorithm is a 5-byte mask that is applied to the protected header fields using exclusive
+        //  OR. The least significant bits of the first byte of the packet are masked by the least significant bits of
+        //  the first mask byte, and the packet number is masked with the remaining bytes. "
         byte decryptedFlags;
+        // https://www.rfc-editor.org/rfc/rfc8999.html#section-5.1
+        // "A QUIC packet with a long header has the high bit of the first byte set to 1. "
+        // "A QUIC packet with a short header has the high bit of the first byte set to 0."
         if ((flags & 0x80) == 0x80) {
             // Long header: 4 bits masked
             decryptedFlags = (byte) (flags ^ mask[0] & 0x0f);
@@ -152,9 +154,8 @@ abstract public class QuicPacket {
             decryptedFlags = (byte) (flags ^ mask[0] & 0x1f);
         }
         setUnprotectedHeader(decryptedFlags);
-        buffer.position(currentPosition);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.1
         // "pn_length = (packet[0] & 0x03) + 1"
         int protectedPackageNumberLength = (decryptedFlags & 0x03) + 1;
         byte[] protectedPackageNumber = new byte[protectedPackageNumberLength];
@@ -162,33 +163,36 @@ abstract public class QuicPacket {
 
         byte[] unprotectedPacketNumber = new byte[protectedPackageNumberLength];
         for (int i = 0; i < protectedPackageNumberLength; i++) {
-            // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.4.1:
-            // " ...and the packet number is
-            //   masked with the remaining bytes.  Any unused bytes of mask that might
-            //   result from a shorter packet number encoding are unused."
+            // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.4.1
+            // "The least significant bits of the first byte of the packet are masked by the least significant bits of
+            //  the first mask byte, and the packet number is masked with the remaining bytes. Any unused bytes of mask
+            //  that might result from a shorter packet number encoding are unused."
+            // "packet[pn_offset:pn_offset+pn_length] ^= mask[1:1+pn_length]"
             unprotectedPacketNumber[i] = (byte) (protectedPackageNumber[i] ^ mask[1+i]);
         }
         long truncatedPacketNumber = bytesToInt(unprotectedPacketNumber);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.1
+        // "Once header protection is removed, the packet number is decoded by finding the packet number value that is
+        //  closest to the next expected packet. The next expected packet is the highest received packet number plus one."
         packetNumber = decodePacketNumber(truncatedPacketNumber, largestPacketNumber, protectedPackageNumberLength * 8);
         log.decrypted("Unprotected packet number: " + packetNumber);
 
-        currentPosition = buffer.position();
-        // https://tools.ietf.org/html/draft-ietf-quic-tls-17#section-5.3
-        // "The associated data, A, for the AEAD is the contents of the QUIC
-        //   header, starting from the flags byte in either the short or long
-        //   header, up to and including the unprotected packet number."
-        byte[] frameHeader = new byte[buffer.position()];
-        buffer.position(0);
+        int payloadStartPosition = buffer.position();
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.3
+        // "The associated data, A, for the AEAD is the contents of the QUIC header, starting from the first byte of
+        //  either the short or long header, up to and including the unprotected packet number."
+        byte[] frameHeader = new byte[payloadStartPosition - packetStartPosition];
+        buffer.position(packetStartPosition);
         buffer.get(frameHeader);
         frameHeader[0] = decryptedFlags;
-        buffer.position(currentPosition);
+        buffer.position(payloadStartPosition);
 
         // Copy unprotected (decrypted) packet number in frame header, before decrypting payload.
         System.arraycopy(unprotectedPacketNumber, 0, frameHeader, frameHeader.length - (protectedPackageNumberLength), protectedPackageNumberLength);
         log.encrypted("Frame header", frameHeader);
 
-        // "The input plaintext, P, for the AEAD is the payload of the QUIC
-        //   packet, as described in [QUIC-TRANSPORT]."
+        // https://www.rfc-editor.org/rfc/rfc9001.html#section-5.3
+        // "The input plaintext, P, for the AEAD is the payload of the QUIC packet"
         // "The output ciphertext, C, of the AEAD is transmitted in place of P."
         int encryptedPayloadLength = remainingLength - protectedPackageNumberLength;
         if (encryptedPayloadLength < 1) {
@@ -204,7 +208,11 @@ abstract public class QuicPacket {
         frames = new ArrayList<>();
         parseFrames(frameBytes, log);
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.3.1
-        // "An endpoint MUST (...) after removing both packet and header protection, (...)"
+        // "These bits are protected using header protection; see Section 5.4 of [QUIC-TLS]. The value included prior
+        //  to protection MUST be set to 0. An endpoint MUST treat receipt of a packet that has a non-zero value for
+        //  these bits, after removing both packet and header protection, as a connection error of type
+        //  PROTOCOL_VIOLATION. Discarding such a packet after only removing header protection can expose the endpoint
+        //  to attacks (...)."
         checkReservedBits(decryptedFlags);
     }
 
@@ -271,8 +279,9 @@ abstract public class QuicPacket {
     }
 
     static long decodePacketNumber(long truncatedPacketNumber, long largestPacketNumber, int bits) {
-        // https://www.rfc-editor.org/rfc/rfc9000.html#sample-packet-number-decoding
-        // "Figure 47: Sample Packet Number Decoding Algorithm"
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-a.3
+        // "The pseudocode in Figure 47 includes an example algorithm for decoding packet numbers after header protection
+        //  has been removed."
         long expectedPacketNumber = largestPacketNumber + 1;
         long pnWindow = 1L << bits;
         long pnHalfWindow = pnWindow / 2;

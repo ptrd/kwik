@@ -136,7 +136,7 @@ public abstract class PacketParser {
             // Short header packet
             packet = new ShortHeaderPacket(quicVersion.getVersion());
         }
-        data.rewind();
+        data.reset();
 
         if (packet.getEncryptionLevel() != null) {
             Aead aead = getAead(packet, data);

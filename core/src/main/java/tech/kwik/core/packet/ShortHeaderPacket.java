@@ -64,29 +64,22 @@ public class ShortHeaderPacket extends QuicPacket {
 
     @Override
     public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
-        log.debug("Parsing " + this.getClass().getSimpleName());
+        int packetStartPosition = buffer.position();
         if (buffer.remaining() < 1 + sourceConnectionIdLength) {
             throw new InvalidPacketException();
-        }
-        if (buffer.position() != 0) {
-            // parsePacketNumberAndPayload method requires packet to start at 0.
-            throw new IllegalStateException();
         }
         byte flags = buffer.get();
         checkPacketType(flags);
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-24#section-5.1
-        // "Packets with short headers (Section 17.3) only include the
-        //   Destination Connection ID and omit the explicit length.  The length
-        //   of the Destination Connection ID field is expected to be known to
-        //   endpoints."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-5.1
+        // "Packets with short headers (Section 17.3) only include the Destination Connection ID and omit the explicit
+        //  length. The length of the Destination Connection ID field is expected to be known to endpoints. "
         byte[] packetConnectionId = new byte[sourceConnectionIdLength];
         destinationConnectionId = packetConnectionId;
         buffer.get(packetConnectionId);
-        log.debug("Destination connection id", packetConnectionId);
 
         try {
-            parsePacketNumberAndPayload(buffer, flags, buffer.limit() - buffer.position(), aead, largestPacketNumber, log);
+            parsePacketNumberAndPayload(buffer, packetStartPosition, flags, buffer.limit() - buffer.position(), aead, largestPacketNumber, log);
             aead.confirmKeyUpdateIfInProgress();
         }
         catch (DecryptionException cantDecrypt) {
@@ -94,7 +87,7 @@ public class ShortHeaderPacket extends QuicPacket {
             throw cantDecrypt;
         }
         finally {
-            packetSize = buffer.position() - 0;
+            packetSize = buffer.position() - packetStartPosition;
         }
     }
 
