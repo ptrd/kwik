@@ -190,11 +190,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             bufferedInitialPackets.add(initialPacket);
             bufferedDatagramDataSize += data.limit();
             if (! checkClientHelloComplete(initialPacket)) {
-                String propValue = System.getProperty("tech.kwik.core.min-crypto-data-check");
-                boolean checkEnabled = propValue == null || !propValue.equalsIgnoreCase("disabled");
-                if (checkEnabled && initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
-                    throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
-                }
+                checkSufficientCryptoData(initialPacket);
                 return;
             }
 
@@ -222,6 +218,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             // Clean up faster
             cleanupTask.cancel(true);
             scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
+        }
+    }
+
+    private void checkSufficientCryptoData(InitialPacket initialPacket) throws UnacceptablePacketException {
+        String propValue = System.getProperty("tech.kwik.core.min-crypto-data-check");
+        boolean checkEnabled = propValue == null || !propValue.equalsIgnoreCase("disabled");
+        if (checkEnabled && initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
+            throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
         }
     }
 
