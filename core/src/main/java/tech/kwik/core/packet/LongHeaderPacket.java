@@ -36,7 +36,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-// https://tools.ietf.org/html/draft-ietf-quic-transport-16#section-17.2
+/**
+ * Represents a long header packet except for Version Negotiation Packet and Retry Packet which are handled by separate
+ * classes since they have a different structure and protection.
+ * https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+ * https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.2  (Initial Packet)
+ * https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.3  (0-RTT Packet)
+ * https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.4  (Handshake Packet)
+ */
 public abstract class LongHeaderPacket extends QuicPacket {
 
     private static final int MAX_PACKET_SIZE = 1500;
@@ -212,11 +219,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
     @Override
     public void parse(ByteBuffer buffer, Aead aead, long largestPacketNumber, Logger log, int sourceConnectionIdLength) throws DecryptionException, InvalidPacketException, TransportError {
-        log.debug("Parsing " + this.getClass().getSimpleName());
-        if (buffer.position() != 0) {
-            // parsePacketNumberAndPayload method requires packet to start at 0.
-            throw new IllegalStateException();
-        }
+        int packetStartPosition = buffer.position();
         if (buffer.remaining() < MIN_PACKET_LENGTH) {
             throw new InvalidPacketException();
         }
@@ -225,15 +228,15 @@ public abstract class LongHeaderPacket extends QuicPacket {
 
         boolean matchingVersion = Version.parse(buffer.getInt()).equals(this.quicVersion);
         if (! matchingVersion) {
-            // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-5.2
-            // "... packets are discarded if they indicate a different protocol version than that of the connection..."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-5.2
+            // "For example, packets are discarded if they indicate a different protocol version than that of the connection ..."
             throw new InvalidPacketException("Version does not match version of the connection");
         }
 
         int dstConnIdLength = buffer.get();
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-27#section-17.2
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
         // "In QUIC version 1, this value MUST NOT exceed 20.  Endpoints that receive a version 1 long header with a
-        // value larger than 20 MUST drop the packet."
+        //  value larger than 20 MUST drop the packet."
         if (dstConnIdLength < 0 || dstConnIdLength > 20) {
             throw new InvalidPacketException();
         }
@@ -252,26 +255,26 @@ public abstract class LongHeaderPacket extends QuicPacket {
         }
         sourceConnectionId = new byte[srcConnIdLength];
         buffer.get(sourceConnectionId);
-        log.debug("Destination connection id", destinationConnectionId);
-        log.debug("Source connection id", sourceConnectionId);
 
         parseAdditionalFields(buffer);
 
+        // Initial, Handshake and 0-RTT packets have the same structure except for the additional fields: all end with
+        // Length (i), Packet Number (8..32), Packet Payload (8..),
         int length;
         try {
-            // "The length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes"
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2
+            // "This is the length of the remainder of the packet (that is, the Packet Number and Payload fields) in bytes, encoded as a variable-length integer"
             length = VariableLengthInteger.parseInt(buffer);
         }
         catch (IllegalArgumentException | InvalidIntegerEncodingException | IntegerTooLargeException invalidInt) {
             throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
         }
-        log.debug("Length (PN + payload): " + length);
 
         try {
-            parsePacketNumberAndPayload(buffer, flags, length, aead, largestPacketNumber, log);
+            parsePacketNumberAndPayload(buffer, packetStartPosition, flags, length, aead, largestPacketNumber, log);
         }
         finally {
-            packetSize = buffer.position() - 0;
+            packetSize = buffer.position() - packetStartPosition;
         }
     }
 

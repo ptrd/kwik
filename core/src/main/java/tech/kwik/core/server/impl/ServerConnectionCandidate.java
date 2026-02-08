@@ -182,31 +182,38 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         try {
             int datagramNumber = metaData.datagramNumber();
             Instant timeReceived = metaData.timeReceived();
-            InitialPacket initialPacket = parseInitialPacket(datagramNumber, timeReceived, data);
-            log.received(timeReceived, datagramNumber, initialPacket);
-            log.debug("Parsed packet with size " + data.position() + "; " + data.remaining() + " bytes left.");
+            int packetsParsed = 0;
+            while (data.hasRemaining()) {
+                try {
+                    InitialPacket packet = parseInitialPacket(datagramNumber, timeReceived, data);
+                    packetsParsed++;
+                    log.received(timeReceived, datagramNumber, packet);
 
-            checkGenuineFirstFlight(initialPacket);
-            bufferedInitialPackets.add(initialPacket);
-            bufferedDatagramDataSize += data.limit();
-            if (! checkClientHelloComplete(initialPacket)) {
-                String propValue = System.getProperty("tech.kwik.core.min-crypto-data-check");
-                boolean checkEnabled = propValue == null || !propValue.equalsIgnoreCase("disabled");
-                if (checkEnabled && initialPacket.getFrames().stream().filter(f -> f instanceof CryptoFrame).mapToInt(f -> ((CryptoFrame) f).getLength()).sum() < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
-                    throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
+                    checkGenuineFirstFlight(packet);
+                    bufferedInitialPackets.add(packet);
                 }
+                catch (InvalidPacketException | DecryptionException e) {
+                    if (packetsParsed == 0) {
+                        log.debug("Dropped invalid initial packet (no connection created)");
+                    }
+                    else {
+                        log.debug("Stopped parsing initial packet datagram after parsing " + packetsParsed + " initial packets: " + e.getMessage());
+                    }
+                    // Stop parsing further packets, but continue processing the ones that have been parsed successfully.
+                    break;
+                }
+            }
+            bufferedDatagramDataSize += data.limit();
+            if (! checkClientHelloComplete(bufferedInitialPackets)) {
+                checkSufficientCryptoData(bufferedInitialPackets);
                 return;
             }
 
-            // Packet is valid. This is the moment to create a real server connection and continue processing.
+            // Received a valid ClientHello. This is the moment to create a real server connection and continue processing.
             if (registeredConnection == null) {
-                createAndRegisterServerConnection(initialPacket, metaData, data, bufferedDatagramDataSize);
+                createAndRegisterServerConnection(bufferedInitialPackets.get(0), metaData, data, bufferedDatagramDataSize);
                 cleanupTask.cancel(true);
             }
-        }
-        catch (InvalidPacketException | DecryptionException unacceptablePacket) {
-            // Drop packet without any action (i.e. do not send anything; do not change state; avoid unnecessary processing)
-            log.debug("Dropped invalid initial packet (no connection created)");
         }
         catch (TlsProtocolException | TransportError | UnacceptablePacketException invalidTlsMesssage) {
             // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
@@ -225,16 +232,33 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         }
     }
 
+    private void checkSufficientCryptoData(List<InitialPacket> packets) throws UnacceptablePacketException {
+        String propValue = System.getProperty("tech.kwik.core.min-crypto-data-check");
+        boolean checkEnabled = propValue == null || !propValue.equalsIgnoreCase("disabled");
+        if (checkEnabled) {
+            int cryptoSize = packets.stream()
+                    .flatMap(p -> p.getFrames().stream())
+                    .filter(f -> f instanceof CryptoFrame)
+                    .mapToInt(f -> ((CryptoFrame) f).getLength())
+                    .sum();
+            if (cryptoSize < MINIMUM_NON_FINAL_CRYPTO_LENGTH) {
+                throw new UnacceptablePacketException("Initial packet containing insufficient crypto data");
+            }
+        }
+    }
+
     /**
      * Check whether received (including buffered) crypto data already contains a complete ClientHello message.
-     * @param initialPacket
+     * @param initialPackets
      * @return
      * @throws TlsProtocolException when the first message is not a ClientHello
      */
-    private boolean checkClientHelloComplete(InitialPacket initialPacket) throws TlsProtocolException, TransportError {
-        for (QuicFrame frame: initialPacket.getFrames()) {
-            if (frame instanceof CryptoFrame) {
-                cryptoBuffer.add((CryptoFrame) frame);
+    private boolean checkClientHelloComplete(List<InitialPacket> initialPackets) throws TlsProtocolException, TransportError {
+        for (InitialPacket initialPacket: initialPackets) {
+            for (QuicFrame frame : initialPacket.getFrames()) {
+                if (frame instanceof CryptoFrame) {
+                    cryptoBuffer.add((CryptoFrame) frame);
+                }
             }
         }
 
@@ -316,9 +340,10 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     InitialPacket parseInitialPacket(int datagramNumber, Instant timeReceived, ByteBuffer data) throws InvalidPacketException, DecryptionException, TransportError {
         // Note that the caller already has extracted connection id's from the raw data, so checking for minimal length is not necessary here.
+        data.mark();
         int flags = data.get();
         int packetVersion = data.getInt();
-        data.rewind();
+        data.reset();
 
         if ((flags & 0x40) != 0x40) {
             // https://tools.ietf.org/html/draft-ietf-quic-transport-34#section-17.2
