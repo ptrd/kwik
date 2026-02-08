@@ -179,6 +179,37 @@ class ServerConnectionCandidateTest {
     }
 
     @Test
+    void whenDatagramContainsCoalescedInitialPacketsAllOfThemShouldBeParsed() throws Exception {
+        // Given
+        byte[] validClientHelloBytes = new ClientHelloBuilder().buildBinary();
+        int nrOfParts = 3;
+        int partSize = validClientHelloBytes.length / nrOfParts;
+        CryptoFrame[] cryptoFrames = new CryptoFrame[nrOfParts];
+        for (int i = 0; i < nrOfParts; i++) {
+            int offset = i * partSize;
+            int length = (i == nrOfParts - 1) ? validClientHelloBytes.length - offset : partSize;
+            cryptoFrames[i] = new CryptoFrame(version, offset, Arrays.copyOfRange(validClientHelloBytes, offset, offset + length));
+        }
+
+        ByteBuffer datagramData = ByteBuffer.allocate(1200);
+        for (int i = 0; i < nrOfParts; i++) {
+            byte[] packetData = createInitialPacketBytes(scid, odcid, i, List.of(cryptoFrames[i]));
+            datagramData.put(packetData);
+        }
+
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), datagramData, clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNotNull();
+        Integer antiAmplificationLimit = (Integer) new FieldReader(createdServerConnection.getSender(), SenderImpl.class.getDeclaredField("antiAmplificationLimit")).read();
+        assertThat(antiAmplificationLimit).isEqualTo(3 * 1200);
+    }
+
+    @Test
     void firstInitialPacketWithoutCryptoFrameShouldNotCreateConnection() throws Exception {
         // Given
         List<QuicFrame> frames = List.of(new PingFrame(), new Padding(1164));
@@ -409,13 +440,22 @@ class ServerConnectionCandidateTest {
         // Then
         assertThat(createdServerConnection).isNull();
     }
+
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
-        return createInitialPacketBytes(version, scid, odcid, frames);
+        return createInitialPacketBytes(version, scid, odcid, 0, frames);
+    }
+
+    byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, int packetNumber, List<QuicFrame> frames) throws Exception {
+        return createInitialPacketBytes(version, scid, odcid, packetNumber, frames);
     }
 
     byte[] createInitialPacketBytes(Version version, byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
+        return createInitialPacketBytes(version, scid, odcid, 0, frames);
+    }
+
+    byte[] createInitialPacketBytes(Version version, byte[] scid, byte[] odcid, int packetNumber, List<QuicFrame> frames) throws Exception {
         InitialPacket initialPacket = new InitialPacket(version, scid, odcid, null, frames);
-        initialPacket.setPacketNumber(0);
+        initialPacket.setPacketNumber(packetNumber);
         ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(version), Role.Client, null, mock(Logger.class));
         secrets.computeInitialKeys(odcid);
         return initialPacket.generatePacketBytes(secrets.getOwnAead(EncryptionLevel.Initial));
