@@ -92,6 +92,11 @@ public class QuicTransportParametersExtension extends Extension {
     }
 
     @Override
+    public int getType() {
+        return CODEPOINT_V1;
+    }
+
+    @Override
     public byte[] getBytes() {
         if (data == null) {
             serialize();
