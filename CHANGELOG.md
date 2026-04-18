@@ -1,5 +1,11 @@
 # Releases
 
+## 0.10.9 (2026-04-18)
+
+- fix: coalesced initial packets were not parsed
+- upgrade agent15 to 3.2
+- switch back to original siphash java implementation (`io.whitfin:siphash`), which now has proper Java module support (reverts the workaround introduced in 0.10.2)
+
 ## 0.10.8 (2025-11-18)
 
 - suppress warning message when packet can not be decrypted because of discarded keys
