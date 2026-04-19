@@ -116,6 +116,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int antiAmplificationLimit = -1;
     private volatile Runnable shutdownHook;
     private volatile Instant lastestAckElicitingTime;
+    private final byte[] paddingPattern;
 
 
     public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
@@ -153,6 +154,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         senderThread = new Thread(() -> sendLoop(), "sender" + (!id.isBlank()? "-" + id: ""));
         senderThread.setDaemon(true);
+
+        String paddingPatternProp = System.getProperty("tech.kwik.padding-pattern");
+        if (paddingPatternProp != null && !paddingPatternProp.isEmpty()) {
+            paddingPattern = new byte[paddingPatternProp.length() / 2];
+            for (int i = 0; i < paddingPattern.length; i++) {
+                paddingPattern[i] = (byte) Integer.parseInt(paddingPatternProp.substring(i * 2, i * 2 + 2), 16);
+            }
+        }
+        else {
+            paddingPattern = new byte[]{ 0 };
+        }
     }
 
     public void start(ConnectionSecrets secrets) {
@@ -430,10 +442,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             return;
         }
 
-        int minSize = assembledDatagram.getMinDatagramSize();
-        if (minSize > 0 && buffer.position() < minSize) {
-            buffer.put(new byte[minSize - buffer.position()]);
-        }
+        addExternalPadding(buffer, assembledDatagram.getMinDatagramSize());
 
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
@@ -456,6 +465,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         log.sent(timeSent, packetsSent);
         dataSent += countDataBytes(packetsSent);
         qlog.emitPacketSentEvent(packetsSent, timeSent);
+    }
+
+    private void addExternalPadding(ByteBuffer buffer, int minDatagramSize) {
+        if (minDatagramSize > 0 && buffer.position() < minDatagramSize) {
+            int paddingLength = minDatagramSize - buffer.position();
+            byte[] padding = new byte[paddingLength];
+            for (int i = 0; i < paddingLength; i++) {
+                padding[i] = paddingPattern[i % paddingPattern.length];
+            }
+            buffer.put(padding);
+        }
     }
 
     private AssembledDatagram assemblePacket() {
