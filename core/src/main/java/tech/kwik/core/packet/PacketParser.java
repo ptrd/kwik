@@ -155,6 +155,16 @@ public abstract class PacketParser {
         return packet;
     }
 
+    /**
+     * Get the AEAD to decrypt the given packet.
+     * @param packet  the packet to get the AEAD for. The packet is not yet parsed, but version and encryption level
+     *                are set and can be used to determine the AEAD to use.
+     * @param data
+     * @return
+     * @throws MissingKeysException
+     * @throws InvalidPacketException
+     * @throws TransportError
+     */
     protected abstract Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException, TransportError;
 
     /**
