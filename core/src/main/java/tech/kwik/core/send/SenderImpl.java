@@ -182,7 +182,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public void send(RetryPacket retryPacket) {
         try {
-            send(List.of(new SendItem(retryPacket)));
+            send(new AssembledDatagram(new SendItem(retryPacket)));
         } catch (IOException e) {
             log.error("Sending packet failed: " + retryPacket);
         }
@@ -343,14 +343,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     void sendIfAny() throws IOException {
-        List<SendItem> items;
+        AssembledDatagram assembled;
         do {
-            items = assemblePacket();
-            if (!items.isEmpty()) {
-                send(items);
+            assembled = assemblePacket();
+            if (!assembled.isEmpty()) {
+                send(assembled);
             }
         }
-        while (!items.isEmpty());
+        while (!assembled.isEmpty());
     }
 
     private void wakeUpSenderLoop() {
@@ -395,7 +395,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         return 5000;
     }
 
-    void send(List<SendItem> itemsToSend) throws IOException {
+    void send(AssembledDatagram assembledDatagram) throws IOException {
+        List<SendItem> itemsToSend = assembledDatagram.getItems();
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
         try {
@@ -428,7 +429,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             // Nothing to send
             return;
         }
-        
+
+        int minSize = assembledDatagram.getMinDatagramSize();
+        if (minSize > 0 && buffer.position() < minSize) {
+            buffer.put(new byte[minSize - buffer.position()]);
+        }
+
         DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
 
         Instant timeSent = clock.instant();
@@ -452,7 +458,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         qlog.emitPacketSentEvent(packetsSent, timeSent);
     }
 
-    private List<SendItem> assemblePacket() {
+    private AssembledDatagram assemblePacket() {
         int remainingCwnd = (int) congestionController.remainingCwnd();
         int currentMaxPacketSize = maxPacketSize;
         if (antiAmplificationLimit >= 0) {
@@ -466,7 +472,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             }
             else {
                 log.warn("Cannot send; anti-amplification limit is reached");
-                return Collections.emptyList();
+                return new AssembledDatagram(Collections.emptyList());
             }
         }
         byte[] srcCid = connection.getSourceConnectionId();

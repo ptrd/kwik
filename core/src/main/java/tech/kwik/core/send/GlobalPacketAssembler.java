@@ -46,6 +46,7 @@ public class GlobalPacketAssembler {
     private SendRequestQueue[] sendRequestQueue;
     private volatile PacketAssembler[] packetAssembler = new PacketAssembler[EncryptionLevel.values().length];
     private volatile EncryptionLevel[] enabledLevels;
+    private final PaddingMode paddingMode;
 
 
     public GlobalPacketAssembler(VersionHolder quicVersion, SendRequestQueue[] sendRequestQueues, GlobalAckGenerator globalAckGenerator) {
@@ -75,6 +76,9 @@ public class GlobalPacketAssembler {
         });
 
         enabledLevels = new EncryptionLevel[] { Initial, ZeroRTT, Handshake };
+
+        String paddingModeProp = System.getProperty("tech.kwik.padding-mode", "inside");
+        paddingMode = "outside".equalsIgnoreCase(paddingModeProp) ? PaddingMode.OUTSIDE : PaddingMode.INSIDE;
     }
 
     /**
@@ -86,7 +90,7 @@ public class GlobalPacketAssembler {
      * @param destinationConnectionId
      * @return
      */
-    public List<SendItem> assemble(int remainingCwndSize, int maxDatagramSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
+    public AssembledDatagram assemble(int remainingCwndSize, int maxDatagramSize, byte[] sourceConnectionId, byte[] destinationConnectionId) {
         List<SendItem> packets = new ArrayList<>();
         int size = 0;
         boolean hasInitial = false;
@@ -118,6 +122,8 @@ public class GlobalPacketAssembler {
             }
         }
 
+        int minDatagramSize = 0;
+
         if (hasInitial && size < 1200) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-14.1
             // "A client MUST expand the payload of all UDP datagrams carrying Initial packets to at least the smallest
@@ -125,7 +131,12 @@ public class GlobalPacketAssembler {
             //  the Initial packet; see Section 12.2."
             // "Similarly, a server MUST expand the payload of all UDP datagrams carrying ack-eliciting Initial packets
             //  to at least the smallest allowed maximum datagram size of 1200 bytes."
-            size += addPadding(packets, size, 1200);
+            if (paddingMode == PaddingMode.INSIDE) {
+                size += addPadding(packets, size, 1200);
+            }
+            else {
+                minDatagramSize = 1200;
+            }
         }
 
         if (hasPathChallengeOrResponse && size < 1200) {
@@ -138,10 +149,16 @@ public class GlobalPacketAssembler {
             //  maximum datagram size of 1200 bytes."
             // "However, an endpoint MUST NOT expand the datagram containing the PATH_RESPONSE if the resulting data
             //  exceeds the anti-amplification limit."
-            size += addPadding(packets, size, Integer.min(1200, maxDatagramSize));
+            int required = Integer.min(1200, maxDatagramSize);
+            if (paddingMode == PaddingMode.INSIDE) {
+                size += addPadding(packets, size, required);
+            }
+            else {
+                minDatagramSize = Integer.max(minDatagramSize, required);
+            }
         }
 
-        return packets;
+        return new AssembledDatagram(packets, minDatagramSize);
     }
 
     protected int addPadding(List<SendItem> packets, int currentEstimatedSize, int requiredMinimumSize) {

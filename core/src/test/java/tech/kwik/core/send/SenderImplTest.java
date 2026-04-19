@@ -39,6 +39,8 @@ import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
 
+import tech.kwik.core.send.AssembledDatagram;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -95,10 +97,10 @@ class SenderImplTest extends AbstractSenderTest {
         ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
         ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
         packet1.setPacketNumber(10);
-        sender.send(List.of(new SendItem(packet1)));
+        sender.send(new AssembledDatagram(new SendItem(packet1)));
         packet1.setPacketNumber(11);
         packet2.setPacketNumber(12);
-        sender.send(List.of(new SendItem(packet1), new SendItem(packet2)));
+        sender.send(new AssembledDatagram(List.of(new SendItem(packet1), new SendItem(packet2))));
 
         assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
         assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
@@ -154,7 +156,7 @@ class SenderImplTest extends AbstractSenderTest {
 
     private void setupMockPacketAssember() throws NoSuchFieldException {
         packetAssembler = mock(GlobalPacketAssembler.class);
-        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(List.of(new SendItem(new MockPacket(0, 1200, ""))));
+        when(packetAssembler.assemble(anyInt(), anyInt(), any(byte[].class), any(byte[].class))).thenReturn(new AssembledDatagram(List.of(new SendItem(new MockPacket(0, 1200, "")))));
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
@@ -222,7 +224,7 @@ class SenderImplTest extends AbstractSenderTest {
         // When
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new AckFrame(0));
         initialPacket.setPacketNumber(1);
-        sender.send(mutableListOf(new SendItem(initialPacket)));
+        sender.send(new AssembledDatagram(mutableListOf(new SendItem(initialPacket))));
 
         // Then
         verify(socket, never()).send(any(DatagramPacket.class));
