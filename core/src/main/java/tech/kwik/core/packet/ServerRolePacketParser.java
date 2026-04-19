@@ -18,7 +18,6 @@
  */
 package tech.kwik.core.packet;
 
-import tech.kwik.core.QuicConstants;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
@@ -59,21 +58,20 @@ public class ServerRolePacketParser extends PacketParser {
 
         if (retryRequired && packet instanceof InitialPacket) {
             // Check whether the packet has a (retry) token
-            data.mark();
-            int destCidLength = data.get(5) & 0xff;
-            int srcCidLength = data.get(6 + destCidLength) & 0xff;
-            data.position(7 + destCidLength + srcCidLength);
-            int tokenLength;
             try {
-                tokenLength = VariableLengthInteger.parseInt(data);
+                data.mark();
+                int destCidLength = data.get(5) & 0xff;
+                int srcCidLength = data.get(6 + destCidLength) & 0xff;
+                data.position(7 + destCidLength + srcCidLength);
+                int tokenLength = VariableLengthInteger.parseInt(data);
+                data.reset();
+                if (tokenLength == 0) {
+                    // If the packet has no token, it uses the secrets based on the original destination connection id.
+                    return connectionSecrets.getOriginalClientInitialAead();
+                }
             }
-            catch (InvalidIntegerEncodingException | IntegerTooLargeException e) {
-                throw new TransportError(QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR);
-            }
-            data.reset();
-            if (tokenLength == 0) {
-                // If the packet has no token, it uses the secrets based on the original destination connection id.
-                return connectionSecrets.getOriginalClientInitialAead();
+            catch (InvalidIntegerEncodingException | IntegerTooLargeException | IndexOutOfBoundsException | IllegalArgumentException e) {
+                throw new InvalidPacketException("malformed initial packet");
             }
         }
 
