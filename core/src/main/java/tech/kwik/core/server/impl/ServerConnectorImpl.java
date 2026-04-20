@@ -22,6 +22,7 @@ import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
 import tech.kwik.core.concurrent.DaemonThreadFactory;
+import tech.kwik.core.concurrent.VirtualExecutor;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
@@ -146,8 +147,16 @@ public class ServerConnectorImpl implements ServerConnector {
         receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
 
         int maxSharedExecutorThreads = 10;
-        sharedExecutor = new ThreadPoolExecutor(1, maxSharedExecutorThreads, 60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<Runnable>(), new DaemonThreadFactory("server connector shared executor"));
+        sharedExecutor =
+                VirtualExecutor.supported()
+                        ? VirtualExecutor.createExecutor("server connector shared executor")
+                        : new ThreadPoolExecutor(
+                        1,
+                        maxSharedExecutorThreads,
+                        60L,
+                        TimeUnit.SECONDS,
+                        new LinkedBlockingQueue<>(),
+                        new DaemonThreadFactory("server connector shared executor"));
         sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         context = new ServerConnectorContext();
 
