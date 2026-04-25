@@ -20,7 +20,7 @@ package tech.kwik.core.cid;
 
 import tech.kwik.core.log.Logger;
 
-import java.util.Arrays;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -109,7 +109,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     public boolean isStatelessResetToken(byte[] tokenCandidate) {
         return connectionIds.values().stream()
                 .filter(cid -> cid.getConnectionIdStatus().notUnusedOrRetired())
-                .anyMatch(cid -> Arrays.equals(cid.getStatelessResetToken(), tokenCandidate));
+                .anyMatch(cid -> MessageDigest.isEqual(cid.getStatelessResetToken(), tokenCandidate));
     }
 }
 

@@ -64,6 +64,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
@@ -484,7 +485,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
                 connectionSecrets.recomputeInitialKeys(connectionIdManager.getInitialConnectionId());
                 return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
             }
-            else if (!Arrays.equals(packet.getToken(), token)) {
+            else if (!MessageDigest.isEqual(packet.getToken(), token)) {
                 // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
                 // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
                 // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
