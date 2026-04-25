@@ -29,6 +29,7 @@ import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.Random;
 
 /**
@@ -41,7 +42,7 @@ public class NewConnectionIdFrame extends QuicFrame {
     private int sequenceNr;
     private int retirePriorTo;
     private byte[] connectionId;
-    private static Random random = new Random();
+    private final static Random random = new SecureRandom();
     private byte[] statelessResetToken;
 
     public NewConnectionIdFrame(Version quicVersion) {
