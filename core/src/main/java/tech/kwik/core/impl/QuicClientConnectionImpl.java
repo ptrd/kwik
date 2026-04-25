@@ -1302,7 +1302,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             new X509TrustManager() {
                 @Override
                 public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                    return null;
+                    return new X509Certificate[0];
                 }
                 @Override
                 public void checkClientTrusted(
