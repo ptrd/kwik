@@ -175,9 +175,9 @@ public abstract class BaseAeadImpl implements Aead {
         return hp;
     }
 
-    public abstract Cipher getHeaderProtectionCipher();
+    protected abstract Cipher getHeaderProtectionCipher();
 
-    public abstract SecretKeySpec getKeySpec();
+    protected abstract SecretKeySpec getKeySpec();
 
-    public abstract Cipher getCipher();
+    protected abstract Cipher getCipher();
 }

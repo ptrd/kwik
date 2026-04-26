@@ -19,19 +19,11 @@
 package tech.kwik.core.impl;
 
 import tech.kwik.core.crypto.Aead;
-import tech.kwik.core.crypto.Aes128Gcm;
-import tech.kwik.core.crypto.BaseAeadImpl;
-import tech.kwik.core.log.Logger;
+import tech.kwik.core.crypto.CryptoTestUtils;
 import tech.kwik.core.test.ByteUtils;
-import tech.kwik.core.test.FieldSetter;
-
-import javax.crypto.Cipher;
 
 import static tech.kwik.core.impl.Version.IETF_draft_29;
 import static tech.kwik.core.impl.Version.QUIC_version_1;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestUtils {
 
@@ -41,26 +33,7 @@ public class TestUtils {
      * @throws Exception
      */
     public static Aead createKeys() throws Exception {
-        Aes128Gcm keys = mock(Aes128Gcm.class);
-        when(keys.getHp()).thenReturn(new byte[16]);
-        when(keys.getIv()).thenReturn(new byte[12]);
-        Aes128Gcm dummyKeys = new Aes128Gcm(Version.getDefault(), Role.Client, true, new byte[16], null, mock(Logger.class));
-        FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("hp"), new byte[16]);
-        Cipher hpCipher = dummyKeys.getHeaderProtectionCipher();
-        when(keys.getHeaderProtectionCipher()).thenReturn(hpCipher);
-        FieldSetter.setField(dummyKeys, BaseAeadImpl.class.getDeclaredField("key"), new byte[16]);
-        Cipher wCipher = dummyKeys.getCipher();
-        // The Java implementation of this cipher (GCM), prevents re-use with the same iv.
-        // As various tests often use the same packet numbers (used for creating the nonce), the cipher must be re-initialized for each test.
-        // Still, a consequence is that generatePacketBytes cannot be called twice on the same packet.
-        when(keys.getCipher()).thenReturn(wCipher);
-        when(keys.getKeySpec()).thenReturn(dummyKeys.getKeySpec());
-
-        when(keys.aeadEncrypt(any(), any(), any())).thenCallRealMethod();
-        when(keys.aeadDecrypt(any(), any(), any())).thenCallRealMethod();
-        when(keys.createHeaderProtectionMask(any())).thenCallRealMethod();
-
-        return keys;
+        return CryptoTestUtils.createKeys();
     }
 
     public static byte[] createValidInitial(Version quicVersion) {

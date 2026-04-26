@@ -68,7 +68,7 @@ public class ChaCha20 extends BaseAeadImpl {
     }
 
     @Override
-    public Cipher getHeaderProtectionCipher() {
+    protected Cipher getHeaderProtectionCipher() {
         if (hpCipher == null) {
             try {
                 hpCipher = Cipher.getInstance("ChaCha20");
@@ -84,7 +84,7 @@ public class ChaCha20 extends BaseAeadImpl {
     }
 
     @Override
-    public SecretKeySpec getKeySpec() {
+    protected SecretKeySpec getKeySpec() {
         if (keySpec == null) {
             keySpec = new SecretKeySpec(key, "ChaCha20-Poly1305");
         }
@@ -92,7 +92,7 @@ public class ChaCha20 extends BaseAeadImpl {
     }
 
     @Override
-    public Cipher getCipher() {
+    protected Cipher getCipher() {
         if (cipher == null) {
             try {
                 cipher = Cipher.getInstance("ChaCha20-Poly1305");

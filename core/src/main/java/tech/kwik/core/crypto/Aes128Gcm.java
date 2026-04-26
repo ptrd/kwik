@@ -46,7 +46,7 @@ public class Aes128Gcm extends BaseAeadImpl {
     }
 
     @Override
-    public Cipher getHeaderProtectionCipher() {
+    protected Cipher getHeaderProtectionCipher() {
         if (hpCipher == null) {
             try {
                 // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.3
@@ -54,10 +54,12 @@ public class Aes128Gcm extends BaseAeadImpl {
                 hpCipher = Cipher.getInstance("AES/ECB/NoPadding");
                 SecretKeySpec keySpec = new SecretKeySpec(getHp(), "AES");
                 hpCipher.init(Cipher.ENCRYPT_MODE, keySpec);
-            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            }
+            catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
                 // Inappropriate runtime environment
                 throw new QuicRuntimeException(e);
-            } catch (InvalidKeyException e) {
+            }
+            catch (InvalidKeyException e) {
                 // Programming error
                 throw new RuntimeException();
             }
@@ -71,7 +73,8 @@ public class Aes128Gcm extends BaseAeadImpl {
         byte[] mask;
         try {
             mask = hpCipher.doFinal(sample);
-        } catch (IllegalBlockSizeException | BadPaddingException e) {
+        }
+        catch (IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
         }
@@ -79,7 +82,7 @@ public class Aes128Gcm extends BaseAeadImpl {
     }
 
     @Override
-    public SecretKeySpec getKeySpec() {
+    protected SecretKeySpec getKeySpec() {
         if (keySpec == null) {
             keySpec = new SecretKeySpec(key, "AES");
         }
@@ -87,14 +90,15 @@ public class Aes128Gcm extends BaseAeadImpl {
     }
 
     @Override
-    public Cipher getCipher() {
+    protected Cipher getCipher() {
         if (cipher == null) {
             try {
                 // From https://tools.ietf.org/html/draft-ietf-quic-tls-16#section-5.3:
                 // "Prior to establishing a shared secret, packets are protected with AEAD_AES_128_GCM"
                 String AES_GCM_NOPADDING = "AES/GCM/NoPadding";
                 cipher = Cipher.getInstance(AES_GCM_NOPADDING);
-            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            }
+            catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
                 // Inappropriate runtime environment
                 throw new QuicRuntimeException(e);
             }
@@ -111,7 +115,8 @@ public class Aes128Gcm extends BaseAeadImpl {
             aeadCipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             aeadCipher.updateAAD(associatedData);
             return aeadCipher.doFinal(message);
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException |
+        }
+        catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException |
                  BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
@@ -132,9 +137,11 @@ public class Aes128Gcm extends BaseAeadImpl {
             aeadCipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
             aeadCipher.updateAAD(associatedData);
             return aeadCipher.doFinal(message);
-        } catch (AEADBadTagException decryptError) {
+        }
+        catch (AEADBadTagException decryptError) {
             throw new DecryptionException();
-        } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+        }
+        catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             // Programming error
             throw new RuntimeException();
         }
