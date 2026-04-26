@@ -24,7 +24,6 @@ import tech.kwik.core.cid.ConnectionIdStatus;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.impl.TransportParameters;
-import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.util.Bytes;
 
 import java.io.BufferedReader;
@@ -51,6 +50,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 
 
 public class InteractiveShell {
@@ -403,8 +404,8 @@ public class InteractiveShell {
                 builder.maxUdpPayloadSize(toInt(value));
                 builder.enforceMaxUdpPayloadSize(true);
                 params.maxUdpPayloadSize = toInt(value);
-                if (toInt(value) > Receiver.MAX_DATAGRAM_SIZE) {
-                    System.out.println(String.format("Warning: client will read at most %d datagram bytes", Receiver.MAX_DATAGRAM_SIZE));
+                if (toInt(value) > MAX_SUPPORTED_PACKET_SIZE) {
+                    System.out.println(String.format("Warning: client will read at most %d datagram bytes", MAX_SUPPORTED_PACKET_SIZE));
                 }
                 break;
             case "strict":

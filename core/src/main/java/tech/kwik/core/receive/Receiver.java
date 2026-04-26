@@ -33,12 +33,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
+
 /**
  * Receives UDP datagrams on separate thread and queues them for asynchronous processing.
  */
 public class Receiver {
-
-    public static final int MAX_DATAGRAM_SIZE = 1500;
 
     private volatile DatagramSocket socket;
     private final Logger log;
@@ -102,7 +102,7 @@ public class Receiver {
 
         try {
             while (! isClosing) {
-                byte[] receiveBuffer = new byte[MAX_DATAGRAM_SIZE];
+                byte[] receiveBuffer = new byte[MAX_SUPPORTED_PACKET_SIZE];
                 DatagramPacket receivedPacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
                 try {
                     socket.receive(receivedPacket);

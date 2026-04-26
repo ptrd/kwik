@@ -33,9 +33,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-abstract public class QuicPacket {
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 
-    protected static final int MAX_PACKET_SIZE = 1500;
+abstract public class QuicPacket {
 
     protected Version quicVersion;
     protected long packetNumber = -1;
@@ -424,7 +424,7 @@ abstract public class QuicPacket {
     }
 
     protected ByteBuffer generatePayloadBytes(int encodedPacketNumberLength) {
-        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        ByteBuffer frameBytes = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
         frames.stream().forEachOrdered(frame -> frame.serialize(frameBytes));
         int serializeFramesLength = frameBytes.position();
         // https://tools.ietf.org/html/draft-ietf-quic-tls-27#section-5.4.2

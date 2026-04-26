@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
+
 /**
  * Represents a long header packet except for Version Negotiation Packet and Retry Packet which are handled by separate
  * classes since they have a different structure and protection.
@@ -46,7 +48,6 @@ import java.util.stream.Collectors;
  */
 public abstract class LongHeaderPacket extends QuicPacket {
 
-    private static final int MAX_PACKET_SIZE = 1500;
     // Minimal length for a valid packet:  type version dcid len dcid scid len scid length packet number payload
     private static int MIN_PACKET_LENGTH = 1 +  4 +     1 +      0 +  1 +      0 +  1 +    1 +    1;
 
@@ -122,7 +123,7 @@ public abstract class LongHeaderPacket extends QuicPacket {
     public byte[] generatePacketBytes(Aead aead) {
         assert(packetNumber >= 0);
 
-        ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        ByteBuffer packetBuffer = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
         generateFrameHeaderInvariant(packetBuffer);
         generateAdditionalFields(packetBuffer);
         byte[] encodedPacketNumber = encodePacketNumber(packetNumber);

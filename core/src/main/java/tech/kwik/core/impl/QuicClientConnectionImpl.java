@@ -81,10 +81,12 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static tech.kwik.agent15.TlsConstants.SignatureScheme.*;
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 import static tech.kwik.core.common.EncryptionLevel.App;
 import static tech.kwik.core.common.EncryptionLevel.Handshake;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 import static tech.kwik.core.impl.QuicClientConnectionImpl.EarlyDataStatus.Accepted;
 import static tech.kwik.core.impl.QuicClientConnectionImpl.EarlyDataStatus.None;
 import static tech.kwik.core.impl.QuicClientConnectionImpl.EarlyDataStatus.Requested;
@@ -99,7 +101,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     public static final long DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 10_000;
     public static final int DEFAULT_MAX_IDLE_TIMEOUT = 60_000;
     public static final int MIN_MAX_IDLE_TIMEOUT = 10;
-    public static final int MIN_RECEIVER_BUFFER_SIZE = 1500;
+    public static final int MIN_RECEIVER_BUFFER_SIZE = MAX_SUPPORTED_PACKET_SIZE;
     public static final long DEFAULT_MAX_STREAM_DATA = 250_000;
     public static final int MAX_DATA_FACTOR = 10;
     public static final int MAX_OPEN_PEER_INITIATED_BIDI_STREAMS = 3;
@@ -111,7 +113,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "Values below 1200 are invalid."
     public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
-    public static final int DEFAULT_MAX_UDP_PAYLOAD_SIZE = Receiver.MAX_DATAGRAM_SIZE;
+    public static final int DEFAULT_MAX_UDP_PAYLOAD_SIZE = MAX_SUPPORTED_PACKET_SIZE;
 
     public enum EarlyDataStatus {
         None,
@@ -1730,8 +1732,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (maxSize < MIN_MAX_UDP_PAYLOAD_SIZE) {
                 throw new IllegalArgumentException("Max UDP payload size must be at least " + MIN_MAX_UDP_PAYLOAD_SIZE + ".");
             }
-            if (maxSize > Receiver.MAX_DATAGRAM_SIZE) {
-                throw new IllegalArgumentException("Max UDP payload size cannot be larger than " + Receiver.MAX_DATAGRAM_SIZE + ".");
+            if (maxSize > MAX_SUPPORTED_PACKET_SIZE) {
+                throw new IllegalArgumentException("Max UDP payload size cannot be larger than " + MAX_SUPPORTED_PACKET_SIZE + ".");
             }
             connectionProperties.setMaxUdpPayloadSize(maxSize);
         }

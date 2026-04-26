@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021, 2022, 2023, 2024, 2025 Peter Doornbosch
+ * Copyright © 2026 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,20 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.core.frame;
+package tech.kwik.core.common;
 
-import java.nio.ByteBuffer;
+public class KwikConstants {
 
-import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
+    public static final int MAX_SUPPORTED_PACKET_SIZE = 1500;
 
-public class FrameTest {
-
-    protected byte[] getBytes(QuicFrame frame) {
-        ByteBuffer buffer = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
-        frame.serialize(buffer);
-        buffer.flip();
-        byte[] data = new byte[buffer.remaining()];
-        buffer.get(data);
-        return data;
-    }
 }

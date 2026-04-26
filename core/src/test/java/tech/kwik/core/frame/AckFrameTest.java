@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 import static tech.kwik.core.frame.AckFrame.FIXED_SENDER_ACK_DELAY_EXPONENT;
 
 class AckFrameTest extends FrameTest {
@@ -207,7 +208,7 @@ class AckFrameTest extends FrameTest {
         Range firstRange = ranges.get(0);
 
         // When
-        ByteBuffer buffer = ByteBuffer.allocate(1500);
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
         ackFrame.serialize(buffer);
 
         // Then
@@ -234,7 +235,7 @@ class AckFrameTest extends FrameTest {
         Range firstRange = ranges.get(0);
 
         // When
-        ByteBuffer buffer = ByteBuffer.allocate(1500);
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
         ackFrame.serialize(buffer);
 
         // Then

@@ -18,8 +18,9 @@
  */
 package tech.kwik.core.impl;
 
-import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.util.Bytes;
+
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -50,7 +51,7 @@ public class TransportParameters {
 
     public TransportParameters() {
         setDefaults();
-        maxUdpPayloadSize = Receiver.MAX_DATAGRAM_SIZE;
+        maxUdpPayloadSize = MAX_SUPPORTED_PACKET_SIZE;
     }
 
     public TransportParameters(int maxIdleTimeoutInSeconds, int initialMaxStreamData, int initialMaxStreamsBidirectional, int initialMaxStreamsUnidirectional) {
@@ -62,7 +63,7 @@ public class TransportParameters {
         initialMaxData = 10L * initialMaxStreamData;
         initialMaxStreamsBidi = initialMaxStreamsBidirectional;
         initialMaxStreamsUni = initialMaxStreamsUnidirectional;
-        maxUdpPayloadSize = Receiver.MAX_DATAGRAM_SIZE;
+        maxUdpPayloadSize = MAX_SUPPORTED_PACKET_SIZE;
     }
 
     private void setDefaults() {

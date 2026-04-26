@@ -18,16 +18,16 @@
  */
 package tech.kwik.core.frame;
 
-import tech.kwik.core.log.Logger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 
-class StreamFrameTest {
+class StreamFrameTest extends FrameTest {
 
     @Test
     void testStreamFrameParsing() throws Exception {
@@ -61,15 +61,6 @@ class StreamFrameTest {
         // Generate frame bytes and parse to get access to copied data bytes.
         frame = new StreamFrame().parse(ByteBuffer.wrap(getBytes(frame)), Mockito.mock(Logger.class));
         assertThat(frame.getStreamData()).isEqualTo("34567".getBytes());
-    }
-
-    private byte[] getBytes(QuicFrame frame) {
-        ByteBuffer buffer = ByteBuffer.allocate(1500);
-        frame.serialize(buffer);
-        buffer.flip();
-        byte[] data = new byte[buffer.remaining()];
-        buffer.get(data);
-        return data;
     }
 
     private byte[] generateByteArray(int size) throws Exception {

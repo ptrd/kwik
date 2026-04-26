@@ -35,6 +35,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
+import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
+
 public class ShortHeaderPacket extends QuicPacket {
 
     protected short keyPhaseBit;
@@ -134,7 +136,7 @@ public class ShortHeaderPacket extends QuicPacket {
     public byte[] generatePacketBytes(Aead aead) {
         assert(packetNumber >= 0);
 
-        ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        ByteBuffer buffer = ByteBuffer.allocate(MAX_SUPPORTED_PACKET_SIZE);
         byte flags;
         // https://tools.ietf.org/html/draft-ietf-quic-transport-17#section-17.3
         // "|0|1|S|R|R|K|P P|"
