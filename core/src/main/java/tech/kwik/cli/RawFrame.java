@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2025 Peter Doornbosch
+ * Copyright © 2019, 2020, 2025, 2026 Peter Doornbosch
  *
  * This file is part of Kwik, a QUIC client Java library
  *
