@@ -139,10 +139,10 @@ public class VersionNegotiationPacket extends QuicPacket {
     public byte[] generatePacketBytes(Aead aead) {
         ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 1 + destinationConnectionId.length + 1 + sourceConnectionId.length + 4 * serverSupportedVersions.size());
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-17.2.1
-        // "The value in the Unused field is selected randomly by the server. (...)
-        //  Servers SHOULD set the most significant bit of this field (0x40) to 1 so that Version Negotiation packets
-        //  appear to have the Fixed Bit field."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-17.2.1
+        // "The value in the Unused field is set to an arbitrary value by the server. Clients MUST ignore the value of
+        //  this field. Where QUIC might be multiplexed with other protocols (see [RFC7983]), servers SHOULD set the most
+        //  significant bit of this field (0x40) to 1 so that Version Negotiation packets appear to have the Fixed Bit field."
         buffer.put((byte) ((byte) random.nextInt(256) | 0b11000000));
         // "The Version field of a Version Negotiation packet MUST be set to 0x00000000."
         buffer.putInt(0x00000000);
