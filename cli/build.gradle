@@ -9,7 +9,7 @@ dependencies {
     implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
 
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
-    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+    implementation group: 'commons-cli', name: 'commons-cli', version: '1.11.0'
 }
 
 application {

@@ -380,8 +380,8 @@ public class KwikCli {
     private String determineAlpn(CommandLine cmd) {
         String alpn;
         if (cmd.hasOption("A")) {
-            alpn = cmd.getOptionValue("A", null);
-            if (alpn == null) {
+            alpn = cmd.getOptionValue("A", "");
+            if (alpn == "") {
                 throw new IllegalArgumentException("Missing argument for option -A");
             }
         }
