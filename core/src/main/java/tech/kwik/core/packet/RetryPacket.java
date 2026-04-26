@@ -149,14 +149,14 @@ public class RetryPacket extends QuicPacket {
             throw new InvalidPacketException();
         }
 
-        int dstConnIdLength = buffer.get();
+        int dstConnIdLength = buffer.get() & 0xff;
         if (buffer.remaining() < dstConnIdLength + 1 + RETRY_INTEGRITY_TAG_LENGTH) {
             throw new InvalidPacketException();
         }
         destinationConnectionId = new byte[dstConnIdLength];
         buffer.get(destinationConnectionId);
 
-        int srcConnIdLength = buffer.get();
+        int srcConnIdLength = buffer.get() & 0xff;
         if (buffer.remaining() < srcConnIdLength) {
             throw new InvalidPacketException();
         }

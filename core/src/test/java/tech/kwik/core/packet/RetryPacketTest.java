@@ -105,6 +105,28 @@ class RetryPacketTest {
     }
 
     @Test
+    void parseRetryPacketWithNegativeDestinationConnectionIdLength() throws Exception {
+        // 0x80 is 128 unsigned but -128 as a signed byte
+        String data = ("0f " + QUIC_VERSION_AS_HEX + "80 00000000000000000000000000000000 00").replace(" ", "");
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
+
+        assertThatThrownBy(() ->
+                new RetryPacket(Version.getDefault()).parse(buffer, null, DONT_CARE, mock(Logger.class), DONT_CARE)
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
+    void parseRetryPacketWithNegativeSourceConnectionIdLength() throws Exception {
+        // 0x80 is 128 unsigned but -128 as a signed byte
+        String data = ("0f " + QUIC_VERSION_AS_HEX + "00 80 0000000000000000000000000000000000").replace(" ", "");
+        ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
+
+        assertThatThrownBy(() ->
+                new RetryPacket(Version.getDefault()).parse(buffer, null, DONT_CARE, mock(Logger.class), DONT_CARE)
+        ).isInstanceOf(InvalidPacketException.class);
+    }
+
+    @Test
     void parseRetryPacketWithIncompleteRetryIntegrityTag() throws Exception {
         String data = ("0f " + QUIC_VERSION_AS_HEX + "040d0d0d0d 040e0e0e0e 0102030405060708090a0b0c0d0e").replace(" ", "");
         ByteBuffer buffer = ByteBuffer.wrap(ByteUtils.hexToBytes(data));
