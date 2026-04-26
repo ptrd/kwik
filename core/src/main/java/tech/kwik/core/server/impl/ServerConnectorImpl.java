@@ -143,7 +143,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 .map(Version::of)
                 .map(Version::getId)
                 .collect(Collectors.toList());
-        receiver = new Receiver(serverSocket, log, exception -> System.exit(9));
+        receiver = new Receiver(serverSocket, log, exception -> close());
 
         int maxSharedExecutorThreads = 10;
         sharedExecutor = new ThreadPoolExecutor(1, maxSharedExecutorThreads, 60L, TimeUnit.SECONDS,
