@@ -81,7 +81,7 @@ public class ServerConnectorImpl implements ServerConnector {
     private final ServerConnectionFactory serverConnectionFactory;
     private ApplicationProtocolRegistry applicationProtocolRegistry;
     private final ExecutorService sharedExecutor;
-    private final ScheduledExecutorService sharedScheduledExecutor;
+    private final ScheduledThreadPoolExecutor sharedScheduledExecutor;
     private final Context context;
     private final ServerConnectionRegistryImpl connectionRegistry;
     private final int connectionIdLength;
@@ -147,8 +147,10 @@ public class ServerConnectorImpl implements ServerConnector {
 
         int maxSharedExecutorThreads = 10;
         sharedExecutor = new ThreadPoolExecutor(1, maxSharedExecutorThreads, 60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<Runnable>(), new DaemonThreadFactory("server connector shared executor"));
-        sharedScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+                new LinkedBlockingQueue<Runnable>(), new DaemonThreadFactory("server connector shared executor"),
+                new ThreadPoolExecutor.DiscardPolicy());
+        sharedScheduledExecutor = new ScheduledThreadPoolExecutor(1);
+        sharedScheduledExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
         context = new ServerConnectorContext();
 
         serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");

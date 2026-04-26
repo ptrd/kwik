@@ -24,9 +24,10 @@ import tech.kwik.core.send.Sender;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static tech.kwik.core.common.EncryptionLevel.App;
@@ -50,7 +51,7 @@ public class KeepAliveActor {
      * @param sender
      */
     public KeepAliveActor(VersionHolder quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender) {
-        this(Clock.systemUTC(), quicVersion, keepAliveTime, peerIdleTimeout, sender, Executors.newScheduledThreadPool(1));
+        this(Clock.systemUTC(), quicVersion, keepAliveTime, peerIdleTimeout, sender, createScheduler());
     }
 
     KeepAliveActor(Clock clock, VersionHolder quicVersion, int keepAliveTime, int peerIdleTimeout, Sender sender, ScheduledExecutorService scheduler) {
@@ -82,5 +83,11 @@ public class KeepAliveActor {
 
     public void shutdown() {
         scheduler.shutdown();
+    }
+
+    private static ScheduledExecutorService createScheduler() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        return executor;
     }
 }

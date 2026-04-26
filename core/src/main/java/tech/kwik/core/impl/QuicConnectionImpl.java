@@ -163,8 +163,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
         connectionState = Status.Created;
         closeFramesSendRateLimiter = new ProgressivelyIncreasingRateLimiter();
-        scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("scheduler" + id));
-        callbackThread = Executors.newSingleThreadExecutor(new DaemonThreadFactory("callbacks-" + id));
+        scheduler = createScheduler(id);
+        ThreadPoolExecutor callbackThreadPoolExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), new DaemonThreadFactory("callbacks-" + id),
+                new ThreadPoolExecutor.DiscardPolicy());
+        callbackThread = callbackThreadPoolExecutor;
         currentEncryptionLevel = Initial;
     }
 
@@ -940,6 +943,12 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // Because this method is not called in the context of processing received messages,
         // sender flush must be called explicitly.
         getSender().flush();
+    }
+
+    private static ScheduledExecutorService createScheduler(String id) {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, new DaemonThreadFactory("scheduler" + id));
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        return executor;
     }
 
     private void schedule(Runnable command, int delay, TimeUnit unit) {

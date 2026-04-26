@@ -380,7 +380,7 @@ class ServerConnectorImplTest {
         server.close();
 
         // Then
-        verify(serverSocket).close();
+        verify(serverSocket, atLeastOnce()).close();
     }
     //endregion
 

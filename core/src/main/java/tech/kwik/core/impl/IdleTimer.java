@@ -24,9 +24,10 @@ import tech.kwik.core.packet.QuicPacket;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
@@ -64,9 +65,15 @@ public class IdleTimer {
         this.log = logger;
         this.timerResolution = timerResolution;
 
-        timer = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("idle-timer"));
+        timer = createScheduler();
         lastActionTime = clock.instant();
         lastAction = Action.PACKET_RECEIVED;  // Initial state is like a packet was received (no tail loss).
+    }
+
+    private ScheduledExecutorService createScheduler() {
+        ScheduledThreadPoolExecutor timer = new ScheduledThreadPoolExecutor(1, new DaemonThreadFactory("idle-timer"));
+        timer.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        return timer;
     }
 
     void setIdleTimeout(long idleTimeoutInMillis) {
