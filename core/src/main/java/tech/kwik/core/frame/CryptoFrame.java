@@ -22,6 +22,7 @@ package tech.kwik.core.frame;
 import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
@@ -29,6 +30,8 @@ import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.stream.StreamElement;
 
 import java.nio.ByteBuffer;
+
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 /**
  * Represents a crypto frame.
@@ -79,12 +82,15 @@ public class CryptoFrame extends QuicFrame implements StreamElement {
         buffer.put(cryptoData);
     }
 
-    public CryptoFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+    public CryptoFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException, TransportError {
         log.debug("Parsing Crypto frame");
         buffer.get();
 
         offset = VariableLengthInteger.parseLong(buffer);
         length = VariableLengthInteger.parseInt(buffer);
+        if (length > buffer.remaining()) {
+            throw new TransportError(FRAME_ENCODING_ERROR, "Crypto data length exceeds remaining buffer length");
+        }
 
         cryptoData = new byte[length];
         buffer.get(cryptoData);

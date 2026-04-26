@@ -22,12 +22,15 @@ import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.ImplementationError;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
+
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 /**
  * RFC 9221   An Unreliable Datagram Extension to QUIC
@@ -65,10 +68,13 @@ public class DatagramFrame extends QuicFrame {
         buffer.put(data);
     }
 
-    public QuicFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+    public QuicFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException, TransportError {
         int frameType = VariableLengthInteger.parseInt(buffer);
         if (frameType == DATAGRAM_FRAME_TYPE_WITH_LEN) {
             int length = VariableLengthInteger.parseInt(buffer);
+            if (length > buffer.remaining()) {
+                throw new TransportError(FRAME_ENCODING_ERROR, "Datagram frame length exceeds remaining buffer size");
+            }
             data = new byte[length];
             buffer.get(data);
         }

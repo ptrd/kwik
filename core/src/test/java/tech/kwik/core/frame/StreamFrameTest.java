@@ -20,11 +20,14 @@ package tech.kwik.core.frame;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 
 class StreamFrameTest extends FrameTest {
@@ -61,6 +64,21 @@ class StreamFrameTest extends FrameTest {
         // Generate frame bytes and parse to get access to copied data bytes.
         frame = new StreamFrame().parse(ByteBuffer.wrap(getBytes(frame)), Mockito.mock(Logger.class));
         assertThat(frame.getStreamData()).isEqualTo("34567".getBytes());
+    }
+
+    @Test
+    void parseStreamFrameWithExcessiveDataLengthShouldThrowTransportError() {
+        // A length field value exceeding MAX_SUPPORTED_PACKET_SIZE (1500) must be rejected with
+        // FRAME_ENCODING_ERROR to prevent OOM. The 2-byte VLI 0x7FFF encodes 16383 (max 2-byte VLI value).
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
+                0x0A,               // frame type: STREAM with length bit set (bits: 0b00001010)
+                0x00,               // stream ID (VLI = 0)
+                0x7F, (byte) 0xFF   // length (VLI = 16383, max 2-byte VLI)
+        });
+
+        assertThatThrownBy(() -> new StreamFrame().parse(buffer, Mockito.mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(FRAME_ENCODING_ERROR));
     }
 
     private byte[] generateByteArray(int size) throws Exception {

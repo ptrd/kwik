@@ -33,6 +33,8 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
+
 
 public class StreamFrame extends QuicFrame implements StreamElement {
 
@@ -121,6 +123,9 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         }
         if (withLength) {
             length = VariableLengthInteger.parseInt(buffer);
+            if (length > buffer.remaining()) {
+                throw new TransportError(FRAME_ENCODING_ERROR, "Stream frame length exceeds remaining buffer length");
+            }
         }
         else {
             length = buffer.limit() - buffer.position();

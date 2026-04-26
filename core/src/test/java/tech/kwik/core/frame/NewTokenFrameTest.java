@@ -19,13 +19,32 @@
 package tech.kwik.core.frame;
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.impl.TransportError;
+import tech.kwik.core.log.Logger;
 
 import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 
 class NewTokenFrameTest extends FrameTest {
+
+    @Test
+    void parseNewTokenFrameWithExcessiveTokenLengthShouldThrowTransportError() {
+        // A token length field value exceeding MAX_SUPPORTED_PACKET_SIZE (1500) must be rejected with
+        // FRAME_ENCODING_ERROR to prevent OOM. The 2-byte VLI 0x7FFF encodes 16383 (max 2-byte VLI value).
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
+                0x07,               // frame type: NEW_TOKEN
+                0x7F, (byte) 0xFF   // token length (VLI = 16383, max 2-byte VLI)
+        });
+
+        assertThatThrownBy(() -> new NewTokenFrame().parse(buffer, mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(FRAME_ENCODING_ERROR));
+    }
 
     @Test
     void testGetFrameLength() {

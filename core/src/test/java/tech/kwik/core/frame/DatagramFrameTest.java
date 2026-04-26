@@ -19,12 +19,29 @@
 package tech.kwik.core.frame;
 
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.impl.TransportError;
 
 import java.nio.ByteBuffer;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 class DatagramFrameTest {
+
+    @Test
+    void parseDatagramFrameWithExcessiveDataLengthShouldThrowTransportError() {
+        // A length field value exceeding MAX_SUPPORTED_PACKET_SIZE (1500) must be rejected with
+        // FRAME_ENCODING_ERROR to prevent OOM. The 2-byte VLI 0x7FFF encodes 16383 (max 2-byte VLI value).
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[] {
+                0x31,               // frame type: DATAGRAM with length (DATAGRAM_FRAME_TYPE_WITH_LEN)
+                0x7F, (byte) 0xFF   // length (VLI = 16383, max 2-byte VLI)
+        });
+
+        assertThatThrownBy(() -> new DatagramFrame().parse(buffer, null))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(FRAME_ENCODING_ERROR));
+    }
 
     @Test
     void parseDatagramFrameWithLengthField() throws Exception {

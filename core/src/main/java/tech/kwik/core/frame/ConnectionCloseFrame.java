@@ -21,6 +21,7 @@ package tech.kwik.core.frame;
 import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
@@ -29,6 +30,8 @@ import tech.kwik.core.packet.QuicPacket;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 /**
  * Represents a connection close frame.
@@ -76,7 +79,7 @@ public class ConnectionCloseFrame extends QuicFrame {
         }
     }
 
-    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+    public ConnectionCloseFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException, TransportError {
         frameType = buffer.get() & 0xff;
         if (frameType != 0x1c && frameType != 0x1d) {
             throw new RuntimeException();  // Programming error
@@ -87,6 +90,9 @@ public class ConnectionCloseFrame extends QuicFrame {
             triggeringFrameType = VariableLengthInteger.parseLong(buffer);
         }
         int reasonPhraseLength = VariableLengthInteger.parseInt(buffer);
+        if (reasonPhraseLength > buffer.remaining()) {
+            throw new TransportError(FRAME_ENCODING_ERROR, "Reason phrase length exceeds remaining buffer length");
+        }
         if (reasonPhraseLength > 0) {
             reasonPhrase = new byte[reasonPhraseLength];
             buffer.get(reasonPhrase);

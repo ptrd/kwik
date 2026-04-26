@@ -21,12 +21,15 @@ package tech.kwik.core.frame;
 import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.generic.VariableLengthInteger;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
+
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 /**
  * Represents a new token frame.
@@ -43,10 +46,13 @@ public class NewTokenFrame extends QuicFrame {
         newToken = token;
     }
 
-    public NewTokenFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException {
+    public NewTokenFrame parse(ByteBuffer buffer, Logger log) throws InvalidIntegerEncodingException, IntegerTooLargeException, TransportError {
         buffer.get();
 
         int tokenLength = VariableLengthInteger.parseInt(buffer);
+        if (tokenLength > buffer.remaining()) {
+            throw new TransportError(FRAME_ENCODING_ERROR, "New Token Frame token length exceeds remaining buffer length");
+        }
         newToken = new byte[tokenLength];
         buffer.get(newToken);
 
