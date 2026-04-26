@@ -18,10 +18,10 @@
  */
 package tech.kwik.h09.server;
 
-import tech.kwik.core.QuicConnection;
-import tech.kwik.core.QuicStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.QuicConnection;
+import tech.kwik.core.QuicStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -107,6 +107,34 @@ class Http09ConnectionTest {
         when(quicStream.getOutputStream()).thenReturn(arrayOutputStream);
         http09Connection.handleRequest(quicStream);
 
+        assertThat(arrayOutputStream.toString()).startsWith("404");
+    }
+
+    @Test
+    void pathTraversalWithSiblingFileStartingWithWwwDirNameShouldBePrevented() throws Exception {
+        // Given: a root directory with a www subdirectory and a sibling file that starts with "www"
+        Path rootDir = Files.createTempDirectory("kwikh09");
+        
+        // Create www directory
+        File wwwDir = new File(rootDir.toFile(), "www");
+        wwwDir.mkdirs();
+        Files.write(Paths.get(wwwDir.toString(), "public.txt"), "This is public\n".getBytes());
+        
+        // Create a sibling file/directory whose name starts with "www" (e.g., "wwwsecrets")
+        File siblingFile = new File(rootDir.toFile(), "wwwsecrets");
+        Files.write(siblingFile.toPath(), "This should not be accessible\n".getBytes());
+        
+        Http09Connection http09Connection = new Http09Connection(mock(QuicConnection.class), wwwDir);
+        
+        // When: requesting a file using path traversal to access the sibling file
+        QuicStream quicStream = mock(QuicStream.class);
+        when(quicStream.getInputStream()).thenReturn(new ByteArrayInputStream("GET ../wwwsecrets".getBytes()));
+        ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream(1024);
+        when(quicStream.getOutputStream()).thenReturn(arrayOutputStream);
+        http09Connection.handleRequest(quicStream);
+        
+        // Then: the response should be 404, but due to the bug it returns the secret content
+        // This test will FAIL (proving the bug exists) because the file content is returned instead of 404
         assertThat(arrayOutputStream.toString()).startsWith("404");
     }
 

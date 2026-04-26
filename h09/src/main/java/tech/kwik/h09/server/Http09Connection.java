@@ -28,6 +28,7 @@ import tech.kwik.h09.io.LimitExceededException;
 import tech.kwik.h09.io.LimitedInputStream;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -102,9 +103,11 @@ public class Http09Connection implements ApplicationProtocolConnection {
      * @throws IOException
      */
     private File getFileInWwwDir(String fileName) throws IOException {
-        String requestedFilePath = new File(wwwDir, fileName).getCanonicalPath();
-        if (requestedFilePath.startsWith(wwwDir.getCanonicalPath())) {
-            return new File(requestedFilePath);
+        Path resolvedPath = new File(wwwDir, fileName).getCanonicalFile().toPath();
+        // Path.startsWith() compares path components, so it is not fooled by sibling directories that share a name prefix,
+        // and it handles edge cases like wwwDir == "/" where appending a separator would incorrectly produce "//".
+        if (resolvedPath.startsWith(wwwDir.getCanonicalFile().toPath())) {
+            return resolvedPath.toFile();
         }
         else {
             return null;
