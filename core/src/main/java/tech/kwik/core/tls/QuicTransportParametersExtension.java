@@ -39,6 +39,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static tech.kwik.core.QuicConstants.TransportParameterId.*;
 import static tech.kwik.core.impl.Role.Server;
 
@@ -266,7 +268,7 @@ public class QuicTransportParametersExtension extends Extension {
         if (!parsedParameters.add(parameterId)) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.4
             // "An endpoint SHOULD treat receipt of duplicate transport parameters as a connection error of type TRANSPORT_PARAMETER_ERROR."
-            throw new TransportError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR, "duplicate transport parameter");
+            throw new TransportError(TRANSPORT_PARAMETER_ERROR, "duplicate transport parameter");
         }
         int size = VariableLengthInteger.parse(buffer);
         if (buffer.remaining() < size) {
@@ -411,7 +413,7 @@ public class QuicTransportParametersExtension extends Extension {
         }
     }
 
-    private void parsePreferredAddress(ByteBuffer buffer, Logger log) throws DecodeErrorException {
+    private void parsePreferredAddress(ByteBuffer buffer, Logger log) throws DecodeErrorException, TransportError {
         try {
             TransportParameters.PreferredAddress preferredAddress = new TransportParameters.PreferredAddress();
 
@@ -432,7 +434,22 @@ public class QuicTransportParametersExtension extends Extension {
                 throw new DecodeErrorException("Preferred address: no valid IP address");
             }
 
-            int connectionIdSize = buffer.get();
+            int connectionIdSize = buffer.get() & 0xff;
+            if (connectionIdSize == 0) {
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+                // "Similarly, a server MUST NOT include a zero-length connection ID in this transport parameter. A client
+                //  MUST treat a violation of these requirements as a connection error of type TRANSPORT_PARAMETER_ERROR."
+                throw new TransportError(TRANSPORT_PARAMETER_ERROR, "preferred address Connection ID length cannot be 0");
+            }
+            if (connectionIdSize > 20) {
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+                // "The Connection ID and Stateless Reset Token fields of a preferred address are identical in syntax
+                //  and semantics to the corresponding fields of a NEW_CONNECTION_ID frame (Section 19.15). "
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.15
+                // "Values less than 1 and greater than 20 are invalid and MUST be treated as a connection error of type
+                //  FRAME_ENCODING_ERROR."
+                throw new TransportError(FRAME_ENCODING_ERROR, "preferred address connection id size is too large");
+            }
             preferredAddress.setConnectionId(buffer, connectionIdSize);
             preferredAddress.setStatelessResetToken(buffer, 16); //
 

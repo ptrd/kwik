@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import tech.kwik.agent15.TlsProtocolException;
 import tech.kwik.agent15.alert.DecodeErrorException;
 import tech.kwik.core.impl.Role;
+import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.impl.TransportParameters;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.log.Logger;
@@ -34,6 +35,7 @@ import java.util.HashSet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 
 
@@ -104,6 +106,69 @@ class QuicTransportParametersExtensionTest {
 
         TransportParameters.PreferredAddress preferredAddress = params.getTransportParameters().getPreferredAddress();
         assertThat(preferredAddress.getIp6()).isNull();
+    }
+
+    @Test
+    void parsePreferredAddressWithNegativeConnectionIdLength() throws Exception {
+        // 0x80 is 128 unsigned but -128 as a signed byte; buffer.get() returns a signed byte,
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[]{
+                // id size  ip4..................  port
+                0x0d, 0x19, 4, 31, (byte) 198, 62, 0x11, 0x51,
+                // ip6   0:0:0:0:0:0:0:0 (all zeros = not set)
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                // port    connection id length (0x80 = -128 as a signed byte)
+                0x11, 0x51, (byte) 0x80
+        });
+
+        QuicTransportParametersExtension params = new QuicTransportParametersExtension();
+
+        assertThatThrownBy(
+                () -> params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(TransportError.class);
+    }
+
+    @Test
+    void parsePreferredAddressWithZeroConnectionIdLengthShouldThrowTransportError() throws Exception {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[]{
+                // id size  ip4..................  port
+                0x0d, 0x29, 4, 31, (byte) 198, 62, 0x11, 0x51,
+                // ip6   0:0:0:0:0:0:0:0 (all zeros = not set)
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                // port    connection id length
+                0x11, 0x51, 0x00,
+                // stateless reset token
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+        });
+
+        QuicTransportParametersExtension params = new QuicTransportParametersExtension();
+
+        assertThatThrownBy(
+                () -> params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(TRANSPORT_PARAMETER_ERROR));
+    }
+
+    @Test
+    void parsePreferredAddressWithConnectionIdLengthExceedingMaximumShouldThrowTransportError() throws Exception {
+        ByteBuffer buffer = ByteBuffer.wrap(new byte[]{
+                // id size  ip4..................  port
+                0x0d, 0x3e, 4, 31, (byte) 198, 62, 0x11, 0x51,
+                // ip6   0:0:0:0:0:0:0:0 (all zeros = not set)
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                // port    connection id length (21 = one more than the maximum of 20)
+                0x11, 0x51, 0x15,
+                // connection id (21 bytes)
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+                // stateless reset token
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+        });
+
+        QuicTransportParametersExtension params = new QuicTransportParametersExtension();
+
+        assertThatThrownBy(
+                () -> params.parseTransportParameter(buffer, new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(FRAME_ENCODING_ERROR));
     }
 
     @Test
