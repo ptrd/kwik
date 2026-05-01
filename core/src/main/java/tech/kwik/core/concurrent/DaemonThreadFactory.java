@@ -18,25 +18,61 @@
  */
 package tech.kwik.core.concurrent;
 
-
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Creates daemon threads. Java's default thread factory used in executors creates non-daemon threads that
- * prevent JVM from shutting down.
+ * Creates daemon threads. Java's default thread factory used in executors creates non-daemon
+ * threads that prevent JVM from shutting down.
  */
 public class DaemonThreadFactory implements ThreadFactory {
 
     private final String threadBaseName;
     private final AtomicInteger threadNumber = new AtomicInteger(1);
+    private ThreadFactory virtualFactory;
 
     public DaemonThreadFactory(String threadBaseName) {
         this.threadBaseName = threadBaseName;
+
+        if (Runtime.version().feature() >= 24) {
+            try {
+                var lookup = MethodHandles.lookup();
+                var builderClass = Class.forName("java.lang.Thread$Builder$OfVirtual");
+                // public static Builder.OfVirtual ofVirtual()
+                var ofVirtualHandle =
+                        lookup.findStatic(Thread.class, "ofVirtual", MethodType.methodType(builderClass));
+
+                // 2. public Thread.Builder name(String prefix, long start)
+                var nameHandle =
+                        lookup.findVirtual(
+                                builderClass,
+                                "name",
+                                MethodType.methodType(builderClass, String.class, long.class));
+
+                // 3. Invoke Thread.ofVirtual().name(threadBaseName, 0)
+                var namedBuilder = nameHandle.invoke(ofVirtualHandle.invoke(), threadBaseName, 0L);
+
+                // 4. public ThreadFactory factory()
+                var factoryHandle =
+                        lookup.findVirtual(builderClass, "factory", MethodType.methodType(ThreadFactory.class));
+
+                // 5. Invoke namedBuilder.factory()
+                this.virtualFactory = (ThreadFactory) factoryHandle.invoke(namedBuilder);
+            } catch (Throwable e) {
+                // impossible
+            }
+        }
     }
 
     @Override
     public Thread newThread(Runnable runnable) {
+
+        if (virtualFactory != null) {
+            return virtualFactory.newThread(runnable);
+        }
+
         Thread thread = new Thread(runnable, threadBaseName + "-" + threadNumber.getAndIncrement());
         thread.setDaemon(true);
         return thread;

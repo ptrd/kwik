@@ -40,6 +40,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
 
+    private final QuicStreamImpl stream;
+
     private final NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
     private final Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
     private volatile long contiguousUpToOffset = 0;
@@ -49,8 +51,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private final int maxCombinedFrameSize;
     private volatile boolean discarded;
 
-    public ReceiveBufferImpl() {
-        this(DEFAULT_MAX_COMBINED_FRAME_SIZE);
+    private volatile long lastAvailData = -1;
+
+    public ReceiveBufferImpl(QuicStreamImpl stream) {
+        this(stream, DEFAULT_MAX_COMBINED_FRAME_SIZE);
     }
 
     /**
@@ -64,8 +68,23 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * @param maxCombinedFrameSize  the maximum size of a combined frame (i.e. when frames are combined to remove
      *                              overlap, the resulting frame will not be larger than this size).
      */
-    public ReceiveBufferImpl(int maxCombinedFrameSize) {
+    public ReceiveBufferImpl(QuicStreamImpl stream, int maxCombinedFrameSize) {
         this.maxCombinedFrameSize = maxCombinedFrameSize;
+        this.stream = stream;
+    }
+
+    private void notifyWriter(boolean force) {
+        if (stream == null || stream.connection == null || stream.connection.getStreamReadListener() == null) return;
+        if (stream.isInputClosed()) return;
+
+        long avail = bytesAvailable();
+        if (force || avail != lastAvailData) {
+            lastAvailData = avail;
+            this.stream.listenerPool.execute(() -> {
+				if (stream.isInputClosed()) return;
+				stream.connection.getStreamReadListener().read(stream, avail);
+			});
+        }
     }
 
     @Override
@@ -96,6 +115,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 nextFrame = contiguousFrames.peek();
             }
         }
+
+        if (totalBytesRead > 0) notifyWriter(false);
         return totalBytesRead;
     }
 
@@ -133,9 +154,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     bufferedOutOfOrderData -= nextFrame.getLength();
                 }
             }
+
+            // notificar sempre que a quantidade (bytesAvailable) mudar (entrou dado/ficou contíguo/FIN drenou)
+            notifyWriter(false);
+
             return contiguousUpToOffset > previousContiguousUpToOffset;
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             // Because the add method is the only method making modifications to the outOfOrderFrames, race conditions
             // will not occur. However, there is one exception: the discardAllData method. Concurrent call to this method
             // can cause a race condition, which can lead to various runtime exceptions in the code block wrapped by this
@@ -308,6 +332,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         outOfOrderFrames.clear();
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
+        notifyWriter(true);
     }
 
     private static class SimpleStreamElement implements StreamElement {
@@ -357,7 +382,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
         @Override
         public String toString() {
-            return "" + offset + ".." + (offset + data.length - 1);
+            return offset + ".." + (offset + data.length - 1);
         }
     }
 }

@@ -29,7 +29,7 @@ import java.io.OutputStream;
  *  unidirectional or bidirectional."
  *
  */
-public interface QuicStream {
+public interface QuicStream extends AutoCloseable {
 
     /**
      * Returns the input stream for reading data sent by the peer.
