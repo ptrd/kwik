@@ -72,7 +72,8 @@ public class StreamManager {
     private final AtomicInteger nextStreamIdUnidirectional;
     private volatile int nextPeerInitiatedUnidirectionalStreamId;
     private volatile int nextPeerInitiatedBidirectionalStreamId;
-    private long cumulativeReceiveOffset;
+    /** The total of the maximum received offsets for all streams. Used to check connection flow control. */
+    private long totalReceivedMaxOffset;
     private long absoluteUnidirectionalStreamIdLimit;
     private long absoluteBidirectionalStreamIdLimit;
 
@@ -245,14 +246,17 @@ public class StreamManager {
         int streamId = frame.getStreamId();
         QuicStreamImpl stream = streams.get(streamId);
         checkConnectionFlowControl(stream, frame);
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-4.1
+        // "A receiver maintains a cumulative sum of bytes received on all streams, which is used to check for violations
+        //  of the advertised connection or stream data limits. "
         if (stream != null) {
-            cumulativeReceiveOffset += stream.addStreamData(frame);
+            totalReceivedMaxOffset += stream.addStreamData(frame);
         }
         else {
             if (isPeerInitiated(streamId)) {
                 QuicStreamImpl peerInitiatedStream = createPeerInitiatedStream(streamId);
                 if (peerInitiatedStream != null) {
-                    cumulativeReceiveOffset += peerInitiatedStream.addStreamData(frame);
+                    totalReceivedMaxOffset += peerInitiatedStream.addStreamData(frame);
                 }
             }
             else {
@@ -314,9 +318,9 @@ public class StreamManager {
     public void process(ResetStreamFrame resetStreamFrame) throws TransportError {
         QuicStreamImpl stream = streams.get(resetStreamFrame.getStreamId());
         if (stream != null) {
-            // https://www.rfc-editor.org/rfc/rfc9000.html#name-reset_stream-frames
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.4
             // "A receiver of RESET_STREAM can discard any data that it already received on that stream."
-            cumulativeReceiveOffset += stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
+            totalReceivedMaxOffset += stream.terminateStream(resetStreamFrame.getErrorCode(), resetStreamFrame.getFinalSize());
         }
     }
 
@@ -340,8 +344,11 @@ public class StreamManager {
             long receivingStreamMaxOffset = receivingStream != null ? receivingStream.getReceivedMaxOffset() : 0;
             if (frame.getUpToOffset() > receivingStreamMaxOffset) {
                 long increment = frame.getUpToOffset() - receivingStreamMaxOffset;
-                if (cumulativeReceiveOffset + increment > flowControlMax) {
-                    log.error("Flow control error on stream: " + frame.getStreamId() + ":" + cumulativeReceiveOffset + " + " + increment + " > " + flowControlMax);
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-4.1
+                // "A receiver MUST close the connection with an error of type FLOW_CONTROL_ERROR if the sender violates
+                //  the advertised connection or stream data limits; "
+                if (totalReceivedMaxOffset + increment > flowControlMax) {
+                    log.error("Flow control error on stream: " + frame.getStreamId() + ":" + totalReceivedMaxOffset + " + " + increment + " > " + flowControlMax);
                     throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
                 }
             }
