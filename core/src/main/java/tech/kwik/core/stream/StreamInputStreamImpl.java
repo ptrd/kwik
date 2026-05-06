@@ -279,11 +279,12 @@ class StreamInputStreamImpl extends StreamInputStream {
         }
         if (!aborted && !closed && !reset) {
             reset = true;
-            int unusedFlowControlCredits = (int) (finalSize - receiveBuffer.readOffset());
-            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
+            // Determine number of bytes that will not be read by the application (due to the reset), but that do occupy space in the flow control window.
+            long unusedFlowControlCredits = finalSize - receiveBuffer.readOffset();
             receiveBuffer.discardAllData();
             interruptBlockingReader();
             quicStream.inputClosed();
+            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
         }
         return increment;
     }

@@ -324,11 +324,11 @@ public class StreamManager {
         }
     }
 
-    public void updateConnectionFlowControl(int size) {
+    public void updateConnectionFlowControl(long size) {
         try {
             updateFlowControlLock.lock();
 
-            flowControlMax += size;
+            flowControlMax += size;  // Will not overflow, because receiving Long.MAX_VALUE bytes would take years.
             if (flowControlMax - flowControlLastAdvertised > flowControlIncrement) {
                 connection.send(new MaxDataFrame(flowControlMax), f -> {}, true);
                 flowControlLastAdvertised = flowControlMax;

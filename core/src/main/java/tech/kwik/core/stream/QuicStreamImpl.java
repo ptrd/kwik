@@ -216,7 +216,7 @@ public class QuicStreamImpl implements QuicStream {
         inputStream.abort();
     }
 
-    void updateConnectionFlowControl(int bytesRead) {
+    void updateConnectionFlowControl(long bytesRead) {
         streamManager.updateConnectionFlowControl(bytesRead);
     }
 
