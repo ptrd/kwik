@@ -347,7 +347,7 @@ public class StreamManager {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-4.1
                 // "A receiver MUST close the connection with an error of type FLOW_CONTROL_ERROR if the sender violates
                 //  the advertised connection or stream data limits; "
-                if (totalReceivedMaxOffset + increment > flowControlMax) {
+                if (increment > flowControlMax - totalReceivedMaxOffset) {  // Same as totalReceivedMaxOffset + increment > flowControlMax, but without risk of overflow.
                     log.error("Flow control error on stream: " + frame.getStreamId() + ":" + totalReceivedMaxOffset + " + " + increment + " > " + flowControlMax);
                     throw new TransportError(QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR);
                 }
