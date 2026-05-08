@@ -46,8 +46,10 @@ public class TransportParameters {
     private int maxUdpPayloadSize;
     private byte[] statelessResetToken;
     private VersionInformation versionInformation;
-    // https://www.rfc-editor.org/rfc/rfc9221.html#name-transport-parameter
+    // https://www.rfc-editor.org/rfc/rfc9221.html#section-3
     private long maxDatagramFrameSize;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-3
+    private boolean resetStreamAtSupport;
 
     public TransportParameters() {
         setDefaults();
@@ -265,6 +267,14 @@ public class TransportParameters {
 
     public void setMaxDatagramFrameSize(long maxDatagramFrameSize) {
         this.maxDatagramFrameSize = maxDatagramFrameSize;
+    }
+
+    public boolean isResetStreamAtSupported() {
+        return resetStreamAtSupport;
+    }
+
+    public void setResetStreamAtSupported(boolean resetStreamAtSupport) {
+        this.resetStreamAtSupport = resetStreamAtSupport;
     }
 
     public static class PreferredAddress {

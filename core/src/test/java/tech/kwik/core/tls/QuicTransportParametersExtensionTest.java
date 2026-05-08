@@ -360,4 +360,36 @@ class QuicTransportParametersExtensionTest {
         transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Client, mock(Logger.class));
         assertThat(transportParametersExtension.getTransportParameters().getMaxDatagramFrameSize()).isEqualTo(1500);
     }
+
+    @Test
+    void parseResetStreamAtTransportParameter() throws Exception {
+        //                                           ext size  id (8-byte VLI for 0x17f7586d2cb571) sz
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 09     c0 17 f7 58 6d 2c b5 71              00".replaceAll(" ", ""));
+        var transportParametersExtension = new QuicTransportParametersExtension(Version.QUIC_version_1);
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Client, mock(Logger.class));
+        assertThat(transportParametersExtension.getTransportParameters().isResetStreamAtSupported()).isTrue();
+    }
+
+    @Test
+    void parseResetStreamAtTransportParameterWithNonZeroValueShouldThrow() throws Exception {
+        //                              id (8-byte VLI for 0x17f7586d2cb571)  sz value
+        byte[] rawData = ByteUtils.hexToBytes("c0 17 f7 58 6d 2c b5 71        01 42".replaceAll(" ", ""));
+        var transportParametersExtension = new QuicTransportParametersExtension();
+        assertThatThrownBy(() -> transportParametersExtension.parseTransportParameter(ByteBuffer.wrap(rawData), new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(TRANSPORT_PARAMETER_ERROR));
+    }
+
+    @Test
+    void serializeResetStreamAtTransportParameter() throws Exception {
+        TransportParameters tp = new TransportParameters(10, 1_048_576, 1024, 256);
+        tp.setInitialSourceConnectionId(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+        tp.setResetStreamAtSupported(true);
+        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), tp, Role.Client).getBytes();
+
+        var transportParametersExtension = new QuicTransportParametersExtension(Version.getDefault());
+        transportParametersExtension.parse(ByteBuffer.wrap(serializedForm), Role.Server, mock(Logger.class));
+
+        assertThat(transportParametersExtension.getTransportParameters().isResetStreamAtSupported()).isTrue();
+    }
 }
