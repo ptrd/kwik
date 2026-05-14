@@ -49,8 +49,8 @@ import java.util.List;
 public class SampleWebServer {
 
     private static void usageAndExit() {
-        System.err.println("Usage: [--noRetry] cert file, cert key file, port number, www dir");
-        System.err.println("   or: [--noRetry] key store file, key store (and key) password, port number, www dir");
+        System.err.println("Usage: [--noRetry] [--logPackets] cert file, cert key file, port number, www dir");
+        System.err.println("   or: [--noRetry] [--logPackets] key store file, key store (and key) password, port number, www dir");
         System.exit(1);
     }
 
@@ -61,13 +61,16 @@ public class SampleWebServer {
         }
 
         boolean withRetry = true;
-        if (args.get(0).equals("--noRetry")) {
-            withRetry = false;
-            System.out.println("Retry disabled");
-            args.remove(0);
+        boolean logPackets = false;
+        while (!args.isEmpty() && args.get(0).startsWith("--")) {
+            switch (args.remove(0)) {
+                case "--noRetry":     withRetry = false; System.out.println("Retry disabled"); break;
+                case "--logPackets":  logPackets = true; break;
+                default:             usageAndExit();
+            }
         }
 
-        if (args.size() < 4 || args.stream().anyMatch(arg -> arg.startsWith("-"))) {
+        if (args.size() < 4) {
             usageAndExit();
         }
 
@@ -83,6 +86,7 @@ public class SampleWebServer {
         log.logWarning(true);
         log.logInfo(true);
         log.logStream(true);
+        log.logPackets(logPackets);
 
         File certificateFile = null;
         File certificateKeyFile = null;
