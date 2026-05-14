@@ -140,15 +140,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         });
 
         rttEstimater = (initialRtt == null)? new RttEstimator(log): new RttEstimator(log, initialRtt);
-        globalAckGenerator = new GlobalAckGenerator(this, rttEstimater);
-        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
-        lastestAckElicitingTime = clock.instant();
 
         congestionController = new NewRenoCongestionController(log, this);
 
         recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this, log);
         connection.addHandshakeStateListener(recoveryManager);
         connection.addAckFrameReceivedListener(recoveryManager);
+
+        globalAckGenerator = new GlobalAckGenerator(this, rttEstimater, recoveryManager);
+        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
+
+        lastestAckElicitingTime = clock.instant();
 
         idleTimer = connection.getIdleTimer();
 

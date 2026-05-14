@@ -31,7 +31,7 @@ import java.util.Optional;
 public class NullAckGenerator extends AckGenerator {
 
     public NullAckGenerator() {
-        super(null, null, null);
+        super(null, null, null, null);
     }
 
     @Override

@@ -22,6 +22,7 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.impl.FrameReceivedListener;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.recovery.RecoveryStatusProvider;
 import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.send.NullAckGenerator;
 import tech.kwik.core.send.Sender;
@@ -33,9 +34,10 @@ public class GlobalAckGenerator implements FrameReceivedListener<AckFrame> {
 
     private AckGenerator[] ackGenerators;
 
-    public GlobalAckGenerator(Sender sender, RttProvider rttProvider) {
+    public GlobalAckGenerator(Sender sender, RttProvider rttProvider, RecoveryStatusProvider recoveryStatusProvider) {
         ackGenerators = new AckGenerator[PnSpace.values().length];
-        Arrays.stream(PnSpace.values()).forEach(pnSpace -> ackGenerators[pnSpace.ordinal()] = new AckGenerator(pnSpace, sender, rttProvider));
+        Arrays.stream(PnSpace.values()).forEach(pnSpace ->
+                ackGenerators[pnSpace.ordinal()] = new AckGenerator(pnSpace, sender, rttProvider, recoveryStatusProvider));
     }
 
     public void packetReceived(QuicPacket packet) {

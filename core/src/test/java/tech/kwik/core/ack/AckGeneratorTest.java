@@ -28,6 +28,7 @@ import tech.kwik.core.impl.MockPacket;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.packet.RetryPacket;
 import tech.kwik.core.packet.VersionNegotiationPacket;
+import tech.kwik.core.recovery.RecoveryStatusProvider;
 import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.send.Sender;
 import tech.kwik.core.test.TestClock;
@@ -52,7 +53,7 @@ class AckGeneratorTest {
         clock = new TestClock();
         sender = mock(Sender.class);
         rttProvider = mock(RttProvider.class);
-        ackGenerator = new AckGenerator(clock, PnSpace.App, sender, rttProvider);
+        ackGenerator = new AckGenerator(clock, PnSpace.App, sender, rttProvider, mock(RecoveryStatusProvider.class), 2);
     }
 
     @Test
@@ -332,13 +333,11 @@ class AckGeneratorTest {
         assertThat(ackedRanges).containsExactly(range(15, 19), range(7, 10), range(1));
     }
 
-    //region needs an ack
+    //region wants ack from peer
     @Test
     void shouldWantAckWhenTimeSinceLastCleanupWasLongEnoughInThePast() {
         // Given
-        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
-        ackGenerator.generateAckForPacket(1);
-
+        setupLargeAckState(LargeAckState.RANGES);
         when(rttProvider.getSmoothedRtt()).thenReturn(20);
         Instant start = clock.instant();
         when(sender.lastAckElicitingSent()).thenReturn(start);
@@ -355,9 +354,7 @@ class AckGeneratorTest {
     @Test
     void whenTimeSinceLastCleanupSmallerThenRtt() {
         // Given
-        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
-        ackGenerator.generateAckForPacket(1);
-
+        setupLargeAckState(LargeAckState.RANGES);
         when(rttProvider.getSmoothedRtt()).thenReturn(20);
         Instant start = clock.instant();
         when(sender.lastAckElicitingSent()).thenReturn(start);
@@ -374,9 +371,7 @@ class AckGeneratorTest {
     @Test
     void whenTimeSinceLastCleanupGreaterThenTinyRttButLessThenMinDuration() {
         // Given
-        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
-        ackGenerator.generateAckForPacket(1);
-
+        setupLargeAckState(LargeAckState.RANGES);
         when(rttProvider.getSmoothedRtt()).thenReturn(3);
         Instant start = clock.instant();
         when(sender.lastAckElicitingSent()).thenReturn(start);
@@ -393,9 +388,7 @@ class AckGeneratorTest {
     @Test
     void shouldWantAckWhenLastAckElicitingSentOlderThanThreshold() {
         // Given
-        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
-        ackGenerator.generateAckForPacket(1);
-
+        setupLargeAckState(LargeAckState.RANGES);
         when(rttProvider.getSmoothedRtt()).thenReturn(20);
         Instant start = clock.instant();
         when(sender.lastAckElicitingSent()).thenReturn(start);
@@ -412,9 +405,7 @@ class AckGeneratorTest {
     @Test
     void wantsAckReturnsFalseWhenLastAckElicitingSentTooRecent() {
         // Given
-        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
-        ackGenerator.generateAckForPacket(1);
-
+        setupLargeAckState(LargeAckState.RANGES);
         when(rttProvider.getSmoothedRtt()).thenReturn(20);
         Instant start = clock.instant();
         when(sender.lastAckElicitingSent()).thenReturn(start);
@@ -426,9 +417,61 @@ class AckGeneratorTest {
         // Then
         assertThat(ackGenerator.wantsAckFromPeer()).isFalse();
     }
+
+    @Test
+    void wantsAckReturnsFalseWhenStateIsNotLargeEnough() {
+        // Given: only one received packet and one ack sent — state below threshold after cleanup
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+        ackGenerator.process(new AckFrame(1));
+        clock.fastForward(31);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isFalse();
+    }
+
+    @Test
+    void wantsAckReturnsTrueWhenAckSentLogIsLargeEvenWithOnlyOneRange() {
+        // Given: one range in rangesToAcknowledge (not large), but three entries in the ack-sent log (large)
+        setupLargeAckState(LargeAckState.ACK_SENT_LOG);
+        when(rttProvider.getSmoothedRtt()).thenReturn(20);
+        Instant start = clock.instant();
+        when(sender.lastAckElicitingSent()).thenReturn(start);
+        ackGenerator.process(new AckFrame(1));
+
+        // When
+        clock.fastForward(31);
+
+        // Then
+        assertThat(ackGenerator.wantsAckFromPeer()).isTrue();
+    }
     //endregion
 
     //region helpers
+    enum LargeAckState { RANGES, ACK_SENT_LOG }
+
+    private void setupLargeAckState(LargeAckState type) {
+        ackGenerator.packetReceived(new MockPacket(5, 83, EncryptionLevel.App));
+        ackGenerator.generateAckForPacket(1);
+        if (type == LargeAckState.RANGES) {
+            // Non-contiguous packets form separate ranges that remain in rangesToAcknowledge after cleanup,
+            // exceeding the largeMaintainedState threshold.
+            ackGenerator.packetReceived(new MockPacket(10, 83, EncryptionLevel.App));
+            ackGenerator.packetReceived(new MockPacket(20, 83, EncryptionLevel.App));
+            ackGenerator.packetReceived(new MockPacket(30, 83, EncryptionLevel.App));
+        }
+        else {
+            // Sending acks for multiple unconfirmed packet numbers fills ackSentWithPacket; after process()
+            // clears the first entry, enough remain to exceed the largeMaintainedState threshold.
+            ackGenerator.generateAckForPacket(2);
+            ackGenerator.generateAckForPacket(3);
+            ackGenerator.generateAckForPacket(4);
+        }
+    }
+
     private Range range(int from, int to) {
         return new Range(from, to);
     }

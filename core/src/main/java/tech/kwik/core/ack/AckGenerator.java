@@ -24,6 +24,7 @@ import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.Range;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.recovery.RecoveryStatusProvider;
 import tech.kwik.core.recovery.RttProvider;
 import tech.kwik.core.send.Sender;
 
@@ -51,17 +52,27 @@ public class AckGenerator {
     private SortedMap<Long, AckFrame> ackSentWithPacket = new TreeMap<>();
     private int acksNotSend = 0;
     private volatile Instant lastAckRangesCleanup;
+    private final RecoveryStatusProvider recoveryStatusProvider;
+    private final int largeAckSentLogThreshold;
+    private final int largeRangesToAcknowledgeThreshold;
 
-    public AckGenerator(PnSpace pnSpace, Sender sender, RttProvider rttProvider) {
-        this(Clock.systemUTC(), pnSpace, sender, rttProvider);
+    public AckGenerator(PnSpace pnSpace, Sender sender, RttProvider rttProvider, RecoveryStatusProvider recoveryStatusProvider) {
+        this(Clock.systemUTC(), pnSpace, sender, rttProvider, recoveryStatusProvider, 100);
     }
 
-    public AckGenerator(Clock clock, PnSpace pnSpace, Sender sender, RttProvider rttProvider) {
+    public AckGenerator(Clock clock, PnSpace pnSpace, Sender sender, RttProvider rttProvider, RecoveryStatusProvider recoveryStatusProvider) {
+        this(clock, pnSpace, sender, rttProvider, recoveryStatusProvider, 100);
+    }
+
+    AckGenerator(Clock clock, PnSpace pnSpace, Sender sender, RttProvider rttProvider, RecoveryStatusProvider recoveryStatusProvider, int largeMaintainedStateThreshold) {
         this.clock = clock;
         this.pnSpace = pnSpace;
         this.sender = sender;
         this.rttProvider = rttProvider;
+        this.largeAckSentLogThreshold = largeMaintainedStateThreshold;
+        this.largeRangesToAcknowledgeThreshold = largeMaintainedStateThreshold;
         lastAckRangesCleanup = clock.instant();
+        this.recoveryStatusProvider = recoveryStatusProvider;
     }
 
     public synchronized boolean hasAckToSend() {
@@ -232,16 +243,22 @@ public class AckGenerator {
         //  for a long period of time, and ACK frames it sends could be unnecessarily large. In such a case, a receiver
         //  could send a PING or other small ack-eliciting frame occasionally, such as once per round trip, to elicit
         //  an ACK from the peer."
-        long timeSinceLastCleanup = Duration.between(lastAckRangesCleanup, clock.instant()).toMillis();
-        if (timeSinceLastCleanup > MIN_TIME_BETWEEN_CLEANUPS_MS) {
-            int rtt = rttProvider.getSmoothedRtt();
-            if (timeSinceLastCleanup > rtt) {
-                if (Duration.between(sender.lastAckElicitingSent(), clock.instant()).toMillis() > 1.5 * rtt) {
-                    return true;
+        if (! recoveryStatusProvider.waitingForAcknowledgement() && largeMaintainedState()) {
+            long timeSinceLastCleanup = Duration.between(lastAckRangesCleanup, clock.instant()).toMillis();
+            if (timeSinceLastCleanup > MIN_TIME_BETWEEN_CLEANUPS_MS) {  // Condition for cases when rtt is very small
+                int rtt = rttProvider.getSmoothedRtt();
+                if (timeSinceLastCleanup > rtt) {  // Don't bother if peer has recently sent an ack (triggering a cleanup)
+                    if (Duration.between(sender.lastAckElicitingSent(), clock.instant()).toMillis() > 1.5 * rtt) {
+                        return true;
+                    }
                 }
             }
         }
         return false;
+    }
+
+    private boolean largeMaintainedState() {
+        return ackSentWithPacket.size() > largeAckSentLogThreshold || rangesToAcknowledge.size() > largeRangesToAcknowledgeThreshold;
     }
 }
 

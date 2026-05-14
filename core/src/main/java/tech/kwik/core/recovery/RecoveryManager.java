@@ -98,7 +98,7 @@ import java.util.stream.Stream;
  * ack eliciting packets in flight, but is not sure whether the peer has validated the client address.
  * </p>
  */
-public class RecoveryManager implements FrameReceivedListener<AckFrame>, HandshakeStateListener {
+public class RecoveryManager implements FrameReceivedListener<AckFrame>, HandshakeStateListener, RecoveryStatusProvider {
 
     private enum ProbeType {
         Default,
@@ -494,6 +494,10 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     void unschedule() {
         lossDetectionFuture.cancel(true);
         timerExpiration = null;
+    }
+
+    public boolean waitingForAcknowledgement() {
+        return timerExpiration != null;
     }
 
     public void onAckReceived(AckFrame ackFrame, PnSpace pnSpace, Instant timeReceived) {
