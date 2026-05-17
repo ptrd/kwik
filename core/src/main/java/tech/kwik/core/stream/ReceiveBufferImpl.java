@@ -70,12 +70,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public long bytesAvailable() {
-        return contiguousUpToOffset - readUpToOffset;
+        return discarded? 0: contiguousUpToOffset - readUpToOffset;
     }
 
     @Override
     public boolean allRead() {
-        return streamEndOffset >= 0 && readUpToOffset == streamEndOffset;
+        return (streamEndOffset >= 0 && readUpToOffset == streamEndOffset) || discarded;
     }
 
     @Override
@@ -101,7 +101,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public boolean allDataReceived() {
-        return streamEndOffset >= 0 && contiguousUpToOffset == streamEndOffset;
+        return (streamEndOffset >= 0 && contiguousUpToOffset == streamEndOffset) || discarded;
     }
 
     @Override

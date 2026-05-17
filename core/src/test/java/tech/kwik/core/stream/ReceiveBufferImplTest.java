@@ -207,6 +207,102 @@ class ReceiveBufferImplTest {
     }
     // endregion
 
+    // region abnormal stream completion
+    @Test
+    void whenAllDataDiscardedNothingCanBeRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenAllDataDiscardedThenNoDataIsAvailable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+    }
+
+    @Test
+    void whenAllDataDiscardedThenAllDataIsReceived() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
+    void whenAllDataDiscardedThenAllDataIsRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
+
+    @Test
+    void whenDataIsDiscardedAfterPartialReadStatusMethodsRemainConsistent() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.read(ByteBuffer.allocate(50));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        // Note: discardAllData() leaves the internal contiguousUpToOffset stale, but the status methods short-circuit
+        // on the discarded flag, so they must still report a consistent "nothing left, all done" state.
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenDataIsDiscardedReadOffsetReflectsBytesActuallyRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.read(ByteBuffer.allocate(50));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.readOffset()).isEqualTo(50);
+    }
+
+    @Test
+    void whenContiguousFrameArrivesAfterDiscardNoDataBecomesReadable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.discardAllData();
+
+        // When
+        receiveBuffer.add(new DataFrame(100, 50));  // late frame, contiguous with the discarded data
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+    // end region
+
     // region out-of-order data measurement
     @Test
     void outOfOrderBufferedDataShouldBeMeasured() {
