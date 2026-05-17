@@ -19,6 +19,7 @@ class ReceiveBufferImplTest {
         receiveBuffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
     }
 
+    // region reading data
     @Test
     void readFromEmptyStreamReturnsNothing() {
         // When
@@ -130,7 +131,9 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.readOffset()).isEqualTo(85);
     }
+    // endregion
 
+    // region normal stream completion
     @Test
     void finalFrameReceivedDoesNotMeanAllDataIsReceived() {
         // When
@@ -202,7 +205,9 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(readResult).isEqualTo(-1);
     }
+    // endregion
 
+    // region out-of-order data measurement
     @Test
     void outOfOrderBufferedDataShouldBeMeasured() {
         // Given
@@ -245,7 +250,9 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
+    // endregion
 
+    // region memory management
     @Test
     void duplicatedFramesAreCombinedToReduceMemoryUsage() {
         // Given
@@ -546,32 +553,9 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         checkDataCanBeReadAfterAdding(750);
     }
+    // endregion
 
-    @Test
-    void testRandomStreamElementAdditions() {
-        Random random = new Random();
-        int streamEnd = 100_000;
-        int added = 0;
-        String bufferContentBefore = "";
-        DataFrame frame = null;
-        try {
-            while (receiveBuffer.bytesAvailable() < streamEnd) {
-                bufferContentBefore = receiveBuffer.toDebugString(5000);
-                int offset = random.nextInt(streamEnd);
-                int length = random.nextInt(1000);
-                frame = new DataFrame(offset, length);
-                added++;
-                receiveBuffer.add(frame);
-                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
-            }
-            System.out.println("Tested random stream element additions with " + added + " frames");
-        }
-        catch (AssertionError e) {
-            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
-            throw e;
-        }
-    }
-
+    // region contains and combine helper methods
     @Test
     void testProperContainingFrame() {
         // Given
@@ -693,6 +677,33 @@ class ReceiveBufferImplTest {
         assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
+    // endregion
+
+    // region stress test
+    @Test
+    void testRandomStreamElementAdditions() {
+        Random random = new Random();
+        int streamEnd = 100_000;
+        int added = 0;
+        String bufferContentBefore = "";
+        DataFrame frame = null;
+        try {
+            while (receiveBuffer.bytesAvailable() < streamEnd) {
+                bufferContentBefore = receiveBuffer.toDebugString(5000);
+                int offset = random.nextInt(streamEnd);
+                int length = random.nextInt(1000);
+                frame = new DataFrame(offset, length);
+                added++;
+                receiveBuffer.add(frame);
+                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+            }
+        }
+        catch (AssertionError e) {
+            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
+            throw e;
+        }
+    }
+    // endregion
 
     private void checkData(ByteBuffer buffer) {
         for (int i = 0; i < buffer.position(); i++) {
@@ -701,7 +712,6 @@ class ReceiveBufferImplTest {
     }
 
     private void checkDataCanBeReadAfterAdding(int length, DataFrame... dataFrames) {
-        System.out.println("test result: " + receiveBuffer.toDebugString());
         Arrays.stream(dataFrames).forEach(f -> receiveBuffer.add(f));
         ByteBuffer readBytes = ByteBuffer.allocate(length);
         int bytesRead = receiveBuffer.read(readBytes);
