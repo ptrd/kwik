@@ -39,6 +39,7 @@ public class QuicStreamImpl implements QuicStream {
     protected final int streamId;
     protected final Role role;
     protected final QuicConnectionImpl connection;
+    final ListenerThreadPool listenerPool;
     private final StreamManager streamManager;
     protected final Logger log;
     private final StreamInputStream inputStream;
@@ -46,7 +47,6 @@ public class QuicStreamImpl implements QuicStream {
     private volatile boolean outputClosed;
     private volatile boolean inputClosed;
     private final ReentrantLock stateLock;
-
 
     public QuicStreamImpl(int streamId, Role role, QuicConnectionImpl connection, StreamManager streamManager, FlowControl flowController) {
         this(Version.getDefault(), streamId, role, connection, streamManager, flowController, new NullLogger());
@@ -77,12 +77,14 @@ public class QuicStreamImpl implements QuicStream {
 
         if (isBidirectional() || isUnidirectional() && isSelfInitiated()) {
             outputStream = createStreamOutputStream(sendBufferSize, flowController);
+            ((StreamOutputStreamImpl) outputStream).getSendBuffer().notifyCanWrite(true);
         }
         else {
             outputStream = new NullStreamOutputStream();
         }
 
         stateLock = new ReentrantLock();
+        listenerPool = new ListenerThreadPool();
     }
 
     private long determineInitialReceiveBufferSize() {
@@ -102,6 +104,13 @@ public class QuicStreamImpl implements QuicStream {
     @Override
     public OutputStream getOutputStream() {
         return outputStream;
+    }
+
+    public boolean isOutputClosed() {
+        return outputClosed;
+    }
+    public boolean isInputClosed() {
+        return inputClosed;
     }
 
     /**
@@ -196,8 +205,16 @@ public class QuicStreamImpl implements QuicStream {
     long terminateStream(long errorCode, long finalSize) throws TransportError {
         return inputStream.terminate(errorCode, finalSize);
     }
-
-    // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.
+    
+    @Override
+    public void close() {
+        // TODO: QuicStream should have a close method that closes both input
+        //  and output stream and releases all resources and marks itself as
+        //  terminated.
+        
+        // currently only closing the listener thread pool
+        this.listenerPool.close();
+    }
 
     /**
      * Resets the output stream so data can again be send from the start of the stream (offset 0). Note that in such

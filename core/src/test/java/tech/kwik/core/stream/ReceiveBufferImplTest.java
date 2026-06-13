@@ -16,7 +16,7 @@ class ReceiveBufferImplTest {
 
     @BeforeEach
     void setUpObjectUnderTest() {
-        receiveBuffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        receiveBuffer = new ReceiveBufferImpl(null, MAX_COMBINED_FRAME_SIZE);
     }
 
     @Test

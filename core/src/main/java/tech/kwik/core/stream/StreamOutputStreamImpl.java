@@ -19,10 +19,10 @@
 package tech.kwik.core.stream;
 
 import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.frame.DataBlockedFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.ResetStreamFrame;
 import tech.kwik.core.frame.StreamDataBlockedFrame;
+import tech.kwik.core.frame.DataBlockedFrame;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.log.Logger;
 
@@ -39,7 +39,6 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     private static final int MIN_FRAME_SIZE = 1 + 8 + 8 + 2 + 1;
 
     private final QuicStreamImpl quicStream;
-    private final Object lock = new Object();
 
     private final SendBuffer sendBuffer;
     private final Logger log;
@@ -64,7 +63,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     StreamOutputStreamImpl(QuicStreamImpl quicStream, Integer sendBufferSize, FlowControl flowControl, Logger log) {
         this.quicStream = quicStream;
         flowController = flowControl;
-        sendBuffer = new SendBuffer(sendBufferSize);
+        sendBuffer = new SendBuffer(quicStream, sendBufferSize);
         this.log = log;
         maxBufferSize = sendBuffer.getMaxSize();
         retransmitBuffer = new RetransmitBuffer();
@@ -170,7 +169,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
             long flowControlLimit = flowController.getFlowControlLimit(quicStream);
             assert (flowControlLimit >= currentOffset);
 
-            int maxBytesToSend = sendBuffer.getAvailableBytes();
+            int maxBytesToSend = sendBuffer.getBufferedBytes();
             if (flowControlLimit > currentOffset || maxBytesToSend == 0) {
                 StreamFrame dummy = new StreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, new byte[0], false);
                 maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getFrameLength() - 1);  // Take one byte extra for length field var int
@@ -264,7 +263,11 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     protected EncryptionLevel getEncryptionLevel() {
         return App;
     }
-
+    
+    SendBuffer getSendBuffer() {
+        return sendBuffer;
+    }
+    
     // Very confusing name: this has nothing to do with resetting the stream as the reset method does!
     protected void resetOutputStream() {
         closed = false;
@@ -302,7 +305,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     private QuicFrame createResetFrame(int maxFrameSize) {
-        assert (reset == true);
+        assert reset;
         return new ResetStreamFrame(quicStream.streamId, resetErrorCode, currentOffset);
     }
 

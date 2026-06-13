@@ -61,7 +61,7 @@ class StreamInputStreamImpl extends StreamInputStream {
     public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
         this.quicStream = quicStream;
         this.log = log;
-        receiveBuffer = new ReceiveBufferImpl();
+        receiveBuffer = new ReceiveBufferImpl(quicStream);
 
         receiverFlowControlLimit = receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;

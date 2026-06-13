@@ -96,7 +96,7 @@ public class CryptoStream {
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
         maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
-        receiveBuffer = new ReceiveBufferImpl();
+        receiveBuffer = new ReceiveBufferImpl(null);
     }
 
     public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, Logger log) {

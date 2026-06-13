@@ -142,6 +142,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile ConnectionCloseFrame lastConnectionCloseFrameSent;
     private final ScheduledExecutorService scheduler;
     private ConnectionListener connectionListener;
+    private StreamReadListener readListener;
+    private StreamWriteListener writeListener;
     protected final ExecutorService callbackThread;
 
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
@@ -149,7 +151,6 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     private volatile int maxDatagramFrameSize;
     private volatile Consumer<byte[]> datagramHandler;
     private volatile ExecutorService datagramHandlerExecutor;
-
 
     protected QuicConnectionImpl(Version originalVersion, Role role, Path secretsFile, ConnectionConfig settings, String id, Logger log) {
         this.quicVersion = new VersionHolder(originalVersion);
@@ -971,8 +972,30 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public ConnectionListener getConnectionListener() {
+        return connectionListener;
+    }
+    @Override
     public void setConnectionListener(ConnectionListener connectionListener) {
         this.connectionListener = connectionListener;
+    }
+
+    @Override
+    public StreamReadListener getStreamReadListener() {
+        return readListener;
+    }
+    @Override
+    public void setStreamReadListener(StreamReadListener listener) {
+        this.readListener = listener;
+    }
+
+    @Override
+    public StreamWriteListener getStreamWriteListener() {
+        return writeListener;
+    }
+    @Override
+    public void setStreamWriteListener(StreamWriteListener listener) {
+        this.writeListener = listener;
     }
 
     protected abstract boolean usingIPv4();
