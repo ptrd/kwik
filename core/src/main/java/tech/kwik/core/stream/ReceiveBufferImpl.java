@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 /**
- * A receive buffer imlementation.
+ * A receive buffer implementation.
  * This implementation is not thread-safe, but concurrent access by separate producer and consumer threads is supported,
  * under the condition that the add method is never called concurrently and the collection of read methods (i.e. all
  * other methods) are never called concurrently.
@@ -48,6 +48,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long bufferedOutOfOrderData;
     private final int maxCombinedFrameSize;
     private volatile boolean discarded;
+    private volatile long discardBeyondOffset = Long.MAX_VALUE;
 
     public ReceiveBufferImpl() {
         this(DEFAULT_MAX_COMBINED_FRAME_SIZE);
@@ -70,12 +71,17 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public long bytesAvailable() {
-        return discarded? 0: contiguousUpToOffset - readUpToOffset;
+        // Cap at the discard offset (Long.MAX_VALUE when discardDataBeyond was not called) so that data beyond it,
+        // which will never be returned by read(), is not reported as available. Clamp to 0, as discardDataBeyond may
+        // run on another thread and lower the discard offset below readUpToOffset.
+        return discarded? 0: Long.max(0, Long.min(contiguousUpToOffset, discardBeyondOffset) - readUpToOffset);
     }
 
     @Override
     public boolean allRead() {
-        return (streamEndOffset >= 0 && readUpToOffset == streamEndOffset) || discarded;
+        return (streamEndOffset >= 0 && readUpToOffset == streamEndOffset)
+                || discarded
+                || readUpToOffset >= discardBeyondOffset;
     }
 
     @Override
@@ -87,11 +93,21 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         int totalBytesRead = 0;
         StreamElement nextFrame = contiguousFrames.peek();
         while (nextFrame != null && buffer.hasRemaining()) {
-            int bytesToRead = (int) Long.min(buffer.remaining(), nextFrame.getUpToOffset() - readUpToOffset);
+            // Read the volatile discard offset once: discardDataBeyond may run on another thread and could otherwise
+            // lower it below readUpToOffset between checks, which would make bytesToRead negative. When readUpToOffset
+            // has already reached the discard offset there is nothing left to read (discardBeyondOffset is
+            // Long.MAX_VALUE when discardDataBeyond was not called).
+            long discardOffset = discardBeyondOffset;
+            if (readUpToOffset >= discardOffset) {
+                break;
+            }
+            // Never return data at or beyond the discard offset.
+            long maxOffset = Long.min(discardOffset, nextFrame.getUpToOffset());
+            int bytesToRead = (int) Long.min(buffer.remaining(), maxOffset - readUpToOffset);
             buffer.put(nextFrame.getStreamData(), (int) (readUpToOffset - nextFrame.getOffset()), bytesToRead);
             readUpToOffset += bytesToRead;
             totalBytesRead += bytesToRead;
-            if (readUpToOffset == nextFrame.getUpToOffset()) {
+            if (readUpToOffset == maxOffset) {
                 contiguousFrames.poll();
                 nextFrame = contiguousFrames.peek();
             }
@@ -101,7 +117,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     @Override
     public boolean allDataReceived() {
-        return (streamEndOffset >= 0 && contiguousUpToOffset == streamEndOffset) || discarded;
+        return (streamEndOffset >= 0 && contiguousUpToOffset == streamEndOffset)
+                || discarded
+                || contiguousUpToOffset >= discardBeyondOffset;
     }
 
     @Override
@@ -113,6 +131,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     public boolean add(StreamElement frame) {
         try {
             if (frame.getLength() > 0) {
+                if (frame.getOffset() >= discardBeyondOffset) {
+                    // All data of this frame is at or beyond the discard offset, so it will never be read: drop it.
+                    return false;
+                }
                 addWithoutOverlap(frame);
             }
             if (frame.isFinal()) {
@@ -128,8 +150,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     }
                     // First add frame and ...
                     contiguousFrames.add(nextFrame);
-                    // ... then update the offset (otherwise: race condition)
-                    contiguousUpToOffset = nextFrame.getUpToOffset();
+                    // ... then update the offset (otherwise: race condition).
+                    // The contiguous offset never advances beyond the discard offset, so that the status methods
+                    // (e.g. bytesAvailable) do not account for data that will never be read.
+                    contiguousUpToOffset = Long.min(nextFrame.getUpToOffset(), discardBeyondOffset);
                     bufferedOutOfOrderData -= nextFrame.getLength();
                 }
             }
@@ -308,6 +332,18 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         outOfOrderFrames.clear();
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
+    }
+
+    @Override
+    public void discardDataBeyond(long offset) {
+        // This method may be called from any thread (not just the producer or consumer thread), so it must only touch
+        // the volatile discardBeyondOffset and nothing else. In particular it must not write contiguousUpToOffset
+        // (which is owned by the producer/add thread) nor modify the buffered frames (outOfOrderFrames,
+        // contiguousFrames), as that would break the lock-free producer/consumer cooperation this class relies on (see
+        // class javadoc). Instead, data beyond the offset is handled lazily: add() drops frames that fall entirely
+        // beyond the offset, read() never returns data beyond it, and the status methods cap their result at it.
+        // The offset can only decrease (a reset can only lower the reliable size, never raise it).
+        discardBeyondOffset = Long.min(discardBeyondOffset, offset);
     }
 
     private static class SimpleStreamElement implements StreamElement {
