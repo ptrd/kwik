@@ -92,7 +92,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             readUpToOffset += bytesToRead;
             totalBytesRead += bytesToRead;
             if (readUpToOffset == nextFrame.getUpToOffset()) {
-                contiguousFrames.remove();
+                contiguousFrames.poll();
                 nextFrame = contiguousFrames.peek();
             }
         }
