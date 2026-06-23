@@ -74,13 +74,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // Cap at the discard offset (Long.MAX_VALUE when discardDataBeyond was not called) so that data beyond it,
         // which will never be returned by read(), is not reported as available. Clamp to 0, as discardDataBeyond may
         // run on another thread and lower the discard offset below readUpToOffset.
-        return discarded? 0: Long.max(0, Long.min(contiguousUpToOffset, discardBeyondOffset) - readUpToOffset);
+        return Long.max(0, Long.min(contiguousUpToOffset, discardBeyondOffset) - readUpToOffset);
     }
 
     @Override
     public boolean allRead() {
         return (streamEndOffset >= 0 && readUpToOffset == streamEndOffset)
-                || discarded
                 || readUpToOffset >= discardBeyondOffset;
     }
 
@@ -118,7 +117,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     @Override
     public boolean allDataReceived() {
         return (streamEndOffset >= 0 && contiguousUpToOffset == streamEndOffset)
-                || discarded
                 || contiguousUpToOffset >= discardBeyondOffset;
     }
 
@@ -328,6 +326,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     public void discardAllData() {
+        // Discarding all data is equivalent to discarding everything from offset 0 onward: no data will ever be read
+        // anymore.
+        discardBeyondOffset = 0;
+        // The discarded flag remains needed to make add() tolerate the races caused by clearing the buffers below while
+        // another thread may be adding (see the catch block in add()).
         discarded = true;
         outOfOrderFrames.clear();
         bufferedOutOfOrderData = 0;
