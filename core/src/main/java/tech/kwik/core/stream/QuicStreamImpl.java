@@ -197,6 +197,21 @@ public class QuicStreamImpl implements QuicStream {
         return inputStream.terminate(errorCode, finalSize);
     }
 
+    /**
+     * Terminates the receiving input stream with partial delivery guarantee. Is called when peer sends a
+     * RESET_STREAM_AT frame. The initial bytes up to reliableSize must be delivered before signaling the reset.
+     *
+     * This method is intentionally package-protected, as it should only be called by the StreamManager class.
+     *
+     * @param errorCode
+     * @param finalSize
+     * @param reliableSize
+     * @return the increase of the largest offset given the final size of the reset frame.
+     */
+    long terminateStreamAt(long errorCode, long finalSize, long reliableSize) throws TransportError {
+        return inputStream.terminateAt(errorCode, finalSize, reliableSize);
+    }
+
     // TODO: QuicStream should have a close method that closes both input and output stream and releases all resources and marks itself as terminated.
 
     /**

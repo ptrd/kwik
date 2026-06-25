@@ -40,6 +40,8 @@ public interface FrameProcessor {
 
     void process(ResetStreamFrame resetStreamFrame, QuicPacket packet, PacketMetaData metaData);
 
+    void process(ResetStreamAtFrame resetStreamAtFrame, QuicPacket packet, PacketMetaData metaData);
+
     void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData);
 
     void process(StopSendingFrame stopSendingFrame, QuicPacket packet, PacketMetaData metaData);

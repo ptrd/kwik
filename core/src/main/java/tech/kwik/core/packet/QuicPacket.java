@@ -371,6 +371,10 @@ abstract public class QuicPacket {
                     case 0x1e:
                         frames.add(new HandshakeDoneFrame(quicVersion).parse(buffer, log));
                         break;
+                    case 0x24:
+                        // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-4
+                        frames.add(new ResetStreamAtFrame().parse(buffer, log));
+                        break;
                     case 0x30:
                     case 0x31:
                         frames.add(new DatagramFrame().parse(buffer, log));

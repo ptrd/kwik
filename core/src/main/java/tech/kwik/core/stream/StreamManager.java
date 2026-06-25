@@ -324,6 +324,14 @@ public class StreamManager {
         }
     }
 
+    public void process(ResetStreamAtFrame resetStreamAtFrame) throws TransportError {
+        QuicStreamImpl stream = streams.get(resetStreamAtFrame.getStreamId());
+        if (stream != null) {
+            totalReceivedMaxOffset += stream.terminateStreamAt(
+                    resetStreamAtFrame.getErrorCode(), resetStreamAtFrame.getFinalSize(), resetStreamAtFrame.getReliableSize());
+        }
+    }
+
     public void updateConnectionFlowControl(long size) {
         try {
             updateFlowControlLock.lock();

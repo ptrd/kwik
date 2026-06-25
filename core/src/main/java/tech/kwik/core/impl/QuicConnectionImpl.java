@@ -519,6 +519,16 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public void process(ResetStreamAtFrame resetStreamAtFrame, QuicPacket packet, PacketMetaData metaData) {
+        try {
+            getStreamManager().process(resetStreamAtFrame);
+        }
+        catch (TransportError transportError) {
+            immediateCloseWithError(transportError.getTransportErrorCode().value, null);
+        }
+    }
+
+    @Override
     public void process(StopSendingFrame stopSendingFrame, QuicPacket packet, PacketMetaData metaData) {
         getStreamManager().process(stopSendingFrame);
     }
