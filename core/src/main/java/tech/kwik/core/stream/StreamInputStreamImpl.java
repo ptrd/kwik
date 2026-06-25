@@ -194,7 +194,6 @@ class StreamInputStreamImpl extends StreamInputStream {
                     catch (InterruptedException e) {
                         // Nothing to do here: read will be abort in next loop iteration with IOException
                     }
-
                 }
 
                 if (receiveBuffer.bytesAvailable() == 0) {
@@ -209,6 +208,7 @@ class StreamInputStreamImpl extends StreamInputStream {
             }
             finally {
                 blockingReaderThread = null;
+                Thread.interrupted();  // clear the wakeup interrupt (if any); it was only meant to unblock this reader
             }
         }
     }
