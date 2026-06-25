@@ -163,14 +163,14 @@ class StreamInputStreamImpl extends StreamInputStream {
         Instant readAttemptStarted = Instant.now();
         long waitPeriod = waitForNextFrameTimeout;
         while (true) {
-            if (aborted || closed || reset) {
-                throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
-            }
+            try {
+                blockingReaderThread = Thread.currentThread();
 
-            synchronized (addMonitor) {
-                try {
-                    blockingReaderThread = Thread.currentThread();
+                if (aborted || closed || reset) {
+                    throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
+                }
 
+                synchronized (addMonitor) {
                     int bytesRead = receiveBuffer.read(ByteBuffer.wrap(buffer, offset, len));
                     if (bytesRead > 0) {
                         updateAllowedFlowControl(bytesRead);
@@ -190,21 +190,25 @@ class StreamInputStreamImpl extends StreamInputStream {
                     // Nothing read: block until bytes can be read, read timeout or abort
                     try {
                         addMonitor.wait(waitPeriod);
-                    } catch (InterruptedException e) {
+                    }
+                    catch (InterruptedException e) {
                         // Nothing to do here: read will be abort in next loop iteration with IOException
                     }
-                } finally {
-                    blockingReaderThread = null;
+
+                }
+
+                if (receiveBuffer.bytesAvailable() == 0) {
+                    long waited = Duration.between(readAttemptStarted, Instant.now()).toMillis();
+                    if (waited > waitForNextFrameTimeout) {
+                        throw new SocketTimeoutException("Read timeout on stream " + quicStream.streamId + "; read up to " + receiveBuffer.readOffset());
+                    }
+                    else {
+                        waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
+                    }
                 }
             }
-
-            if (receiveBuffer.bytesAvailable() == 0) {
-                long waited = Duration.between(readAttemptStarted, Instant.now()).toMillis();
-                if (waited > waitForNextFrameTimeout) {
-                    throw new SocketTimeoutException("Read timeout on stream " + quicStream.streamId + "; read up to " + receiveBuffer.readOffset());
-                } else {
-                    waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
-                }
+            finally {
+                blockingReaderThread = null;
             }
         }
     }
