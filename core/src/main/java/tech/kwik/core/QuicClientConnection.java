@@ -190,7 +190,7 @@ public interface QuicClientConnection extends QuicConnection {
         /**
          * Sets the password for the client's private key.
          * @param keyPassword
-         * @return
+         * @return  the builder
          */
         Builder clientKey(String keyPassword);
 
@@ -198,9 +198,16 @@ public interface QuicClientConnection extends QuicConnection {
 
         /**
          * Enable the datagram extension (RFC 9221).
-         * @return
+         * @return  the builder
          */
         Builder enableDatagramExtension();
+
+        /**
+         * Enable the Stream Resets with Partial Delivery extension
+         * (https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html)
+         * @return  the builder
+         */
+        Builder enableReliableStreamReset();
     }
 
 }

@@ -79,4 +79,11 @@ public interface ApplicationProtocolSettings {
      * @return
      */
     default boolean enableDatagramExtension() { return false; }
+
+    /**
+     * Whether the Stream Resets with Partial Delivery extension
+     * (https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html) should be enabled.
+     * @return
+     */
+    default boolean enableReliableStreamReset() { return false; }
 }

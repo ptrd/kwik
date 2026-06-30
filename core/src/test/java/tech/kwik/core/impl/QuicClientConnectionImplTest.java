@@ -38,6 +38,7 @@ import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.frame.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
+import tech.kwik.core.tls.QuicTransportParametersExtension;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.StreamManager;
@@ -740,6 +741,34 @@ class QuicClientConnectionImplTest {
 
         // Then
         assertThat(transportParameters.getMaxDatagramFrameSize()).isGreaterThan(0);
+    }
+    //endregion
+
+    //region reliable stream reset
+    @Test
+    void whenReliableStreamResetIsNotEnabledTransportParameterShouldNotBeSent() throws Exception {
+        // When
+        TransportParameters transportParameters = connection.initTransportParameters();
+
+        // Then
+        assertThat(transportParameters.isResetStreamAtSupported()).isFalse();
+    }
+
+    @Test
+    void whenReliableStreamResetIsEnabledTransportParameterShouldRoundTrip() throws Exception {
+        // Given
+        connection.enableReliableStreamReset();
+        TransportParameters sentParameters = connection.initTransportParameters();
+        // The source connection id is normally filled in at connect time; set it here so the parameters can be serialized.
+        sentParameters.setInitialSourceConnectionId(new byte[8]);
+
+        // When: serialize as client and parse it back as server (round trip over the wire)
+        byte[] serializedForm = new QuicTransportParametersExtension(Version.getDefault(), sentParameters, Role.Client).getBytes();
+        QuicTransportParametersExtension received = new QuicTransportParametersExtension();
+        received.parse(ByteBuffer.wrap(serializedForm), Role.Server, mock(Logger.class));
+
+        // Then
+        assertThat(received.getTransportParameters().isResetStreamAtSupported()).isTrue();
     }
     //endregion
 

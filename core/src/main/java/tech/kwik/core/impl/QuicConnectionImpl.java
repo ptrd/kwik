@@ -147,6 +147,9 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     // https://datatracker.ietf.org/doc/html/rfc9221  Datagram Extension
     protected volatile DatagramExtensionStatus datagramExtensionStatus = DatagramExtensionStatus.Disabled;
     private volatile int maxDatagramFrameSize;
+
+    // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html  Stream Resets with Partial Delivery
+    protected volatile boolean reliableStreamResetEnabled;
     private volatile Consumer<byte[]> datagramHandler;
     private volatile ExecutorService datagramHandlerExecutor;
 
@@ -520,6 +523,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     @Override
     public void process(ResetStreamAtFrame resetStreamAtFrame, QuicPacket packet, PacketMetaData metaData) {
+        if (!reliableStreamResetEnabled) {
+            immediateCloseWithError(PROTOCOL_VIOLATION.value, "RESET_STREAM_AT frame received, but reliable stream reset extension is not enabled");
+            return;
+        }
         try {
             getStreamManager().process(resetStreamAtFrame);
         }
@@ -1047,6 +1054,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         if (datagramExtensionStatus == DatagramExtensionStatus.Disabled) {
             datagramExtensionStatus = DatagramExtensionStatus.Enable;
         }
+    }
+
+    public void enableReliableStreamReset() {
+        reliableStreamResetEnabled = true;
     }
 
     protected class CheckDestinationFilter extends BasePacketFilter {
