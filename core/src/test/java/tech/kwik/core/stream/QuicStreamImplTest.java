@@ -1314,6 +1314,63 @@ class QuicStreamImplTest {
     }
 
     @Test
+    void resetStreamReliableShouldUseBytesWrittenAsReliableSize() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[100]);
+        captureSendFunction(connection);  // Nothing sent yet, just clear the send request from the write
+
+        // When
+        quicStream.resetStreamReliable(9);
+
+        // Then
+        QuicFrame frame = captureSendFunction(connection).apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamAtFrame.class);
+        assertThat(((ResetStreamAtFrame) frame).getReliableSize()).isEqualTo(100);
+        assertThat(((ResetStreamAtFrame) frame).getFinalSize()).isEqualTo(100);
+    }
+
+    @Test
+    void whenNothingWrittenResetStreamReliableShouldSendPlainResetStreamFrame() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+
+        // When
+        quicStream.resetStreamReliable(9);
+
+        // Then
+        QuicFrame frame = captureSendFunction(connection).apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamFrame.class);
+    }
+
+    @Test
+    void whenPeerDoesNotSupportReliableResetResetStreamReliableShouldThrow() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[10]);
+
+        // When peer support is absent (default), then
+        assertThatThrownBy(() ->
+                quicStream.resetStreamReliable(9)
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void afterResetStreamReliableAllDataWrittenShouldStillBeSent() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[100]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+
+        // When
+        quicStream.resetStreamReliable(9);
+
+        // Then
+        StreamFrame streamFrame = (StreamFrame) sendFunction.apply(1500);
+        assertThat(streamFrame.getOffset()).isEqualTo(0);
+        assertThat(streamFrame.getLength()).isEqualTo(100);
+    }
+
+    @Test
     void whenAllReliableDataIsSentAfterReliableResetStreamClosedShouldBeCalled() throws Exception {
         // Given
         when(connection.canUseReliableStreamReset()).thenReturn(true);

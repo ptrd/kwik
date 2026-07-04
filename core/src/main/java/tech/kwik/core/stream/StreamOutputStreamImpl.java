@@ -392,6 +392,15 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         }
     }
 
+    /**
+     * Resets the stream like {@link #reset(long, long)}, guaranteeing delivery of all data written to the stream so far.
+     *
+     * @param errorCode
+     */
+    protected void resetReliable(long errorCode) {
+        reset(errorCode, totalWritten);
+    }
+
     private void discardAllData() {
         sendBuffer.clear();
     }

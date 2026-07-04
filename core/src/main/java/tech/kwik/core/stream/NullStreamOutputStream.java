@@ -31,6 +31,10 @@ public class NullStreamOutputStream extends StreamOutputStream {
     }
 
     @Override
+    void resetReliable(long errorCode) {
+    }
+
+    @Override
     protected void resetOutputStream() {
     }
 

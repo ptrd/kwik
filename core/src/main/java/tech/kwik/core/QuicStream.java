@@ -126,6 +126,21 @@ public interface QuicStream {
     }
 
     /**
+     * Resets the stream (abrupt termination) while guaranteeing delivery of all data written to the stream so far,
+     * resulting in a RESET_STREAM_AT frame. Equivalent to calling {@link #resetStream(long, long)} with the number of
+     * bytes written as reliable size.
+     *
+     * Requires the peer to support the "Stream Resets with Partial Delivery" extension, see
+     * {@link QuicConnection#canUseReliableStreamReset()}.
+     *
+     * @param applicationProtocolErrorCode
+     * @throws IllegalStateException  when the peer does not support the "Stream Resets with Partial Delivery" extension
+     */
+    default void resetStreamReliable(long applicationProtocolErrorCode) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * @deprecated use {@link #abortReading(long)} instead
      * @param applicationProtocolErrorCode
      */
