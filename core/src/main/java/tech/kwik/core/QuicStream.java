@@ -121,13 +121,13 @@ public interface QuicStream {
      * @throws IllegalStateException     when the peer does not support the "Stream Resets with Partial Delivery" extension
      * @throws IllegalArgumentException  when reliableSize is negative or exceeds the number of bytes written to the stream
      */
-    default void resetStream(long applicationProtocolErrorCode, long reliableSize) {
+    default void resetStreamAt(long applicationProtocolErrorCode, long reliableSize) {
         throw new UnsupportedOperationException();
     }
 
     /**
      * Resets the stream (abrupt termination) while guaranteeing delivery of all data written to the stream so far,
-     * resulting in a RESET_STREAM_AT frame. Equivalent to calling {@link #resetStream(long, long)} with the number of
+     * resulting in a RESET_STREAM_AT frame. Equivalent to calling {@link #resetStreamAt(long, long)} with the number of
      * bytes written as reliable size.
      *
      * Requires the peer to support the "Stream Resets with Partial Delivery" extension, see
@@ -136,7 +136,7 @@ public interface QuicStream {
      * @param applicationProtocolErrorCode
      * @throws IllegalStateException  when the peer does not support the "Stream Resets with Partial Delivery" extension
      */
-    default void resetStreamReliable(long applicationProtocolErrorCode) {
+    default void resetStreamAt(long applicationProtocolErrorCode) {
         throw new UnsupportedOperationException();
     }
 

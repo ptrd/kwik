@@ -96,7 +96,7 @@ public interface QuicConnection extends DatagramExtension {
 
     /**
      * Returns whether streams can be reset with partial delivery guarantee, see
-     * {@link QuicStream#resetStream(long, long)}. This requires the peer to support the "Stream Resets with Partial
+     * {@link QuicStream#resetStreamAt(long, long)}. This requires the peer to support the "Stream Resets with Partial
      * Delivery" extension (https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html), which is
      * known once the connection is established.
      * @return  true when the peer has advertised support for receiving RESET_STREAM_AT frames

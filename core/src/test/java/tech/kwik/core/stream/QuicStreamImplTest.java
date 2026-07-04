@@ -25,12 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.frame.MaxStreamDataFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.ResetStreamAtFrame;
-import tech.kwik.core.frame.ResetStreamFrame;
-import tech.kwik.core.frame.StopSendingFrame;
-import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.generic.IntegerTooLargeException;
 import tech.kwik.core.generic.InvalidIntegerEncodingException;
 import tech.kwik.core.impl.QuicConnectionImpl;
@@ -1045,7 +1040,7 @@ class QuicStreamImplTest {
 
         // When peer support is absent (default), then
         assertThatThrownBy(() ->
-                quicStream.resetStream(9, 5)
+                quicStream.resetStreamAt(9, 5)
         ).isInstanceOf(IllegalStateException.class);
     }
 
@@ -1057,7 +1052,7 @@ class QuicStreamImplTest {
 
         // When, then
         assertThatThrownBy(() ->
-                quicStream.resetStream(9, 11)
+                quicStream.resetStreamAt(9, 11)
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -1068,7 +1063,7 @@ class QuicStreamImplTest {
 
         // When, then
         assertThatThrownBy(() ->
-                quicStream.resetStream(9, -1)
+                quicStream.resetStreamAt(9, -1)
         ).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -1081,7 +1076,7 @@ class QuicStreamImplTest {
         sendFunction.apply(1500);  // Simulate all data is sent
 
         // When
-        quicStream.resetStream(9, 50);
+        quicStream.resetStreamAt(9, 50);
 
         // Then
         ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
@@ -1101,7 +1096,7 @@ class QuicStreamImplTest {
         captureSendFunction(connection);  // Nothing sent yet, just clear the send request from the write
 
         // When
-        quicStream.resetStream(9, 500);
+        quicStream.resetStreamAt(9, 500);
 
         // Then
         QuicFrame frame = captureSendFunction(connection).apply(100);
@@ -1118,7 +1113,7 @@ class QuicStreamImplTest {
         Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
 
         // When
-        quicStream.resetStream(9, 500);
+        quicStream.resetStreamAt(9, 500);
 
         // Then
         StreamFrame streamFrame = (StreamFrame) sendFunction.apply(1500);
@@ -1140,7 +1135,7 @@ class QuicStreamImplTest {
         clearInvocations(connection);
 
         // When: reset with reliable size smaller than the number of bytes already sent
-        quicStream.resetStream(9, 50);
+        quicStream.resetStreamAt(9, 50);
 
         // Then: the remaining buffered data is not sent
         assertThat(sendFunction.apply(1500)).isNull();
@@ -1158,7 +1153,7 @@ class QuicStreamImplTest {
         QuicFrame lostFrame = sendFunction.apply(1500);  // Simulate all data is sent (in one frame overlapping the reliable size)
         clearInvocations(connection);
 
-        quicStream.resetStream(9, 50);
+        quicStream.resetStreamAt(9, 50);
 
         // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
         lostFrameCallbackCaptor.getValue().accept(lostFrame);
@@ -1182,7 +1177,7 @@ class QuicStreamImplTest {
         assertThat(((StreamFrame) lostFrame).getOffset()).isEqualTo(60);
         clearInvocations(connection);
 
-        quicStream.resetStream(9, 50);
+        quicStream.resetStreamAt(9, 50);
 
         // When the frame with only data beyond the reliable size is lost
         lostFrameCallbackCaptor.getValue().accept(lostFrame);
@@ -1198,7 +1193,7 @@ class QuicStreamImplTest {
         quicStream.getOutputStream().write(new byte[100]);
         captureSendFunction(connection).apply(1500);  // Simulate all data is sent
 
-        quicStream.resetStream(9, 100);
+        quicStream.resetStreamAt(9, 100);
         ArgumentCaptor<Function<Integer, QuicFrame>> resetSupplierCaptor = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
         verify(connection, atLeastOnce()).send(resetSupplierCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
@@ -1223,7 +1218,7 @@ class QuicStreamImplTest {
         captureSendFunction(connection);
 
         // When
-        quicStream.resetStream(9, 0);
+        quicStream.resetStreamAt(9, 0);
 
         // Then
         QuicFrame frame = captureSendFunction(connection).apply(100);
@@ -1237,7 +1232,7 @@ class QuicStreamImplTest {
         quicStream.getOutputStream().write(new byte[10]);
 
         // When
-        quicStream.resetStream(9, 10);
+        quicStream.resetStreamAt(9, 10);
 
         // Then
         assertThatThrownBy(() ->
@@ -1251,11 +1246,11 @@ class QuicStreamImplTest {
         // Given
         when(connection.canUseReliableStreamReset()).thenReturn(true);
         quicStream.getOutputStream().write(new byte[10]);
-        quicStream.resetStream(9, 10);
+        quicStream.resetStreamAt(9, 10);
         clearInvocations(connection);
 
         // When
-        quicStream.resetStream(9, 5);
+        quicStream.resetStreamAt(9, 5);
 
         // Then no additional reset frame is sent
         verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
@@ -1279,7 +1274,7 @@ class QuicStreamImplTest {
         Thread.sleep(10);
 
         // When
-        quicStream.resetStream(9, 10);
+        quicStream.resetStreamAt(9, 10);
         Thread.sleep(10);
 
         // Then
@@ -1300,7 +1295,7 @@ class QuicStreamImplTest {
         Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
 
         // When
-        quicStream.resetStream(9, 100);
+        quicStream.resetStreamAt(9, 100);
 
         // Then: still data to send, so flow control must remain active
         verify(flowControl, never()).unregister(any(QuicStream.class));
@@ -1321,7 +1316,7 @@ class QuicStreamImplTest {
         captureSendFunction(connection);  // Nothing sent yet, just clear the send request from the write
 
         // When
-        quicStream.resetStreamReliable(9);
+        quicStream.resetStreamAt(9);
 
         // Then
         QuicFrame frame = captureSendFunction(connection).apply(100);
@@ -1336,7 +1331,7 @@ class QuicStreamImplTest {
         when(connection.canUseReliableStreamReset()).thenReturn(true);
 
         // When
-        quicStream.resetStreamReliable(9);
+        quicStream.resetStreamAt(9);
 
         // Then
         QuicFrame frame = captureSendFunction(connection).apply(100);
@@ -1350,7 +1345,7 @@ class QuicStreamImplTest {
 
         // When peer support is absent (default), then
         assertThatThrownBy(() ->
-                quicStream.resetStreamReliable(9)
+                quicStream.resetStreamAt(9)
         ).isInstanceOf(IllegalStateException.class);
     }
 
@@ -1362,7 +1357,7 @@ class QuicStreamImplTest {
         Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
 
         // When
-        quicStream.resetStreamReliable(9);
+        quicStream.resetStreamAt(9);
 
         // Then
         StreamFrame streamFrame = (StreamFrame) sendFunction.apply(1500);
@@ -1384,7 +1379,7 @@ class QuicStreamImplTest {
         Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
 
         // When
-        quicStream.resetStream(9, 10);
+        quicStream.resetStreamAt(9, 10);
 
         // Then: not all reliable data has been sent yet, so the stream is not closed yet
         verify(streamManager, never()).streamClosed(anyInt());

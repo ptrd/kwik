@@ -358,7 +358,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
      * @param errorCode
      * @param reliableSize
      */
-    protected void reset(long errorCode, long reliableSize) {
+    protected void resetReliable(long errorCode, long reliableSize) {
         if (reliableSize < 0) {
             throw new IllegalArgumentException("reliable size must not be negative");
         }
@@ -393,12 +393,12 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     /**
-     * Resets the stream like {@link #reset(long, long)}, guaranteeing delivery of all data written to the stream so far.
+     * Resets the stream like {@link #resetReliable(long, long)}, guaranteeing delivery of all data written to the stream so far.
      *
      * @param errorCode
      */
     protected void resetReliable(long errorCode) {
-        reset(errorCode, totalWritten);
+        resetReliable(errorCode, totalWritten);
     }
 
     private void discardAllData() {
