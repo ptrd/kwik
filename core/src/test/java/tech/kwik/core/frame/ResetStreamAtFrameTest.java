@@ -129,6 +129,21 @@ class ResetStreamAtFrameTest {
     }
     // endregion
 
+    // region maximum frame size
+    @Test
+    void maximumFrameSizeShouldNotBeExceededByActualFrame() {
+        // Given — maximum var-int values for final size and reliable size
+        long maxVarInt = 4611686018427387903L;
+        var frame = new ResetStreamAtFrame(127, 592, maxVarInt, maxVarInt);
+
+        // When
+        int maximumFrameSize = ResetStreamAtFrame.getMaximumFrameSize(127, 592);
+
+        // Then
+        assertThat(frame.getFrameLength()).isLessThanOrEqualTo(maximumFrameSize);
+    }
+    // endregion
+
     // region frame type
     @Test
     void serializedFrameStartsWithTypeByte0x24() {

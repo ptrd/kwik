@@ -658,6 +658,28 @@ class QuicConnectionImplTest {
         verify(connection.getStreamManager()).process(resetStreamAtFrame);
         verify(sender, never()).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class));
     }
+
+    @Test
+    void whenPeerAdvertisesResetStreamAtSupportReliableStreamResetCanBeUsed() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setResetStreamAtSupported(true);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canUseReliableStreamReset()).isTrue();
+    }
+
+    @Test
+    void whenPeerDoesNotAdvertiseResetStreamAtSupportReliableStreamResetCannotBeUsed() {
+        // When
+        connection.processCommonTransportParameters(new TransportParameters());
+
+        // Then
+        assertThat(connection.canUseReliableStreamReset()).isFalse();
+    }
     //endregion
 
     //region helper methods

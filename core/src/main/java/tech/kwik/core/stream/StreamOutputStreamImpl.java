@@ -19,16 +19,13 @@
 package tech.kwik.core.stream;
 
 import tech.kwik.core.common.EncryptionLevel;
-import tech.kwik.core.frame.DataBlockedFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.ResetStreamFrame;
-import tech.kwik.core.frame.StreamDataBlockedFrame;
-import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.frame.*;
 import tech.kwik.core.log.Logger;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static tech.kwik.core.common.EncryptionLevel.App;
 
@@ -56,6 +53,20 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     // Reset indicates whether the OutputStream has been reset.
     private volatile boolean reset;
     private volatile long resetErrorCode;
+    // Reliable size of a reliable reset (RESET_STREAM_AT): the amount of stream data that must still be delivered
+    // despite the reset. A negative value indicates the reset (if any) is a plain reset.
+    private volatile long reliableResetSize = -1;
+    // Total number of bytes written to this output stream, used to validate the reliable size of a reliable reset.
+    // Thread safety: written by caller thread, read by the thread calling reset (which can be a different one).
+    private volatile long totalWritten;
+    // Guards stream reset, to ensure that of multiple (concurrent) resets only one is effectuated.
+    private final ReentrantLock resetLock = new ReentrantLock();
+    // Whether all stream data up to the reliable size has been sent (and remaining data discarded).
+    // Thread safety: only used by sender thread.
+    private boolean reliableResetCompleted;
+    // Final size sent in the RESET_STREAM_AT frame; must never change once determined.
+    // Thread safety: only used by sender thread.
+    private long resetFinalSize = -1;
     // Stream offset at which the stream was last blocked, for detecting the first time stream is blocked at a certain offset.
     private long blockedOffset;
     protected final FlowControl flowController;
@@ -85,6 +96,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         try {
             if (len <= maxBufferSize) {
                 sendBuffer.write(data, off, len);
+                totalWritten += len;
             }
             else {
                 // Buffering all would break the contract (because this method copies _all_ data) but splitting and
@@ -154,11 +166,14 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     QuicFrame sendStreamFrame(int maxFrameSize) {
-        if (reset) {
+        if (reset && reliableResetSize < 0) {
+            // Plain reset: no stream data is sent anymore.
             return null;
         }
         // As this class always queues a send stream frame request by registering a callback, the callback can be used to keep track of the number of requests that are actually queued.
         sendRequestsQueued.decrementAndGet();
+
+        checkReliableResetCompleted();
 
         StreamFrame streamFrame = null;
         if (retransmitBuffer.hasDataToRetransmit()) {
@@ -171,6 +186,12 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
             assert (flowControlLimit >= currentOffset);
 
             int maxBytesToSend = sendBuffer.getAvailableBytes();
+            if (reset && reliableResetSize >= 0) {
+                // Reliable reset: send no data beyond the reliable size. The current offset can (only) be beyond the
+                // reliable size when the reset happened concurrently with this method execution; in that case no data
+                // is sent at all and a next invocation (queued by the reset) will discard the remaining data.
+                maxBytesToSend = (int) Long.min(maxBytesToSend, Long.max(0, reliableResetSize - currentOffset));
+            }
             if (flowControlLimit > currentOffset || maxBytesToSend == 0) {
                 StreamFrame dummy = new StreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, new byte[0], false);
                 maxBytesToSend = Integer.min(maxBytesToSend, maxFrameSize - dummy.getFrameLength() - 1);  // Take one byte extra for length field var int
@@ -180,6 +201,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
                 streamFrame = sendBuffer.getStreamFrame(quicStream.quicVersion, quicStream.streamId, currentOffset, maxBytesToSend);
                 if (streamFrame != null) {
                     currentOffset += streamFrame.getLength();
+                    checkReliableResetCompleted();
                 }
 
                 if (streamFrame != null && streamFrame.isFinal()) {
@@ -209,6 +231,25 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         }
 
         return streamFrame;
+    }
+
+    /**
+     * Checks whether all stream data up to the reliable size of a reliable reset has been sent, and if so, discards
+     * the remaining data and stops flow control (delivery of the data already sent is guaranteed by retransmission,
+     * which does not need flow control).
+     * Thread safety: is called from sender thread only.
+     */
+    private void checkReliableResetCompleted() {
+        if (reset && reliableResetSize >= 0 && currentOffset >= reliableResetSize && !reliableResetCompleted) {
+            reliableResetCompleted = true;
+            // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-5
+            // "When using a RESET_STREAM_AT frame, the initiator MUST guarantee reliable delivery of stream data of at
+            //  least Reliable Size bytes."
+            sendBuffer.clear();
+            // This situation is similar to the final frame being sent, so stop flow control and close the output stream.
+            stopFlowControl();
+            quicStream.outputClosed();
+        }
     }
 
     protected void finalFrameSent() {
@@ -255,7 +296,11 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     private void retransmitStreamFrame(QuicFrame frame) {
         assert (frame instanceof StreamFrame);
-        if (!reset) {
+        // When reset, stream data is not retransmitted, except for a reliable reset, which guarantees delivery of
+        // stream data up to the reliable size:
+        // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-5
+        // "If STREAM frames containing data up to that byte offset are lost, the initiator MUST retransmit this data"
+        if (!reset || reliableResetSize >= 0 && ((StreamFrame) frame).getOffset() < reliableResetSize) {
             retransmitBuffer.add((StreamFrame) frame);
             scheduleSendStreamFrameRequest(true);
         }
@@ -286,14 +331,64 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
      * @param errorCode
      */
     protected void reset(long errorCode) {
-        if (!closed && !reset) {
-            reset = true;
-            resetErrorCode = errorCode;
-            discardAllData();
-            // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
-            quicStream.connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(quicStream.streamId, errorCode), App, this::retransmitResetFrame, true);
-            interruptBlockingThread();
-            quicStream.outputClosed();
+        resetLock.lock();
+        try {
+            if (!closed && !reset) {
+                reset = true;
+                resetErrorCode = errorCode;
+                // Interrupt a blocked writer before discarding the data: discarding frees buffer space, which would wake
+                // up the writer and let its write complete normally, but after a reset a pending write should fail.
+                interruptBlockingThread();
+                discardAllData();
+                // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
+                quicStream.connection.send(this::createResetFrame, ResetStreamFrame.getMaximumFrameSize(quicStream.streamId, errorCode), App, this::retransmitResetFrame, true);
+                quicStream.outputClosed();
+            }
+        }
+        finally {
+            resetLock.unlock();
+        }
+    }
+
+    /**
+     * https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
+     * "A sender that wants to reset a stream but also deliver some bytes to the receiver sends a RESET_STREAM_AT frame
+     *  with the Reliable Size field specifying the amount of data to be delivered."
+     *
+     * @param errorCode
+     * @param reliableSize
+     */
+    protected void reset(long errorCode, long reliableSize) {
+        if (reliableSize < 0) {
+            throw new IllegalArgumentException("reliable size must not be negative");
+        }
+        if (!quicStream.connection.canUseReliableStreamReset()) {
+            throw new IllegalStateException("peer does not support reliable stream reset");
+        }
+        if (reliableSize > totalWritten) {
+            throw new IllegalArgumentException("reliable size cannot exceed the number of bytes written to the stream");
+        }
+        if (reliableSize == 0) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-5
+            // "A RESET_STREAM_AT frame with this value is logically equivalent to a RESET_STREAM frame"
+            reset(errorCode);
+            return;
+        }
+        resetLock.lock();
+        try {
+            if (!closed && !reset) {
+                resetErrorCode = errorCode;
+                reliableResetSize = reliableSize;
+                reset = true;
+                // Use sender callback to ensure current offset used in reset frame is accessed by sender thread.
+                quicStream.connection.send(this::createResetStreamAtFrame, ResetStreamAtFrame.getMaximumFrameSize(quicStream.streamId, errorCode), App, this::retransmitResetFrame, true);
+                // Data up to the reliable size must still be sent; queue a send request in case none is pending.
+                scheduleSendStreamFrameRequest(true); // Necessary to ensure checkReliableResetCompleted is called after reset.
+                interruptBlockingThread();
+            }
+        }
+        finally {
+            resetLock.unlock();
         }
     }
 
@@ -306,8 +401,19 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
         return new ResetStreamFrame(quicStream.streamId, resetErrorCode, currentOffset);
     }
 
+    private QuicFrame createResetStreamAtFrame(int maxFrameSize) {
+        // Thread safety: is called from sender thread only.
+        assert (reset == true);
+        if (resetFinalSize < 0) {
+            // Data up to the reliable size will still be sent (and sending is capped at the reliable size), so the
+            // final size is known already, even when not all data has been sent yet.
+            resetFinalSize = Long.max(currentOffset, reliableResetSize);
+        }
+        return new ResetStreamAtFrame(quicStream.streamId, resetErrorCode, resetFinalSize, reliableResetSize);
+    }
+
     private void retransmitResetFrame(QuicFrame frame) {
-        assert (frame instanceof ResetStreamFrame);
+        assert (frame instanceof ResetStreamFrame || frame instanceof ResetStreamAtFrame);
         quicStream.connection.send(frame, this::retransmitResetFrame);
     }
 

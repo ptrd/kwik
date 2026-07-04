@@ -23,9 +23,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
+import tech.kwik.core.QuicStream;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.MaxStreamDataFrame;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.ResetStreamAtFrame;
 import tech.kwik.core.frame.ResetStreamFrame;
 import tech.kwik.core.frame.StopSendingFrame;
 import tech.kwik.core.frame.StreamFrame;
@@ -1032,6 +1034,309 @@ class QuicStreamImplTest {
         assertThat(thrownException.get())
                 .isInstanceOf(InterruptedIOException.class)  // Require InterruptedIOException, as that proofs the write was blocked before being interrupted.
                 .hasMessageContaining("reset");
+    }
+    //endregion
+
+    //region output reliable reset (RESET_STREAM_AT)
+    @Test
+    void whenPeerDoesNotSupportReliableResetReliableResetShouldThrow() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[10]);
+
+        // When peer support is absent (default), then
+        assertThatThrownBy(() ->
+                quicStream.resetStream(9, 5)
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void whenReliableSizeExceedsBytesWrittenReliableResetShouldThrow() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[10]);
+
+        // When, then
+        assertThatThrownBy(() ->
+                quicStream.resetStream(9, 11)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenReliableSizeIsNegativeReliableResetShouldThrow() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+
+        // When, then
+        assertThatThrownBy(() ->
+                quicStream.resetStream(9, -1)
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenAllDataAlreadySentReliableResetShouldSendResetStreamAtWithFinalSizeEqualToDataSent() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[100]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+        sendFunction.apply(1500);  // Simulate all data is sent
+
+        // When
+        quicStream.resetStream(9, 50);
+
+        // Then
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(connection, atLeastOnce()).send(captor.capture(), anyInt(), argThat(l -> l == EncryptionLevel.App), any(Consumer.class), anyBoolean());
+        QuicFrame frame = captor.getAllValues().get(0).apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamAtFrame.class);
+        assertThat(((ResetStreamAtFrame) frame).getErrorCode()).isEqualTo(9);
+        assertThat(((ResetStreamAtFrame) frame).getFinalSize()).isEqualTo(100);
+        assertThat(((ResetStreamAtFrame) frame).getReliableSize()).isEqualTo(50);
+    }
+
+    @Test
+    void whenNotAllDataSentYetFinalSizeOfResetStreamAtFrameShouldBeReliableSize() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[1000]);
+        captureSendFunction(connection);  // Nothing sent yet, just clear the send request from the write
+
+        // When
+        quicStream.resetStream(9, 500);
+
+        // Then
+        QuicFrame frame = captureSendFunction(connection).apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamAtFrame.class);
+        assertThat(((ResetStreamAtFrame) frame).getFinalSize()).isEqualTo(500);
+        assertThat(((ResetStreamAtFrame) frame).getReliableSize()).isEqualTo(500);
+    }
+
+    @Test
+    void afterReliableResetDataUpToReliableSizeShouldStillBeSent() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[1000]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9, 500);
+
+        // Then
+        StreamFrame streamFrame = (StreamFrame) sendFunction.apply(1500);
+        assertThat(streamFrame.getOffset()).isEqualTo(0);
+        assertThat(streamFrame.getLength()).isEqualTo(500);
+        // And no data beyond the reliable size is sent
+        assertThat(sendFunction.apply(1500)).isNull();
+    }
+
+    @Test
+    void whenReliableSizeIsSmallerThanBytesAlreadySentRemainingBufferedDataShouldNotBeSent() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[150]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+        StreamFrame firstFrame = (StreamFrame) sendFunction.apply(110);  // Sends first ~105 bytes, rest stays buffered
+        assertThat(firstFrame.getLength()).isGreaterThan(50);
+        assertThat(firstFrame.getLength()).isLessThan(150);
+        clearInvocations(connection);
+
+        // When: reset with reliable size smaller than the number of bytes already sent
+        quicStream.resetStream(9, 50);
+
+        // Then: the remaining buffered data is not sent
+        assertThat(sendFunction.apply(1500)).isNull();
+    }
+
+    @Test
+    void afterReliableResetLostFrameOverlappingReliableRangeShouldBeRetransmitted() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+        quicStream.getOutputStream().write(new byte[100]);
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
+        Function<Integer, QuicFrame> sendFunction = sendFunctionCaptor.getValue();
+        QuicFrame lostFrame = sendFunction.apply(1500);  // Simulate all data is sent (in one frame overlapping the reliable size)
+        clearInvocations(connection);
+
+        quicStream.resetStream(9, 50);
+
+        // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
+        lostFrameCallbackCaptor.getValue().accept(lostFrame);
+
+        // Then the frame is retransmitted, because it contains data below the reliable size
+        assertThat(sendFunction.apply(1500)).isEqualTo(lostFrame);
+    }
+
+    @Test
+    void afterReliableResetLostFrameBeyondReliableSizeShouldNotBeRetransmitted() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>> sendFunctionCaptor = ArgumentCaptor.forClass(Function.class);
+        quicStream.getOutputStream().write(new byte[60]);
+        verify(connection, times(1)).send(sendFunctionCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
+        Function<Integer, QuicFrame> sendFunction = sendFunctionCaptor.getValue();
+        sendFunction.apply(1500);  // Sends bytes 0..60
+        quicStream.getOutputStream().write(new byte[40]);
+        QuicFrame lostFrame = sendFunction.apply(1500);  // Sends bytes 60..100
+        assertThat(((StreamFrame) lostFrame).getOffset()).isEqualTo(60);
+        clearInvocations(connection);
+
+        quicStream.resetStream(9, 50);
+
+        // When the frame with only data beyond the reliable size is lost
+        lostFrameCallbackCaptor.getValue().accept(lostFrame);
+
+        // Then it is not retransmitted
+        assertThat(sendFunction.apply(1500)).isNull();
+    }
+
+    @Test
+    void lostResetStreamAtFrameShouldBeRetransmitted() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[100]);
+        captureSendFunction(connection).apply(1500);  // Simulate all data is sent
+
+        quicStream.resetStream(9, 100);
+        ArgumentCaptor<Function<Integer, QuicFrame>> resetSupplierCaptor = ArgumentCaptor.forClass(Function.class);
+        ArgumentCaptor<Consumer> lostFrameCallbackCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(connection, atLeastOnce()).send(resetSupplierCaptor.capture(), anyInt(), any(EncryptionLevel.class), lostFrameCallbackCaptor.capture(), anyBoolean());
+        QuicFrame resetFrame = resetSupplierCaptor.getAllValues().get(0).apply(100);
+        assertThat(resetFrame).isInstanceOf(ResetStreamAtFrame.class);
+        clearInvocations(connection);
+
+        // When the recovery manager determines that the frame is lost, it will call the lost-frame-callback with the lost frame as argument
+        lostFrameCallbackCaptor.getAllValues().get(0).accept(resetFrame);
+
+        // Then the same frame is sent again
+        ArgumentCaptor<QuicFrame> resendCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(connection).send(resendCaptor.capture(), any(Consumer.class));
+        assertThat(resendCaptor.getValue()).isSameAs(resetFrame);
+    }
+
+    @Test
+    void reliableResetWithReliableSizeZeroShouldSendPlainResetStreamFrame() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[10]);
+        captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9, 0);
+
+        // Then
+        QuicFrame frame = captureSendFunction(connection).apply(100);
+        assertThat(frame).isInstanceOf(ResetStreamFrame.class);
+    }
+
+    @Test
+    void whenOutputIsReliablyResetWriteFails() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[10]);
+
+        // When
+        quicStream.resetStream(9, 10);
+
+        // Then
+        assertThatThrownBy(() ->
+                quicStream.getOutputStream().write(new byte[10])
+        ).isInstanceOf(IOException.class)
+                .hasMessageContaining("reset");
+    }
+
+    @Test
+    void resetAfterReliableResetShouldBeIgnored() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[10]);
+        quicStream.resetStream(9, 10);
+        clearInvocations(connection);
+
+        // When
+        quicStream.resetStream(9, 5);
+
+        // Then no additional reset frame is sent
+        verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
+    }
+
+    @Test
+    void whenOutputIsReliablyResetBlockingWriteIsAborted() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        quicStream.getOutputStream().write(new byte[10]);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        new Thread(() -> {
+            try {
+                quicStream.getOutputStream().write(new byte[1_000_000]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        }).start();
+        Thread.sleep(10);
+
+        // When
+        quicStream.resetStream(9, 10);
+        Thread.sleep(10);
+
+        // Then
+        assertThat(thrownException.get())
+                .isInstanceOf(InterruptedIOException.class)
+                .hasMessageContaining("reset");
+    }
+
+    @Test
+    void flowControlShouldRemainActiveUntilAllReliableDataIsSent() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        FlowControl flowControl = mock(FlowControl.class);
+        when(flowControl.getFlowControlLimit(any(QuicStream.class))).thenReturn(9999L);
+        when(flowControl.increaseFlowControlLimit(any(QuicStream.class), anyLong())).thenAnswer(invocation -> invocation.getArgument(1));
+        quicStream = new QuicStreamImpl(0, role, connection, streamManager, flowControl, logger);
+        quicStream.getOutputStream().write(new byte[100]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9, 100);
+
+        // Then: still data to send, so flow control must remain active
+        verify(flowControl, never()).unregister(any(QuicStream.class));
+
+        // When all reliable data is sent
+        sendFunction.apply(1500);
+
+        // Then flow control is released
+        verify(flowControl).unregister(any(QuicStream.class));
+        verify(flowControl).streamClosed(any(QuicStream.class));
+    }
+
+    @Test
+    void whenAllReliableDataIsSentAfterReliableResetStreamClosedShouldBeCalled() throws Exception {
+        // Given
+        when(connection.canUseReliableStreamReset()).thenReturn(true);
+        role = Role.Server;
+        int streamId = 3;  // server initiated unidirectional stream
+        FlowControl flowControl = mock(FlowControl.class);
+        when(flowControl.getFlowControlLimit(any(QuicStream.class))).thenReturn(9999L);
+        when(flowControl.increaseFlowControlLimit(any(QuicStream.class), anyLong())).thenAnswer(invocation -> invocation.getArgument(1));
+        quicStream = new QuicStreamImpl(streamId, role, connection, streamManager, flowControl);
+        quicStream.getOutputStream().write(new byte[10]);
+        Function<Integer, QuicFrame> sendFunction = captureSendFunction(connection);
+
+        // When
+        quicStream.resetStream(9, 10);
+
+        // Then: not all reliable data has been sent yet, so the stream is not closed yet
+        verify(streamManager, never()).streamClosed(anyInt());
+
+        // When all reliable data is sent
+        sendFunction.apply(1500);
+
+        // Then
+        verify(streamManager).streamClosed(eq(quicStream.streamId));
     }
     //endregion
 

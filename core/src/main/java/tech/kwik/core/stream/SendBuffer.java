@@ -82,6 +82,11 @@ public class SendBuffer {
                     // Might throw InterruptedException, must be handled by caller
                     notFull.await();
                 }
+                if (Thread.currentThread().isInterrupted()) {
+                    // When an interrupt races with a signal, await() can return normally with the interrupt status set
+                    // (instead of throwing InterruptedException); the interrupted write must not complete.
+                    throw new InterruptedException();
+                }
             }
             finally {
                 blockingWriterThread = null;
@@ -153,6 +158,13 @@ public class SendBuffer {
     public void clear() {
         sendQueue.clear();
         bufferedBytes.set(0);
+        bufferLock.lock();
+        try {
+            notFull.signal();
+        }
+        finally {
+            bufferLock.unlock();
+        }
     }
 
     public void interruptBlockedWriter() {

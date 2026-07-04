@@ -176,6 +176,11 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     @Override
+    public void resetStream(long errorCode, long reliableSize) {
+        outputStream.reset(errorCode, reliableSize);
+    }
+
+    @Override
     public String toString() {
         return "Stream " + streamId;
     }

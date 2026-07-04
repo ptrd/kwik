@@ -150,6 +150,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html  Stream Resets with Partial Delivery
     protected volatile boolean reliableStreamResetEnabled;
+    private volatile boolean peerSupportsReliableStreamReset;
     private volatile Consumer<byte[]> datagramHandler;
     private volatile ExecutorService datagramHandlerExecutor;
 
@@ -350,6 +351,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
 
         updateDatagramExtensionStatus(peerTransportParams);
+
+        // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-3
+        // "Support for receiving RESET_STREAM_AT frames is advertised by sending the reset_stream_at (...) transport parameter"
+        peerSupportsReliableStreamReset = peerTransportParams.isResetStreamAtSupported();
     }
 
     private void updateDatagramExtensionStatus(TransportParameters peerTransportParams) {
@@ -1058,6 +1063,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
 
     public void enableReliableStreamReset() {
         reliableStreamResetEnabled = true;
+    }
+
+    @Override
+    public boolean canUseReliableStreamReset() {
+        return peerSupportsReliableStreamReset;
     }
 
     protected class CheckDestinationFilter extends BasePacketFilter {

@@ -42,6 +42,20 @@ public class ResetStreamAtFrame extends QuicFrame {
     private long finalSize;
     private long reliableSize;
 
+    /**
+     * Returns an upper bound for the size of a frame with the given parameters. A frame created with these parameters
+     * will never have a size larger than this upper bound.
+     * @param streamId
+     * @param errorCode
+     * @return
+     */
+    public static int getMaximumFrameSize(int streamId, long errorCode) {
+        int maxFinalSizeLength = 8;
+        int maxReliableSizeLength = 8;
+        return 1 + VariableLengthInteger.bytesNeeded(streamId) + VariableLengthInteger.bytesNeeded(errorCode)
+                + maxFinalSizeLength + maxReliableSizeLength;
+    }
+
     public ResetStreamAtFrame() {}
 
     public ResetStreamAtFrame(int streamId, long errorCode, long finalSize, long reliableSize) {
