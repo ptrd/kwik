@@ -362,6 +362,15 @@ class QuicTransportParametersExtensionTest {
     }
 
     @Test
+    void parseResetStreamAtTransportParameterDraft07() throws Exception {
+        //                                           ext size  id sz
+        byte[] rawData = ByteUtils.hexToBytes("00 39 00 02     1d 00".replaceAll(" ", ""));
+        var transportParametersExtension = new QuicTransportParametersExtension(Version.QUIC_version_1);
+        transportParametersExtension.parse(ByteBuffer.wrap(rawData), Role.Client, mock(Logger.class));
+        assertThat(transportParametersExtension.getTransportParameters().isResetStreamAtSupported()).isTrue();
+    }
+
+    @Test
     void parseResetStreamAtTransportParameter() throws Exception {
         //                                           ext size  id (8-byte VLI for 0x17f7586d2cb571) sz
         byte[] rawData = ByteUtils.hexToBytes("00 39 00 09     c0 17 f7 58 6d 2c b5 71              00".replaceAll(" ", ""));
@@ -371,9 +380,18 @@ class QuicTransportParametersExtensionTest {
     }
 
     @Test
-    void parseResetStreamAtTransportParameterWithNonZeroValueShouldThrow() throws Exception {
+    void parseResetStreamAtTransportParameterDraft07WithNonZeroValueShouldThrow() throws Exception {
         //                              id (8-byte VLI for 0x17f7586d2cb571)  sz value
         byte[] rawData = ByteUtils.hexToBytes("c0 17 f7 58 6d 2c b5 71        01 42".replaceAll(" ", ""));
+        var transportParametersExtension = new QuicTransportParametersExtension();
+        assertThatThrownBy(() -> transportParametersExtension.parseTransportParameter(ByteBuffer.wrap(rawData), new HashSet<>(), mock(Logger.class)))
+                .isInstanceOf(TransportError.class)
+                .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(TRANSPORT_PARAMETER_ERROR));
+    }
+
+    @Test
+    void parseResetStreamAtTransportParameterWithNonZeroValueShouldThrow() throws Exception {
+        byte[] rawData = ByteUtils.hexToBytes("1d 01 42".replaceAll(" ", ""));
         var transportParametersExtension = new QuicTransportParametersExtension();
         assertThatThrownBy(() -> transportParametersExtension.parseTransportParameter(ByteBuffer.wrap(rawData), new HashSet<>(), mock(Logger.class)))
                 .isInstanceOf(TransportError.class)
