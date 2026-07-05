@@ -18,6 +18,9 @@
  */
 package tech.kwik.core.stream;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tech.kwik.core.ConnectionConfig;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.common.EncryptionLevel;
@@ -34,10 +37,8 @@ import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,15 +49,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static tech.kwik.core.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
 
 class StreamManagerTest {
 
@@ -755,6 +756,25 @@ class StreamManagerTest {
         assertThatCode(() ->
                 streamManager.process(new StreamFrame(stream.getStreamId(), streamFinalSize - 5 * 1024, new byte[1024], false))
         ).doesNotThrowAnyException();
+    }
+
+    @Test
+    void connectionFlowControlCheckShouldNotMissViolationDueToLongOverflow() throws Exception {
+        // Given: simulate totalReceivedMaxOffset accumulated to near Long.MAX_VALUE (which is nearly impossible in practice)
+        Field totalReceivedMaxOffsetField = StreamManager.class.getDeclaredField("totalReceivedMaxOffset");
+        totalReceivedMaxOffsetField.setAccessible(true);
+        totalReceivedMaxOffsetField.set(streamManager, Long.MAX_VALUE - 5);
+
+        Field flowControlMaxField = StreamManager.class.getDeclaredField("flowControlMax");
+        flowControlMaxField.setAccessible(true);
+        flowControlMaxField.set(streamManager, Long.MAX_VALUE);
+
+        // When: a new peer-initiated stream frame arrives with upToOffset = 10 (increment = 10 > 5 remaining credits),
+        // the sum of totalReceivedMaxOffset and increment would overflow to a negative number.
+        assertThatThrownBy(() ->
+                streamManager.process(new StreamFrame(1, 9L, new byte[1], false)))
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
     }
     //endregion
 

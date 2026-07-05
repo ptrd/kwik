@@ -265,6 +265,33 @@ class ServerConnectionImplTest {
     }
     //endregion
 
+    //region reliable stream reset
+    @Test
+    void whenReliableStreamResetIsEnabledTransportParameterShouldBeSent() throws Exception {
+        // Given
+        connection.enableReliableStreamReset();
+
+        // When
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().isResetStreamAtSupported()).isTrue();
+    }
+
+    @Test
+    void whenReliableStreamResetIsNotEnabledTransportParameterShouldNotBeSent() throws Exception {
+        // When
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().isResetStreamAtSupported()).isFalse();
+    }
+    //endregion
+
     //region compatible version negotiation
     @Test
     void versionInformationWithSupportedOtherVersionLeadsToVersionChange() throws Exception {

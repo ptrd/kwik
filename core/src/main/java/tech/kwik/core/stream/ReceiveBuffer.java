@@ -80,4 +80,11 @@ public interface ReceiveBuffer {
      * Discard all data that is currently buffered.
      */
     void discardAllData();
+
+
+    /**
+     * Discard all buffered data at or beyond the given stream offset. Data before the offset is kept.
+     * @param offset  the stream offset; data at or beyond this offset is discarded
+     */
+    void discardDataBeyond(long offset);
 }

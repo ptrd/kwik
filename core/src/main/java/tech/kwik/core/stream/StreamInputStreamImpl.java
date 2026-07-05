@@ -34,6 +34,7 @@ import java.time.Instant;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 /**
  * Input stream for reading data received by the QUIC stream.
@@ -57,6 +58,10 @@ class StreamInputStreamImpl extends StreamInputStream {
     private long receiverFlowControlLimit;
     private volatile boolean aborted;
     private volatile long finalSize = -1;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
+    // "... a variant of stream resets that reliably delivers the beginning of a stream up to a sender-specified offset, communicated using the RESET_STREAM_AT frame."
+    private volatile boolean resetAt;
+    private volatile long resetAtReliableSize;
 
     public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
         this.quicStream = quicStream;
@@ -158,19 +163,25 @@ class StreamInputStreamImpl extends StreamInputStream {
         Instant readAttemptStarted = Instant.now();
         long waitPeriod = waitForNextFrameTimeout;
         while (true) {
-            if (aborted || closed || reset) {
-                throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
-            }
+            try {
+                blockingReaderThread = Thread.currentThread();
 
-            synchronized (addMonitor) {
-                try {
-                    blockingReaderThread = Thread.currentThread();
+                if (aborted || closed || reset) {
+                    throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
+                }
 
+                synchronized (addMonitor) {
                     int bytesRead = receiveBuffer.read(ByteBuffer.wrap(buffer, offset, len));
                     if (bytesRead > 0) {
                         updateAllowedFlowControl(bytesRead);
+                        if (resetAt && !reset && receiveBuffer.readOffset() >= resetAtReliableSize) {
+                            // All reliable data has been delivered; now signal the reset.
+                            reset = true;
+                            quicStream.inputClosed();
+                        }
                         return bytesRead;
-                    } else if (bytesRead < 0) {
+                    }
+                    else if (bytesRead < 0) {
                         // End of stream
                         allDataRead();
                         return -1;
@@ -179,21 +190,25 @@ class StreamInputStreamImpl extends StreamInputStream {
                     // Nothing read: block until bytes can be read, read timeout or abort
                     try {
                         addMonitor.wait(waitPeriod);
-                    } catch (InterruptedException e) {
+                    }
+                    catch (InterruptedException e) {
                         // Nothing to do here: read will be abort in next loop iteration with IOException
                     }
-                } finally {
-                    blockingReaderThread = null;
+                }
+
+                if (receiveBuffer.bytesAvailable() == 0) {
+                    long waited = Duration.between(readAttemptStarted, Instant.now()).toMillis();
+                    if (waited > waitForNextFrameTimeout) {
+                        throw new SocketTimeoutException("Read timeout on stream " + quicStream.streamId + "; read up to " + receiveBuffer.readOffset());
+                    }
+                    else {
+                        waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
+                    }
                 }
             }
-
-            if (receiveBuffer.bytesAvailable() == 0) {
-                long waited = Duration.between(readAttemptStarted, Instant.now()).toMillis();
-                if (waited > waitForNextFrameTimeout) {
-                    throw new SocketTimeoutException("Read timeout on stream " + quicStream.streamId + "; read up to " + receiveBuffer.readOffset());
-                } else {
-                    waitPeriod = Long.max(1, waitForNextFrameTimeout - waited);
-                }
+            finally {
+                blockingReaderThread = null;
+                Thread.interrupted();  // clear the wakeup interrupt (if any); it was only meant to unblock this reader
             }
         }
     }
@@ -279,13 +294,64 @@ class StreamInputStreamImpl extends StreamInputStream {
         }
         if (!aborted && !closed && !reset) {
             reset = true;
-            int unusedFlowControlCredits = (int) (finalSize - receiveBuffer.readOffset());
-            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
+            // Determine number of bytes that will not be read by the application (due to the reset), but that do occupy space in the flow control window.
+            long unusedFlowControlCredits = finalSize - receiveBuffer.readOffset();
             receiveBuffer.discardAllData();
             interruptBlockingReader();
             quicStream.inputClosed();
+            quicStream.updateConnectionFlowControl(unusedFlowControlCredits);
         }
         return increment;
+    }
+
+    long terminateAt(long errorCode, long finalSizeOfReset, long reliableSize) throws TransportError {
+        // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
+        // "As stated in Section 4.5 of [RFC9000], the final size for a stream cannot change once it is known. If a frame
+        //  is received indicating a change in the final size for the stream, an endpoint SHOULD respond with an error of
+        //  type FINAL_SIZE_ERROR."
+        if (this.finalSize >= 0 && finalSizeOfReset != this.finalSize) {
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        if (finalSizeOfReset < largestOffsetReceived) {
+            throw new TransportError(FINAL_SIZE_ERROR);
+        }
+        if (reliableSize > finalSizeOfReset) {
+            throw new TransportError(FRAME_ENCODING_ERROR, "RESET_STREAM_AT: Reliable Size exceeds Final Size");
+        }
+
+        long largestOffsetIncrement = 0;
+        if (finalSize < 0) {
+            finalSize = finalSizeOfReset;
+            largestOffsetIncrement = finalSize - largestOffsetReceived;
+        }
+
+        if (!aborted && !closed && !reset) {
+            // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-5.2
+            // "When receiving a RESET_STREAM_AT frame with a lower Reliable Size, the receiver only needs to provide
+            //  data up the lower Reliable Size to the application. "
+            if (!resetAt || reliableSize < resetAtReliableSize) {
+                resetAtReliableSize = reliableSize;
+                resetAt = true;
+            }
+
+            receiveBuffer.discardDataBeyond(reliableSize);
+
+            // Return flow control credits for bytes above reliableSize that were counted but won't be consumed.
+            if (finalSizeOfReset > reliableSize) {
+                long unusedBytes = finalSizeOfReset - Long.max(reliableSize, receiveBuffer.readOffset());
+                if (unusedBytes > 0) {
+                    quicStream.updateConnectionFlowControl((int) unusedBytes);
+                }
+            }
+
+            // If the application has already read past reliableSize, signal the reset immediately.
+            if (receiveBuffer.readOffset() >= resetAtReliableSize) {
+                reset = true;
+                interruptBlockingReader();
+                quicStream.inputClosed();
+            }
+        }
+        return largestOffsetIncrement;
     }
 
     void abort() {

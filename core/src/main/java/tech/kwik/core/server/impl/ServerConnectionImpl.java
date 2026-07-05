@@ -412,6 +412,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         if (protocolSettings.enableDatagramExtension()) {
             enableDatagramExtension();
         }
+
+        if (protocolSettings.enableReliableStreamReset()) {
+            enableReliableStreamReset();
+        }
     }
 
     TransportParameters initTransportParameters() {
@@ -425,6 +429,10 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         parameters.setInitialMaxStreamsUni(configuration.maxOpenPeerInitiatedUnidirectionalStreams());
         if (datagramExtensionStatus == DatagramExtensionStatus.EnabledReceiveOnly || datagramExtensionStatus == DatagramExtensionStatus.Enabled) {
             parameters.setMaxDatagramFrameSize(MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE);
+        }
+
+        if (reliableStreamResetEnabled) {
+            parameters.setResetStreamAtSupported(true);
         }
 
         return parameters;

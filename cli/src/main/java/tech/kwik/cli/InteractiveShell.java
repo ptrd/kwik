@@ -20,6 +20,7 @@ package tech.kwik.cli;
 
 import tech.kwik.agent15.util.ByteUtils;
 import tech.kwik.core.ConnectionTerminatedEvent;
+import tech.kwik.core.QuicStream;
 import tech.kwik.core.cid.ConnectionIdStatus;
 import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.QuicClientConnectionImpl;
@@ -47,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -65,6 +67,7 @@ public class InteractiveShell {
     private KwikCli.HttpVersion httpVersion;
     private HttpClient httpClient;
     private CompletableFuture<HttpResponse<Path>> currentHttpGetResult;
+    private final Map<Integer, QuicStream> streams = new ConcurrentHashMap<>();
 
     public InteractiveShell(QuicClientConnectionImpl.ExtendedBuilder builder, String alpn, KwikCli.HttpVersion httpVersion) {
         Objects.requireNonNull(builder);
@@ -99,6 +102,9 @@ public class InteractiveShell {
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
         commands.put("raw", this::sendRaw);
+        commands.put("stream", this::createStream);
+        commands.put("write", this::writeToStream);
+        commands.put("reset_at", this::resetAt);
         commands.put("!!", this::repeatLastCommand);
         commands.put("quit", this::quit);
         commands.put("quack", this::quack);
@@ -175,6 +181,7 @@ public class InteractiveShell {
             builder.connectTimeout(Duration.ofMillis(connectionTimeout));
             quicConnection = builder.build();
             quicConnection.setConnectionListener(this::closed);
+            quicConnection.setPeerInitiatedStreamCallback(stream -> streams.put(stream.getStreamId(), stream));
 
             quicConnection.connect();
             System.out.println("Ok, connected to " + quicConnection.getUri() + "\n");
@@ -454,6 +461,57 @@ public class InteractiveShell {
         rawData.get(rawDataBytes);
         RawFrame rawFrame = new RawFrame(rawDataBytes);
         quicConnection.send(rawFrame, f -> {}, true);
+    }
+
+    private void createStream(String args) {
+        if (quicConnection == null) {
+            System.out.println("Error: not connected");
+            return;
+        }
+        try {
+            QuicStream stream = quicConnection.createStream(true);
+            streams.put(stream.getStreamId(), stream);
+            System.out.println("Created stream with id " + stream.getStreamId());
+        }
+        catch (IOException e) {
+            System.out.println("Error: " + e);
+        }
+    }
+
+    private void writeToStream(String args) {
+        String[] parts = args.split("\\s+", 2);
+        if (parts.length != 2) {
+            System.out.println("Usage: write <stream-id> <data>");
+            return;
+        }
+        int streamId = toInt(parts[0]);
+        QuicStream stream = streams.get(streamId);
+        if (stream == null) {
+            System.out.println("Error: no stream with id " + streamId);
+            return;
+        }
+        try {
+            stream.getOutputStream().write(parts[1].getBytes());
+        }
+        catch (IOException e) {
+            System.out.println("Error: " + e);
+        }
+    }
+
+    private void resetAt(String args) {
+        String[] parts = args.split("\\s+");
+        if (parts.length != 2) {
+            System.out.println("Usage: reset_at <stream-id> <error-code>");
+            return;
+        }
+        int streamId = toInt(parts[0]);
+        long errorCode = toLong(parts[1]);
+        QuicStream stream = streams.get(streamId);
+        if (stream == null) {
+            System.out.println("Error: no stream with id " + streamId);
+            return;
+        }
+        stream.resetStreamAt(errorCode);
     }
 
     private void convertRawArgsToBytes(String argumentLine, ByteBuffer buffer) {

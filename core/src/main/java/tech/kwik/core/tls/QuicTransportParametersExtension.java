@@ -52,6 +52,12 @@ public class QuicTransportParametersExtension extends Extension {
 
     // https://www.rfc-editor.org/rfc/rfc9221.html#name-quic-transport-parameter
     public static final int MAX_DATAGRAM_FRAME_SIZE = 0x20;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-08.html#section-8.1
+    // "Value: 0x1d
+    //  Parameter Name: reset_stream_at"
+    private static final long RESET_STREAM_AT_PARAMETER_ID = 0x1d;
+    // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-3
+    private static final long RESET_STREAM_AT_PARAMETER_ID_DRAFT_07 = 0x17f7586d2cb571L;
 
     private static final int MINIMUM_EXTENSION_LENGTH = 2;
     public static final int CODEPOINT_IETFDRAFT = 0xffa5;
@@ -224,6 +230,11 @@ public class QuicTransportParametersExtension extends Extension {
             addTransportParameter(buffer, MAX_DATAGRAM_FRAME_SIZE, params.getMaxDatagramFrameSize());
         }
 
+        if (params.isResetStreamAtSupported()) {
+            addTransportParameter(buffer, RESET_STREAM_AT_PARAMETER_ID);
+            addTransportParameter(buffer, RESET_STREAM_AT_PARAMETER_ID_DRAFT_07);
+        }
+
         int length = buffer.position();
         buffer.limit(length);
 
@@ -383,6 +394,17 @@ public class QuicTransportParametersExtension extends Extension {
             log.debug("- max datagram frame size: " + datagramMaxFrameSize);
             params.setMaxDatagramFrameSize(datagramMaxFrameSize);
         }
+        else if (parameterId == RESET_STREAM_AT_PARAMETER_ID || parameterId == RESET_STREAM_AT_PARAMETER_ID_DRAFT_07) {
+            if (size != 0) {
+                // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html#section-3
+                // "An implementation that understands this transport parameter MUST treat the receipt of a non-empty
+                //  value as a connection error of type TRANSPORT_PARAMETER_ERROR."
+                throw new TransportError(QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR,
+                        "reset_stream_at transport parameter must have zero-length value");
+            }
+            log.debug("- reset_stream_at");
+            params.setResetStreamAtSupported(true);
+        }
         else {
             String extension = "";
             if (parameterId == 0x0020) extension = "datagram";
@@ -478,6 +500,11 @@ public class QuicTransportParametersExtension extends Extension {
         buffer.reset();
         VariableLengthInteger.encode(encodedValueLength, buffer);
         VariableLengthInteger.encode(value, buffer);
+    }
+
+    private void addTransportParameter(ByteBuffer buffer, long id) {
+        VariableLengthInteger.encode(id, buffer);
+        VariableLengthInteger.encode(0, buffer);
     }
 
     protected void addTransportParameter(ByteBuffer buffer, QuicConstants.TransportParameterId id, byte[] value) {

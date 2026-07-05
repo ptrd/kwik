@@ -24,6 +24,10 @@ public abstract class StreamOutputStream extends OutputStream {
     
     abstract void reset(long errorCode);
 
+    abstract void resetReliable(long errorCode, long reliableSize);
+
+    abstract void resetReliable(long errorCode);
+
     protected abstract void resetOutputStream();
 
     protected abstract void stopFlowControl();

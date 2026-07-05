@@ -333,6 +333,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             parameters.setMaxDatagramFrameSize(MAX_DATAGRAM_FRAME_SIZE_TRANSPORT_PARAMETER_VALUE);
         }
 
+        if (reliableStreamResetEnabled) {
+            parameters.setResetStreamAtSupported(true);
+        }
+
         return parameters;
     }
 
@@ -1381,6 +1385,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private KeyStore keyStore;
         private String keyPassword;
         private boolean enableDatagramExtension;
+        private boolean enableReliableStreamReset;
         private X509ExtendedKeyManager keyManager;
 
         private BuilderImpl() {
@@ -1425,6 +1430,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             if (enableDatagramExtension) {
                 quicConnection.enableDatagramExtension();
+            }
+
+            if (enableReliableStreamReset) {
+                quicConnection.enableReliableStreamReset();
             }
 
             return quicConnection;
@@ -1705,6 +1714,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder enableDatagramExtension() {
             enableDatagramExtension = true;
+            return this;
+        }
+
+        @Override
+        public Builder enableReliableStreamReset() {
+            enableReliableStreamReset = true;
             return this;
         }
     }

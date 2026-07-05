@@ -19,6 +19,7 @@ class ReceiveBufferImplTest {
         receiveBuffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
     }
 
+    // region reading data
     @Test
     void readFromEmptyStreamReturnsNothing() {
         // When
@@ -130,7 +131,9 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.readOffset()).isEqualTo(85);
     }
+    // endregion
 
+    // region normal stream completion
     @Test
     void finalFrameReceivedDoesNotMeanAllDataIsReceived() {
         // When
@@ -202,7 +205,308 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(readResult).isEqualTo(-1);
     }
+    // endregion
 
+    // region abnormal stream completion
+    @Test
+    void whenAllDataDiscardedNothingCanBeRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenAllDataDiscardedThenNoDataIsAvailable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+    }
+
+    @Test
+    void whenAllDataDiscardedThenAllDataIsReceived() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
+    void whenAllDataDiscardedThenAllDataIsRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
+
+    @Test
+    void whenDataIsDiscardedAfterPartialReadStatusMethodsRemainConsistent() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.read(ByteBuffer.allocate(50));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        // Note: discardAllData() leaves the internal contiguousUpToOffset stale, but the status methods short-circuit
+        // on the discarded flag, so they must still report a consistent "nothing left, all done" state.
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenDataIsDiscardedReadOffsetReflectsBytesActuallyRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.read(ByteBuffer.allocate(50));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.readOffset()).isEqualTo(50);
+    }
+
+    @Test
+    void whenContiguousFrameArrivesAfterDiscardNoDataBecomesReadable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.discardAllData();
+
+        // When
+        receiveBuffer.add(new DataFrame(100, 50));  // late frame, contiguous with the discarded data
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+    // end region
+
+    // region discard data beyond offset
+    @Test
+    void whenDiscardDataBeyondIsSetDataBeyondTheOffsetIsNotAvailable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+
+        // When
+        receiveBuffer.discardDataBeyond(400);
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(400);
+    }
+
+    @Test
+    void readReturnsDataOnlyUpToDiscardOffset() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        ByteBuffer buffer = ByteBuffer.allocate(1000);
+        int bytesRead = receiveBuffer.read(buffer);
+
+        // Then
+        assertThat(bytesRead).isEqualTo(400);
+        assertThat(buffer.position()).isEqualTo(400);
+        checkData(buffer);
+    }
+
+    @Test
+    void whenAllDataUpToDiscardOffsetIsReadThenAllRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        receiveBuffer.read(ByteBuffer.allocate(400));
+
+        // Then
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
+
+    @Test
+    void whenReadReachesDiscardOffsetThenReadReturnsMinusOne() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);
+        receiveBuffer.read(ByteBuffer.allocate(400));
+
+        // When
+        int readResult = receiveBuffer.read(ByteBuffer.allocate(100));
+
+        // Then
+        assertThat(readResult).isEqualTo(-1);
+    }
+
+    @Test
+    void whenAllDataUpToDiscardOffsetIsReceivedThenAllDataReceived() {
+        // Given
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 400));
+
+        // Then
+        // All data up to the discard offset has been received and nothing beyond it will ever be delivered,
+        // so the stream has received all the data it ever will.
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
+    void whenDiscardOffsetIsSetAfterDataIsReceivedThenAllDataReceived() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+
+        // When
+        receiveBuffer.discardDataBeyond(400);
+
+        // Then
+        // All data up to the discard offset has been received and nothing beyond it will ever be delivered,
+        // so the stream has received all the data it ever will.
+        assertThat(receiveBuffer.allDataReceived()).isTrue();
+    }
+
+    @Test
+    void frameEntirelyBeyondDiscardOffsetIsNotAdded() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 400));
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        boolean newReadableData = receiveBuffer.add(new DataFrame(400, 600));
+
+        // Then
+        assertThat(newReadableData).isFalse();
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(400);
+    }
+
+    @Test
+    void outOfOrderFrameEntirelyBeyondDiscardOffsetIsNotAdded() {
+        // Given
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        boolean newReadableData = receiveBuffer.add(new DataFrame(500, 100));
+
+        // Then
+        assertThat(newReadableData).isFalse();
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+    }
+
+    @Test
+    void frameStraddlingDiscardOffsetIsAvailableUpToTheOffset() {
+        // Given
+        receiveBuffer.discardDataBeyond(400);
+
+        // When                          0..999, straddling the discard offset
+        receiveBuffer.add(new DataFrame(0, 1000));
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(400);
+        ByteBuffer buffer = ByteBuffer.allocate(1000);
+        assertThat(receiveBuffer.read(buffer)).isEqualTo(400);
+        checkData(buffer);
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
+
+    @Test
+    void dataBeforeDiscardOffsetSpreadOverMultipleFramesIsFullyAvailable() {
+        // Given
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 300));
+        receiveBuffer.add(new DataFrame(300, 700));   // straddles the discard offset
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(400);
+        ByteBuffer buffer = ByteBuffer.allocate(1000);
+        assertThat(receiveBuffer.read(buffer)).isEqualTo(400);
+        checkData(buffer);
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
+
+    @Test
+    void discardOffsetCanOnlyDecrease() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);
+
+        // When  (a higher offset must be ignored: a reset can only lower the reliable size)
+        receiveBuffer.discardDataBeyond(700);
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(400);
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(1000))).isEqualTo(400);
+    }
+
+    @Test
+    void loweringDiscardOffsetBelowReadOffsetIsHandledGracefully() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.read(ByteBuffer.allocate(500));   // read offset is now 500
+
+        // When  (e.g. a late reset lowers the reliable size below what was already read)
+        receiveBuffer.discardDataBeyond(300);
+
+        // Then  (no negative values, nothing more to read)
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(0);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void readingExactlyUpToDiscardOffsetInChunksDoesNotReadBeyondIt() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);
+
+        // When
+        int firstRead = receiveBuffer.read(ByteBuffer.allocate(250));
+        int secondRead = receiveBuffer.read(ByteBuffer.allocate(250));
+        int thirdRead = receiveBuffer.read(ByteBuffer.allocate(250));
+
+        // Then
+        assertThat(firstRead).isEqualTo(250);
+        assertThat(secondRead).isEqualTo(150);   // capped at the discard offset (400)
+        assertThat(thirdRead).isEqualTo(-1);      // all read
+        assertThat(receiveBuffer.readOffset()).isEqualTo(400);
+    }
+
+    @Test
+    void whenDiscardDataBeyondIsNotCalledAllDataRemainsAvailable() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+
+        // Then
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(1000);
+        assertThat(receiveBuffer.read(ByteBuffer.allocate(1000))).isEqualTo(1000);
+    }
+    // endregion
+
+    // region out-of-order data measurement
     @Test
     void outOfOrderBufferedDataShouldBeMeasured() {
         // Given
@@ -245,7 +549,9 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
+    // endregion
 
+    // region memory management
     @Test
     void duplicatedFramesAreCombinedToReduceMemoryUsage() {
         // Given
@@ -546,32 +852,9 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         checkDataCanBeReadAfterAdding(750);
     }
+    // endregion
 
-    @Test
-    void testRandomStreamElementAdditions() {
-        Random random = new Random();
-        int streamEnd = 100_000;
-        int added = 0;
-        String bufferContentBefore = "";
-        DataFrame frame = null;
-        try {
-            while (receiveBuffer.bytesAvailable() < streamEnd) {
-                bufferContentBefore = receiveBuffer.toDebugString(5000);
-                int offset = random.nextInt(streamEnd);
-                int length = random.nextInt(1000);
-                frame = new DataFrame(offset, length);
-                added++;
-                receiveBuffer.add(frame);
-                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
-            }
-            System.out.println("Tested random stream element additions with " + added + " frames");
-        }
-        catch (AssertionError e) {
-            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
-            throw e;
-        }
-    }
-
+    // region contains and combine helper methods
     @Test
     void testProperContainingFrame() {
         // Given
@@ -693,6 +976,33 @@ class ReceiveBufferImplTest {
         assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
+    // endregion
+
+    // region stress test
+    @Test
+    void testRandomStreamElementAdditions() {
+        Random random = new Random();
+        int streamEnd = 100_000;
+        int added = 0;
+        String bufferContentBefore = "";
+        DataFrame frame = null;
+        try {
+            while (receiveBuffer.bytesAvailable() < streamEnd) {
+                bufferContentBefore = receiveBuffer.toDebugString(5000);
+                int offset = random.nextInt(streamEnd);
+                int length = random.nextInt(1000);
+                frame = new DataFrame(offset, length);
+                added++;
+                receiveBuffer.add(frame);
+                assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+            }
+        }
+        catch (AssertionError e) {
+            System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
+            throw e;
+        }
+    }
+    // endregion
 
     private void checkData(ByteBuffer buffer) {
         for (int i = 0; i < buffer.position(); i++) {
@@ -701,7 +1011,6 @@ class ReceiveBufferImplTest {
     }
 
     private void checkDataCanBeReadAfterAdding(int length, DataFrame... dataFrames) {
-        System.out.println("test result: " + receiveBuffer.toDebugString());
         Arrays.stream(dataFrames).forEach(f -> receiveBuffer.add(f));
         ByteBuffer readBytes = ByteBuffer.allocate(length);
         int bytesRead = receiveBuffer.read(readBytes);

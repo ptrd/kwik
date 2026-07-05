@@ -627,6 +627,61 @@ class QuicConnectionImplTest {
     }
     //endregion
 
+    //region reliable stream reset
+    @Test
+    void whenReceivingResetStreamAtFrameWhenNotEnabledConnectionShouldBeClosedWithProtocolViolation() throws Exception {
+        // Given
+        connectionEncryptionLevel(App);
+        ResetStreamAtFrame resetStreamAtFrame = new ResetStreamAtFrame(0, 0, 100, 50);
+
+        // When
+        connection.process(resetStreamAtFrame, mock(QuicPacket.class), mock(PacketMetaData.class));
+
+        // Then
+        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        verify(sender).send(frameCaptor.capture(), any(EncryptionLevel.class));
+        assertThat(frameCaptor.getValue()).isInstanceOf(ConnectionCloseFrame.class);
+        assertThat(((ConnectionCloseFrame) frameCaptor.getValue()).getErrorCode())
+                .isEqualTo(QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION.value);
+    }
+
+    @Test
+    void whenReliableStreamResetIsEnabledResetStreamAtFrameShouldBeForwardedToStreamManager() throws Exception {
+        // Given
+        connection.enableReliableStreamReset();
+        ResetStreamAtFrame resetStreamAtFrame = new ResetStreamAtFrame(0, 0, 100, 50);
+
+        // When
+        connection.process(resetStreamAtFrame, mock(QuicPacket.class), mock(PacketMetaData.class));
+
+        // Then
+        verify(connection.getStreamManager()).process(resetStreamAtFrame);
+        verify(sender, never()).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class));
+    }
+
+    @Test
+    void whenPeerAdvertisesResetStreamAtSupportReliableStreamResetCanBeUsed() {
+        // Given
+        TransportParameters transportParameters = new TransportParameters();
+        transportParameters.setResetStreamAtSupported(true);
+
+        // When
+        connection.processCommonTransportParameters(transportParameters);
+
+        // Then
+        assertThat(connection.canUseReliableStreamReset()).isTrue();
+    }
+
+    @Test
+    void whenPeerDoesNotAdvertiseResetStreamAtSupportReliableStreamResetCannotBeUsed() {
+        // When
+        connection.processCommonTransportParameters(new TransportParameters());
+
+        // Then
+        assertThat(connection.canUseReliableStreamReset()).isFalse();
+    }
+    //endregion
+
     //region helper methods
     private PacketMetaData metaDataForNow() {
         InetSocketAddress sourceAddress = new InetSocketAddress(52719);

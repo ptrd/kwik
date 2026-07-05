@@ -159,6 +159,17 @@ public class FrameFormatter implements FrameProcessor {
     }
 
     @Override
+    public void process(ResetStreamAtFrame resetStreamAtFrame, QuicPacket packet, PacketMetaData metaData) {
+        jsonGenerator.writeStartObject()
+                .write("frame_type", "reset_stream_at")
+                .write("stream_id", resetStreamAtFrame.getStreamId())
+                .write("error_code", resetStreamAtFrame.getErrorCode())
+                .write("final_size", resetStreamAtFrame.getFinalSize())
+                .write("reliable_size", resetStreamAtFrame.getReliableSize())
+                .writeEnd();
+    }
+
+    @Override
     public void process(RetireConnectionIdFrame retireConnectionIdFrame, QuicPacket packet, PacketMetaData metaData) {
         jsonGenerator.writeStartObject()
                 .write("frame_type", "retire_connection_id")

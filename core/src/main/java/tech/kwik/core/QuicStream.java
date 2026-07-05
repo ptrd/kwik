@@ -106,6 +106,41 @@ public interface QuicStream {
     void resetStream(long applicationProtocolErrorCode);
 
     /**
+     * Resets the stream (abrupt termination) while guaranteeing delivery of the stream data up to the given reliable
+     * size, resulting in a RESET_STREAM_AT frame.
+     * https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
+     * "This document defines a new QUIC frame, the RESET_STREAM_AT frame, that allows resetting a stream, while
+     *  guaranteeing delivery of stream data up to a certain byte offset."
+     *
+     * Requires the peer to support the "Stream Resets with Partial Delivery" extension, see
+     * {@link QuicConnection#canUseReliableStreamReset()}.
+     *
+     * @param applicationProtocolErrorCode
+     * @param reliableSize  the amount of stream data (bytes from the start of the stream) that will be delivered to
+     *                      the peer, despite the reset; must not exceed the number of bytes written to the stream
+     * @throws IllegalStateException     when the peer does not support the "Stream Resets with Partial Delivery" extension
+     * @throws IllegalArgumentException  when reliableSize is negative or exceeds the number of bytes written to the stream
+     */
+    default void resetStreamAt(long applicationProtocolErrorCode, long reliableSize) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Resets the stream (abrupt termination) while guaranteeing delivery of all data written to the stream so far,
+     * resulting in a RESET_STREAM_AT frame. Equivalent to calling {@link #resetStreamAt(long, long)} with the number of
+     * bytes written as reliable size.
+     *
+     * Requires the peer to support the "Stream Resets with Partial Delivery" extension, see
+     * {@link QuicConnection#canUseReliableStreamReset()}.
+     *
+     * @param applicationProtocolErrorCode
+     * @throws IllegalStateException  when the peer does not support the "Stream Resets with Partial Delivery" extension
+     */
+    default void resetStreamAt(long applicationProtocolErrorCode) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * @deprecated use {@link #abortReading(long)} instead
      * @param applicationProtocolErrorCode
      */

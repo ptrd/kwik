@@ -45,6 +45,11 @@ public class NullStreamInputStream extends StreamInputStream {
     }
 
     @Override
+    long terminateAt(long errorCode, long finalSize, long reliableSize) throws TransportError {
+        return 0;
+    }
+
+    @Override
     void abort() {
     }
 

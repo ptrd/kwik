@@ -33,5 +33,7 @@ public abstract class StreamInputStream extends InputStream {
 
     abstract long terminate(long errorCode, long finalSize) throws TransportError;
 
+    abstract long terminateAt(long errorCode, long finalSize, long reliableSize) throws TransportError;
+
     abstract void abort();
 }
