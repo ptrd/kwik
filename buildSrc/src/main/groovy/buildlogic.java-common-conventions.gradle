@@ -1,19 +1,43 @@
+import com.vanniktech.maven.publish.JavaLibrary
+import com.vanniktech.maven.publish.JavadocJar
+
 plugins {
     id 'java'
     id 'idea'
     id 'eclipse'
-    id 'maven-publish'
-    id 'signing'
+    id 'com.vanniktech.maven.publish'
     id 'application'
 }
 
 group = 'tech.kwik'
 
+// Derive the project version from git at configuration time, so that every task
+// (the jar, and the sources/javadoc jars and publications created by the
+// vanniktech plugin) consistently sees the same version. A clean tag like
+// 'v1.0.19' becomes '1.0.19'; any other 'git describe' output (development
+// builds) is used verbatim.
+version = {
+    def proc = "git describe --always --dirty".execute()
+    proc.waitFor()
+    if (proc.exitValue() != 0) {
+        logger.quiet("Building development version.")
+        return 'unspecified'
+    }
+    def versionTag = proc.in.readLines()[0]
+    if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
+        if (versionTag.startsWith("v")) {
+            versionTag = versionTag[1..-1]
+        }
+        logger.quiet("Building version ${versionTag}.")
+    } else {
+        logger.error("Version tag '${versionTag}' does not contain a valid version.")
+    }
+    return versionTag
+}()
+
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
-    withJavadocJar()
-    withSourcesJar()
 }
 
 javadoc {
@@ -56,67 +80,48 @@ tasks.named('test') {
     }
 }
 
-task determineVersion {
-    doLast {
-        def proc = "git describe --always --dirty".execute()
-        proc.waitFor()
-        if (proc.exitValue()) {
-            logger.quiet("Building development version.")
-        } else {
-            def versionTag = proc.in.readLines()[0]
-            // Check that tag matches format like v1.0 or v1.0.19
-            if (versionTag ==~ /v?[0-9]+(\.\d+){1,2}/) {
-                if (versionTag.startsWith("v")) {
-                    versionTag = versionTag[1..-1]
-                }
-                logger.quiet("Building version ${versionTag}.")
-            }
-            else {
-                logger.error("Version tag '${versionTag}' does not contain a valid version.");
-            }
-            project.version = versionTag
-        }
-    }
-}
+compileJava.dependsOn processResources
 
-compileJava.dependsOn (determineVersion, processResources)
+mavenPublishing {
+    // Publish the java component with a sources jar and an (intentionally) empty
+    // javadoc jar. Maven Central requires a javadoc jar to be present, but we do
+    // not ship the generated documentation; it can be generated from source with
+    // './gradlew javadoc'.
+    configure(new JavaLibrary(new JavadocJar.Empty(), true))
 
-ext.pomContent = {
-    name = 'Kwik'
-    description = 'A QUIC implementation in Java'
-    url = 'https://github.com/ptrd/kwik'
+    // Uploads to Maven Central (Central Portal). Credentials are read from the
+    // 'mavenCentralUsername' / 'mavenCentralPassword' Gradle properties.
+    publishToMavenCentral()
 
-    licenses {
-        license {
-            name = 'GNU Lesser General Public License v3'
-            url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
-        }
-    }
+    // GPG-signs all publications, using the standard signing.* Gradle properties.
+    signAllPublications()
 
-    developers {
-        developer {
-            id = 'peterd'
-            name = 'Peter Doornbosch'
-            email = 'peter.doornbosch@gmail.com'
-        }
-    }
-
-    scm {
-        connection = 'scm:git:git@github.com:ptrd/kwik.git'
-        developerConnection = 'scm:git:git@github.com:ptrd/kwik.git'
+    // The artifactId defaults to the (sub)project name, the group and version to
+    // the project's group and version. Modules override name/description below.
+    pom {
+        name = 'Kwik'
+        description = 'A QUIC implementation in Java'
         url = 'https://github.com/ptrd/kwik'
-    }
-}
 
-publishing {
-    repositories {
-        maven {
-            name = "ossrh-staging-api"
-            url = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
-            credentials {
-                username = project.properties.ossrhUsername
-                password = project.properties.ossrhPassword
+        licenses {
+            license {
+                name = 'GNU Lesser General Public License v3'
+                url = 'https://www.gnu.org/licenses/lgpl-3.0-standalone.html'
             }
+        }
+
+        developers {
+            developer {
+                id = 'peterd'
+                name = 'Peter Doornbosch'
+                email = 'peter.doornbosch@gmail.com'
+            }
+        }
+
+        scm {
+            connection = 'scm:git:git@github.com:ptrd/kwik.git'
+            developerConnection = 'scm:git:git@github.com:ptrd/kwik.git'
+            url = 'https://github.com/ptrd/kwik'
         }
     }
 }

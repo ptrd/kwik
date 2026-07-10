@@ -18,18 +18,9 @@ application {
     applicationDefaultJvmArgs = ['-Duser.language=en', '-Duser.country=US', '-ea']
 }
 
-publishing {
-    publications {
-        kwik(MavenPublication) {
-            artifactId = 'kwik-interop'
-            from components.java
-            pom pomContent
-            pom.name = 'Kwik interop'
-            pom.description = 'Interop implementation for Kwik, the QUIC implementation in Java'
-        }
+mavenPublishing {
+    pom {
+        name = 'Kwik interop'
+        description = 'Interop implementation for Kwik, the QUIC implementation in Java'
     }
-}
-
-signing {
-    sign publishing.publications.kwik
 }

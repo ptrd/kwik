@@ -13,18 +13,9 @@ dependencies {
     testImplementation(project(':kwik').sourceSets.test.output)  // Necessary to use test utils from kwik core
 }
 
-publishing {
-    publications {
-        kwik(MavenPublication) {
-            artifactId = 'kwik-qlog'
-            from components.java
-            pom pomContent
-            pom.name = 'Kwik qlog'
-            pom.description = 'qlog add-on for Kwik, the QUIC implementation in Java'
-        }
+mavenPublishing {
+    pom {
+        name = 'Kwik qlog'
+        description = 'qlog add-on for Kwik, the QUIC implementation in Java'
     }
-}
-
-signing {
-    sign publishing.publications.kwik
 }

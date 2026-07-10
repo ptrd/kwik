@@ -20,18 +20,4 @@ task includeVersion {
     }
 }
 
-compileJava.dependsOn (determineVersion, includeVersion, processResources)
-
-publishing {
-    publications {
-        kwik(MavenPublication) {
-            artifactId = 'kwik'
-            from components.java
-            pom pomContent
-        }
-    }
-}
-
-signing {
-    sign publishing.publications.kwik
-}
+compileJava.dependsOn (includeVersion, processResources)
