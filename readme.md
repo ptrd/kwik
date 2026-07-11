@@ -58,6 +58,7 @@ and QUIC v2 ([RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)).
 * Compatible Version Negotiation [RFC 9368](https://www.rfc-editor.org/rfc/rfc9368.html)
 * QUIC V2 [RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)
 * Unreliable Datagram Extension [RFC 9221](https://www.rfc-editor.org/rfc/rfc9221.html)
+* QUIC Stream Resets with Partial Delivery (https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset)
   
 Client only:
 

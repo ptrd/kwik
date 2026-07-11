@@ -1,5 +1,27 @@
 # Releases
 
+
+
+## 0.11 (2026-07-11)
+
+- support the reliable stream reset extension specified by https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset (draft version 0.7 and 0.8)
+- use `com.vanniktech` maven publish plugin for publishing releases to maven central, in order to reduce the size of the 
+  maven artifacts (avoid redundant checksum files, do not include javadoc)
+- switch back to the siphash implementation from `io.whitfin:siphash`, because it provides a proper Jigsaw module
+- several robustness fixes
+- upgrade agent15 tot 3.3
+
+## 0.10.10 (2026-05-14)
+
+- introduced padding mode to enable padding outside the QUIC packet; padding pattern configurable via system property
+  'tech.kwik.padding-mode' with values 'inside' or 'outside'
+- fix: trailing padding bytes in a coalesced datagram should be ignored
+- fix: only send an ack-eliciting ping when the maintained ack state is becoming too large; this prevents a 'ping storm' 
+  that under certain circumstances could happen when Kwik client communicated with Kwik server
+- several security and robustness fixes
+- add command line option to SampleWebServer to log packets
+- upgrade agent15 tot 3.2
+
 ## 0.10.9 (2026-04-18)
 
 - fix: coalesced initial packets were not parsed
