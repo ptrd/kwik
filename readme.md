@@ -308,7 +308,9 @@ To run the demo web server, execute `tech.kwik.sample.SampleWebServer` with the 
 - private key file
 - port number
 - www directory to serve
+
 or
+
 - keystore file containing (only) the server certificate and key
 - keystore password (which should match the key password)
 - port number
