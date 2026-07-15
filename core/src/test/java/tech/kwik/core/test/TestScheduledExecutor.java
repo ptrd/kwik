@@ -49,6 +49,7 @@ public class TestScheduledExecutor implements ScheduledExecutorService, TestCloc
         long delayInMillis = unit.toMillis(delay);
         ScheduledAction action = new ScheduledAction(clock.instant().plusMillis(delayInMillis), command);
         scheduledActions.add(action);
+        clock.setTick(delayInMillis);
         return new ActionFuture(action);
     }
 

@@ -35,14 +35,12 @@ import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.QLog;
 import tech.kwik.core.packet.QuicPacket;
-import tech.kwik.core.packet.RetryPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
 import tech.kwik.core.recovery.RecoveryManager;
 import tech.kwik.core.recovery.RttEstimator;
+import tech.kwik.core.socket.SocketManager;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -84,9 +82,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     private final Clock clock;
     private volatile int maxPacketSize;
-    private volatile DatagramSocket socket;
-    private final InetSocketAddress peerAddress;
     private final QuicConnectionImpl connection;
+    private final SocketManager socketManager;
     private final CongestionController congestionController;
     private final RttEstimator rttEstimater;
     private final Logger log;
@@ -119,17 +116,16 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private final byte[] paddingPattern;
 
 
-    public SenderImpl(VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
-                      QuicConnectionImpl connection, String id, Integer initialRtt, Logger log) {
-        this(Clock.systemUTC(), version, maxPacketSize, socket, peerAddress, connection, id, initialRtt, log);
+    public SenderImpl(VersionHolder version, int maxPacketSize, SocketManager socketManager, QuicConnectionImpl connection,
+                      String id, Integer initialRtt, Logger log) {
+        this(Clock.systemUTC(), version, maxPacketSize, socketManager, connection, id, initialRtt, log);
     }
 
-    public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, DatagramSocket socket, InetSocketAddress peerAddress,
+    public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, SocketManager socketManager,
                       QuicConnectionImpl connection, String id, Integer initialRtt, Logger log) {
         this.clock = clock;
         this.maxPacketSize = maxPacketSize;
-        this.socket = socket;
-        this.peerAddress = peerAddress;
+        this.socketManager = socketManager;
         this.connection = connection;
         this.log = log;
         this.qlog = log.getQLog();
@@ -148,7 +144,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         connection.addAckFrameReceivedListener(recoveryManager);
 
         globalAckGenerator = new GlobalAckGenerator(this, rttEstimater, recoveryManager);
-        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator);
+        packetAssembler = new GlobalPacketAssembler(version, sendRequestQueue, globalAckGenerator, connection.getConnectionIdManager());
 
         lastestAckElicitingTime = clock.instant();
 
@@ -194,12 +190,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         wakeUpSenderLoop();
     }
 
-    public void send(RetryPacket retryPacket) {
-        try {
-            send(new AssembledDatagram(new SendItem(retryPacket)));
-        } catch (IOException e) {
-            log.error("Sending packet failed: " + retryPacket);
-        }
+    @Override
+    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
+        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
+        wakeUpSenderLoop();
     }
 
     @Override
@@ -263,10 +257,6 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         wakeUpSenderLoop();
     }
     
-    public void changeAddress(DatagramSocket newSocket) {
-        socket = newSocket;
-    }
-
     public void discard(PnSpace space, String reason) {
         synchronized (discardedSpaces) {
             if (!discardedSpaces[space.ordinal()]) {
@@ -443,13 +433,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             // Nothing to send
             return;
         }
-
         addExternalPadding(buffer, assembledDatagram.getMinDatagramSize());
 
-        DatagramPacket datagram = new DatagramPacket(datagramData, buffer.position(), peerAddress.getAddress(), peerAddress.getPort());
+        buffer.limit(buffer.position());
 
-        Instant timeSent = clock.instant();
-        socket.send(datagram);
+        Instant timeSent = socketManager.send(buffer, itemsToSend.stream().findAny().get().getClientAddress());
         datagramsSent++;
         packetsSent += itemsToSend.size();
         bytesSent += buffer.position();
@@ -497,9 +485,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 return new AssembledDatagram(Collections.emptyList());
             }
         }
-        byte[] srcCid = connection.getSourceConnectionId();
-        byte[] destCid = connection.getDestinationConnectionId();
-        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, srcCid, destCid);
+
+        return packetAssembler.assemble(remainingCwnd, currentMaxPacketSize, socketManager.getClientAddress());
     }
 
     @Override
@@ -534,6 +521,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
                 rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
     }
 
+    @Override
     public int getPto() {
         return rttEstimater.getSmoothedRtt() + 4 * rttEstimater.getRttVar() + receiverMaxAckDelay;
     }

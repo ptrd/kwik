@@ -685,7 +685,7 @@ class QuicConnectionImplTest {
     //region helper methods
     private PacketMetaData metaDataForNow() {
         InetSocketAddress sourceAddress = new InetSocketAddress(52719);
-        return new PacketMetaData(Instant.now(), sourceAddress, 0);
+        return new PacketMetaData(Instant.now(), sourceAddress, 0, 1204);
     }
 
     private PacketFilter wrapWithClosingOrDrainingFilter(QuicConnectionImpl connection) {
@@ -880,7 +880,7 @@ class QuicConnectionImplTest {
         }
 
         @Override
-        protected ConnectionIdManager getConnectionIdManager() {
+        public ConnectionIdManager getConnectionIdManager() {
             return null;
         }
 
@@ -896,11 +896,6 @@ class QuicConnectionImplTest {
 
         @Override
         public byte[] getSourceConnectionId() {
-            return new byte[0];
-        }
-
-        @Override
-        public byte[] getDestinationConnectionId() {
             return new byte[0];
         }
 

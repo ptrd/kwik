@@ -45,9 +45,11 @@ import tech.kwik.core.frame.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
+import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
 import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.send.SenderImpl;
+import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
 import tech.kwik.core.stream.FlowControl;
 import tech.kwik.core.stream.StreamManager;
@@ -68,6 +70,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -127,10 +130,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private final boolean usingIPv4;
     private final QuicSessionTicket sessionTicket;
     private final TlsClientEngine tlsEngine;
-    private final DatagramSocket socket;
+    private final ClientSocketManager socketManager;
     private final InetAddress serverAddress;
     private final SenderImpl sender;
-    private final Receiver receiver;
+    private final MultipleAddressReceiver receiver;
     private volatile PacketParser parser;
     private final StreamManager streamManager;
     private volatile TransportParameters transportParams;
@@ -184,23 +187,25 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         this.clientCertificateKey = clientCertificateKey;
         this.socketFactory = socketFactory != null? socketFactory: (address) -> new DatagramSocket();
 
-        socket = this.socketFactory.createSocket(serverAddress);
-
         idleTimer = new IdleTimer(this, log);
-        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socket, new InetSocketAddress(serverAddress, port),
-                        this, "", initialRtt, log);
-        sender.enableAllLevels();
-        idleTimer.setPtoSupplier(sender::getPto);
-        ackGenerator = sender.getGlobalAckGenerator();
-
-        receiver = new Receiver(socket, log, this::abortConnection, createPacketFilter());
-
-        streamManager = new StreamManager(this, Role.Client, log, connectionProperties, callbackThread);
 
         BiConsumer<Integer, String> closeWithErrorFunction = (error, reason) -> {
             immediateCloseWithError(error, reason);
         };
-        connectionIdManager = new ConnectionIdManager(cidLength, 2, sender, closeWithErrorFunction, log);
+        connectionIdManager = new ConnectionIdManager(cidLength, connectionProperties.getActiveConnectionIdLimit(), closeWithErrorFunction, log);
+
+        receiver = new MultipleAddressReceiver(log, createPacketFilter(), this::abortConnection);
+        socketManager = new ClientSocketManager(new InetSocketAddress(serverAddress, port), receiver, socketFactory);
+        connectionIdManager.registerClientAddress(socketManager.getClientAddress());
+
+        sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, "", initialRtt, log);
+        sender.enableAllLevels();
+        connectionIdManager.setSender(sender);
+        idleTimer.setPtoSupplier(sender::getPto);
+        ackGenerator = sender.getGlobalAckGenerator();
+
+        transportParams = initTransportParameters();
+        streamManager = new StreamManager(this, Role.Client, log, connectionProperties, callbackThread);
 
         connectionState = Status.Created;
         tlsEngine = TlsClientEngineFactory.createClientEngine(new ClientMessageSender() {
@@ -378,7 +383,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
 
         log.info(String.format("Original destination connection id: %s (scid: %s)", bytesToHex(connectionIdManager.getOriginalDestinationConnectionId()), bytesToHex(connectionIdManager.getInitialConnectionId())));
-        generateInitialKeys();
+        generateInitialKeys(connectionIdManager.getOriginalDestinationConnectionId());
 
         receiver.start();
         sender.start(connectionSecrets);
@@ -503,7 +508,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), null, receivedPacketCounter);
+                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), rawPacket.getPeerAddress(), receivedPacketCounter, rawPacket.getData().limit());
                     datagramProcessingChain.processDatagram(rawPacket.getData(), metaData);
 
                     sender.datagramProcessed(receiver.hasMore());
@@ -525,8 +530,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         }
     }
 
-    private void generateInitialKeys() {
-        connectionSecrets.computeInitialKeys(connectionIdManager.getCurrentPeerConnectionId());
+    private void generateInitialKeys(byte[] initialServerCid) {
+        connectionSecrets.computeInitialKeys(initialServerCid);
     }
 
     private void startHandshake(String applicationProtocol, boolean withEarlyData) {
@@ -742,7 +747,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 connectionIdManager.registerInitialPeerCid(peerConnectionId);
                 connectionIdManager.registerRetrySourceConnectionId(peerConnectionId);
                 log.debug("Changing destination connection id into: " + bytesToHex(peerConnectionId));
-                generateInitialKeys();
+                generateInitialKeys(peerConnectionId);
                 ((ClientRolePacketParser) parser).setOriginalDestinationConnectionId(peerConnectionId);
 
                 // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.3
@@ -844,19 +849,49 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     protected void postTerminateHook() {
-        socket.close();
+        socketManager.close();
         super.postTerminateHook();
     }
 
     public void changeAddress() {
         try {
-            DatagramSocket newSocket = socketFactory.createSocket(serverAddress);
-            sender.changeAddress(newSocket);
-            receiver.changeAddress(newSocket);
-            log.info("Changed local address to " + newSocket.getLocalPort());
-        } catch (SocketException e) {
+            changeAddress(null);
+        }
+        catch (SocketException e) {
             // Fairly impossible, as we created a socket on an ephemeral port
             log.error("Changing local address failed", e);
+        }
+    }
+
+    public void changeAddress(Integer localPort) throws SocketException {
+        int oldPort = socketManager.getLocalSocketAddress().getPort();
+        InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
+        log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
+    }
+
+    public void addLocalAddress(Integer localPort) throws SocketException {
+        InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
+        log.info("Added local address " + newAddress.getPort());
+    }
+
+    public void sendPathChallenge(boolean useStandardPath, int paddingSize) {
+        byte[] challengeData = new byte[8];
+        new SecureRandom().nextBytes(challengeData);
+
+        QuicFrame pathChallengeFrame = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
+        if (paddingSize > 0) {
+            pathChallengeFrame = new CompositeFrame(pathChallengeFrame, new Padding(paddingSize));
+        }
+
+        if (useStandardPath) {
+            send(pathChallengeFrame, f -> {}, true);
+        }
+        else {
+            if (socketManager.getAlternateClientAddress() == null) {
+                log.warn("Cannot send path challenge to alternate address, because it is not set");
+                return;
+            }
+            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress());
         }
     }
 
@@ -873,15 +908,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         else {
             log.error("Refusing key update because handshake is not yet confirmed");
         }
-    }
-
-    @Override
-    public int getMaxShortHeaderPacketOverhead() {
-        return 1  // flag byte
-                + connectionIdManager.getCurrentPeerConnectionId().length
-                + 4  // max packet number size, in practice this will be mostly 1
-                + 16 // encryption overhead
-        ;
     }
 
     public TransportParameters getTransportParameters() {
@@ -967,7 +993,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         //  MUST NOT include a zero-length connection ID in this transport parameter. A client MUST treat a violation of
         //  these requirements as a connection error of type TRANSPORT_PARAMETER_ERROR."
         if (transportParameters.getPreferredAddress() != null) {
-            if (connectionIdManager.getCurrentPeerConnectionId().length == 0) {
+            if (connectionIdManager.getInitialPeerConnectionId().length == 0) {
                 throw new TransportError(TRANSPORT_PARAMETER_ERROR, "Unexpected preferred address parameter for server using zero-length connection ID");
             }
             if (transportParameters.getPreferredAddress().getConnectionId().length == 0) {
@@ -1033,7 +1059,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         // "An endpoint MUST treat the following as a connection error of type TRANSPORT_PARAMETER_ERROR or PROTOCOL_VIOLATION:
         //   *  a mismatch between values received from a peer in these transport parameters and the value sent in the
         //      corresponding Destination or Source Connection ID fields of Initial packets."
-        if (! Arrays.equals(connectionIdManager.getCurrentPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
+        if (! Arrays.equals(connectionIdManager.getInitialPeerConnectionId(), transportParameters.getInitialSourceConnectionId())) {
             log.error("Source connection id does not match corresponding transport parameter");
             immediateCloseWithError(PROTOCOL_VIOLATION.value, "initial_source_connection_id transport parameter does not match");
             return false;
@@ -1134,7 +1160,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
-    protected ConnectionIdManager getConnectionIdManager() {
+    public ConnectionIdManager getConnectionIdManager() {
         return connectionIdManager;
     }
 
@@ -1150,11 +1176,6 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public Map<Integer, ConnectionIdInfo> getSourceConnectionIds() {
         return connectionIdManager.getAllConnectionIds();
-    }
-
-    @Override
-    public byte[] getDestinationConnectionId() {
-        return connectionIdManager.getCurrentPeerConnectionId();
     }
 
     public Map<Integer, ConnectionIdInfo> getDestinationConnectionIds() {
@@ -1285,7 +1306,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public InetSocketAddress getLocalAddress() {
-        return (InetSocketAddress) socket.getLocalSocketAddress();
+        return socketManager.getLocalSocketAddress();
     }
 
     @Override

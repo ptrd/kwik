@@ -50,7 +50,7 @@ class ServerConnectionThreadDummy implements ServerConnectionProxy {
 
     @Override
     public void parsePackets(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
-        PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+        PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber, 1207);
         try {
             datagramProcessingChain.processDatagram(data, metaData);
         } catch (TransportError e) {

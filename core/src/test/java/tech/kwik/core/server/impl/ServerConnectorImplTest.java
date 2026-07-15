@@ -414,7 +414,7 @@ class ServerConnectorImplTest {
 
     private RawPacket createPacket(ByteBuffer buffer) {
         DatagramPacket datagram = new DatagramPacket(buffer.array(), 0, buffer.limit(), new InetSocketAddress(InetAddress.getLoopbackAddress(), 38675));
-        RawPacket packet = new RawPacket(datagram, Instant.now(), 0);
+        RawPacket packet = new RawPacket(datagram, Instant.now(), null);
         return packet;
     }
 

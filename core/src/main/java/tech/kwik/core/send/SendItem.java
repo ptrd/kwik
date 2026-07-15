@@ -20,10 +20,12 @@ package tech.kwik.core.send;
 
 import tech.kwik.core.packet.QuicPacket;
 
+import java.net.InetSocketAddress;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * Simple holder object for a packet (to send) and its packet-lost callback function.
+ * Simple holder object for a packet (to send) and its packet-lost callback function and client address
  */
 public class SendItem {
 
@@ -31,19 +33,18 @@ public class SendItem {
 
     private final QuicPacket packet;
     private final Consumer<QuicPacket> packetLostCallback;
+    private final InetSocketAddress clientAddress;
 
-    public SendItem(QuicPacket packet) {
-        this.packet = packet;
-        this.packetLostCallback = EMPTY_CALLBACK;
+    public SendItem(QuicPacket packet, Consumer<QuicPacket> packetLostCallback, InetSocketAddress clientAddress) {
+        this.packet = Objects.requireNonNull(packet);
+        this.packetLostCallback = Objects.requireNonNull(packetLostCallback);
+        this.clientAddress = Objects.requireNonNull(clientAddress);
     }
 
-    public SendItem(QuicPacket packet, Consumer<QuicPacket> packetLostCallback) {
-        if (packet == null || packetLostCallback == null) {
-            throw new IllegalArgumentException();
-        }
-
-        this.packet = packet;
-        this.packetLostCallback = packetLostCallback;
+    public SendItem(QuicPacket packet, InetSocketAddress clientAddress) {
+        this.packet = Objects.requireNonNull(packet);
+        this.clientAddress = Objects.requireNonNull(clientAddress);
+        this.packetLostCallback = EMPTY_CALLBACK;
     }
 
     public QuicPacket getPacket() {
@@ -58,5 +59,8 @@ public class SendItem {
     public String toString() {
         return packet.toString();
     }
-}
 
+    public InetSocketAddress getClientAddress() {
+        return clientAddress;
+    }
+}

@@ -22,6 +22,9 @@ import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.CryptoTestUtils;
 import tech.kwik.core.test.ByteUtils;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+
 import static tech.kwik.core.impl.Version.IETF_draft_29;
 import static tech.kwik.core.impl.Version.QUIC_version_1;
 
@@ -74,6 +77,10 @@ public class TestUtils {
         else {
             throw new IllegalStateException("Unexpected value: " + quicVersion);
         }
+    }
+
+    public static InetSocketAddress getArbitraryLocalAddress() throws Exception {
+        return new InetSocketAddress(InetAddress.getByAddress(new byte[]{ (byte) 192, (byte) 168, 1, 13 }), 6821);
     }
 }
 

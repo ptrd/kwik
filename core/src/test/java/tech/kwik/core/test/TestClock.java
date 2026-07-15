@@ -19,11 +19,9 @@
 package tech.kwik.core.test;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,11 +31,13 @@ public class TestClock extends Clock {
     private Instant instant;
     private ZoneId zone;
     private List<ClockListener> listeners;
+    private List<Instant> ticks;
 
     public TestClock() {
-        instant = Instant.now();
+        instant = Instant.EPOCH;  // Debugging is easier when the clock starts at a fixed point in time.
         zone = ZoneOffset.UTC;
         listeners = new ArrayList<>();
+        ticks = new ArrayList<>();
     }
 
     public TestClock(Instant instant, ZoneId zone) {
@@ -60,21 +60,44 @@ public class TestClock extends Clock {
         return instant;
     }
 
-    public void fastForward(TemporalAmount temporalAmount) {
-        instant = instant.plus(temporalAmount);
-        notifyListeners();
-    }
-
     private void notifyListeners() {
         listeners.forEach(l -> l.clockAdvanced());
     }
 
     public void fastForward(int millis) {
-        fastForward(Duration.ofMillis(millis));
+        int clockAdvanceInaccuracyNanos = 1;  // when advancing clock, always add some inaccuracy to avoid a scheduled task running exactly at the scheduled time (which isn't realistic and leads to failing tests in combination with Instant.after())
+        int remainingTime = millis;
+        while (remainingTime > 0 && !ticks.isEmpty()) {
+            long nextTick = ticks.get(0).toEpochMilli() - instant.toEpochMilli();
+            if (nextTick <= remainingTime) {
+                instant = instant.plusMillis(nextTick).plusNanos(clockAdvanceInaccuracyNanos);
+                ticks.remove(0);
+                remainingTime -= nextTick;
+                notifyListeners();
+            }
+            else {
+                instant = instant.plusMillis(remainingTime).plusNanos(clockAdvanceInaccuracyNanos);
+                remainingTime = 0;
+                notifyListeners();
+            }
+        }
+        if (remainingTime > 0) {
+            instant = instant.plusMillis(remainingTime).plusNanos(clockAdvanceInaccuracyNanos);
+            notifyListeners();
+        }
     }
 
     public void registerListener(ClockListener listener) {
         listeners.add(listener);
+    }
+
+    public void setTick(long delayInMillis) {
+        if (delayInMillis <= 0) {
+            // In reality, a clock is always advancing; when scheduling something with 0 delay, it is not executed with 0 delay.
+            delayInMillis = 1;
+        }
+        ticks.add(instant.plusMillis(delayInMillis));
+        ticks.sort(Instant::compareTo);
     }
 
     public interface ClockListener {

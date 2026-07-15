@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 Peter Doornbosch
+ * Copyright © 2023, 2024, 2025, 2026 Peter Doornbosch
  *
  * This file is part of Kwik, an implementation of the QUIC protocol in Java.
  *
@@ -16,26 +16,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package tech.kwik.core.cid;
+package tech.kwik.core.socket;
 
-public enum ConnectionIdStatus {
-    NEW,
-    IN_USE,
-    USED,
-    RETIRED;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.time.Instant;
 
-    public boolean active() {
-        // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
-        // "Connection IDs that are issued and not retired are considered active;..."
-        return ! this.equals(RETIRED);
-    }
+/**
+ * Abstracts the DatagramSocket used for sending and receiving, so it can hide implementation details related to
+ * connection migration and path validation.
+ */
+public interface SocketManager {
 
-    public boolean notUnusedOrRetired() {
-        return !this.equals(NEW) && !this.equals(RETIRED);
-    }
+    Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException;
 
-    public boolean notRetired() {
-        return !this.equals(RETIRED);
-    }
+    void close();
+
+    InetSocketAddress getClientAddress();
 }
-

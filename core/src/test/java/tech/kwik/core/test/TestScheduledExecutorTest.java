@@ -21,6 +21,8 @@ package tech.kwik.core.test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -128,6 +130,7 @@ public class TestScheduledExecutorTest {
 
         assertThat(hasBeenExecuted.get()).isEqualTo(1);
     }
+
     @Test
     void whenShutdownTasksWillNotBeRun() {
         AtomicBoolean hasBeenExecuted = new AtomicBoolean(false);
@@ -146,5 +149,59 @@ public class TestScheduledExecutorTest {
         clock.fastForward(500);
 
         assertThat(hasBeenExecuted.get()).isFalse();
+    }
+
+    @Test
+    void whenTaskSchedulesNewTaskBothShouldHaveBeenRun() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+            scheduledExecutor.schedule((Runnable) () -> hasBeenExecuted.incrementAndGet(), 100, TimeUnit.MILLISECONDS);
+        }, 100, TimeUnit.MILLISECONDS);
+        clock.fastForward(200);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(2);
+    }
+
+    @Test
+    void whenSecondTaskSchedulesNewTaskAllShouldHaveBeenRun() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+        }, 100, TimeUnit.MILLISECONDS);
+        scheduledExecutor.schedule(() -> {
+            hasBeenExecuted.incrementAndGet();
+            scheduledExecutor.schedule((Runnable) () -> hasBeenExecuted.incrementAndGet(), 10, TimeUnit.MILLISECONDS);
+        }, 200, TimeUnit.MILLISECONDS);
+        clock.fastForward(110);
+        clock.fastForward(110);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(3);
+    }
+
+    @Test
+    void whenScheduledTooEarlyItIsExecutedInDueTime() {
+        AtomicInteger hasBeenExecuted = new AtomicInteger(0);
+        AtomicInteger hasBeenRescheduled = new AtomicInteger(0);
+        Instant scheduledTime = clock.instant().plusMillis(10);
+        scheduledExecutor.schedule(() -> doIt(hasBeenExecuted, scheduledTime, hasBeenRescheduled), 9, TimeUnit.MILLISECONDS);
+        clock.fastForward(15);
+
+        assertThat(hasBeenExecuted.get()).isEqualTo(1);
+        assertThat(hasBeenRescheduled.get()).isLessThan(100_000);
+    }
+
+    private void doIt(AtomicInteger hasBeenExecuted, Instant scheduledTime, AtomicInteger hasBeenRescheduled) {
+        if (clock.instant().isAfter(scheduledTime)) {
+            Duration delay = Duration.between(scheduledTime, clock.instant());
+            assertThat(delay.toMillis()).isLessThan(1);
+            hasBeenExecuted.incrementAndGet();
+        }
+        else {
+            Duration duration = Duration.between(clock.instant(), scheduledTime);
+            long delay = duration.toMillis();
+            hasBeenRescheduled.incrementAndGet();
+            scheduledExecutor.schedule(() -> doIt(hasBeenExecuted, scheduledTime, hasBeenRescheduled), delay, TimeUnit.MILLISECONDS);
+        }
     }
 }

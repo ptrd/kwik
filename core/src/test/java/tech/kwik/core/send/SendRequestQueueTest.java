@@ -18,14 +18,11 @@
  */
 package tech.kwik.core.send;
 
-import tech.kwik.core.frame.CryptoFrame;
-import tech.kwik.core.frame.DatagramFrame;
-import tech.kwik.core.frame.PathResponseFrame;
-import tech.kwik.core.frame.QuicFrame;
-import tech.kwik.core.frame.StreamFrame;
-import tech.kwik.core.impl.Version;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.frame.*;
+import tech.kwik.core.impl.TestUtils;
+import tech.kwik.core.impl.Version;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -181,4 +178,49 @@ class SendRequestQueueTest {
         assertThat(sendRequestQueue.next(1010).get().getFrame(1500)).isInstanceOf(StreamFrame.class);
     }
     //endregion
+
+    //region alternate address request
+    @Test
+    void whenAlternateAddressRequestIsFetchedThereIsNoSuchRequestAnymore() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
+        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress());
+
+        // When
+        sendRequestQueue.getAlternateAddressRequest(1000);
+
+        // Then
+        assertThat(sendRequestQueue.hasAlternateAddressRequest()).isFalse();
+    }
+
+    @Test
+    void whenAlternateAddressRequestsAreQueuedOrderShouldBeMaintained() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress());
+        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress());
+
+        // When
+        Optional<SendRequest> request1 = sendRequestQueue.getAlternateAddressRequest(1140);
+        Optional<SendRequest> request2 = sendRequestQueue.getAlternateAddressRequest(1140);
+
+        // Then
+        assertThat(request1.get().getFrame(10)).isInstanceOf(PathChallengeFrame.class);
+        assertThat(request2.get().getFrame(10)).isInstanceOf(PingFrame.class);
+    }
+
+    @Test
+    void whenAlternateAddressRequestIsRequestedItShouldRespectSizeLimit() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress());
+
+        // When
+        Optional<SendRequest> request1 = sendRequestQueue.getAlternateAddressRequest(8);
+        Optional<SendRequest> request2 = sendRequestQueue.getAlternateAddressRequest(10);
+
+        // Then
+        assertThat(request1).isEmpty();
+        assertThat(request2).isPresent();
+    }
 }

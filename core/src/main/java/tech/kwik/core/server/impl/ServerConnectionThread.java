@@ -104,7 +104,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
 
             while (! connectionReceiverThread.isInterrupted()) {
                 ReceivedDatagram datagram = queue.take();
-                PacketMetaData metaData = new PacketMetaData(datagram.timeReceived, datagram.sourceAddress, datagram.datagramNumber);
+                PacketMetaData metaData = new PacketMetaData(datagram.timeReceived, datagram.sourceAddress, datagram.datagramNumber, datagram.size);
                 datagramProcessingChain.processDatagram(datagram.data, metaData);
             }
         }
@@ -138,7 +138,7 @@ public class ServerConnectionThread implements ServerConnectionProxy {
                 // The anti amplification tracking filter is added first, because it must count any packet that makes it to the connection.
                 new AntiAmplificationTrackingFilter(receivedPayloadBytesCounterFunction,
                         new ClientAddressFilter(firstInitialPacketMetaData.sourceAddress(), log,
-                                new ClientInitialScidFilter(serverConnection.getDestinationConnectionId(), log,
+                                new ClientInitialScidFilter(serverConnection.getInitialClientConnectionId(), log,
                                         new InitialPacketMinimumSizeFilter(log,
                                                 new DatagramPostProcessingFilter(postProcessingFunction, log,
                                                         new DatagramParserFilter(parser))))));
@@ -150,12 +150,14 @@ public class ServerConnectionThread implements ServerConnectionProxy {
         final Instant timeReceived;
         final ByteBuffer data;
         final InetSocketAddress sourceAddress;
+        final int size;
 
         public ReceivedDatagram(int datagramNumber, Instant timeReceived, ByteBuffer data, InetSocketAddress sourceAddress) {
             this.datagramNumber = datagramNumber;
             this.timeReceived = timeReceived;
             this.data = data;
             this.sourceAddress = sourceAddress;
+            this.size = data.limit();
         }
     }
 }

@@ -24,6 +24,7 @@ import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,6 +40,7 @@ public class SendRequestQueue {
     private final EncryptionLevel encryptionLevel;
     private Deque<SendRequest> requestQueue = new ConcurrentLinkedDeque<>();
     private Deque<List<QuicFrame>> probeQueue = new ConcurrentLinkedDeque<>();
+    private Deque<SendRequest> altAddressRequestQueue = new ConcurrentLinkedDeque<>();
     private final Object ackLock = new Object();
     private Instant nextAckTime;
     private volatile boolean cleared;
@@ -92,6 +94,10 @@ public class SendRequestQueue {
 
     public void addProbeRequest(List<QuicFrame> frames) {
         probeQueue.addLast(frames);
+    }
+
+    public void addAlternateAddressRequest(QuicFrame frame, InetSocketAddress address) {
+        altAddressRequestQueue.add(new FixedFrameSendRequest(frame, f -> {}, address));
     }
 
     public boolean hasProbe() {
@@ -172,15 +178,19 @@ public class SendRequestQueue {
     public boolean hasRequests() {
         return !requestQueue.isEmpty();
     }
-    
+
     public Optional<SendRequest> next(int maxFrameLength) {
+        return next(requestQueue, maxFrameLength);
+    }
+
+    private Optional<SendRequest> next(Deque<SendRequest> queue, int maxFrameLength) {
         if (maxFrameLength < 1) {  // Minimum frame size is 1: some frames (e.g. ping) are just a type field.
             // Forget it
             return Optional.empty();
         }
 
         try {
-            for (Iterator<SendRequest> iterator = requestQueue.iterator(); iterator.hasNext(); ) {
+            for (Iterator<SendRequest> iterator = queue.iterator(); iterator.hasNext(); ) {
                 SendRequest next = iterator.next();
                 if (next.getEstimatedSize() <= maxFrameLength) {
                     iterator.remove();
@@ -236,5 +246,12 @@ public class SendRequestQueue {
         return "SendRequestQueue[" + encryptionLevel + "]";
     }
 
+    public boolean hasAlternateAddressRequest() {
+        return ! altAddressRequestQueue.isEmpty();
+    }
+
+    public Optional<SendRequest> getAlternateAddressRequest(int available) {
+        return next(altAddressRequestQueue, available);
+    }
 }
 

@@ -59,6 +59,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private TestScheduledExecutor scheduler;
     private CongestionController congestionController;
 
+    //region setup
     @BeforeEach
     void initObjectUnderTest() throws Exception {
         rttEstimator = mock(RttEstimator.class);
@@ -86,7 +87,9 @@ class RecoveryManagerTest extends RecoveryTests {
     void shutdownRecoveryManager() {
         recoveryManager.stopRecovery();
     }
+    //endregion
 
+    //region loss
     // https://tools.ietf.org/html/draft-ietf-quic-recovery-20#section-6.1.2
     // "If packets sent prior to the largest
     //   acknowledged packet cannot yet be declared lost, then a timer SHOULD
@@ -106,7 +109,9 @@ class RecoveryManagerTest extends RecoveryTests {
         clock.fastForward(defaultRtt);
         verify(lostPacketHandler, times(1)).process(argThat(new PacketMatcherByPacketNumber(1)));
     }
+    //endregion
 
+    //region probe
     @Test
     void whenAckElicitingPacketIsNotAckedProbeIsSent() {
         // Given recovery manager is not in handshake state anymore
@@ -243,6 +248,23 @@ class RecoveryManagerTest extends RecoveryTests {
     }
 
     @Test
+    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
+        // Given a client sends an initial packet that is acknowledged
+        recoveryManager.packetSent(createCryptoPacket(0), clock.instant(), lostPacket -> {});
+        clock.fastForward(defaultRtt);
+        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial, clock.instant());
+
+        // When nothing is received during first probe timeout
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        clock.fastForward(probeTimeout);
+
+        // Then even though all client packets are acked, it sends to a probe to prevent a deadlock when server cannot send due to the amplification limit
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+    }
+    //endregion
+
+    //region loss time
+    @Test
     void earliestLossTimeIsFound() throws Exception {
         // Given mock loss detectors are instantiated and registered in the recovery manager
         LossDetector[] detectors = new LossDetector[3];
@@ -260,7 +282,9 @@ class RecoveryManagerTest extends RecoveryTests {
         // Then the value of the earliest is returned
         assertThat(recoveryManager.getEarliestLossTime(LossDetector::getLossTime).pnSpace.ordinal()).isEqualTo(2);
     }
+    //endregion
 
+    //region retransmit
     @Test
     void initialPacketRetransmit() {
         // Given an initial packet is sent (with crypto frames only)
@@ -276,22 +300,9 @@ class RecoveryManagerTest extends RecoveryTests {
         // And the lost packet handler is not called (because that would lead to an additional retransmit: the probe is the retransmit)
         verify(lostPacketHandler, never()).process(any(InitialPacket.class));
     }
+    //endregion
 
-    @Test
-    void probeIsSentToPeerAwaitingAddressValidation() throws InterruptedException {
-        // Given a client sends an initial packet that is acknowledged
-        recoveryManager.packetSent(createCryptoPacket(0), clock.instant(), lostPacket -> {});
-        clock.fastForward(defaultRtt);
-        recoveryManager.onAckReceived(new AckFrame(0), PnSpace.Initial, clock.instant());
-
-        // When nothing is received during first probe timeout
-        int probeTimeout = defaultRtt + 4 * defaultRttVar;
-        clock.fastForward(probeTimeout);
-
-        // Then even though all client packets are acked, it sends to a probe to prevent a deadlock when server cannot send due to the amplification limit
-        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
-    }
-
+    //region probe data
     @Test
     void framesToRetransmitShouldNotBePing() throws Exception {
         QuicPacket pingPacket = createHandshakePacket(0, new PingFrame());
@@ -387,6 +398,88 @@ class RecoveryManagerTest extends RecoveryTests {
 
         verify(congestionController, never()).registerLost(argThat(l -> ! l.isEmpty()));   // It's okay when it is called with an empty list
     }
+
+    @Test
+    void singlePathChallengeFrameShouldNotBeRetransmitted() throws Exception {
+        QuicPacket packet1 = createPacket(0, new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, new StreamFrame(1, new byte[90], true));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathChallengeFrameNorPaddingShouldBeRetransmittedWhenCombined() throws Exception {
+        QuicPacket packet1 = createPacket(0, List.of(new PathChallengeFrame(Version.QUIC_version_1, new byte[8]), new Padding(2)));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, new StreamFrame(1, new byte[90], true));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class, Padding.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathChallengeFrameShouldNeverBeRetransmitted() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new StreamFrame(1, new byte[90], true), new PathChallengeFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathChallengeFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void neverPutPaddingInProbe() {
+        QuicPacket packet = createPacket(0, List.of(new Padding(2), new AckFrame(0), new PathChallengeFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(Padding.class);
+    }
+
+    @Test
+    void pathResponseFrameShouldNotBeRetransmittedWhenSolo() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+    }
+
+    @Test
+    void pathResponseFrameShouldNotBeConsideredForRetransmit() throws Exception {
+        QuicPacket packet1 = createPacket(0, List.of(new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet1, clock.instant(), p -> {});
+        QuicPacket packet2 = createPacket(1, List.of(new StreamFrame(1, new byte[90], true)));
+        recoveryManager.packetSent(packet2, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+
+    @Test
+    void pathResponseFrameShouldNotBeRetransmittedWhenCombined() throws Exception {
+        QuicPacket packet = createPacket(0, List.of(new StreamFrame(1, new byte[90], true), new PathResponseFrame(Version.getDefault(), new byte[8])));
+        recoveryManager.packetSent(packet, clock.instant(), p -> {});
+
+        List<QuicFrame> framesToRetransmit = recoveryManager.getFramesToRetransmit(PnSpace.App);
+
+        assertThat(framesToRetransmit).doesNotHaveAnyElementsOfTypes(PathResponseFrame.class);
+        assertThat(framesToRetransmit).isNotEmpty();
+    }
+    //endregion
 
     /**
      * Ensure that packetSent is called when probes packets are sent with the given packetNumbers.

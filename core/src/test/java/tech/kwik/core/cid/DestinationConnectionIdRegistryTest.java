@@ -18,31 +18,54 @@
  */
 package tech.kwik.core.cid;
 
-import tech.kwik.core.log.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.log.Logger;
+
+import java.net.InetSocketAddress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static tech.kwik.core.impl.TestUtils.getArbitraryLocalAddress;
 
 class DestinationConnectionIdRegistryTest {
 
     private DestinationConnectionIdRegistry connectionIdRegistry;
+    private InetSocketAddress clientAddress;
 
+    //region setup
     @BeforeEach
-    void initObjectUnderTest() {
+    void initObjectUnderTest() throws Exception {
         connectionIdRegistry = new DestinationConnectionIdRegistry(new byte[]{ 0x01, 0x10, 0x78, 0x33 }, mock(Logger.class));
+        clientAddress = getArbitraryLocalAddress();
+        connectionIdRegistry.registerClientAddress(clientAddress);
         connectionIdRegistry.setInitialStatelessResetToken(new byte[]{ 0x01, 0x10, 0x78, 0x33 });
         connectionIdRegistry.registerNewConnectionId(1, new byte[] { 0x02, 0x1c, 0x56, 0x0b }, new byte[] { 0x02, 0x1c, 0x56, 0x0b });
         connectionIdRegistry.registerNewConnectionId(2, new byte[] { 0x03, 0x2a, 0x1f, 0x7e }, new byte[] { 0x03, 0x2a, 0x1f, 0x7e });
     }
+    //endregion
 
+    //region switch to new connection id
     @Test
     void testUseNext() {
         byte[] newCid = connectionIdRegistry.useNext();
         assertThat(newCid).isEqualTo(new byte[] { 0x02, 0x1c, 0x56, 0x0b });
     }
 
+    @Test
+    void afterRetiringCurrentCidItShouldNotBeUsedAnymore() {
+        // Given
+        byte[] initialCid = connectionIdRegistry.getCurrent(clientAddress);
+
+        // When
+        connectionIdRegistry.retireAllBefore(1);
+
+        // Then
+        assertThat(connectionIdRegistry.getCurrent(clientAddress)).isNotEqualTo(initialCid);
+    }
+    //endregion
+
+    //region stateless reset token
     @Test
     void matchInitialStatelessResetToken() {
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x01, 0x10, 0x78, 0x33 })).isTrue();
@@ -71,4 +94,5 @@ class DestinationConnectionIdRegistryTest {
         connectionIdRegistry.useNext();
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x02, 0x1c, 0x56, 0x0b })).isTrue();
     }
+    //endregion
 }

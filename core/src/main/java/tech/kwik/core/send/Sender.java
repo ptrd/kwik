@@ -22,6 +22,7 @@ import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.frame.QuicFrame;
 
+import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.Consumer;
@@ -90,6 +91,14 @@ public interface Sender {
     void send(Function<Integer, QuicFrame> frameSupplier, int minimumSize, EncryptionLevel level, Consumer<QuicFrame> lostCallback);
 
     /**
+     * Send one frame to (server role) or from (client role) an alternate client address.
+     * Gets priority over other queued reqeusts.
+     * @param frame
+     * @param clientAddress
+     */
+    void sendAlternateAddress(QuicFrame frame, InetSocketAddress clientAddress);
+
+    /**
      * Set the initial token that should be used for all initial packets.
      * @param token
      */
@@ -136,4 +145,10 @@ public interface Sender {
      * @return
      */
     Instant lastAckElicitingSent();
+
+    /**
+     * Returns the current PTO value for the current path in milliseconds.
+     * @return
+     */
+    int getPto();
 }

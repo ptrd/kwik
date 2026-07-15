@@ -20,6 +20,7 @@ package tech.kwik.core.receive;
 
 import java.net.DatagramPacket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
@@ -30,23 +31,21 @@ public class RawPacket {
 
     private final DatagramPacket receivedPacket;
     private final Instant timeReceived;
-    private final int number;
     private final ByteBuffer data;
+    private final InetSocketAddress peerAddress;
+    private final InetSocketAddress localAddress;
 
-    public RawPacket(DatagramPacket receivedPacket, Instant timeReceived, int number) {
+    public RawPacket(DatagramPacket receivedPacket, Instant timeReceived, InetSocketAddress localAddress) {
         this.receivedPacket = receivedPacket;
         this.timeReceived = timeReceived;
-        this.number = number;
 
         data = ByteBuffer.wrap(receivedPacket.getData(), 0, receivedPacket.getLength());
+        this.peerAddress = (InetSocketAddress) receivedPacket.getSocketAddress();
+        this.localAddress = localAddress;
     }
 
     public Instant getTimeReceived() {
         return timeReceived;
-    }
-
-    public int getNumber() {
-        return number;
     }
 
     public ByteBuffer getData() {
@@ -57,11 +56,11 @@ public class RawPacket {
         return data.limit();
     }
 
-    public InetAddress getAddress() {
-        return receivedPacket.getAddress();
+    public InetSocketAddress getPeerAddress() {
+        return peerAddress;
     }
 
-    public int getPort() {
-        return receivedPacket.getPort();
+    public InetSocketAddress getLocalAddress() {
+        return localAddress;
     }
 }

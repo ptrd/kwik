@@ -162,7 +162,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 }
 
                 try {
-                    PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber);
+                    PacketMetaData metaData = new PacketMetaData(timeReceived, sourceAddress, datagramNumber, data.limit());
                     filterChain.processDatagram(data, metaData);
                 }
                 catch (TransportError e) {

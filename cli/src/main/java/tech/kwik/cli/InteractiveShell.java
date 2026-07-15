@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -99,8 +100,10 @@ public class InteractiveShell {
         commands.put("cid_list", this::printConnectionIds);
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
+        commands.put("udp_add", this::addUdpPort);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
+        commands.put("pc", this::pathChallenge);
         commands.put("raw", this::sendRaw);
         commands.put("stream", this::createStream);
         commands.put("write", this::writeToStream);
@@ -332,7 +335,26 @@ public class InteractiveShell {
     }
 
     private void changeUdpPort(String args) {
-        quicConnection.changeAddress();
+        if (! args.isBlank()) {
+            try {
+                quicConnection.changeAddress(toInt(args));
+            }
+            catch (SocketException e) {
+                error(e);
+            }
+        }
+        else {
+            quicConnection.changeAddress();
+        }
+    }
+
+    private void addUdpPort(String args) {
+        try {
+            quicConnection.addLocalAddress(toInt(args));
+        }
+        catch (SocketException e) {
+            error(e);
+        }
     }
 
     private void help(String arg) {
@@ -447,8 +469,8 @@ public class InteractiveShell {
         arguments += " ";
         String firstArg = arguments.substring(0, arguments.indexOf(" ")).toLowerCase();
         if (! firstArg.equals("frame")) {
-            System.err.println("Command syntax: raw frame <data>, where <data> is a mix of hex bytes and 'varint <decimal number>'");
-            System.err.println("For example: \"raw frame 0e 0000 varint 4 cafebabe\" sends a stream frame with stream id 0, offset 0, length 4 and data cafebabe");
+            System.out.println("Command syntax: raw frame <data>, where <data> is a mix of hex bytes and 'varint <decimal number>'");
+            System.out.println("For example: \"raw frame 0e 0000 varint 4 cafebabe\" sends a stream frame with stream id 0, offset 0, length 4 and data cafebabe");
             return;
         }
 
@@ -525,7 +547,7 @@ public class InteractiveShell {
                         VariableLengthInteger.encode(Integer.parseInt(integer), buffer);
                     }
                     else {
-                        System.err.println("varint argument must be a (decimal) integer");
+                        error("varint argument must be a (decimal) integer");
                     }
                 }
             }
@@ -544,6 +566,23 @@ public class InteractiveShell {
         quicConnection.ping();
     }
 
+    private void pathChallenge(String arg) {
+        List<String> args = Arrays.stream(arg.split(" ")).filter(s -> !s.isBlank()).collect(Collectors.toList());
+        if (args.size() >= 1 && !(args.get(0).equals("std") || args.get(0).equals("alt"))) {
+            error("First argument must be 'std' or 'alt' to indicate which path to challenge");
+            return;
+        }
+
+        boolean useStandardPath = args.size() == 0 || args.get(0).equals("std");
+
+        if (args.size() >= 1) {
+            args.remove(0);
+        }
+        int paddingSize = args.size() >= 1? toInt(args.get(0)): 0;
+
+        quicConnection.sendPathChallenge(useStandardPath, paddingSize);
+    }
+
     private void quack(String s) {
         if (quicConnection.isDatagramExtensionEnabled()) {
             quicConnection.setDatagramHandler(data -> System.out.println("Received datagram: \"" + new String(data) + "\""));
@@ -559,6 +598,10 @@ public class InteractiveShell {
         error.printStackTrace();
     }
 
+    private void error(String message) {
+        System.out.println("Error: " + message);
+    }
+
     private void prompt() {
         System.out.print("> ");
         System.out.flush();
@@ -566,8 +609,14 @@ public class InteractiveShell {
 
     private Integer toInt(String value) {
         try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
+            if (! value.isBlank()) {
+                return Integer.parseInt(value);
+            }
+            else {
+                return 0;
+            }
+        }
+        catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0;
         }
@@ -575,8 +624,14 @@ public class InteractiveShell {
 
     private Long toLong(String value) {
         try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException e) {
+            if (! value.isBlank()) {
+                return Long.parseLong(value);
+            }
+            else {
+                return 0L;
+            }
+        }
+        catch (NumberFormatException e) {
             System.out.println("Error: value not an integer; using 0");
             return 0L;
         }

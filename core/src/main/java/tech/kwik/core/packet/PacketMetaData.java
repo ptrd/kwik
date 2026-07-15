@@ -26,12 +26,14 @@ public class PacketMetaData {
     private final Instant timeReceived;
     private final InetSocketAddress sourceAddress;
     private final int datagramNumber;
+    private final int datagramSize;
     private final boolean moreDataInDatagram;
 
-    public PacketMetaData(Instant timeReceived, InetSocketAddress sourceAddress, int datagramNumber) {
+    public PacketMetaData(Instant timeReceived, InetSocketAddress sourceAddress, int datagramNumber, int datagramSize) {
         this.timeReceived = timeReceived;
         this.sourceAddress = sourceAddress;
         this.datagramNumber = datagramNumber;
+        this.datagramSize = datagramSize;
         moreDataInDatagram = false;
     }
 
@@ -39,6 +41,7 @@ public class PacketMetaData {
         this.timeReceived = original.timeReceived;
         this.sourceAddress = original.sourceAddress;
         this.datagramNumber = original.datagramNumber;
+        this.datagramSize = original.datagramSize;
         this.moreDataInDatagram = moreDataInDatagram;
     }
 
@@ -52,6 +55,10 @@ public class PacketMetaData {
 
     public InetSocketAddress sourceAddress() {
         return sourceAddress;
+    }
+
+    public int getDatagramSize() {
+        return datagramSize;
     }
 
     public int datagramNumber() {

@@ -34,6 +34,7 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.VersionNegotiationPacket;
+import tech.kwik.core.receive.FixedAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
 import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
@@ -143,7 +144,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 .map(Version::of)
                 .map(Version::getId)
                 .collect(Collectors.toList());
-        receiver = new Receiver(serverSocket, log, exception -> close());
+        receiver = new FixedAddressReceiver(serverSocket, log, exception -> close());
 
         int maxSharedExecutorThreads = 10;
         sharedExecutor = new ThreadPoolExecutor(1, maxSharedExecutorThreads, 60L, TimeUnit.SECONDS,
@@ -217,10 +218,10 @@ public class ServerConnectorImpl implements ServerConnector {
     protected void process(RawPacket rawPacket) {
         ByteBuffer data = rawPacket.getData();
         if (isValidLongHeaderPacket(data)) {
-            processLongHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
+            processLongHeaderPacket(rawPacket.getPeerAddress(), data);
         }
         else if (isValidShortHeaderPacket(data)) {
-            processShortHeaderPacket(new InetSocketAddress(rawPacket.getAddress(), rawPacket.getPort()), data);
+            processShortHeaderPacket(rawPacket.getPeerAddress(), data);
         }
         else {
             // There is another reason why a long header packet could be invalid (inconsistent connection ID lengths),

@@ -33,6 +33,7 @@ import tech.kwik.core.util.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
@@ -50,13 +51,47 @@ public class ShortHeaderPacket extends QuicPacket {
     }
 
     /**
-     * Constructs a short header packet for sending (client role).
+     * Constructs a short header packet for sending.
+     * @param quicVersion
+     * @param destinationConnectionId
+     */
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId) {
+        this.quicVersion = quicVersion;
+        this.destinationConnectionId = destinationConnectionId;
+        frames = new ArrayList<>();
+    }
+
+    /**
+     * Constructs a short header packet for sending.
      * @param quicVersion
      * @param destinationConnectionId
      * @param frame
      */
     public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, QuicFrame frame) {
         this.quicVersion = quicVersion;
+        this.destinationConnectionId = destinationConnectionId;
+        frames = new ArrayList<>();
+        if (frame != null) {
+            frames.add(frame);
+        }
+    }
+
+    public ShortHeaderPacket(Version quicVersion, byte[] destinationConnectionId, List<QuicFrame> frames) {
+        this.quicVersion = quicVersion;
+        this.destinationConnectionId = destinationConnectionId;
+        this.frames = new ArrayList<>();
+        this.frames.addAll(frames);
+    }
+
+    /**
+     * Creates a short header packet without explicitely specifying a QUIC version; use for tests only!
+     * @param packetNumber
+     * @param destinationConnectionId
+     * @param frame
+     */
+    public ShortHeaderPacket(long packetNumber, byte[] destinationConnectionId, QuicFrame frame) {
+        this.quicVersion = Version.getDefault();
+        setPacketNumber(packetNumber);
         this.destinationConnectionId = destinationConnectionId;
         frames = new ArrayList<>();
         if (frame != null) {
