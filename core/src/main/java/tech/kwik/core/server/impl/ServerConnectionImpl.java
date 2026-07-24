@@ -108,6 +108,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private boolean acceptedEarlyData = false;
     private int allowedClientConnectionIds = 3;
     private boolean applicationProtocolStarted;
+    private final boolean connectionMigrationEnabled;
 
     /**
      * Creates a server connection implementation.
@@ -171,7 +172,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             cryptoStreams.add(bufferedInitialCrypto);
         }
 
-
         ackGenerator = sender.getGlobalAckGenerator();
 
         if (retryRequired) {
@@ -188,7 +188,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
 
-        pathValidator = new PathValidator(quicVersion, initialClientAddress, sender, log, socketManager);
+        connectionMigrationEnabled = System.getProperty("tech.kwik.server.connection-migration.enabled", "false").equalsIgnoreCase("true");
+        pathValidator = connectionMigrationEnabled? new PathValidator(quicVersion, initialClientAddress, sender, log, socketManager): null;
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }
@@ -534,7 +535,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public ProcessResult process(ShortHeaderPacket packet, PacketMetaData metaData) {
         connectionIdManager.registerConnectionIdInUse(packet.getDestinationConnectionId());
-        pathValidator.checkSourceAddress(packet, metaData);
+        if (connectionMigrationEnabled) {
+            pathValidator.checkSourceAddress(packet, metaData);
+        }
         processFrames(packet, metaData);
         return ProcessResult.Continue;
     }
@@ -609,7 +612,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
-        pathValidator.checkPathResponse(pathResponseFrame, metaData);
+        if (connectionMigrationEnabled) {
+            pathValidator.checkPathResponse(pathResponseFrame, metaData);
+        }
     }
 
     @Override
