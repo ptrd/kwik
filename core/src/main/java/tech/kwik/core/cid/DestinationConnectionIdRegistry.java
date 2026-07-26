@@ -132,7 +132,9 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     public byte[] getCurrent(InetSocketAddress clientAddress) {
-        cidByClientAddress.computeIfAbsent(clientAddress, (address) -> {
+        // Capture the value returned by computeIfAbsent directly; a separate get() could race with a concurrent
+        // cidByClientAddress.clear() and return null.
+        ConnectionIdInfo cidInfo = cidByClientAddress.computeIfAbsent(clientAddress, (address) -> {
             boolean currentIsInUse = cidByClientAddress.values().stream().anyMatch(cid -> cid.getSequenceNumber() == currentCidIndex);
             if (currentIsInUse) {
                 findNextIndex().ifPresent(cid -> currentCidIndex = cid);
@@ -142,7 +144,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
             }
             return connectionIds.get(currentCidIndex);
         });
-        return cidByClientAddress.get(clientAddress).getConnectionId();
+        return cidInfo.getConnectionId();
     }
 
     public void registerClientAddress(InetSocketAddress clientAddress) {
