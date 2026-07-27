@@ -273,6 +273,9 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "New connection IDs are sent in NEW_CONNECTION_ID frames and retransmitted if the packet containing them is
         //  lost. Retransmissions of this frame carry the same sequence number value."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
+        // "Likewise, retired connection IDs are sent in RETIRE_CONNECTION_ID frames and retransmitted if the packet
+        //  containing them is lost."
         sender.send(frame, App, this::retransmitFrame);
     }
 
@@ -469,7 +472,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      */
     public void retireConnectionId(Integer sequenceNumber) {
         peerCidRegistry.retireConnectionId(sequenceNumber);
-        sender.send(new RetireConnectionIdFrame(quicVersion, sequenceNumber), App, lostFrame -> retireConnectionId(sequenceNumber));
+        sendRetireCid(sequenceNumber);
     }
 
     /**
