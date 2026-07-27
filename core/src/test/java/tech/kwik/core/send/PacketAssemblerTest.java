@@ -692,6 +692,26 @@ class PacketAssemblerTest extends AbstractSenderTest {
     }
     //endregion
 
+    //region peer connection id
+    @Test
+    void whenRetireConnectionIdFrameIsSentPacketUsesUpdatedPeerConnectionId() {
+        // Given
+        byte[] firstCid = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+        byte[] secondCid = new byte[] { 0x05, 0x06, 0x07, 0x08 };
+        when(connectionIdProvider.getPeerConnectionId(defaultClientAddress)).thenReturn(firstCid, secondCid);
+
+        // When
+        sendRequestQueue.addRequest(maxSize -> new StreamFrame(0, new byte[512], true), 3 + 2 + 512, null);
+        sendRequestQueue.addRequest(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, defaultClientAddress).get().getPacket();
+        assertThat(packet.getFrames()).hasAtLeastOneElementOfType(StreamFrame.class);
+        assertThat(packet.getFrames()).hasAtLeastOneElementOfType(RetireConnectionIdFrame.class);
+        assertThat(packet.getDestinationConnectionId()).isEqualTo(secondCid);
+    }
+    //endregion
+
     //region datagram extension
     @Test
     void maxSizedDatagramFrameCanBeSentInThePresenceOfOptionalAcks() {

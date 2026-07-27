@@ -24,6 +24,7 @@ import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.QuicFrame;
+import tech.kwik.core.frame.RetireConnectionIdFrame;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.packet.HandshakePacket;
@@ -33,6 +34,7 @@ import tech.kwik.core.packet.ZeroRttPacket;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -162,6 +164,20 @@ public class PacketAssembler {
                     estimatedSize += nextFrame.getFrameLength();
                     packet.addFrame(nextFrame);
                     callbacks.add(next.get().getLostCallback());
+
+                    if (nextFrame instanceof RetireConnectionIdFrame) {
+                        // In case the connection id has changed after the packet was created, make sure the new cid is
+                        // used, as the old might have been retired and subject of this RetireConnectionIdFrame.
+                        byte[] currentCid = cidProvider.getPeerConnectionId(defaultClientAddress);
+                        if (! Arrays.equals(currentCid, packet.getDestinationConnectionId())) {
+                            // For the time being, log this so we can validate this race condition has been fixed.
+                            System.out.println("Refreshing CID, as packets contains " + nextFrame
+                                    + "(changed from " + Arrays.toString(packet.getDestinationConnectionId())
+                                    + " to " + Arrays.toString(currentCid) + ")");
+                            // TODO: take into account that new cid can be of different length than old cid, which will change packet header size and thus the max size of the packet.
+                            packet = clonePacket(packet, currentCid);
+                        }
+                    }
                 }
             }
         }
@@ -243,6 +259,30 @@ public class PacketAssembler {
         }
         packet.setPacketNumber(nextPacketNumber());
         return packet;
+    }
+
+    protected QuicPacket clonePacket(QuicPacket original, byte[] newDestinationConnectionId) {
+        Version version = original.getVersion();
+
+        QuicPacket clone;
+        switch (level) {
+            case Handshake:
+                clone = new HandshakePacket(version, cidProvider.getInitialConnectionId(), newDestinationConnectionId, null);
+                break;
+            case App:
+                clone = new ShortHeaderPacket(version, newDestinationConnectionId);
+                break;
+            case ZeroRTT:
+                clone = new ZeroRttPacket(version, cidProvider.getInitialConnectionId(), newDestinationConnectionId, (QuicFrame) null);
+                break;
+            default:
+                throw new RuntimeException();  // programming error
+        }
+        for (QuicFrame frame: original.getFrames()) {
+            clone.addFrame(frame);
+        }
+        clone.setPacketNumber(original.getPacketNumber());
+        return clone;
     }
 
     public void stop(Consumer<PacketAssembler> finalizer) {
