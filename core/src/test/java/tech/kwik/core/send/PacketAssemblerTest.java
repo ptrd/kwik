@@ -710,6 +710,25 @@ class PacketAssemblerTest extends AbstractSenderTest {
         assertThat(packet.getFrames()).hasAtLeastOneElementOfType(RetireConnectionIdFrame.class);
         assertThat(packet.getDestinationConnectionId()).isEqualTo(secondCid);
     }
+
+    @Test
+    void whenRetireConnectionIdFrameIsSentPacketUpdatedPacketShouldNotExceedMaxLength() {
+        // Given
+        byte[] firstCid = new byte[] { 0x01, 0x02, 0x03 };
+        byte[] secondCid = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14 };
+        when(connectionIdProvider.getPeerConnectionId(defaultClientAddress)).thenReturn(firstCid, secondCid);
+
+        // When
+        sendRequestQueue.addRequest(new StreamFrame(0, new byte[1196], true), null);
+        sendRequestQueue.addRequest(new RetireConnectionIdFrame(Version.getDefault(), 0), null);
+        sendRequestQueue.addRequest(new Padding(6), null);
+
+        // Then
+        QuicPacket packet = oneRttPacketAssembler.assemble(12000, 1232, defaultClientAddress).get().getPacket();
+        assertThat(packet.estimateLength(0)).isLessThanOrEqualTo(1232);
+        assertThat(packet.getFrames()).hasAtLeastOneElementOfType(StreamFrame.class);
+        assertThat(packet.getFrames()).hasAtLeastOneElementOfType(RetireConnectionIdFrame.class);
+    }
     //endregion
 
     //region datagram extension

@@ -31,6 +31,8 @@ import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
 import tech.kwik.core.packet.ZeroRttPacket;
+import tech.kwik.core.util.Bytes;
+import tech.kwik.core.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -170,12 +172,19 @@ public class PacketAssembler {
                         // used, as the old might have been retired and subject of this RetireConnectionIdFrame.
                         byte[] currentCid = cidProvider.getPeerConnectionId(defaultClientAddress);
                         if (! Arrays.equals(currentCid, packet.getDestinationConnectionId())) {
-                            // For the time being, log this so we can validate this race condition has been fixed.
-                            System.out.println("Refreshing CID, as packets contains " + nextFrame
-                                    + "(changed from " + Arrays.toString(packet.getDestinationConnectionId())
-                                    + " to " + Arrays.toString(currentCid) + ")");
-                            // TODO: take into account that new cid can be of different length than old cid, which will change packet header size and thus the max size of the packet.
-                            packet = clonePacket(packet, currentCid);
+                            int lengthDifference = currentCid.length - packet.getDestinationConnectionId().length;
+                            if (estimatedSize + lengthDifference <= available) {
+                                byte[] previousCid = packet.getDestinationConnectionId();
+                                packet = clonePacket(packet, currentCid);
+                                estimatedSize += lengthDifference;
+                                // For the time being, log this so we can validate this race condition has been fixed.
+                                System.out.println("Refreshing CID, as packets contains " + nextFrame
+                                        + "(changed from " + Bytes.bytesToHex(previousCid)
+                                        + " to " + Bytes.bytesToHex(currentCid) + ")");
+                            }
+                            // else: cannot fit new cid in packet, so leave packet as is (at the risk of a protocol violation).
+                            // This should not happen, as the RetireConnectionIdFrame request should have been registered
+                            // with a size large enough to accommodate a new cid of maximum length.
                         }
                     }
                 }
