@@ -77,14 +77,15 @@ public interface Sender {
      * max frame size, but for frames with varying size (e.g. stream frames), it is the max size when creating the
      * smallest frame possible (or useful) in the given circumstances. E.g. if frame size is uncertain due
      * to variable length integer encoding, this minimum should take worst case into account.
-     * Note that when the frame supplier is called, it may be allowed to produce a larger frame, if packet size permits.
+     * Note that when the frame supplier is called, it might be allowed to produce a larger frame, if packet size permits.
+     * Also, the frame supplier is allowed to produce a frame this is smaller than the minimum size (hence minimum maximum size).
      *
      * When packet used to send the frame is lost, the callback will be executed to give the caller the opportunity
      * to retransmit.
      *
-     * @param frameSupplier    function that provides the frame that is being send, the integer input parameter is the
+     * @param frameSupplier    function that provides the frame that is being sent, the integer input parameter is the
      *                         maximum size the frame may have
-     * @param minimumSize      the minimum size the frame supplier function can produce
+     * @param minimumSize      the minimum size the frame supplier function guarantees it can produce
      * @param level
      * @param lostCallback
      */

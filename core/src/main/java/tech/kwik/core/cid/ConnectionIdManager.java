@@ -282,13 +282,15 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     /**
      * Send a retire connection ID frame, that informs the peer the given connection ID will not be used by this
      * endpoint anymore for addressing the peer.
-     * @param seqNr
+     * @param sequenceNumber
      */
-    private void sendRetireCid(Integer seqNr) {
+    private void sendRetireCid(Integer sequenceNumber) {
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Likewise, retired connection IDs are sent in RETIRE_CONNECTION_ID frames and retransmitted if the packet
         //  containing them is lost."
-        sender.send(new RetireConnectionIdFrame(quicVersion, seqNr), App, this::retransmitFrame);
+        int exactFrameSize = new RetireConnectionIdFrame(quicVersion, sequenceNumber).getFrameLength();
+        int reservedSize = exactFrameSize + (20 - 1); // Reserve extra space for exchanging cid's, length is in range 1..20
+        sender.send(size -> new RetireConnectionIdFrame(quicVersion, sequenceNumber), reservedSize, App, lostFrame -> retireConnectionId(sequenceNumber));
     }
 
     /**

@@ -38,7 +38,6 @@ import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.frame.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
-import tech.kwik.core.tls.QuicTransportParametersExtension;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.StreamManager;
@@ -47,6 +46,7 @@ import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
+import tech.kwik.core.tls.QuicTransportParametersExtension;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -61,6 +61,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -584,19 +585,20 @@ class QuicClientConnectionImplTest {
         // When
         connection.retireDestinationConnectionId(0);
 
-        ArgumentCaptor<QuicFrame> frameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
+        ArgumentCaptor<Function<Integer, QuicFrame>> frameCaptor = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
-        verify(sender, times(1)).send(frameCaptor.capture(), any(EncryptionLevel.class), captor.capture());
+        verify(sender, times(1)).send(frameCaptor.capture(), anyInt(), any(EncryptionLevel.class), captor.capture());
 
         clearInvocations(sender);
 
         Consumer lostPacketCallback = captor.getValue();
-        lostPacketCallback.accept(frameCaptor.getValue());
+        QuicFrame lostFrame = frameCaptor.getValue().apply(30);
+        lostPacketCallback.accept(lostFrame);
 
         // Then
-        ArgumentCaptor<QuicFrame> secondFrameCaptor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(sender, times(1)).send(secondFrameCaptor.capture(), any(EncryptionLevel.class), any(Consumer.class));
-        QuicFrame retransmitPacket = secondFrameCaptor.getValue();
+        ArgumentCaptor<Function<Integer, QuicFrame>> secondFrameCaptor = ArgumentCaptor.forClass(Function.class);
+        verify(sender, times(1)).send(secondFrameCaptor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        QuicFrame retransmitPacket = secondFrameCaptor.getValue().apply(30);
         assertThat(retransmitPacket).isEqualTo(new RetireConnectionIdFrame(Version.getDefault(), 0));
     }
 
@@ -611,7 +613,7 @@ class QuicClientConnectionImplTest {
         connection.process(new NewConnectionIdFrame(Version.getDefault(), 2, 0, new byte[]{ 0x02, 0x02, 0x02, 0x02 }), null, mock(PacketMetaData.class));
 
         // Then
-        verify(sender).send(argThat(frame -> frame.equals(new RetireConnectionIdFrame(Version.getDefault(), 2))), any(EncryptionLevel.class), any(Consumer.class));
+        verify(sender).send(argThat(f -> f.apply(30).equals(new RetireConnectionIdFrame(Version.getDefault(), 2))), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
     }
     //endregion
 

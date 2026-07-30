@@ -21,6 +21,7 @@ package tech.kwik.core.cid;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.frame.NewConnectionIdFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.RetireConnectionIdFrame;
@@ -35,6 +36,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -274,7 +276,9 @@ class ConnectionIdManagerTest {
         serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 1, new byte[4]));
 
         // Then
-        verify(sender, atLeastOnce()).send(argThat(f -> f instanceof RetireConnectionIdFrame), any(), any(Consumer.class));
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        verify(sender, atLeastOnce()).send(argThat(f -> f.apply(100) instanceof RetireConnectionIdFrame), captor.capture(), any(EncryptionLevel.class), any(Consumer.class));
+        assertThat(captor.getValue()).isGreaterThan(10);
     }
 
     @Test
@@ -363,9 +367,10 @@ class ConnectionIdManagerTest {
         serverConnectionIdManager.process(new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[4]));
 
         // Then
-        ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(sender, atLeastOnce()).send(captor.capture(), any(), any(Consumer.class));
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(sender, atLeastOnce()).send(captor.capture(), anyInt(), any(), any(Consumer.class));
         List<Integer> retiredSeqNr = captor.getAllValues().stream()
+                .map(func -> func.apply(100))
                 .filter(f -> f instanceof RetireConnectionIdFrame)
                 .map(f -> ((RetireConnectionIdFrame) f).getSequenceNr())
                 .collect(Collectors.toList());
