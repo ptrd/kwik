@@ -11,6 +11,20 @@ dependencies {
     implementation group: 'com.io7m.repackage.io.whitfin', name: 'io.whitfin.siphash', version: '2.0.1'
 }
 
+// Expose the test output (e.g. MockPacket, TestUtils) so other modules can reuse it as test utilities.
+configurations {
+    testArtifacts
+}
+
+tasks.register('testJar', Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+}
+
+artifacts {
+    testArtifacts testJar
+}
+
 task includeVersion {
     doLast {
         ext.versionDir = new File("${buildDir}", "generated/tech/kwik/core")
