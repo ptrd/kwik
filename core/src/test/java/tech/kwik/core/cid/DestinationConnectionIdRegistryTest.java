@@ -92,6 +92,7 @@ class DestinationConnectionIdRegistryTest {
     @Test
     void matchNonInitialStatelessResetToken() {
         connectionIdRegistry.useNext();
+        connectionIdRegistry.getCurrent(clientAddress);
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x02, 0x1c, 0x56, 0x0b })).isTrue();
     }
 

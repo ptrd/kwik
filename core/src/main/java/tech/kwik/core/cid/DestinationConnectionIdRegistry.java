@@ -51,8 +51,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
     public DestinationConnectionIdRegistry(byte[] initialConnectionId, Logger log) {
         super(log);
-        currentCidIndex = 0;
-        connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
+        connectionIds.put(0, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
     }
 
     /**
@@ -62,8 +61,15 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
      * @param connectionId
      */
     public void replaceInitialConnectionId(byte[] connectionId) {
-        connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE));
-        cidByClientAddress.clear();
+        assert currentCidIndex == 0;
+        ConnectionIdInfo oldCid = connectionIds.get(0);
+        ConnectionIdInfo newCid = new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE);
+        connectionIds.put(0, newCid);
+        cidByClientAddress.forEach((k, cid) -> {
+            if (cid == oldCid) {
+                cidByClientAddress.put(k, newCid);
+            }
+        });
     }
 
     /**
@@ -92,7 +98,6 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
             currentCidIndex = nextCidIndex.get();
             connectionIds.get(previousCidIndex).setStatus(ConnectionIdStatus.USED);
             cidByClientAddress.clear();
-            connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
             return connectionIds.get(currentCidIndex).getConnectionId();
         }
         else {
@@ -116,14 +121,11 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
         toRetire.forEach(seqNr -> markAsRetired(seqNr));
 
-        if (connectionIds.get(currentCidIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
-            currentCidIndex = findNextIndex()
-                    // will never here, as this is called from processing a NewConnectionID frame, which implies that a new connection ID is available
-                    .orElseThrow(() -> new IllegalStateException("Can't find connection id that is not retired"));
-            connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
-            // Important: clearing the map must be the last action, so everything before is visible when encountering an empty map in getCurrent()
-            cidByClientAddress.clear();
+        cidByClientAddress.forEach((seqNr,cid) -> {
+            if (cid.getConnectionIdStatus() == ConnectionIdStatus.RETIRED) {
+                cidByClientAddress.remove(seqNr);
         }
+        });
 
         return toRetire;
     }
@@ -138,7 +140,14 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     public void setInitialStatelessResetToken(byte[] statelessResetToken) {
-        connectionIds.put(0, connectionIds.get(0).addStatelessResetToken(statelessResetToken));
+        ConnectionIdInfo oldCid = connectionIds.get(0);
+        ConnectionIdInfo newCid = oldCid.addStatelessResetToken(statelessResetToken);
+        connectionIds.put(0, newCid);
+        cidByClientAddress.forEach((k, cid) -> {
+            if (cid == oldCid) {
+                cidByClientAddress.put(k, newCid);
+            }
+        });
     }
 
     /**
@@ -162,19 +171,29 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
      * @throw IllegalStateException when connection ID's are exhausted
      */
     public byte[] getCurrent(InetSocketAddress clientAddress) {
-        // Capture the value returned by computeIfAbsent directly; a separate get() could race with a concurrent
-        // cidByClientAddress.clear() and return null.
         ConnectionIdInfo cidInfo = cidByClientAddress.computeIfAbsent(clientAddress, (address) -> {
-            boolean currentIsInUse = cidByClientAddress.values().stream().anyMatch(cid -> cid.getSequenceNumber() == currentCidIndex);
-            if (currentIsInUse) {
-                findNextIndex().ifPresent(cid -> currentCidIndex = cid);
-                // or else (no new (unused) connection ID):
-                // Re-use current, let caller decide whether this is appropriate for the situation.
-                connectionIds.get(currentCidIndex).setStatus(ConnectionIdStatus.IN_USE);
-            }
-            return connectionIds.get(currentCidIndex);
+            ConnectionIdInfo newCid = getFirstUnused();
+            newCid.setStatus(ConnectionIdStatus.IN_USE);
+            return newCid;
         });
         return cidInfo.getConnectionId();
+    }
+
+    private ConnectionIdInfo getFirstUnused() {
+        Optional<ConnectionIdInfo> firstUnused = connectionIds.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .filter(e -> e.getValue().getConnectionIdStatus() == ConnectionIdStatus.NEW)
+                .findFirst()
+                .map(e -> e.getValue());
+
+        return firstUnused.orElseThrow(() -> {
+            // This should have been prevented by application logic:
+            // - requested retirement is always combined with a new connection ID
+            // - an endpoint should not trigger retirement itself when no new connection ID's are available
+            // - path migration should be prevented when no new connectionID's are available
+            log.error("Cannot get connection ID because new connections ID's are exhausted");
+            return new IllegalStateException("new connection ID's are exhausted");
+        });
     }
 
     public void registerClientAddress(InetSocketAddress clientAddress) {

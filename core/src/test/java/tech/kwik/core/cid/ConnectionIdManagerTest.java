@@ -40,6 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
@@ -64,10 +65,11 @@ class ConnectionIdManagerTest {
         sender = mock(Sender.class);
         closeCallback = mock(BiConsumer.class);
         initialClientCid = new byte[] { 0x7f, 0x10, 0x49, 0x03 };
+        clientAddress = getArbitraryLocalAddress();
         serverConnectionIdManager = new ConnectionIdManager(initialClientCid, new byte[8], 6, 2, connectionRegistry, closeCallback, mock(Logger.class));
         serverConnectionIdManager.setSender(sender);
+        serverConnectionIdManager.registerClientAddress(clientAddress);
         clientConnectionIdManager = new ConnectionIdManager(4, 2, closeCallback, mock(Logger.class));
-        clientAddress = getArbitraryLocalAddress();
         clientConnectionIdManager.registerClientAddress(clientAddress);
         clientConnectionIdManager.setSender(sender);
     }
@@ -502,12 +504,13 @@ class ConnectionIdManagerTest {
     @Test
     void statelessResetTokenFromNewConnectiondIdFrameIsRecognisedWhenConnectionIdIsUsed() throws Exception {
         // Given
-        clientConnectionIdManager.registerClientAddress(getArbitraryLocalAddress());
+        clientConnectionIdManager.registerClientAddress(clientAddress);
         
         // When
         NewConnectionIdFrame newConnectionIdFrame = new NewConnectionIdFrame(Version.getDefault(), 1, 0, new byte[]{ 0x35, 0x7a, 0x0f, 0x69 });
         clientConnectionIdManager.process(newConnectionIdFrame);
         clientConnectionIdManager.nextPeerId();
+        clientConnectionIdManager.getPeerConnectionId(clientAddress);
 
         // Then
         assertThat(clientConnectionIdManager.isStatelessResetToken(newConnectionIdFrame.getStatelessResetToken())).isTrue();
@@ -549,10 +552,11 @@ class ConnectionIdManagerTest {
 
         // When
         InetAddress otherAddress = InetAddress.getByAddress(new byte[] { 8, 8, 8, 8 });
-        byte[] peerConnectionId = serverConnectionIdManager.getPeerConnectionId(new InetSocketAddress(otherAddress, 4433));
 
         // Then
-        assertThat(peerConnectionId).isEqualTo(initialClientCid);
+        assertThatThrownBy(() ->
+                serverConnectionIdManager.getPeerConnectionId(new InetSocketAddress(otherAddress, 42681))
+        ).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
