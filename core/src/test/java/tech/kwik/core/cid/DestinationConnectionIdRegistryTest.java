@@ -63,6 +63,24 @@ class DestinationConnectionIdRegistryTest {
         // Then
         assertThat(connectionIdRegistry.getCurrent(clientAddress)).isNotEqualTo(initialCid);
     }
+
+    @Test
+    void retiringCidsShouldNotLeaveRetiredCidInUse() throws Exception {
+        // Given: two client addresses (e.g. after the peer migrated), each mapped to a distinct connection ID.
+        InetSocketAddress firstAddress = clientAddress;                                            // mapped to seq 0 by setup
+        InetSocketAddress secondAddress = new InetSocketAddress(clientAddress.getAddress(), 9999); // will get seq 1
+        byte[] firstCid = connectionIdRegistry.getCurrent(firstAddress);
+        byte[] secondCid = connectionIdRegistry.getCurrent(secondAddress);
+        assertThat(secondCid).isNotEqualTo(firstCid);  // sanity: distinct cid per address
+
+        // When: the peer asks to retire all cids before seq 1, i.e. the cid of the *first* (non-current) address.
+        connectionIdRegistry.retireAllBefore(1);
+
+        // Then: the first address must no longer be handed its (now retired) connection ID.
+        assertThat(connectionIdRegistry.getCurrent(firstAddress)).isNotEqualTo(firstCid);
+        assertThat(connectionIdRegistry.getCurrent(firstAddress)).isNotEqualTo(secondCid);
+        assertThat(connectionIdRegistry.getCurrent(secondAddress)).isNotEqualTo(firstCid);
+    }
     //endregion
 
     //region stateless reset token

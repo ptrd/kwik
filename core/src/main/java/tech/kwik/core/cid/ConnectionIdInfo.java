@@ -19,6 +19,8 @@
 package tech.kwik.core.cid;
 
 
+import tech.kwik.core.util.Bytes;
+
 public class ConnectionIdInfo {
 
     final private int sequenceNumber;
@@ -63,6 +65,16 @@ public class ConnectionIdInfo {
 
     protected void setStatus(ConnectionIdStatus newStatus) {
         connectionIdStatus = newStatus;
+    }
+
+    @Override
+    public String toString() {
+        return "CID {" +
+                Bytes.bytesToHex(connectionId) +
+                ", seqNr=" + sequenceNumber +
+                ", " + connectionIdStatus +
+                ", statelessResetToken=" + Bytes.bytesToHex(statelessResetToken) +
+                '}';
     }
 }
 
