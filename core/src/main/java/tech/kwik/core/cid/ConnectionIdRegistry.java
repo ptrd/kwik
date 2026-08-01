@@ -36,7 +36,12 @@ public abstract class ConnectionIdRegistry {
         this.log = log;
     }
 
-    public byte[] retireConnectionId(int sequenceNr) {
+    /**
+     * Marks the connection ID with the given sequence number as retired (if it is still active).
+     * @param sequenceNr
+     * @return
+     */
+    public byte[] markAsRetired(int sequenceNr) {
         if (connectionIds.containsKey(sequenceNr)) {
             ConnectionIdInfo cidInfo = connectionIds.get(sequenceNr);
             if (cidInfo.getConnectionIdStatus().active()) {

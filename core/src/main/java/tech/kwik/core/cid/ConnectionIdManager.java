@@ -221,7 +221,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
             return;
         }
 
-        byte[] retiredCid = cidRegistry.retireConnectionId(sequenceNr);
+        byte[] retiredCid = cidRegistry.markAsRetired(sequenceNr);
         // If not retired already
         if (retiredCid != null) {
             connectionRegistry.deregisterConnectionId(retiredCid);
@@ -473,7 +473,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @param sequenceNumber
      */
     public void retireConnectionId(Integer sequenceNumber) {
-        peerCidRegistry.retireConnectionId(sequenceNumber);
+        peerCidRegistry.markAsRetired(sequenceNumber);
         sendRetireCid(sequenceNumber);
     }
 

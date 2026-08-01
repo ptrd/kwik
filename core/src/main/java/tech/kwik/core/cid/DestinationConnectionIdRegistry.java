@@ -92,7 +92,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
                 .map(entry -> entry.getKey())
                 .collect(Collectors.toList());
 
-        toRetire.forEach(seqNr -> retireConnectionId(seqNr));
+        toRetire.forEach(seqNr -> markAsRetired(seqNr));
 
         if (connectionIds.get(currentCidIndex).getConnectionIdStatus().equals(ConnectionIdStatus.RETIRED)) {
             currentCidIndex = findNextIndex()
