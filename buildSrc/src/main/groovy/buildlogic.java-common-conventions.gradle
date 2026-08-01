@@ -50,12 +50,21 @@ repositories {
 }
 
 ext.agent15_version = '3.3'
+ext.mockito_version = '5.23.0'
+
+// Resolvable configuration holding just the mockito-core jar, so it can be passed to the test JVM as a Java agent
+// (see the '-javaagent' argument on the 'test' task). As of JDK 21+ dynamically self-attaching agents is deprecated
+// and will be disallowed by default in a future JDK; loading Mockito's agent explicitly avoids that.
+configurations {
+    mockitoAgent
+}
 
 dependencies {
     testImplementation('org.junit.jupiter:junit-jupiter:5.13.4')
-    testImplementation("org.mockito:mockito-core:5.23.0")
+    testImplementation("org.mockito:mockito-core:${mockito_version}")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    mockitoAgent("org.mockito:mockito-core:${mockito_version}") { transitive = false }
 }
 
 sourceSets {
@@ -68,6 +77,7 @@ sourceSets {
 }
 
 tasks.named('test') {
+    jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
     useJUnitPlatform()
     testLogging {
         showStandardStreams = true
