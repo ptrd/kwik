@@ -30,13 +30,22 @@ import java.util.stream.Collectors;
 
 /**
  * Registry of the peer's connection IDs, which are used by this endpoint as destination connection IDs.
- * The peer issues these connection IDs and determines when they are retired.
- * It is up to this endpoint to determine which connection ID to use for a specific client address.
+ * The peer issues these connection IDs and determines when they should be retired (but the actual retirement is done
+ * by this endpoint).
+ * It is up to this endpoint to determine which connection ID to use for a specific client address. It may use any
+ * active connection ID at any time.
+ * <p>
+ * Implementation notes:
+ * <ul>this class will use (consume) connection IDs in order of their sequence number (which is not a requirement of the
+ * QUIC protocol, but is a logical choice given the fact that the peer can only ask to retire connection ID whose
+ * sequence number is smaller than a given number);</ul>
+ * <ul>when a new connection ID is being used for a given client address, the previous connection ID is never used again
+ * (as no history is kept of which connection ID's have been used for which client address).</ul>
  */
 public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
 
-    private volatile int currentCidIndex;
-    private volatile int notRetiredThreshold;  // all sequence numbers below are retired
+    private volatile int currentCidIndex;      // the highest index (sequence number) of connection IDs in use
+    private volatile int notRetiredThreshold;  // all sequence numbers _below_ are retired
     private final Map<InetSocketAddress, ConnectionIdInfo> cidByClientAddress = new ConcurrentHashMap<>();
 
 
@@ -46,16 +55,24 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, initialConnectionId, ConnectionIdStatus.IN_USE));
     }
 
+    /**
+     * Replaces the initial connection ID. This is only used by clients, as they generate a random connection ID for
+     * the first initial packet, that upon receipt of a server packet is immediately replaced by the connection ID of
+     * the server.
+     * @param connectionId
+     */
     public void replaceInitialConnectionId(byte[] connectionId) {
         connectionIds.put(currentCidIndex, new ConnectionIdInfo(0, connectionId, ConnectionIdStatus.IN_USE));
         cidByClientAddress.clear();
     }
 
     /**
+     * Registers a new connection ID (together with it's stateless reset token).
      * @param sequenceNr
      * @param connectionId
      * @param statelessResetToken
-     * @return  whether the connection id could be added as new; when its sequence number implies that it as retired already, false is returned.
+     * @return  whether the connection id could be added as new; when its sequence number implies that it is retired
+     *          already (which can happen when packets are delivered out of order), false is returned.
      */
     public boolean registerNewConnectionId(int sequenceNr, byte[] connectionId, byte[] statelessResetToken) {
         if (sequenceNr >= notRetiredThreshold) {
@@ -83,6 +100,11 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         }
     }
 
+    /**
+     * Retires all connection ID's with a sequence number smaller than the given index.
+     * @param retirePriorTo
+     * @return
+     */
     public List<Integer> retireAllBefore(int retirePriorTo) {
         notRetiredThreshold = retirePriorTo;
 
@@ -131,6 +153,14 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
                 .anyMatch(cid -> MessageDigest.isEqual(cid.getStatelessResetToken(), tokenCandidate));
     }
 
+    /**
+     * Returns a connection ID that can be used for the given client address. The method does not have to always
+     * return the same connection ID for the same client address, but it will always return a connection ID that is not
+     * retired and it will never return a connection ID that has been used for a different client address.
+     * @param clientAddress
+     * @return
+     * @throw IllegalStateException when connection ID's are exhausted
+     */
     public byte[] getCurrent(InetSocketAddress clientAddress) {
         // Capture the value returned by computeIfAbsent directly; a separate get() could race with a concurrent
         // cidByClientAddress.clear() and return null.

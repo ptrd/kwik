@@ -29,6 +29,15 @@ import java.time.Instant;
  */
 public interface SocketManager {
 
+    /**
+     * Sends the given data as a UDP datagram to or from the given client address, and returns the time at which it was sent.
+     * When used by a client, the client address is the local address from which the datagram is sent.
+     * When used by a server, the client address is the remote address to which the datagram is sent.
+     * @param data
+     * @param clientAddress
+     * @return
+     * @throws IOException
+     */
     Instant send(ByteBuffer data, InetSocketAddress clientAddress) throws IOException;
 
     void close();

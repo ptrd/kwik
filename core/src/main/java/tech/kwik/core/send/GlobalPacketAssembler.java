@@ -91,10 +91,14 @@ public class GlobalPacketAssembler {
     /**
      * Assembles packets for sending in one datagram. The total size of the QUIC packets returned will never exceed
      * max packet size and for packets not containing probes, it will not exceed the remaining congestion window size.
+     * The given client address is used to determine the connection ID to use as destination connection ID. As clients
+     * can migrate to a new address (and servers can't), only the client address determines which connection ID to use.
+     * When a connection is migrating to a new address, both peers must use a new connection ID to avoid the new path
+     * can be correlated with the old path.
      *
      * @param remainingCwndSize
      * @param maxDatagramSize
-     * @param clientAddress
+     * @param clientAddress  the address from (client role) or to (server role) which the datagram will be sent.
      * @return
      */
     public AssembledDatagram assemble(int remainingCwndSize, int maxDatagramSize, InetSocketAddress clientAddress) {

@@ -32,7 +32,6 @@ import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
 import tech.kwik.core.packet.ZeroRttPacket;
 import tech.kwik.core.util.Bytes;
-import tech.kwik.core.util.Bytes;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -83,7 +82,8 @@ public class PacketAssembler {
      *
      * @param remainingCwndSize     the maximum size the congestion window allows at this time
      * @param availablePacketSize   the maximum size that is available for the packet
-     * @param defaultClientAddress  the client address to use if the queued request does not specify an (alternate) address
+     * @param defaultClientAddress  the address from (client role) or to (server role) which the datagram will be sent,
+     *                              unless an alternate address is specified in a send request (which has priority over the default address)
      * @return
      */
     Optional<SendItem> assemble(int remainingCwndSize, int availablePacketSize, InetSocketAddress defaultClientAddress) {

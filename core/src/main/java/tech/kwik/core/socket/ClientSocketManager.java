@@ -30,7 +30,9 @@ import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Instant;
 
-
+/**
+ * Controls the socket used by the client to send and receive datagrams.
+ */
 public class ClientSocketManager implements SocketManager {
 
     private final InetSocketAddress serverAddress;
