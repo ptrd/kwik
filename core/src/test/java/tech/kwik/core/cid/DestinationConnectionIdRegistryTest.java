@@ -53,6 +53,25 @@ class DestinationConnectionIdRegistryTest {
     }
 
     @Test
+    void secondRetireAllBeforeWithSmallerValueShouldNotResurrectRetiredCid() {
+        // Given: the peer asked to retire all cids before seq 2 (Retire Prior To = 2).
+        connectionIdRegistry.retireAllBefore(2);
+
+        // When: a reordered/duplicate frame asks to retire before seq 1 (a smaller value than before)...
+        connectionIdRegistry.retireAllBefore(1);
+        // ... and a (reordered) NEW_CONNECTION_ID for seq 1 arrives afterwards.
+        byte[] cidForSeq1 = new byte[] { 0x02, 0x1c, 0x56, 0x0b };
+        boolean registeredAsActive = connectionIdRegistry.registerNewConnectionId(1, cidForSeq1, cidForSeq1);
+
+        // Then: seq 1 is below the (first, larger) retire-prior-to and must stay retired, so it must not be
+        // registered as an active/usable connection ID.
+        assertThat(registeredAsActive).isFalse();
+        // And it must never be handed out for use.
+        InetSocketAddress otherAddress = new InetSocketAddress(clientAddress.getAddress(), 8888);
+        assertThat(connectionIdRegistry.getCurrent(otherAddress)).isNotEqualTo(cidForSeq1);
+    }
+
+    @Test
     void afterRetiringCurrentCidItShouldNotBeUsedAnymore() {
         // Given
         byte[] initialCid = connectionIdRegistry.getCurrent(clientAddress);

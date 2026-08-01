@@ -111,7 +111,9 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
      * @return
      */
     public List<Integer> retireAllBefore(int retirePriorTo) {
-        notRetiredThreshold = retirePriorTo;
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.15
+        // "A receiver MUST ignore any Retire Prior To fields that do not increase the largest received Retire Prior To value."
+        notRetiredThreshold = Math.max(notRetiredThreshold, retirePriorTo);
 
         List<Integer> toRetire = connectionIds.entrySet().stream()
                 .filter(entry -> entry.getKey() < retirePriorTo)
