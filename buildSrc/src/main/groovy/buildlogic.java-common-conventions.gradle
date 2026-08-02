@@ -1,5 +1,8 @@
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
+import org.gradle.api.tasks.testing.TestDescriptor
+import org.gradle.api.tasks.testing.TestListener
+import org.gradle.api.tasks.testing.TestResult
 
 plugins {
     id 'java'
@@ -50,34 +53,41 @@ repositories {
 }
 
 ext.agent15_version = '3.3'
+ext.mockito_version = '5.23.0'
 
-dependencies {
-    testImplementation('org.junit.jupiter:junit-jupiter:5.13.4')
-    testImplementation("org.mockito:mockito-core:5.23.0")
-    testImplementation("org.assertj:assertj-core:3.27.7")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+// Resolvable configuration holding just the mockito-core jar, so it can be passed to the test JVM as a Java agent
+// (see the '-javaagent' argument on the 'test' task). As of JDK 21+ dynamically self-attaching agents is deprecated
+// and will be disallowed by default in a future JDK; loading Mockito's agent explicitly avoids that.
+configurations {
+    mockitoAgent
 }
 
-sourceSets {
-    main {
-        resources {
-            srcDir "${buildDir}/generated"
-            exclude 'sources/**'
-        }
-    }
+dependencies {
+    testImplementation('org.junit.jupiter:junit-jupiter:5.14.4')
+    testImplementation("org.mockito:mockito-core:${mockito_version}")
+    testImplementation("org.assertj:assertj-core:3.27.7")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    mockitoAgent("org.mockito:mockito-core:${mockito_version}") { transitive = false }
 }
 
 tasks.named('test') {
+    jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
     useJUnitPlatform()
     testLogging {
         showStandardStreams = true
         events "passed", "skipped", "failed"
-        afterSuite { desc, result ->
-            if (!desc.parent) { // will match the outermost suite
+    }
+    // afterSuite(Closure) is deprecated; use a TestListener to print the overall summary instead.
+    addTestListener(new TestListener() {
+        void beforeSuite(TestDescriptor desc) {}
+        void beforeTest(TestDescriptor desc) {}
+        void afterTest(TestDescriptor desc, TestResult result) {}
+        void afterSuite(TestDescriptor desc, TestResult result) {
+            if (desc.parent == null) { // will match the outermost suite
                 println "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
             }
         }
-    }
+    })
 }
 
 compileJava.dependsOn processResources

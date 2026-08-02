@@ -3,21 +3,47 @@ plugins {
 }
 
 dependencies {
-    implementation group: 'tech.kwik', name: 'agent15', version: "$agent15_version"
+    implementation "tech.kwik:agent15:$agent15_version"
 
     // https://mvnrepository.com/artifact/at.favre.lib/hkdf
-    implementation group: 'at.favre.lib', name: 'hkdf', version: '2.0.0'
+    implementation 'at.favre.lib:hkdf:2.0.0'
 
-    implementation group: 'com.io7m.repackage.io.whitfin', name: 'io.whitfin.siphash', version: '2.0.1'
+    implementation 'com.io7m.repackage.io.whitfin:io.whitfin.siphash:2.0.1'
 }
 
-task includeVersion {
-    doLast {
-        ext.versionDir = new File("${buildDir}", "generated/tech/kwik/core")
-        versionDir.mkdirs()
+// Expose the test output (e.g. MockPacket, TestUtils) so other modules can reuse it as test utilities.
+configurations {
+    testArtifacts
+}
 
-        new File(versionDir, "version.properties").text = project.version
+tasks.register('testJar', Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+}
+
+artifacts {
+    testArtifacts testJar
+}
+
+def projectVersion = project.version.toString()
+def generatedResourcesDir = layout.buildDirectory.dir("generated")
+
+def includeVersion = tasks.register('includeVersion') {
+    outputs.dir(generatedResourcesDir)
+    doLast {
+        def versionDir = new File(generatedResourcesDir.get().asFile, "tech/kwik/core")
+        versionDir.mkdirs()
+        new File(versionDir, "version.properties").text = projectVersion
     }
 }
 
-compileJava.dependsOn (includeVersion, processResources)
+// Register the generated dir as a resource source via the task itself, so every consumer
+// (processResources, sourcesJar, ...) automatically depends on includeVersion.
+sourceSets {
+    main {
+        resources {
+            srcDir includeVersion
+            exclude 'sources/**'
+        }
+    }
+}
