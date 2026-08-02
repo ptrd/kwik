@@ -316,7 +316,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     @Override
     public byte[] getPeerConnectionId(InetSocketAddress clientAddress) {
         if (peerCidRegistry != null) {
-            return peerCidRegistry.getCurrent(clientAddress);
+            return peerCidRegistry.getConnectionId(clientAddress);
         }
         else {
             return new byte[0];
@@ -501,6 +501,6 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     public int getCurrentPeerConnectionIdLength() {
-        return peerCidRegistry.getConnectionIdlength();
+        return peerCidRegistry.getConnectionIdLength();
     }
 }

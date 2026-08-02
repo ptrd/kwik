@@ -73,7 +73,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     }
 
     /**
-     * Registers a new connection ID (together with it's stateless reset token).
+     * Registers a new connection ID (together with its stateless reset token).
      * @param sequenceNr
      * @param connectionId
      * @param statelessResetToken
@@ -167,12 +167,12 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
     /**
      * Returns a connection ID that can be used for the given client address. The method does not have to always
      * return the same connection ID for the same client address, but it will always return a connection ID that is not
-     * retired and it will never return a connection ID that has been used for a different client address.
+     * retired, and it will never return a connection ID that has been used for a different client address.
      * @param clientAddress
      * @return
-     * @throw IllegalStateException when connection ID's are exhausted
+     * @throw IllegalStateException when connection IDs are exhausted
      */
-    public byte[] getCurrent(InetSocketAddress clientAddress) {
+    public byte[] getConnectionId(InetSocketAddress clientAddress) {
         ConnectionIdInfo cidInfo = cidByClientAddress.computeIfAbsent(clientAddress, (address) -> {
             ConnectionIdInfo newCid = getFirstUnused();
             newCid.setStatus(ConnectionIdStatus.IN_USE);
@@ -191,7 +191,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         return firstUnused.orElseThrow(() -> {
             // This should have been prevented by application logic:
             // - requested retirement is always combined with a new connection ID
-            // - an endpoint should not trigger retirement itself when no new connection ID's are available
+            // - an endpoint should not trigger retirement itself when no new connection IDs are available
             // - path migration should be prevented when no new connectionID's are available
             log.error("Cannot get connection ID because new connections ID's are exhausted");
             return new IllegalStateException("new connection ID's are exhausted");
@@ -207,7 +207,7 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
      * Returns the max connection ID length of currently active connection IDs.
      * @return
      */
-    public int getConnectionIdlength() {
+    public int getConnectionIdLength() {
         return connectionIds.values().stream()
                 .filter(cid -> cid.getConnectionIdStatus().active())
                 .mapToInt(cid -> cid.getConnectionId().length)

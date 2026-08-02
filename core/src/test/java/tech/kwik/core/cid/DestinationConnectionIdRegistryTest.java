@@ -68,19 +68,19 @@ class DestinationConnectionIdRegistryTest {
         assertThat(registeredAsActive).isFalse();
         // And it must never be handed out for use.
         InetSocketAddress otherAddress = new InetSocketAddress(clientAddress.getAddress(), 8888);
-        assertThat(connectionIdRegistry.getCurrent(otherAddress)).isNotEqualTo(cidForSeq1);
+        assertThat(connectionIdRegistry.getConnectionId(otherAddress)).isNotEqualTo(cidForSeq1);
     }
 
     @Test
     void afterRetiringCurrentCidItShouldNotBeUsedAnymore() {
         // Given
-        byte[] initialCid = connectionIdRegistry.getCurrent(clientAddress);
+        byte[] initialCid = connectionIdRegistry.getConnectionId(clientAddress);
 
         // When
         connectionIdRegistry.retireAllBefore(1);
 
         // Then
-        assertThat(connectionIdRegistry.getCurrent(clientAddress)).isNotEqualTo(initialCid);
+        assertThat(connectionIdRegistry.getConnectionId(clientAddress)).isNotEqualTo(initialCid);
     }
 
     @Test
@@ -88,17 +88,17 @@ class DestinationConnectionIdRegistryTest {
         // Given: two client addresses (e.g. after the peer migrated), each mapped to a distinct connection ID.
         InetSocketAddress firstAddress = clientAddress;                                            // mapped to seq 0 by setup
         InetSocketAddress secondAddress = new InetSocketAddress(clientAddress.getAddress(), 9999); // will get seq 1
-        byte[] firstCid = connectionIdRegistry.getCurrent(firstAddress);
-        byte[] secondCid = connectionIdRegistry.getCurrent(secondAddress);
+        byte[] firstCid = connectionIdRegistry.getConnectionId(firstAddress);
+        byte[] secondCid = connectionIdRegistry.getConnectionId(secondAddress);
         assertThat(secondCid).isNotEqualTo(firstCid);  // sanity: distinct cid per address
 
         // When: the peer asks to retire all cids before seq 1, i.e. the cid of the *first* (non-current) address.
         connectionIdRegistry.retireAllBefore(1);
 
         // Then: the first address must no longer be handed its (now retired) connection ID.
-        assertThat(connectionIdRegistry.getCurrent(firstAddress)).isNotEqualTo(firstCid);
-        assertThat(connectionIdRegistry.getCurrent(firstAddress)).isNotEqualTo(secondCid);
-        assertThat(connectionIdRegistry.getCurrent(secondAddress)).isNotEqualTo(firstCid);
+        assertThat(connectionIdRegistry.getConnectionId(firstAddress)).isNotEqualTo(firstCid);
+        assertThat(connectionIdRegistry.getConnectionId(firstAddress)).isNotEqualTo(secondCid);
+        assertThat(connectionIdRegistry.getConnectionId(secondAddress)).isNotEqualTo(firstCid);
     }
     //endregion
 
@@ -111,7 +111,7 @@ class DestinationConnectionIdRegistryTest {
     @Test
     void matchNonInitialStatelessResetToken() {
         connectionIdRegistry.useNext();
-        connectionIdRegistry.getCurrent(clientAddress);
+        connectionIdRegistry.getConnectionId(clientAddress);
         assertThat(connectionIdRegistry.isStatelessResetToken(new byte[]{ 0x02, 0x1c, 0x56, 0x0b })).isTrue();
     }
 
