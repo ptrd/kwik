@@ -157,6 +157,11 @@ public class ServerConnectorImpl implements ServerConnector {
         serverReceiveLoop = new Thread(this::receiveLoop, "server receive loop");
 
         new MemoryWatcher(85, log);
+
+        boolean connectionMigrationEnabled = System.getProperty("tech.kwik.server.connection-migration.enabled", "false").equalsIgnoreCase("true");
+        if (connectionMigrationEnabled) {
+            System.out.println("SECURITY WARNING: Connection migration feature is enabled, but this feature is in development and SHOULD NOT (yet) be used in servers exposed to public networks!");
+        }
     }
 
     // Intentionally private: for use with deprecated constructors only.
