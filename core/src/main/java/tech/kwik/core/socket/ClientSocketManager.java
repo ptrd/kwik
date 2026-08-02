@@ -94,13 +94,7 @@ public class ClientSocketManager implements SocketManager {
 
     public InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
         if (port == null || alternateSocket.getLocalPort() != port) {
-            DatagramSocket newSocket;
-            if (port != null) {
-                newSocket = new DatagramSocket(new InetSocketAddress(port));
-            }
-            else {
-                newSocket = new DatagramSocket();
-            }
+            DatagramSocket newSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
             receiver.addSocket(newSocket);
             receiver.removeSocket(socket);
             socket = newSocket;
@@ -121,12 +115,7 @@ public class ClientSocketManager implements SocketManager {
     }
 
     public InetSocketAddress addLocalAddress(Integer port) throws SocketException {
-        if (port != null) {
-            alternateSocket = new DatagramSocket(new InetSocketAddress(port));
-        }
-        else {
-            alternateSocket = new DatagramSocket();
-        }
+        alternateSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
         alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
         receiver.addSocket(alternateSocket);
         return alternateClientAddress;

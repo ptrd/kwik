@@ -19,16 +19,24 @@
 package tech.kwik.core.socket;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tech.kwik.core.DatagramSocketFactory;
 import tech.kwik.core.receive.MultipleAddressReceiver;
 
+import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ClientSocketManagerTest {
 
@@ -57,6 +65,69 @@ class ClientSocketManagerTest {
         // Then
         assertThat(socket).isNotNull();
         assertThat(socket).isInstanceOf(CustomDatagramSocket.class);
+    }
+
+    @Test
+    void alternateSocketFromFactoryIsUsedToSendToAlternateAddress() throws IOException {
+        // Given
+        DatagramSocket initialSocket = mock(DatagramSocket.class);
+        when(initialSocket.getLocalPort()).thenReturn(1000);
+        DatagramSocket alternateSocket = mock(DatagramSocket.class);
+        when(alternateSocket.getLocalPort()).thenReturn(2000);
+
+        DatagramSocketFactory socketFactory = new DatagramSocketFactory() {
+            @Override
+            public DatagramSocket createSocket(InetAddress destination) {
+                return initialSocket;
+            }
+            @Override
+            public DatagramSocket createSocket(InetAddress destination, Integer localPort) {
+                return alternateSocket;
+            }
+        };
+        var serverAddress = new InetSocketAddress("example.com", 4433);
+        var socketMgr = new ClientSocketManager(serverAddress, mock(MultipleAddressReceiver.class), socketFactory);
+        InetSocketAddress alternateAddress = socketMgr.addLocalAddress(null);
+
+        // When
+        socketMgr.send(ByteBuffer.allocate(100), alternateAddress);
+
+        // Then
+        ArgumentCaptor<DatagramPacket> datagram = ArgumentCaptor.forClass(DatagramPacket.class);
+        verify(alternateSocket).send(datagram.capture());
+        verify(initialSocket, never()).send(any());
+        assertThat(datagram.getValue().getAddress()).isEqualTo(serverAddress.getAddress());
+        assertThat(datagram.getValue().getPort()).isEqualTo(serverAddress.getPort());
+    }
+
+    @Test
+    void newSocketFromFactoryIsUsedToSendAfterChangingLocalAddress() throws IOException {
+        // Given
+        DatagramSocket initialSocket = mock(DatagramSocket.class);
+        when(initialSocket.getLocalPort()).thenReturn(1000);
+        DatagramSocket newSocket = mock(DatagramSocket.class);
+        when(newSocket.getLocalPort()).thenReturn(2000);
+
+        DatagramSocketFactory socketFactory = new DatagramSocketFactory() {
+            @Override
+            public DatagramSocket createSocket(InetAddress destination) {
+                return initialSocket;
+            }
+            @Override
+            public DatagramSocket createSocket(InetAddress destination, Integer localPort) {
+                return newSocket;
+            }
+        };
+        var serverAddress = new InetSocketAddress("example.com", 4433);
+        var socketMgr = new ClientSocketManager(serverAddress, mock(MultipleAddressReceiver.class), socketFactory);
+        InetSocketAddress newAddress = socketMgr.changeLocalAddress(null);
+
+        // When
+        socketMgr.send(ByteBuffer.allocate(100), newAddress);
+
+        // Then
+        verify(newSocket).send(any());
+        verify(initialSocket, never()).send(any());
     }
 
     static class CustomSocketFactory implements DatagramSocketFactory {
