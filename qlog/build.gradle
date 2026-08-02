@@ -8,7 +8,7 @@ dependencies {
     implementation(project(':kwik')) // Add kwik core as a dependency
 
     // Default provider for Jakarta JSON Processing
-    implementation 'org.eclipse.parsson:parsson:1.1.6'
+    implementation 'org.eclipse.parsson:parsson:1.1.9'
 
     testImplementation(project(path: ':kwik', configuration: 'testArtifacts'))  // Necessary to use test utils from kwik core
 }
