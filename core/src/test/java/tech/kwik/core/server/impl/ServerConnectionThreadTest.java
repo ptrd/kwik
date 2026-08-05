@@ -67,10 +67,9 @@ class ServerConnectionThreadTest {
 
         // When
         serverConnectionThread.parsePackets(10, Instant.now(), ByteBuffer.allocate(71), new InetSocketAddress(54221));
-        Thread.sleep(10);
 
         // Then
-        verify(parser).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 71), any(PacketMetaData.class));
+        verify(parser, timeout(1000)).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 71), any(PacketMetaData.class));
     }
 
     @Test
@@ -82,14 +81,13 @@ class ServerConnectionThreadTest {
 
         // When
         serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), remainingData, metaData, mock(Logger.class));
-        Thread.sleep(10);
 
         // Then
-        verify(parser).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 73), any(PacketMetaData.class));
+        verify(parser, timeout(1000)).parseAndProcessPackets(argThat(buffer -> buffer.remaining() == 73), any(PacketMetaData.class));
     }
 
     @Test
-    void testRemainingDatagramDataShouldNotIncreaseAntiAmplificationLimit() throws InterruptedException {
+    void testRemainingDatagramDataShouldNotIncreaseAntiAmplificationLimit() throws Exception {
         // Given
         AtomicInteger antiAmplificationLimit = new AtomicInteger(0);
         stubAntiAmplificationLimitWith(antiAmplificationLimit);
@@ -99,10 +97,11 @@ class ServerConnectionThreadTest {
         remainingData.position(1100);
 
         // When
-        serverConnectionThread = new ServerConnectionThread(serverConnection, mock(List.class), remainingData, metaData, mock(Logger.class));
-        Thread.sleep(10);
+        serverConnectionThread = new ServerConnectionThread(serverConnection, List.of(), remainingData, metaData, mock(Logger.class));
 
         // Then
+        // The parser is the tail of the filter chain, so once it fires both anti-amplification adjustments have run.
+        verify(parser, timeout(1000)).parseAndProcessPackets(any(), any(PacketMetaData.class));
         assertThat(antiAmplificationLimit.get()).isZero();
     }
 
