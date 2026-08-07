@@ -988,6 +988,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     @Override
+    public byte[] exportKeyingMaterial(String label, byte[] context, int length) {
+        return getTlsEngine().exportKeyingMaterial(label, context, length);
+    }
+
+    @Override
     public QuicVersion getQuicVersion() {
         return quicVersion.getVersion().toQuicVersion();
     }
