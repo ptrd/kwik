@@ -850,8 +850,8 @@ public class KwikCli {
             new KwikCli().run(args);
         }
         catch (IllegalArgumentException wrongArgs) {
-            System.out.println("Incorrect command: " + wrongArgs.getMessage());
-            usage();
+            System.out.println("Error: " + wrongArgs.getMessage());
+            System.out.println("Use -h or --help for usage information.");
         }
     }
 
