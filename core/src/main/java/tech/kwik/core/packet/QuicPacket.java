@@ -511,6 +511,14 @@ abstract public class QuicPacket {
         this.frames.addAll(frames);
     }
 
+    /**
+     * Returns the size of this packet, if known.
+     * The size is the number of bytes that will be sent over the network, excluding UDP and IP headers.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#section-14
+     * "The datagram size refers to the total UDP payload size of a single UDP datagram carrying QUIC packets. The
+     *  datagram size includes one or more QUIC packet headers and protected payloads, but not the UDP or IP headers."
+     * @return
+     */
     public int getSize() {
         if (packetSize > 0) {
             return packetSize;

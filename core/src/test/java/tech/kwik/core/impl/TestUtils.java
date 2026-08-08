@@ -35,7 +35,7 @@ public class TestUtils {
      * @return
      * @throws Exception
      */
-    public static Aead createKeys() throws Exception {
+    public static Aead createKeys() {
         return CryptoTestUtils.createKeys();
     }
 

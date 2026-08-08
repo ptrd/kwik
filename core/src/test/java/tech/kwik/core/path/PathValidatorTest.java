@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.kwik.core.frame.*;
+import tech.kwik.core.impl.TestUtils;
 import tech.kwik.core.impl.Version;
 import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
@@ -259,7 +260,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = probingPacket(68);
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
 
@@ -277,7 +278,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = probingPacket(68);
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
         PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
@@ -298,7 +299,7 @@ class PathValidatorTest {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(68, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = probingPacket(68);
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
         PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
@@ -323,7 +324,7 @@ class PathValidatorTest {
 
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
         PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
-        QuicPacket probingPacket = new ShortHeaderPacket(78, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        QuicPacket probingPacket = probingPacket(78);
         pathValidator.checkSourceAddress(probingPacket, packetMetaData);
         PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
         PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
@@ -492,7 +493,20 @@ class PathValidatorTest {
     }
 
     private QuicPacket normalPacket(long pn) {
-        return new ShortHeaderPacket(pn, new byte[8], new StreamFrame(0, new byte[1130], false));
+        ShortHeaderPacket packet = new ShortHeaderPacket(pn, new byte[8], new StreamFrame(0, new byte[1130], false));
+        setSize(packet);
+        return packet;
+    }
+
+    private QuicPacket probingPacket(long pn) {
+        ShortHeaderPacket packet = new ShortHeaderPacket(pn, new byte[8], new PathChallengeFrame(Version.getDefault(), new byte[8]));
+        setSize(packet);
+        return packet;
+    }
+
+    private static void setSize(ShortHeaderPacket packet) {
+        // Side-effect of generating the packet bytes is that the size of the packet is set in the packet object.
+        packet.generatePacketBytes(TestUtils.createKeys());
     }
     //endregion
 }
