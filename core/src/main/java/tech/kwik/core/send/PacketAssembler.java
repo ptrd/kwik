@@ -92,11 +92,15 @@ public class PacketAssembler {
         // First check for alternate client address (has always priority)
         if (requestQueue.hasAlternateAddressRequest()) {
             assert level == EncryptionLevel.App;
-            Optional<SendRequest> request = requestQueue.getAlternateAddressRequest(available);
+            // The RFC is not very explicit about this, but it makes sense that path probes are not limited by
+            // congestion window size. Otherwise, in case the old path is not available anymore, the system will
+            // deadlock as congestion window size will not reduce when no ack is received (which can happen if nothing
+            // is sent anymore); this is exacly why "normal" probes are not congestion controlled.
+            Optional<SendRequest> request = requestQueue.getAlternateAddressRequest(availablePacketSize);
             if (request.isPresent()) {
                 return request.map(sendRequest -> {
                     QuicPacket packet = createPacket(sendRequest.getAlternateAddress());
-                    packet.addFrame(sendRequest.getFrame(available));
+                    packet.addFrame(sendRequest.getFrame(availablePacketSize));
                     return new SendItem(packet, sendRequest.getAlternateAddress());
                 });
             }

@@ -27,6 +27,8 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
+import tech.kwik.core.frame.PathChallengeFrame;
+import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.impl.IdleTimer;
@@ -192,6 +194,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
+        if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame)) {
+            throw new IllegalArgumentException("Only path challenge/response frames can be sent to an alternate address");
+        }
         sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
         wakeUpSenderLoop();
     }

@@ -731,6 +731,26 @@ class PacketAssemblerTest extends AbstractSenderTest {
     }
     //endregion
 
+    //region alternate address
+    @Test
+    void alternateAddressPacketWithPathChallengeShouldBeSentEvenWhenCwndIsExhausted() {
+        // Given
+        InetSocketAddress alternateAddress = new InetSocketAddress("10.0.0.1", 4433);
+        PathChallengeFrame pathChallenge = new PathChallengeFrame(Version.getDefault(), new byte[8]);
+        sendRequestQueue.addAlternateAddressRequest(pathChallenge, alternateAddress);
+
+        // When
+        // Congestion window is exhausted (0 bytes remaining), but path validation is not congestion controlled,
+        // so the alternate address packet with the PathChallenge frame should still be sent.
+        Optional<SendItem> item = oneRttPacketAssembler.assemble(8, 40, defaultClientAddress);
+
+        // Then
+        assertThat(item).isPresent();
+        assertThat(item.get().getPacket().getFrames()).hasOnlyElementsOfType(PathChallengeFrame.class);
+        assertThat(item.get().getClientAddress()).isEqualTo(alternateAddress);
+    }
+    //endregion
+
     //region datagram extension
     @Test
     void maxSizedDatagramFrameCanBeSentInThePresenceOfOptionalAcks() {
