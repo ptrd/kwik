@@ -164,6 +164,8 @@ public class KwikCli {
 
         processBufferSizeArg(cmd, connectionBuilder);
 
+        processConnectionIdLengthArg(cmd, connectionBuilder);
+
         if (httpVersion == HttpVersion.HTTP3 && useZeroRtt) {
             throw new IllegalArgumentException("Option --use0RTT is not yet supported by this HTTP3 implementation.");
         }
@@ -572,6 +574,18 @@ public class KwikCli {
         }
     }
 
+    private void processConnectionIdLengthArg(CommandLine cmd, QuicClientConnection.Builder builder) {
+        if (cmd.hasOption("connectionIdLength")) {
+            try {
+                int length = Integer.parseInt(cmd.getOptionValue("connectionIdLength"));
+                builder.connectionIdLength(length);
+            }
+            catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid value for --connectionIdLength: " + cmd.getOptionValue("connectionIdLength"));
+            }
+        }
+    }
+
     private void executeRequest(String httpRequestPath, String outputFile, QuicClientConnection.Builder builder) throws IOException {
 
         if (httpVersion == HttpVersion.HTTP3) {
@@ -879,5 +893,6 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "keyManagerPassword", true, "password for client authentication key manager and key password");
         cmdLineOptions.addOption(null, "preferIPv6", false, "use IPv6 address if available");
         cmdLineOptions.addOption("B", "receiveBuffer", true, String.format("receive buffer size, e.g. \"500K\" or \"5M\" (default is %dK)", DEFAULT_MAX_STREAM_DATA / 1024));
+        cmdLineOptions.addOption(null, "connectionIdLength", true, "length of the (source) connection ID (0 to 20, use 0 for zero-length)");
     }
 }
