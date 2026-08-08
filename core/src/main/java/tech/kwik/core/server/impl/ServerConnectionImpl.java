@@ -189,7 +189,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
 
         connectionMigrationEnabled = System.getProperty("tech.kwik.server.connection-migration.enabled", "false").equalsIgnoreCase("true");
-        pathValidator = connectionMigrationEnabled? new PathValidator(quicVersion, initialClientAddress, sender, log, socketManager): null;
+        pathValidator = connectionMigrationEnabled? new PathValidator(quicVersion, initialClientAddress, sender, socketManager, connectionIdManager, log): null;
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
     }

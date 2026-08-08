@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tech.kwik.core.cid.ConnectionIdProvider;
 import tech.kwik.core.frame.*;
 import tech.kwik.core.impl.TestUtils;
 import tech.kwik.core.impl.Version;
@@ -47,13 +48,13 @@ import static org.mockito.Mockito.*;
 
 class PathValidatorTest {
 
-
     private PathValidator pathValidator;
     private InetSocketAddress defaultClientAddress;
     private SenderImpl sender;
     private ServerConnectionSocketManager socketManager;
     private TestClock testClock;
     private TestScheduledExecutor testScheduledExecutor;
+    private ConnectionIdProvider connectionIdProvider;
 
     //region setup
     @BeforeEach
@@ -63,7 +64,9 @@ class PathValidatorTest {
         socketManager = mock(ServerConnectionSocketManager.class);
         testClock = new TestClock();
         testScheduledExecutor = new TestScheduledExecutor(testClock);
-        pathValidator = new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, mock(Logger.class), socketManager, testClock);
+        connectionIdProvider = mock(ConnectionIdProvider.class);
+        when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(true);
+        pathValidator = new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, socketManager, testClock, connectionIdProvider, mock(Logger.class));
     }
 
     @AfterEach
@@ -112,6 +115,37 @@ class PathValidatorTest {
 
         // Then
         verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+    }
+    //endregion
+
+    //region no unused peer connection ids
+    @Test
+    void whenNoUnusedPeerConnectionIdIsAvailablePathValidationIsNotStarted() {
+        // Given
+        when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(false);
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+    }
+
+    @Test
+    void whenUnusedPeerConnectionIdBecomesAvailablePathValidationIsStartedOnNextPacket() {
+        // Given
+        when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(false);
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+
+        // When
+        when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(true);
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
     }
     //endregion
 

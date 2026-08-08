@@ -214,5 +214,10 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
                 .max()
                 .getAsInt();
     }
+
+    public boolean unusedConnectionIdAvailable() {
+        return connectionIds.values().stream()
+                .anyMatch(cid -> cid.getConnectionIdStatus() == ConnectionIdStatus.NEW);
+    }
 }
 

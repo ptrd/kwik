@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.path;
 
+import tech.kwik.core.cid.ConnectionIdProvider;
 import tech.kwik.core.frame.NewConnectionIdFrame;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PathChallengeFrame;
@@ -49,6 +50,7 @@ public class PathValidator {
     private final VersionHolder version;
     private volatile InetSocketAddress currentAddress;
     private final SenderImpl sender;
+    private final ConnectionIdProvider connectionIdProvider;
     private final Logger logger;
     private final ServerConnectionSocketManager socketManager;
     private final Clock clock;
@@ -58,14 +60,16 @@ public class PathValidator {
     private volatile long highestReceivedPacketNumber;
     private volatile Instant currentAddressLastUsed;
 
-    public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager) {
-        this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, logger, socketManager, Clock.systemUTC());
+    public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, ServerConnectionSocketManager socketManager, ConnectionIdProvider connectionIdProvider, Logger logger) {
+        this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, socketManager, Clock.systemUTC(), connectionIdProvider, logger);
     }
 
-    public PathValidator(ScheduledExecutorService executor, VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, Logger logger, ServerConnectionSocketManager socketManager, Clock clock) {
+    public PathValidator(ScheduledExecutorService executor, VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender,
+                         ServerConnectionSocketManager socketManager, Clock clock, ConnectionIdProvider connectionIdProvider, Logger logger) {
         this.version = version;
         currentAddress = clientAddress;
         this.sender = sender;
+        this.connectionIdProvider = connectionIdProvider;
         this.logger = logger;
         this.socketManager = socketManager;
         this.clock = clock;
@@ -93,15 +97,31 @@ public class PathValidator {
                 }
             }
             else if (! pathValidationInProgress(packetSourceAddress)) {
-                // https://www.rfc-editor.org/rfc/rfc9000.html#section-9
-                // "An endpoint MUST perform path validation (Section 8.2) if it detects any change to a peer's address, "
-                logger.info(String.format("Potential address migration? %s -> %s; starting path validation", currentAddress, packetSourceAddress));
-                startValidation(packet, packetSourceAddress);
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
+                // "If the recipient has no unused connection IDs from the peer, it will not be able to send anything on
+                //  the new path until the peer provides one; ..."
+                // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5
+                // "An endpoint that exhausts available connection IDs cannot probe new paths or initiate migration, nor
+                //  can it respond to probes or attempts by its peer to migrate."
+                if (! hasUnusedPeerConnectionIDs()) {
+                    logger.info(String.format("Potential address migration? %s -> %s, but cannot start path validation due to lack of unused peer connection IDs",
+                            currentAddress, packetSourceAddress));
+                }
+                else {
+                    // https://www.rfc-editor.org/rfc/rfc9000.html#section-9
+                    // "An endpoint MUST perform path validation (Section 8.2) if it detects any change to a peer's address, "
+                    logger.info(String.format("Potential address migration? %s -> %s; starting path validation", currentAddress, packetSourceAddress));
+                    startValidation(packet, packetSourceAddress);
+                }
             }
         }
         else {
             currentAddressLastUsed = clock.instant();
         }
+    }
+
+    private boolean hasUnusedPeerConnectionIDs() {
+        return connectionIdProvider.unusedPeerConnectionIdAvailable();
     }
 
     private void startValidation(QuicPacket packet, InetSocketAddress packetSourceAddress) {

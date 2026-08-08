@@ -43,4 +43,11 @@ public interface ConnectionIdProvider {
      * @param clientAddress
      */
     void registerClientAddress(InetSocketAddress clientAddress);
+
+    /**
+     * Returns true if a new peer connection ID is available, false otherwise.
+     * @return
+     */
+    boolean unusedPeerConnectionIdAvailable();
 }
+
