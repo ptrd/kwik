@@ -340,6 +340,11 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         }
     }
 
+    @Override
+    public boolean peerUsesZeroLengthConnectionId() {
+        return peerCidRegistry == null;
+    }
+
     /**
      * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
      * Source Connection ID field of the first Initial packet it sends/send for the connection.

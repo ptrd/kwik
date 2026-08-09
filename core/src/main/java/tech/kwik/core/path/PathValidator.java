@@ -59,6 +59,7 @@ public class PathValidator {
     private final ScheduledExecutorService executor;
     private volatile long highestReceivedPacketNumber;
     private volatile Instant currentAddressLastUsed;
+    private final boolean peerUsesNonZeroLengthConnectionIDs;
 
     public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, ServerConnectionSocketManager socketManager, ConnectionIdProvider connectionIdProvider, Logger logger) {
         this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, socketManager, Clock.systemUTC(), connectionIdProvider, logger);
@@ -76,6 +77,7 @@ public class PathValidator {
         pathValidationsByChallenge = new ConcurrentHashMap<>();
         pathValidationsByAddress = new ConcurrentHashMap<>();
         this.executor = executor;
+        peerUsesNonZeroLengthConnectionIDs = !connectionIdProvider.peerUsesZeroLengthConnectionId();
 
         pathValidationsByAddress.put(clientAddress, PathValidation.preValidated(clientAddress, clock.instant()));
     }
@@ -103,7 +105,7 @@ public class PathValidator {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5
                 // "An endpoint that exhausts available connection IDs cannot probe new paths or initiate migration, nor
                 //  can it respond to probes or attempts by its peer to migrate."
-                if (! hasUnusedPeerConnectionIDs()) {
+                if (! hasUnusedPeerConnectionIDs() && peerUsesNonZeroLengthConnectionIDs) {
                     logger.info(String.format("Potential address migration? %s -> %s, but cannot start path validation due to lack of unused peer connection IDs",
                             currentAddress, packetSourceAddress));
                 }

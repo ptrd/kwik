@@ -66,7 +66,11 @@ class PathValidatorTest {
         testScheduledExecutor = new TestScheduledExecutor(testClock);
         connectionIdProvider = mock(ConnectionIdProvider.class);
         when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(true);
-        pathValidator = new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, socketManager, testClock, connectionIdProvider, mock(Logger.class));
+        pathValidator = newPathValidator(connectionIdProvider);
+    }
+
+    private PathValidator newPathValidator(ConnectionIdProvider connectionIdProvider) {
+        return new PathValidator(testScheduledExecutor, VersionHolder.with(Version.getDefault()), defaultClientAddress, sender, socketManager, testClock, connectionIdProvider, mock(Logger.class));
     }
 
     @AfterEach
@@ -143,6 +147,21 @@ class PathValidatorTest {
         // When
         when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(true);
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+    }
+
+    @Test
+    void whenPeerUsesZeroLengthConnectionIdPathValidationIsStartedEvenWithoutUnusedConnectionId() {
+        // Given
+        when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(false);
+        when(connectionIdProvider.peerUsesZeroLengthConnectionId()).thenReturn(true);
+        PathValidator zeroLengthCidPathValidator = newPathValidator(connectionIdProvider);
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+
+        // When
+        zeroLengthCidPathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
         verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));

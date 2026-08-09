@@ -49,5 +49,11 @@ public interface ConnectionIdProvider {
      * @return
      */
     boolean unusedPeerConnectionIdAvailable();
+
+    /**
+     * Returns true if the peer uses zero-length connection IDs, false otherwise.
+     * @return
+     */
+    boolean peerUsesZeroLengthConnectionId();
 }
 
