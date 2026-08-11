@@ -345,6 +345,15 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         return peerCidRegistry == null;
     }
 
+    public void addressNoLongerInUse(InetSocketAddress clientAddress) {
+        if (peerCidRegistry != null) {
+            ConnectionIdInfo connectionIdInfo = peerCidRegistry.retireClientAddress(clientAddress);
+            if (connectionIdInfo != null) {
+                sendRetireCid(connectionIdInfo.getSequenceNumber());
+            }
+        }
+    }
+
     /**
      * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
      * Source Connection ID field of the first Initial packet it sends/send for the connection.

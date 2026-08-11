@@ -186,13 +186,19 @@ public class PathValidator {
     }
 
     private void migrateConnection(InetSocketAddress newAddress) {
+        InetSocketAddress previousAddress = currentAddress;
         socketManager.changeClientAddress(newAddress);
-        PathValidation validation = pathValidationsByAddress.get(currentAddress);
+
+        PathValidation validation = pathValidationsByAddress.get(previousAddress);
         if (validation != null) {
             validation.setAddressLastUsed(currentAddressLastUsed);
         }
+
         currentAddress = newAddress;
         currentAddressLastUsed = null;
+
+        // let connection id manager know that the previous address is no longer in use, so it can retire the connection id associated with it
+        connectionIdProvider.addressNoLongerInUse(previousAddress);
     }
 
     private byte[] generateChallenge() {

@@ -55,5 +55,11 @@ public interface ConnectionIdProvider {
      * @return
      */
     boolean peerUsesZeroLengthConnectionId();
+
+    /**
+     * Registers that the given address is no longer in use, so any connection IDs associated with it can be retired.
+     * @param previousAddress
+     */
+    void addressNoLongerInUse(InetSocketAddress previousAddress);
 }
 

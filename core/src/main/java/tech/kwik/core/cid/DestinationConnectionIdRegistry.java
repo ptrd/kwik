@@ -181,6 +181,14 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         return cidInfo.getConnectionId();
     }
 
+    public ConnectionIdInfo retireClientAddress(InetSocketAddress clientAddress) {
+        ConnectionIdInfo cidInfo = cidByClientAddress.remove(clientAddress);
+        if (cidInfo != null) {
+            cidInfo.setStatus(ConnectionIdStatus.RETIRED);
+        }
+        return cidInfo;
+    }
+
     private ConnectionIdInfo getFirstUnused() {
         Optional<ConnectionIdInfo> firstUnused = connectionIds.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())

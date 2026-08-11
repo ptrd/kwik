@@ -309,6 +309,39 @@ class PathValidatorTest {
     }
 
     @Test
+    void whenConnectionIsMigratedThePreviousAddressShouldBeReportedAsNoLongerInUse() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        verify(connectionIdProvider).addressNoLongerInUse(argThat(address -> address.equals(defaultClientAddress)));
+    }
+
+    @Test
+    void whenConnectionIsNotYetMigratedThePreviousAddressShouldNotBeReportedAsNoLongerInUse() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        PacketMetaData packetMetaData = metaDataFor(1200, newAddress);
+        QuicPacket probingPacket = probingPacket(68);
+        pathValidator.checkSourceAddress(probingPacket, packetMetaData);
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        verify(connectionIdProvider, never()).addressNoLongerInUse(any(InetSocketAddress.class));
+    }
+
+    @Test
     void whenPathValidationWasStartedByProbingPacketTheConnectionShouldNotYetBeMigratedAfterSuccessfullPathValidation() {
         // Given
         InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);

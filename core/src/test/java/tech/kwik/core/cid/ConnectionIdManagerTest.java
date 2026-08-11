@@ -577,6 +577,24 @@ class ConnectionIdManagerTest {
     }
 
     @Test
+    void whenAddressNoLongerInUseCidUsedForThatAddressShouldBeRetired() throws Exception {
+        // Given
+        InetSocketAddress clientAddress = getArbitraryLocalAddress();
+        serverConnectionIdManager.registerClientAddress(clientAddress);
+        clearInvocations(sender);
+
+        // When
+        serverConnectionIdManager.addressNoLongerInUse(clientAddress);
+
+        // Then
+        ArgumentCaptor<Function<Integer, QuicFrame>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(sender).send(captor.capture(), anyInt(), any(EncryptionLevel.class), any(Consumer.class));
+        QuicFrame frame = captor.getValue().apply(100);
+        assertThat(frame).isInstanceOf(RetireConnectionIdFrame.class);
+        assertThat(((RetireConnectionIdFrame) frame).getSequenceNr()).isEqualTo(0);
+    }
+
+    @Test
     void whenUsingZeroLengthCidReceivingRetireConnectionIdFrameShouldCloseConnection() {
         // Given
         ConnectionIdManager clientCidMgr = new ConnectionIdManager(0, 8, closeCallback, mock(Logger.class));
