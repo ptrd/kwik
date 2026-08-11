@@ -30,6 +30,7 @@ import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
+import tech.kwik.core.util.OneShotRateLimiter;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -60,6 +61,7 @@ public class PathValidator {
     private volatile long highestReceivedPacketNumber;
     private volatile Instant currentAddressLastUsed;
     private final boolean peerUsesNonZeroLengthConnectionIDs;
+    private OneShotRateLimiter logOncePerAddressRateLimiter;
 
     public PathValidator(VersionHolder version, InetSocketAddress clientAddress, SenderImpl sender, ServerConnectionSocketManager socketManager, ConnectionIdProvider connectionIdProvider, Logger logger) {
         this(Executors.newSingleThreadScheduledExecutor(), version, clientAddress, sender, socketManager, Clock.systemUTC(), connectionIdProvider, logger);
@@ -80,6 +82,7 @@ public class PathValidator {
         peerUsesNonZeroLengthConnectionIDs = !connectionIdProvider.peerUsesZeroLengthConnectionId();
 
         pathValidationsByAddress.put(clientAddress, PathValidation.preValidated(clientAddress, clock.instant()));
+        logOncePerAddressRateLimiter = new OneShotRateLimiter(2);
     }
 
     public void checkSourceAddress(QuicPacket packet, PacketMetaData metaData) {
@@ -106,8 +109,9 @@ public class PathValidator {
                 // "An endpoint that exhausts available connection IDs cannot probe new paths or initiate migration, nor
                 //  can it respond to probes or attempts by its peer to migrate."
                 if (! hasUnusedPeerConnectionIDs() && peerUsesNonZeroLengthConnectionIDs) {
-                    logger.info(String.format("Potential address migration? %s -> %s, but cannot start path validation due to lack of unused peer connection IDs",
-                            currentAddress, packetSourceAddress));
+                    logOncePerAddressRateLimiter.execute(packetSourceAddress, () ->
+                            logger.info(String.format("Potential address migration? %s -> %s, but cannot start path validation due to lack of unused peer connection IDs",
+                                    currentAddress, packetSourceAddress)));
                 }
                 else {
                     // https://www.rfc-editor.org/rfc/rfc9000.html#section-9
