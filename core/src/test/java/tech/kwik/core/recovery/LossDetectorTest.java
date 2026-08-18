@@ -212,6 +212,24 @@ class LossDetectorTest extends RecoveryTests {
     }
 
     @Test
+    void zeroRttDoesNotCauseAssertionErrorInLossDelayCalculation() {
+        // Given both smoothed and latest rtt are reported as 0, which can happen on very fast (e.g. loopback)
+        // connections, because rtt is measured with millisecond resolution.
+        when(rttEstimator.getSmoothedRtt()).thenReturn(0);
+        when(rttEstimator.getLatestRtt()).thenReturn(0);
+
+        lossDetector.packetSent(createPacket(6), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+        lossDetector.packetSent(createPacket(8), clock.instant(), lostPacket -> lostPacketHandler.process(lostPacket));
+
+        // When (only) the second packet is acked, right after it was sent (no time has passed)
+        lossDetector.onAckReceived(new AckFrame(new Range(8L)), clock.instant());
+
+        // Then no exception is thrown, and the first packet is not (yet) declared lost, because it was sent
+        // less than the minimum loss delay (kGranularity) ago.
+        verify(lostPacketHandler, never()).process(any(QuicPacket.class));
+    }
+
+    @Test
     void oldPacketLaterThanLargestAcknowledgedIsNotDeclaredLost() {
         Instant now = Instant.now();
         int timeDiff = (defaultRtt * 9 / 8) + 10;
