@@ -46,8 +46,8 @@ public class LossDetector {
     private final QLog qLog;
     private final float kTimeThreshold = 9f/8f;
     private final int kPacketThreshold = 3;
-    // https://www.rfc-editor.org/rfc/rfc9002.html#appendix-A.1
-    // "kGranularity: The RECOMMENDED value is 1ms."
+    // https://www.rfc-editor.org/rfc/rfc9002.html#section-a.2
+    // "Timer granularity. This is a system-dependent value, and Section 6.1.2 recommends a value of 1 ms."
     private final int kGranularity = 1;
     private final SortedMap<Long, PacketStatus> packetSentLog;
     private final AtomicInteger ackElicitingInFlight;
@@ -178,7 +178,8 @@ public class LossDetector {
 
         int lossDelay = (int) (kTimeThreshold * Integer.max(rttEstimater.getSmoothedRtt(), rttEstimater.getLatestRtt()));
         // https://www.rfc-editor.org/rfc/rfc9002.html#section-6.1.2
-        // "Minimum time of kGranularity before packets are deemed lost."
+        // "To avoid declaring packets as lost too early, this time threshold MUST be set to at least the local timer
+        //  granularity, as indicated by the kGranularity constant. "
         lossDelay = Integer.max(lossDelay, kGranularity);
         Instant lostSendTime = Instant.now(clock).minusMillis(lossDelay);
 
