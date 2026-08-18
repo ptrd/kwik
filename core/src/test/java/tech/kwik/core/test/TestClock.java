@@ -32,6 +32,9 @@ public class TestClock extends Clock {
     private ZoneId zone;
     private List<ClockListener> listeners;
     private List<Instant> ticks;
+    // when advancing clock, always add some inaccuracy to avoid a scheduled task running exactly at the scheduled time
+    // (which isn't realistic and leads to failing tests in combination with Instant.after() or Instant.before())
+    private int clockAdvanceInaccuracyNanos = 1;
 
     public TestClock() {
         instant = Instant.EPOCH;  // Debugging is easier when the clock starts at a fixed point in time.
@@ -65,7 +68,10 @@ public class TestClock extends Clock {
     }
 
     public void fastForward(int millis) {
-        int clockAdvanceInaccuracyNanos = 1;  // when advancing clock, always add some inaccuracy to avoid a scheduled task running exactly at the scheduled time (which isn't realistic and leads to failing tests in combination with Instant.after())
+        if (millis <= 0) {
+            instant = instant.plusNanos(clockAdvanceInaccuracyNanos);
+            return;
+        }
         int remainingTime = millis;
         while (remainingTime > 0 && !ticks.isEmpty()) {
             long nextTick = ticks.get(0).toEpochMilli() - instant.toEpochMilli();
@@ -85,6 +91,10 @@ public class TestClock extends Clock {
             instant = instant.plusMillis(remainingTime).plusNanos(clockAdvanceInaccuracyNanos);
             notifyListeners();
         }
+    }
+
+    public void forwardSubMilliSecond() {
+        instant = instant.plusNanos(clockAdvanceInaccuracyNanos);
     }
 
     public void registerListener(ClockListener listener) {
