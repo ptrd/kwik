@@ -44,6 +44,12 @@ class StreamInputStreamImpl extends StreamInputStream {
     protected static long waitForNextFrameTimeout = Long.MAX_VALUE;
 
     protected static final float receiverMaxDataIncrementFactor = 0.10f;
+    private static final long AUTO_TUNE_INTERVAL_MS = 200;
+    private static final double AUTO_TUNE_GROWTH_FACTOR = 2.0;
+    private final long autoTuneMinWindow;
+    private final long autoTuneMaxWindow;
+    private final boolean autoTuneEnabled;
+    private volatile long currentThroughput;
 
     private final QuicStreamImpl quicStream;
     private final Logger log;
@@ -53,9 +59,13 @@ class StreamInputStreamImpl extends StreamInputStream {
     private final ReceiveBuffer receiveBuffer;
     private final Object addMonitor = new Object();
     private long lastCommunicatedMaxData;
-    private final long receiverMaxDataIncrement;
+    private long receiverMaxDataIncrement;
     private long largestOffsetReceived;
     private long receiverFlowControlLimit;
+    private long totalBytesConsumed;
+    private long autoTuneLastCheckBytes;
+    private Instant autoTuneLastCheckTime;
+    private long currentReceiveWindowSize;
     private volatile boolean aborted;
     private volatile long finalSize = -1;
     // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
@@ -64,13 +74,26 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile long resetAtReliableSize;
 
     public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
+        this(quicStream, receiveBufferSize, false, 32 * 1024L, 16 * 1024 * 1024L, log);
+    }
+
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, boolean autoTuneEnabled, long autoTuneMaxWindow, Logger log) {
+        this(quicStream, receiveBufferSize, autoTuneEnabled, 32 * 1024L, autoTuneMaxWindow, log);
+    }
+
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, boolean autoTuneEnabled, long autoTuneMinWindow, long autoTuneMaxWindow, Logger log) {
         this.quicStream = quicStream;
         this.log = log;
+        this.autoTuneEnabled = autoTuneEnabled;
+        this.autoTuneMinWindow = Math.max(1024L, autoTuneMinWindow);
+        this.autoTuneMaxWindow = Math.max(this.autoTuneMinWindow, autoTuneMaxWindow);
         receiveBuffer = new ReceiveBufferImpl();
 
-        receiverFlowControlLimit = receiveBufferSize;
+        receiverFlowControlLimit = autoTuneEnabled ? Math.max(receiveBufferSize, this.autoTuneMinWindow) : receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;
+        currentReceiveWindowSize = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
+        autoTuneLastCheckTime = Instant.now();
     }
 
     /**
@@ -252,14 +275,61 @@ class StreamInputStreamImpl extends StreamInputStream {
     }
 
     private void updateAllowedFlowControl(int bytesRead) {
-        // Slide flow control window forward (with as many bytes as are read)
-        receiverFlowControlLimit += bytesRead;
-        quicStream.updateConnectionFlowControl(bytesRead);
-        // Avoid sending flow control updates with every single read; check diff with last send max data
+        totalBytesConsumed += bytesRead;
+        autoTuneReceiveWindow();
+
+        long desiredLimit = totalBytesConsumed + currentReceiveWindowSize;
+        if (desiredLimit > receiverFlowControlLimit) {
+            long growth = desiredLimit - receiverFlowControlLimit;
+            receiverFlowControlLimit = desiredLimit;
+            quicStream.updateConnectionFlowControl(growth);
+        }
+
         if (receiverFlowControlLimit - lastCommunicatedMaxData > receiverMaxDataIncrement) {
             quicStream.connection.send(new MaxStreamDataFrame(quicStream.streamId, receiverFlowControlLimit), this::retransmitMaxData, true);
             lastCommunicatedMaxData = receiverFlowControlLimit;
         }
+    }
+
+    private void autoTuneReceiveWindow() {
+        if (!autoTuneEnabled) return;
+        Instant now = Instant.now();
+        long elapsed = Duration.between(autoTuneLastCheckTime, now).toMillis();
+        if (elapsed < AUTO_TUNE_INTERVAL_MS) return;
+
+        long consumed = totalBytesConsumed - autoTuneLastCheckBytes;
+        autoTuneLastCheckBytes = totalBytesConsumed;
+        autoTuneLastCheckTime = now;
+
+        long throughput = consumed * 1000 / Math.max(1, elapsed);
+        this.currentThroughput = throughput;
+
+        long target;
+        int smoothedRtt = (quicStream.connection != null && quicStream.connection.getStats() != null)
+                ? quicStream.connection.getStats().smoothedRtt() : 0;
+        if (smoothedRtt > 0) {
+            long bdp = throughput * smoothedRtt / 1000L;
+            target = Math.max(autoTuneMinWindow, Math.min(2 * bdp, autoTuneMaxWindow));
+        } else {
+            if (throughput > currentReceiveWindowSize / 2) {
+                target = Math.min((long) (currentReceiveWindowSize * AUTO_TUNE_GROWTH_FACTOR), autoTuneMaxWindow);
+            } else if (throughput == 0) {
+                target = autoTuneMinWindow;
+            } else {
+                target = Math.max(autoTuneMinWindow, (long) (currentReceiveWindowSize * 0.75));
+            }
+        }
+
+        this.currentReceiveWindowSize = target;
+        this.receiverMaxDataIncrement = (long) (currentReceiveWindowSize * receiverMaxDataIncrementFactor);
+    }
+
+    public long getCurrentThroughput() {
+        return currentThroughput;
+    }
+
+    public long getCurrentReceiveWindow() {
+        return receiverFlowControlLimit - totalBytesConsumed;
     }
 
     private void retransmitMaxData(QuicFrame lostFrame) {

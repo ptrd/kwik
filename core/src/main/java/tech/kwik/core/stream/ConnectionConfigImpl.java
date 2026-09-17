@@ -30,6 +30,9 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     private final long maxConnectionBufferSize;
     private final long maxUnidirectionalStreamBufferSize;
     private final long maxBidirectionalStreamBufferSize;
+    private final boolean flowControlAutoTuning;
+    private final long minAutoTunedReceiveBufferSize;
+    private final long maxAutoTunedReceiveBufferSize;
 
     public static ConnectionConfig cloneWithMaxUnidirectionalStreamReceiveBufferSize(ConnectionConfig config, long maxUnidirectionalStreamBufferSize) {
         return new ConnectionConfigImpl(
@@ -40,7 +43,10 @@ public class ConnectionConfigImpl implements ConnectionConfig {
                 config.maxTotalPeerInitiatedBidirectionalStreams(),
                 config.maxConnectionBufferSize(),
                 maxUnidirectionalStreamBufferSize,
-                config.maxBidirectionalStreamBufferSize());
+                config.maxBidirectionalStreamBufferSize(),
+                config.flowControlAutoTuning(),
+                config.minAutoTunedReceiveBufferSize(),
+                config.maxAutoTunedReceiveBufferSize());
     }
 
     public static ConnectionConfig cloneWithMaxBidirectionalStreamReceiveBufferSize(ConnectionConfig config, long maxBidirectionalStreamBufferSize) {
@@ -52,14 +58,18 @@ public class ConnectionConfigImpl implements ConnectionConfig {
                 config.maxTotalPeerInitiatedBidirectionalStreams(),
                 config.maxConnectionBufferSize(),
                 config.maxUnidirectionalStreamBufferSize(),
-                maxBidirectionalStreamBufferSize);
+                maxBidirectionalStreamBufferSize,
+                config.flowControlAutoTuning(),
+                config.minAutoTunedReceiveBufferSize(),
+                config.maxAutoTunedReceiveBufferSize());
     }
 
     private ConnectionConfigImpl(int maxIdleTimeout,
                                  int maxOpenUnidirectionalStreams, long maxTotalUnidirectionalStreams,
                                  int maxOpenBidirectionalStreams, long maxTotalBidirectionalStreams,
                                  long maxConnectionBufferSize,
-                                 long maxUnidirectionalStreamBufferSize, long maxBidirectionalStreamBufferSize) {
+                                 long maxUnidirectionalStreamBufferSize, long maxBidirectionalStreamBufferSize,
+                                 boolean flowControlAutoTuning, long minAutoTunedReceiveBufferSize, long maxAutoTunedReceiveBufferSize) {
         this.maxIdleTimeout = maxIdleTimeout;
         this.maxOpenUnidirectionalStreams = maxOpenUnidirectionalStreams;
         this.maxTotalUnidirectionalStreams = maxTotalUnidirectionalStreams;
@@ -68,6 +78,9 @@ public class ConnectionConfigImpl implements ConnectionConfig {
         this.maxConnectionBufferSize = maxConnectionBufferSize;
         this.maxUnidirectionalStreamBufferSize = maxUnidirectionalStreamBufferSize;
         this.maxBidirectionalStreamBufferSize = maxBidirectionalStreamBufferSize;
+        this.flowControlAutoTuning = flowControlAutoTuning;
+        this.minAutoTunedReceiveBufferSize = minAutoTunedReceiveBufferSize;
+        this.maxAutoTunedReceiveBufferSize = maxAutoTunedReceiveBufferSize;
     }
 
     @Override
@@ -113,5 +126,20 @@ public class ConnectionConfigImpl implements ConnectionConfig {
     @Override
     public boolean useStrictSmallestAllowedMaximumDatagramSize() {
         return false;
+    }
+
+    @Override
+    public boolean flowControlAutoTuning() {
+        return flowControlAutoTuning;
+    }
+
+    @Override
+    public long minAutoTunedReceiveBufferSize() {
+        return minAutoTunedReceiveBufferSize;
+    }
+
+    @Override
+    public long maxAutoTunedReceiveBufferSize() {
+        return maxAutoTunedReceiveBufferSize;
     }
 }

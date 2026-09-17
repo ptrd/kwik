@@ -69,7 +69,7 @@ public class QuicStreamImpl implements QuicStream {
         this.log = log;
 
         if (isBidirectional() || isUnidirectional() && isPeerInitiated()) {
-            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize(), log);
+            inputStream = new StreamInputStreamImpl(this, determineInitialReceiveBufferSize(), streamManager.isFlowControlAutoTuningEnabled(), streamManager.getMinAutoTunedReceiveBufferSize(), streamManager.getMaxAutoTunedReceiveBufferSize(), log);
         }
         else {
             inputStream = new NullStreamInputStream();
@@ -269,5 +269,21 @@ public class QuicStreamImpl implements QuicStream {
         finally {
             stateLock.unlock();
         }
+    }
+
+    @Override
+    public long getCurrentReceiveWindow() {
+        if (inputStream instanceof StreamInputStreamImpl) {
+            return ((StreamInputStreamImpl) inputStream).getCurrentReceiveWindow();
+        }
+        return 0L;
+    }
+
+    @Override
+    public long getEstimatedThroughput() {
+        if (inputStream instanceof StreamInputStreamImpl) {
+            return ((StreamInputStreamImpl) inputStream).getCurrentThroughput();
+        }
+        return 0L;
     }
 }

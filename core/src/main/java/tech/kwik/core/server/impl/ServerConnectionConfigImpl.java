@@ -44,6 +44,9 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
     private ServerConnectionConfig.RetryRequired retryRequired;
     private int connectionIdLength = DEFAULT_CONNECTION_ID_LENGTH;
     private boolean useStrictSmallestAllowedMaximumDatagramSize;
+    private boolean flowControlAutoTuning = true;
+    private long minAutoTunedReceiveBufferSize = 32 * 1024L;
+    private long maxAutoTunedReceiveBufferSize = 16 * 1024 * 1024L;
 
     private ServerConnectionConfigImpl() {
     }
@@ -91,6 +94,21 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
     @Override
     public boolean useStrictSmallestAllowedMaximumDatagramSize() {
         return useStrictSmallestAllowedMaximumDatagramSize;
+    }
+
+    @Override
+    public boolean flowControlAutoTuning() {
+        return flowControlAutoTuning;
+    }
+
+    @Override
+    public long minAutoTunedReceiveBufferSize() {
+        return minAutoTunedReceiveBufferSize;
+    }
+
+    @Override
+    public long maxAutoTunedReceiveBufferSize() {
+        return maxAutoTunedReceiveBufferSize;
     }
 
     public int connectionIdLength() {
@@ -308,6 +326,24 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         @Override
         public Builder useStrictSmallestAllowedMaximumDatagramSize(boolean value) {
             config.useStrictSmallestAllowedMaximumDatagramSize = value;
+            return this;
+        }
+
+        @Override
+        public Builder flowControlAutoTuning(boolean enable) {
+            config.flowControlAutoTuning = enable;
+            return this;
+        }
+
+        @Override
+        public Builder minAutoTunedReceiveBufferSize(long minBytes) {
+            config.minAutoTunedReceiveBufferSize = minBytes;
+            return this;
+        }
+
+        @Override
+        public Builder maxAutoTunedReceiveBufferSize(long maxBytes) {
+            config.maxAutoTunedReceiveBufferSize = maxBytes;
             return this;
         }
     }

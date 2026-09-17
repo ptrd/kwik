@@ -118,6 +118,12 @@ public class LossDetector {
 
         rttEstimater.ackReceived(ackFrame, timeReceived, newlyAcked);
 
+        newlyAcked.forEach(p -> {
+            if (p.packet().isProbe()) {
+                recoveryManager.probePacketAcknowledged(p.packet());
+            }
+        });
+
         // Cleanup
         newlyAcked.stream().forEach(p -> packetSentLog.remove(p.packet().getPacketNumber()));
     }
@@ -274,6 +280,9 @@ public class LossDetector {
                     // whether retransmitting the frame is necessary (and in which manner) depends on frame type,
                     // see https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-13.3
                     packetStatus.lostPacketCallback().accept(packetStatus.packet());
+                    if (packetStatus.packet().isProbe()) {
+                        recoveryManager.probePacketLost(packetStatus.packet());
+                    }
                     lost++;
                     qLog.emitPacketLostEvent(packetStatus.packet(), Instant.now());
                 });

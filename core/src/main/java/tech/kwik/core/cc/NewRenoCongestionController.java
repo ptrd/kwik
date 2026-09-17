@@ -127,5 +127,19 @@ public class NewRenoCongestionController extends AbstractCongestionController im
         }
     }
 
+    public synchronized void updateMaxDatagramSize(int newMaxDatagramSize) {
+        long oldMax = kMaxDatagramSize;
+        kMaxDatagramSize = newMaxDatagramSize;
+        kMinimumWindow = 2 * newMaxDatagramSize;
+        congestionWindow = congestionWindow * newMaxDatagramSize / oldMax;
+        if (congestionWindow < kMinimumWindow) {
+            congestionWindow = kMinimumWindow;
+        }
+        log.cc("Cwnd(mtu): " + congestionWindow + "; mds: " + newMaxDatagramSize);
+    }
+
+    public long getMaxDatagramSize() {
+        return kMaxDatagramSize;
+    }
 }
 

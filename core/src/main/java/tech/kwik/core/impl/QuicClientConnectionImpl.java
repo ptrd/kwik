@@ -1743,6 +1743,24 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             enableReliableStreamReset = true;
             return this;
         }
+
+        @Override
+        public Builder flowControlAutoTuning(boolean enable) {
+            connectionProperties.setFlowControlAutoTuning(enable);
+            return this;
+        }
+
+        @Override
+        public Builder minAutoTunedReceiveBufferSize(long minBytes) {
+            connectionProperties.setMinAutoTunedReceiveBufferSize(minBytes);
+            return this;
+        }
+
+        @Override
+        public Builder maxAutoTunedReceiveBufferSize(long maxBytes) {
+            connectionProperties.setMaxAutoTunedReceiveBufferSize(maxBytes);
+            return this;
+        }
     }
 
     /**

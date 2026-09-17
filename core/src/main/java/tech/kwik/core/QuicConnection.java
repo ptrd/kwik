@@ -140,5 +140,17 @@ public interface QuicConnection extends DatagramExtension {
      */
     void close(long applicationErrorCode, String errorReason);
 
+    default int getCurrentPmtu() {
+        return 1200;
+    }
+
+    default long getEstimatedThroughput() {
+        return 0L;
+    }
+
+    default long getCurrentStreamReceiveWindow(int streamId) {
+        return 0L;
+    }
+
     Statistics getStats();
 }

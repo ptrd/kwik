@@ -67,6 +67,10 @@ public class Statistics {
         return senderStatistics.latestRtt();
     }
 
+    public long estimatedThroughput() {
+        return senderStatistics.estimatedThroughput();
+    }
+
     @Override
     public String toString() {
         return String.format(

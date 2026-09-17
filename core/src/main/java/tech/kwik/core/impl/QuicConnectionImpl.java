@@ -35,8 +35,10 @@ import tech.kwik.core.packet.PacketFilter;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.recovery.RecoveryManager;
+import tech.kwik.core.send.PmtuDiscovery;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.FlowControl;
+import tech.kwik.core.stream.QuicStreamImpl;
 import tech.kwik.core.stream.StreamManager;
 import tech.kwik.core.util.ProgressivelyIncreasingRateLimiter;
 import tech.kwik.core.util.RateLimiter;
@@ -124,6 +126,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     protected volatile HandshakeState handshakeState = HandshakeState.Initial;
     protected final Object handshakeStateLock = new Object();
     protected List<HandshakeStateListener> handshakeStateListeners = new CopyOnWriteArrayList<>();
+    protected volatile PmtuDiscovery pmtuDiscovery;
     protected volatile EncryptionLevel currentEncryptionLevel;
     protected IdleTimer idleTimer;
     protected final List<Runnable> postProcessingActions = new ArrayList<>();
@@ -176,7 +179,11 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     public void addHandshakeStateListener(RecoveryManager recoveryManager) {
-        handshakeStateListeners.add(recoveryManager);
+        addHandshakeStateListener((HandshakeStateListener) recoveryManager);
+    }
+
+    public void addHandshakeStateListener(HandshakeStateListener listener) {
+        handshakeStateListeners.add(listener);
     }
 
     /**
@@ -349,6 +356,19 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().setReceiverMaxAckDelay(peerTransportParams.getMaxAckDelay());
 
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
+
+        if (getSender() != null) {
+            PmtuDiscovery discovery = getSender().createPmtuDiscovery();
+            if (discovery != null) {
+                pmtuDiscovery = discovery;
+                int peerMaxUdp = peerTransportParams.getMaxUdpPayloadSize();
+                addHandshakeStateListener(newState -> {
+                    if (newState == HandshakeState.Confirmed && pmtuDiscovery != null) {
+                        pmtuDiscovery.start(peerMaxUdp);
+                    }
+                });
+            }
+        }
 
         updateDatagramExtensionStatus(peerTransportParams);
 
@@ -980,6 +1000,39 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         catch (RejectedExecutionException rejected) {
             // Can happen when already terminated; don't bother
         }
+    }
+
+    @Override
+    public int getCurrentPmtu() {
+        return pmtuDiscovery != null ? pmtuDiscovery.getCurrentPlpmtu() : 1200;
+    }
+
+    @Override
+    public long getCurrentStreamReceiveWindow(int streamId) {
+        StreamManager sm = getStreamManager();
+        if (sm != null) {
+            QuicStreamImpl stream = sm.getStream(streamId);
+            if (stream != null) {
+                return stream.getCurrentReceiveWindow();
+            }
+        }
+        return 0L;
+    }
+
+    @Override
+    public long getEstimatedThroughput() {
+        long maxStreamThroughput = 0L;
+        StreamManager sm = getStreamManager();
+        if (sm != null) {
+            for (QuicStreamImpl stream : sm.getActiveStreams()) {
+                long t = stream.getEstimatedThroughput();
+                if (t > maxStreamThroughput) {
+                    maxStreamThroughput = t;
+                }
+            }
+        }
+        long senderThroughput = (getSender() != null && getStats() != null) ? getStats().estimatedThroughput() : 0L;
+        return Math.max(maxStreamThroughput, senderThroughput);
     }
 
     @Override

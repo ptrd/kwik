@@ -64,4 +64,16 @@ public interface ConnectionConfig {
      * @return whether to apply the strict interpretation of RFC-9000 with respect to the smallest allowed maximum datagram size.
      */
     boolean useStrictSmallestAllowedMaximumDatagramSize();
+
+    default boolean flowControlAutoTuning() {
+        return true;
+    }
+
+    default long minAutoTunedReceiveBufferSize() {
+        return 32 * 1024L;
+    }
+
+    default long maxAutoTunedReceiveBufferSize() {
+        return 16 * 1024 * 1024L;
+    }
 }

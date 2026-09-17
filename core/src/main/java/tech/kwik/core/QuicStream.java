@@ -148,4 +148,12 @@ public interface QuicStream {
     default void closeInput(long applicationProtocolErrorCode) {
         abortReading(applicationProtocolErrorCode);
     }
+
+    default long getCurrentReceiveWindow() {
+        return 0L;
+    }
+
+    default long getEstimatedThroughput() {
+        return 0L;
+    }
 }

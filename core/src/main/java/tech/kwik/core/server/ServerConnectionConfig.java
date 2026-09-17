@@ -65,5 +65,11 @@ public interface ServerConnectionConfig extends ConnectionConfig {
         Builder maxTotalPeerInitiatedBidirectionalStreams(long max);
 
         Builder useStrictSmallestAllowedMaximumDatagramSize(boolean value);
+
+        Builder flowControlAutoTuning(boolean enable);
+
+        Builder minAutoTunedReceiveBufferSize(long minBytes);
+
+        Builder maxAutoTunedReceiveBufferSize(long maxBytes);
     }
 }

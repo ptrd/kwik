@@ -57,6 +57,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static java.lang.Long.max;
@@ -115,7 +116,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private volatile int antiAmplificationLimit = -1;
     private volatile Runnable shutdownHook;
     private volatile Instant lastestAckElicitingTime;
+    private volatile PmtuDiscovery pmtuDiscovery;
     private final byte[] paddingPattern;
+    private final Instant startTime;
 
 
     public SenderImpl(VersionHolder version, int maxPacketSize, SocketManager socketManager, QuicConnectionImpl connection,
@@ -126,6 +129,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     public SenderImpl(Clock clock, VersionHolder version, int maxPacketSize, SocketManager socketManager,
                       QuicConnectionImpl connection, String id, Integer initialRtt, Logger log) {
         this.clock = clock;
+        this.startTime = clock.instant();
         this.maxPacketSize = maxPacketSize;
         this.socketManager = socketManager;
         this.connection = connection;
@@ -349,6 +353,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
 
         sendIfAny();
+        if (pmtuDiscovery != null) {
+            pmtuDiscovery.checkProbeTimeout();
+        }
     }
 
     void sendIfAny() throws IOException {
@@ -406,7 +413,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     void send(AssembledDatagram assembledDatagram) throws IOException {
         List<SendItem> itemsToSend = assembledDatagram.getItems();
-        byte[] datagramData = new byte[maxPacketSize];
+        byte[] datagramData = new byte[Math.max(maxPacketSize, 1500)];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
         try {
             Iterator<SendItem> packetIterator = itemsToSend.iterator();
@@ -476,6 +483,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     private AssembledDatagram assemblePacket() {
         int remainingCwnd = (int) congestionController.remainingCwnd();
         int currentMaxPacketSize = maxPacketSize;
+        if (sendRequestQueue[EncryptionLevel.App.ordinal()].hasProbeWithData() && pmtuDiscovery != null) {
+            currentMaxPacketSize = Math.max(currentMaxPacketSize, pmtuDiscovery.getProbeSize());
+        }
         if (antiAmplificationLimit >= 0) {
             if (bytesSent < antiAmplificationLimit) {
                 if (antiAmplificationLimit - bytesSent < currentMaxPacketSize) {
@@ -522,8 +532,10 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     public SendStatistics getStatistics() {
+        long elapsedMillis = Math.max(1, Duration.between(startTime, clock.instant()).toMillis());
+        long estimatedThroughput = bytesSent * 1000L / elapsedMillis;
         return new SendStatistics(datagramsSent, packetsSent, bytesSent, dataSent, recoveryManager.getLost(),
-                rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
+                rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt(), estimatedThroughput);
     }
 
     @Override
@@ -565,6 +577,36 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         if (maxUdpPayloadSize < maxPacketSize) {
             maxPacketSize = maxUdpPayloadSize;
         }
+    }
+
+    public void updateMaxPacketSize(int newSize) {
+        maxPacketSize = newSize;
+    }
+
+    public void updateMaxDatagramSize(int newSize) {
+        if (congestionController instanceof NewRenoCongestionController) {
+            ((NewRenoCongestionController) congestionController).updateMaxDatagramSize(newSize);
+        }
+    }
+
+    public void sendPmtuProbe(QuicFrame[] frames, Consumer<QuicFrame> lostCallback) {
+        java.util.List<QuicFrame> probeFrames = java.util.Arrays.asList(frames);
+        sendRequestQueue[EncryptionLevel.App.ordinal()].addProbeRequest(probeFrames);
+        wakeUpSenderLoop();
+    }
+
+    public PmtuDiscovery createPmtuDiscovery() {
+        PmtuDiscovery discovery = new PmtuDiscovery(log, this::updateMaxPacketSize, this::updateMaxDatagramSize, (frames, lostCb) -> sendPmtuProbe(frames, lostCb));
+        this.pmtuDiscovery = discovery;
+        recoveryManager.setProbePacketListener(
+            packet -> discovery.probeAcknowledged(packet.getSize()),
+            packet -> discovery.probeLost(packet.getSize())
+        );
+        return discovery;
+    }
+
+    public RecoveryManager getRecoveryManager() {
+        return recoveryManager;
     }
 
     public void resetRecovery(PnSpace pnSpace) {

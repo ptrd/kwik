@@ -208,6 +208,18 @@ public interface QuicClientConnection extends QuicConnection {
          * @return  the builder
          */
         Builder enableReliableStreamReset();
+
+        default Builder flowControlAutoTuning(boolean enable) {
+            return this;
+        }
+
+        default Builder minAutoTunedReceiveBufferSize(long minBytes) {
+            return this;
+        }
+
+        default Builder maxAutoTunedReceiveBufferSize(long maxBytes) {
+            return this;
+        }
     }
 
 }

@@ -32,6 +32,9 @@ public class ClientConnectionConfig implements ConnectionConfig {
     private int maxUdpPayloadSize;
     private boolean useStrictSmallestAllowedMaximumDatagramSize;
     private boolean enforceMaxUdpPayloadSize;
+    private boolean flowControlAutoTuning = true;
+    private long minAutoTunedReceiveBufferSize = 32 * 1024L;
+    private long maxAutoTunedReceiveBufferSize = 16 * 1024 * 1024L;
 
     @Override
     public int maxIdleTimeout() {
@@ -128,5 +131,32 @@ public class ClientConnectionConfig implements ConnectionConfig {
 
     public void setEnforceMaxUdpPayloadSize(boolean enforceMaxUdpPayloadSize) {
         this.enforceMaxUdpPayloadSize = enforceMaxUdpPayloadSize;
+    }
+
+    @Override
+    public boolean flowControlAutoTuning() {
+        return flowControlAutoTuning;
+    }
+
+    public void setFlowControlAutoTuning(boolean enable) {
+        this.flowControlAutoTuning = enable;
+    }
+
+    @Override
+    public long minAutoTunedReceiveBufferSize() {
+        return minAutoTunedReceiveBufferSize;
+    }
+
+    public void setMinAutoTunedReceiveBufferSize(long minBytes) {
+        this.minAutoTunedReceiveBufferSize = minBytes;
+    }
+
+    @Override
+    public long maxAutoTunedReceiveBufferSize() {
+        return maxAutoTunedReceiveBufferSize;
+    }
+
+    public void setMaxAutoTunedReceiveBufferSize(long maxBytes) {
+        this.maxAutoTunedReceiveBufferSize = maxBytes;
     }
 }

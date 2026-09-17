@@ -29,8 +29,13 @@ public class SendStatistics {
     private final int smoothedRtt;
     private final int rttVar;
     private final int latestRtt;
+    private final long estimatedThroughput;
 
     public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long dataBytesSent, long lostPackets, int smoothedRtt, int rttVar, int latestRtt) {
+        this(datagramsSent, packetsSent, bytesSent, dataBytesSent, lostPackets, smoothedRtt, rttVar, latestRtt, 0L);
+    }
+
+    public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long dataBytesSent, long lostPackets, int smoothedRtt, int rttVar, int latestRtt, long estimatedThroughput) {
         this.datagramsSent = datagramsSent;
         this.packetsSent = packetsSent;
         this.bytesSent = bytesSent;
@@ -39,6 +44,7 @@ public class SendStatistics {
         this.smoothedRtt = smoothedRtt;
         this.rttVar = rttVar;
         this.latestRtt = latestRtt;
+        this.estimatedThroughput = estimatedThroughput;
     }
 
     public int datagramsSent() {
@@ -71,5 +77,9 @@ public class SendStatistics {
 
     public int latestRtt() {
         return latestRtt;
+    }
+
+    public long estimatedThroughput() {
+        return estimatedThroughput;
     }
 }

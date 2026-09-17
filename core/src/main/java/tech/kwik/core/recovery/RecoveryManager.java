@@ -522,6 +522,28 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
         }
     }
 
+    private volatile Consumer<QuicPacket> probeAckedListener;
+    private volatile Consumer<QuicPacket> probeLostListener;
+
+    public void setProbePacketListener(Consumer<QuicPacket> probeAckedListener, Consumer<QuicPacket> probeLostListener) {
+        this.probeAckedListener = probeAckedListener;
+        this.probeLostListener = probeLostListener;
+    }
+
+    public void probePacketAcknowledged(QuicPacket packet) {
+        Consumer<QuicPacket> listener = probeAckedListener;
+        if (listener != null) {
+            listener.accept(packet);
+        }
+    }
+
+    public void probePacketLost(QuicPacket packet) {
+        Consumer<QuicPacket> listener = probeLostListener;
+        if (listener != null) {
+            listener.accept(packet);
+        }
+    }
+
     public void packetSent(QuicPacket packet, Instant sent, Consumer<QuicPacket> packetLostCallback) {
         if (!hasBeenStopped) {
             if (packet.isInflightPacket()) {

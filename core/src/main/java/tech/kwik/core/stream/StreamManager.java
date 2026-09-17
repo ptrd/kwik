@@ -545,6 +545,26 @@ public class StreamManager {
         return config.maxUnidirectionalStreamBufferSize();
     }
 
+    public boolean isFlowControlAutoTuningEnabled() {
+        return config.flowControlAutoTuning();
+    }
+
+    public long getMinAutoTunedReceiveBufferSize() {
+        return config.minAutoTunedReceiveBufferSize();
+    }
+
+    public long getMaxAutoTunedReceiveBufferSize() {
+        return config.maxAutoTunedReceiveBufferSize();
+    }
+
+    public QuicStreamImpl getStream(int streamId) {
+        return streams.get(streamId);
+    }
+
+    public java.util.Collection<QuicStreamImpl> getActiveStreams() {
+        return streams.values();
+    }
+
     public long getMaxBidirectionalStreamBufferSize() {
         return config.maxBidirectionalStreamBufferSize();
     }

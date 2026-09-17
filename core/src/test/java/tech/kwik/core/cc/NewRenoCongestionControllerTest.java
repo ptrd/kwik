@@ -219,7 +219,7 @@ class NewRenoCongestionControllerTest {
 
         MockPacket newPacket = new MockPacket(0, 6000, EncryptionLevel.App);
         congestionController.registerInFlight(newPacket);
-        congestionController.registerAcked(List.of(new PacketInfo(Instant.now(), newPacket, this::noOp)));
+        congestionController.registerAcked(List.of(new PacketInfo(Instant.now().plusMillis(1), newPacket, this::noOp)));
         // cwnd was 6000; congestion avoidance adds 1200 * 6000 / 6000 = 1200
         assertThat(congestionController.getWindowSize()).isEqualTo(7200);
     }

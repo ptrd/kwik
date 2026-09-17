@@ -600,6 +600,10 @@ abstract public class QuicPacket {
         isProbe = probe;
     }
 
+    public boolean isProbe() {
+        return isProbe;
+    }
+
     public Version getVersion() {
         return quicVersion;
     }
