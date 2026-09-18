@@ -158,6 +158,10 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         configBuilder.retryRequired(this.retryRequired());
         configBuilder.connectionIdLength(this.connectionIdLength());
         configBuilder.useStrictSmallestAllowedMaximumDatagramSize(this.useStrictSmallestAllowedMaximumDatagramSize());
+        configBuilder.flowControlAutoTuning(this.flowControlAutoTuning());
+        configBuilder.minAutoTunedReceiveBufferSize(this.minAutoTunedReceiveBufferSize());
+        configBuilder.maxAutoTunedReceiveBufferSize(this.maxAutoTunedReceiveBufferSize());
+        configBuilder.maxPathMtu(this.maxPathMtu());
 
         return configBuilder.build();
     }

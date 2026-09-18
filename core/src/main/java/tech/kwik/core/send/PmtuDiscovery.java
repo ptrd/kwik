@@ -63,7 +63,7 @@ public class PmtuDiscovery {
         }
         state = State.Base;
         currentPlpmtu = BASE_PLPMTU;
-        probeSize = BASE_PLPMTU + PROBE_STEP;
+        probeSize = Math.min(BASE_PLPMTU + PROBE_STEP, this.peerMaxUdpPayloadSize);
         probeCount = 0;
         sendProbe();
     }
