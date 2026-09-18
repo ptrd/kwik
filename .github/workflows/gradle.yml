@@ -35,7 +35,7 @@ jobs:
         git config user.email "github-actions@github.com"
         git tag -a -f "${{ inputs.version }}" -m "${{ inputs.version }}"
     - run: ./gradlew --version
-    - run: ./gradlew build assemble
+    - run: ./gradlew assemble
     - uses: actions/upload-artifact@v4
       with:
         name: kwik-build-artifacts
