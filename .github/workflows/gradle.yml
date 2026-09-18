@@ -1,17 +1,54 @@
+name: Java CI with Gradle
+
 on:
-- push
-- pull_request
-- workflow_dispatch
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag'
+        required: false
+        default: ''
+        type: string
+      create_release:
+        description: 'Create release'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - uses: actions/setup-java@v5
       with:
         java-version: 17
         distribution: semeru
     - uses: gradle/actions/setup-gradle@v5
+    - if: ${{ inputs.version != '' }}
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git tag -a -f "${{ inputs.version }}" -m "${{ inputs.version }}"
     - run: ./gradlew --version
-    - run: ./gradlew build
+    - run: ./gradlew build assemble
+    - uses: actions/upload-artifact@v4
+      with:
+        name: kwik-build-artifacts
+        path: |
+          core/build/libs/*.jar
+          cli/build/libs/*.jar
+    - if: ${{ inputs.create_release }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.version != '' && inputs.version || format('v0.10.8-build.{0}', github.run_number) }}
+        name: ${{ inputs.version != '' && inputs.version || format('Release v0.10.8-build.{0}', github.run_number) }}
+        files: |
+          core/build/libs/*.jar
+          cli/build/libs/*.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
