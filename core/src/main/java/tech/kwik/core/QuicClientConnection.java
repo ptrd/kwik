@@ -220,6 +220,10 @@ public interface QuicClientConnection extends QuicConnection {
         default Builder maxAutoTunedReceiveBufferSize(long maxBytes) {
             return this;
         }
+
+        default Builder maxPathMtu(int maxPmtu) {
+            return this;
+        }
     }
 
 }

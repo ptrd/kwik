@@ -596,7 +596,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     public PmtuDiscovery createPmtuDiscovery() {
-        PmtuDiscovery discovery = new PmtuDiscovery(log, this::updateMaxPacketSize, this::updateMaxDatagramSize, (frames, lostCb) -> sendPmtuProbe(frames, lostCb));
+        return createPmtuDiscovery(1452);
+    }
+
+    public PmtuDiscovery createPmtuDiscovery(int maxPlpmtu) {
+        PmtuDiscovery discovery = new PmtuDiscovery(log, this::updateMaxPacketSize, this::updateMaxDatagramSize, (frames, lostCb) -> sendPmtuProbe(frames, lostCb), maxPlpmtu);
         this.pmtuDiscovery = discovery;
         recoveryManager.setProbePacketListener(
             packet -> discovery.probeAcknowledged(packet.getSize()),

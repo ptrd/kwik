@@ -35,6 +35,7 @@ public class ClientConnectionConfig implements ConnectionConfig {
     private boolean flowControlAutoTuning = true;
     private long minAutoTunedReceiveBufferSize = 32 * 1024L;
     private long maxAutoTunedReceiveBufferSize = 16 * 1024 * 1024L;
+    private int maxPathMtu = 1452;
 
     @Override
     public int maxIdleTimeout() {
@@ -158,5 +159,14 @@ public class ClientConnectionConfig implements ConnectionConfig {
 
     public void setMaxAutoTunedReceiveBufferSize(long maxBytes) {
         this.maxAutoTunedReceiveBufferSize = maxBytes;
+    }
+
+    @Override
+    public int maxPathMtu() {
+        return maxPathMtu;
+    }
+
+    public void setMaxPathMtu(int maxPathMtu) {
+        this.maxPathMtu = maxPathMtu;
     }
 }

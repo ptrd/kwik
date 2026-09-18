@@ -27,6 +27,7 @@ public class PmtuDiscovery {
     private static final int ABSOLUTE_MAX_PLPMTU = 1452;
     private static final int SHORT_HEADER_OVERHEAD = 26;
 
+    private final int maxPlpmtu;
     private final Logger log;
     private final IntConsumer maxPacketSizeUpdater;
     private final IntConsumer maxDatagramSizeUpdater;
@@ -40,17 +41,22 @@ public class PmtuDiscovery {
     private int peerMaxUdpPayloadSize;
 
     public PmtuDiscovery(Logger log, IntConsumer maxPacketSizeUpdater, IntConsumer maxDatagramSizeUpdater, BiConsumer<QuicFrame[], Consumer<QuicFrame>> probeSender) {
+        this(log, maxPacketSizeUpdater, maxDatagramSizeUpdater, probeSender, ABSOLUTE_MAX_PLPMTU);
+    }
+
+    public PmtuDiscovery(Logger log, IntConsumer maxPacketSizeUpdater, IntConsumer maxDatagramSizeUpdater, BiConsumer<QuicFrame[], Consumer<QuicFrame>> probeSender, int maxPlpmtu) {
         this.log = log;
         this.maxPacketSizeUpdater = maxPacketSizeUpdater;
         this.maxDatagramSizeUpdater = maxDatagramSizeUpdater;
         this.probeSender = probeSender;
+        this.maxPlpmtu = maxPlpmtu > BASE_PLPMTU ? maxPlpmtu : ABSOLUTE_MAX_PLPMTU;
         this.state = State.Disabled;
         this.currentPlpmtu = BASE_PLPMTU;
-        this.peerMaxUdpPayloadSize = ABSOLUTE_MAX_PLPMTU;
+        this.peerMaxUdpPayloadSize = this.maxPlpmtu;
     }
 
     public void start(int peerMaxUdpPayloadSize) {
-        this.peerMaxUdpPayloadSize = Math.min(peerMaxUdpPayloadSize, ABSOLUTE_MAX_PLPMTU);
+        this.peerMaxUdpPayloadSize = Math.min(peerMaxUdpPayloadSize, maxPlpmtu);
         if (this.peerMaxUdpPayloadSize <= BASE_PLPMTU) {
             state = State.Disabled;
             return;

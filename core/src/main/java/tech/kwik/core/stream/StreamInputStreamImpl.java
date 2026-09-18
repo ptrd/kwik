@@ -276,13 +276,12 @@ class StreamInputStreamImpl extends StreamInputStream {
 
     private void updateAllowedFlowControl(int bytesRead) {
         totalBytesConsumed += bytesRead;
+        quicStream.updateConnectionFlowControl(bytesRead);
         autoTuneReceiveWindow();
 
         long desiredLimit = totalBytesConsumed + currentReceiveWindowSize;
         if (desiredLimit > receiverFlowControlLimit) {
-            long growth = desiredLimit - receiverFlowControlLimit;
             receiverFlowControlLimit = desiredLimit;
-            quicStream.updateConnectionFlowControl(growth);
         }
 
         if (receiverFlowControlLimit - lastCommunicatedMaxData > receiverMaxDataIncrement) {
@@ -308,13 +307,19 @@ class StreamInputStreamImpl extends StreamInputStream {
         int smoothedRtt = (quicStream.connection != null && quicStream.connection.getStats() != null)
                 ? quicStream.connection.getStats().smoothedRtt() : 0;
         if (smoothedRtt > 0) {
-            long bdp = throughput * smoothedRtt / 1000L;
-            target = Math.max(autoTuneMinWindow, Math.min(2 * bdp, autoTuneMaxWindow));
+            int effectiveRtt = Math.max(smoothedRtt, 25);
+            long bdp = throughput * effectiveRtt / 1000L;
+            long calculatedTarget = Math.max(autoTuneMinWindow, Math.min(2 * bdp, autoTuneMaxWindow));
+            if (calculatedTarget < currentReceiveWindowSize) {
+                target = Math.max(calculatedTarget, (long) (currentReceiveWindowSize * 0.75));
+            } else {
+                target = calculatedTarget;
+            }
         } else {
             if (throughput > currentReceiveWindowSize / 2) {
                 target = Math.min((long) (currentReceiveWindowSize * AUTO_TUNE_GROWTH_FACTOR), autoTuneMaxWindow);
             } else if (throughput == 0) {
-                target = autoTuneMinWindow;
+                target = Math.max(autoTuneMinWindow, (long) (currentReceiveWindowSize * 0.75));
             } else {
                 target = Math.max(autoTuneMinWindow, (long) (currentReceiveWindowSize * 0.75));
             }

@@ -47,6 +47,7 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
     private boolean flowControlAutoTuning = true;
     private long minAutoTunedReceiveBufferSize = 32 * 1024L;
     private long maxAutoTunedReceiveBufferSize = 16 * 1024 * 1024L;
+    private int maxPathMtu = 1452;
 
     private ServerConnectionConfigImpl() {
     }
@@ -109,6 +110,11 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
     @Override
     public long maxAutoTunedReceiveBufferSize() {
         return maxAutoTunedReceiveBufferSize;
+    }
+
+    @Override
+    public int maxPathMtu() {
+        return maxPathMtu;
     }
 
     public int connectionIdLength() {
@@ -344,6 +350,12 @@ public class ServerConnectionConfigImpl implements ServerConnectionConfig {
         @Override
         public Builder maxAutoTunedReceiveBufferSize(long maxBytes) {
             config.maxAutoTunedReceiveBufferSize = maxBytes;
+            return this;
+        }
+
+        @Override
+        public Builder maxPathMtu(int maxPmtu) {
+            config.maxPathMtu = maxPmtu;
             return this;
         }
     }

@@ -76,4 +76,8 @@ public interface ConnectionConfig {
     default long maxAutoTunedReceiveBufferSize() {
         return 16 * 1024 * 1024L;
     }
+
+    default int maxPathMtu() {
+        return 1452;
+    }
 }

@@ -71,5 +71,7 @@ public interface ServerConnectionConfig extends ConnectionConfig {
         Builder minAutoTunedReceiveBufferSize(long minBytes);
 
         Builder maxAutoTunedReceiveBufferSize(long maxBytes);
+
+        Builder maxPathMtu(int maxPmtu);
     }
 }

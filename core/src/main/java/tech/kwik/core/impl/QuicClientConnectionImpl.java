@@ -1761,6 +1761,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             connectionProperties.setMaxAutoTunedReceiveBufferSize(maxBytes);
             return this;
         }
+
+        @Override
+        public Builder maxPathMtu(int maxPmtu) {
+            connectionProperties.setMaxPathMtu(maxPmtu);
+            return this;
+        }
     }
 
     /**

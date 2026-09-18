@@ -557,6 +557,10 @@ public class StreamManager {
         return config.maxAutoTunedReceiveBufferSize();
     }
 
+    public int getMaxPathMtu() {
+        return config.maxPathMtu();
+    }
+
     public QuicStreamImpl getStream(int streamId) {
         return streams.get(streamId);
     }

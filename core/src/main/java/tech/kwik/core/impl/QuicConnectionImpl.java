@@ -358,7 +358,8 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         getSender().registerMaxUdpPayloadSize(peerTransportParams.getMaxUdpPayloadSize());
 
         if (getSender() != null) {
-            PmtuDiscovery discovery = getSender().createPmtuDiscovery();
+            int maxPmtu = getStreamManager() != null ? getStreamManager().getMaxPathMtu() : 1452;
+            PmtuDiscovery discovery = getSender().createPmtuDiscovery(maxPmtu);
             if (discovery != null) {
                 pmtuDiscovery = discovery;
                 int peerMaxUdp = peerTransportParams.getMaxUdpPayloadSize();
