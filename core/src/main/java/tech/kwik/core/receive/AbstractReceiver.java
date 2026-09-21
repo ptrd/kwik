@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.PortUnreachableException;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
@@ -93,6 +94,13 @@ public abstract class AbstractReceiver implements Receiver {
                 }
                 catch (SocketTimeoutException timeout) {
                     // Impossible, as no socket timeout set
+                }
+                catch (PortUnreachableException unreachable) {
+                    // Can occur on a connected socket when an ICMP Port Unreachable message is received for a
+                    // *prior* datagram sent on this socket (e.g. because the peer already closed its socket, or
+                    // due to fast port reuse). This does not mean the socket itself is unusable, so ignore it and
+                    // keep listening, instead of letting it fall through to the fatal-error handling below.
+                    log.debug("Ignoring PortUnreachableException while receiving datagrams", unreachable);
                 }
             }
 
