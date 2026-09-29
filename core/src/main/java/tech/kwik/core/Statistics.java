@@ -67,6 +67,17 @@ public class Statistics {
         return senderStatistics.latestRtt();
     }
 
+    /**
+     * Returns the number of probe timeouts (PTO) that have fired in a row, i.e. without any acknowledgement being
+     * received in between. As the probe timeout is derived from the RTT, this is a path-independent indication that
+     * the network path currently used has stopped delivering packets: an application can use it to decide to migrate
+     * the connection (see {@link QuicClientConnection#migrate(java.time.Duration)}).
+     * @return  the number of consecutive probe timeouts, 0 when the last ack-eliciting packet was acknowledged in time
+     */
+    public int consecutivePtoCount() {
+        return senderStatistics.consecutivePtoCount();
+    }
+
     @Override
     public String toString() {
         return String.format(
