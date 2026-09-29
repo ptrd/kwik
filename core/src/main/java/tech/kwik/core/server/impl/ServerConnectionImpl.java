@@ -380,7 +380,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."
         serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
-        serverTransportParams.setDisableMigration(true);
+        // As long as the (unfinished) connection migration feature is not enabled, the client must not try to migrate.
+        serverTransportParams.setDisableMigration(!connectionMigrationEnabled);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         serverTransportParams.setOriginalDestinationConnectionId(connectionIdManager.getOriginalDestinationConnectionId());
         if (retryRequired) {
@@ -608,6 +609,17 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
         super.process(pathChallengeFrame, packet, metaData);
+    }
+
+    @Override
+    protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
+        InetSocketAddress source = metaData.sourceAddress();
+        // Only a path the validator knows about has a peer connection ID assigned; without one nothing can be sent.
+        if (connectionMigrationEnabled && source != null && !source.equals(socketManager.getClientAddress())
+                && pathValidator.isValidatedOrInProgress(source)) {
+            return source;
+        }
+        return null;
     }
 
     @Override
