@@ -74,8 +74,10 @@ public class MultipleAddressReceiver extends AbstractReceiver {
         int index = sockets.indexOf(socket);
         if (index >= 0) {
             DatagramSocket removedSocket = sockets.remove(index);
-            removedSocket.close();
+            // The thread must be removed before the socket is closed: closing makes its receive fail, which would be
+            // considered fatal (see isFatal) as long as the thread is still registered.
             threads.remove(index);
+            removedSocket.close();
         }
     }
 

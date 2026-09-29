@@ -41,8 +41,8 @@ public class ClientSocketManager implements SocketManager {
     private final Clock clock;
     private volatile DatagramSocket socket;
     private volatile DatagramSocket alternateSocket;
-    private InetSocketAddress clientAddress;
-    private InetSocketAddress alternateClientAddress;
+    private volatile InetSocketAddress clientAddress;
+    private volatile InetSocketAddress alternateClientAddress;
 
     public ClientSocketManager(InetSocketAddress serverAddress, MultipleAddressReceiver receiver, DatagramSocketFactory datagramSocketFactory) throws SocketException {
         this(serverAddress, receiver, datagramSocketFactory, Clock.systemUTC());
@@ -60,8 +60,10 @@ public class ClientSocketManager implements SocketManager {
         receiver.addSocket(socket);
     }
 
+    // Changing the sockets is synchronized on this instance, as is assembling and sending a datagram (see
+    // SenderImpl.sendIfAny), so a datagram is never assembled for one address and sent after it has been replaced.
     @Override
-    public Instant send(ByteBuffer data, InetSocketAddress address) throws IOException {
+    public synchronized Instant send(ByteBuffer data, InetSocketAddress address) throws IOException {
         DatagramSocket sendSocket;
         if (address.equals(clientAddress)) {
             sendSocket = socket;
@@ -92,21 +94,21 @@ public class ClientSocketManager implements SocketManager {
         return (InetSocketAddress) socket.getLocalSocketAddress();
     }
 
-    public InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
-        if (port == null || alternateSocket.getLocalPort() != port) {
+    public synchronized InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
+        DatagramSocket oldSocket = socket;
+        if (port == null || alternateSocket == null || alternateSocket.getLocalPort() != port) {
             DatagramSocket newSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
             receiver.addSocket(newSocket);
-            receiver.removeSocket(socket);
+            clientAddress = new InetSocketAddress(newSocket.getInetAddress(), newSocket.getLocalPort());
             socket = newSocket;
-            clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
         }
         else {
-            receiver.removeSocket(socket);
+            clientAddress = alternateClientAddress;
             socket = alternateSocket;
             alternateSocket = null;
-            clientAddress = alternateClientAddress;
             alternateClientAddress = null;
         }
+        receiver.removeSocket(oldSocket);
         return clientAddress;
     }
 
@@ -114,7 +116,7 @@ public class ClientSocketManager implements SocketManager {
         return socket;
     }
 
-    public InetSocketAddress addLocalAddress(Integer port) throws SocketException {
+    public synchronized InetSocketAddress addLocalAddress(Integer port) throws SocketException {
         alternateSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
         alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
         receiver.addSocket(alternateSocket);
@@ -123,5 +125,17 @@ public class ClientSocketManager implements SocketManager {
 
     public InetSocketAddress getAlternateClientAddress() {
         return alternateClientAddress;
+    }
+
+    /**
+     * Stops using the alternate address added with {@link #addLocalAddress(Integer)}, closing its socket.
+     */
+    public synchronized void removeAlternateAddress() {
+        DatagramSocket socketToRemove = alternateSocket;
+        if (socketToRemove != null) {
+            alternateSocket = null;
+            alternateClientAddress = null;
+            receiver.removeSocket(socketToRemove);
+        }
     }
 }
