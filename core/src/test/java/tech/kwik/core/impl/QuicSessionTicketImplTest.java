@@ -18,10 +18,10 @@
  */
 package tech.kwik.core.impl;
 
+import org.junit.jupiter.api.Test;
 import tech.kwik.agent15.NewSessionTicket;
 import tech.kwik.agent15.TlsConstants;
 import tech.kwik.agent15.handshake.NewSessionTicketMessage;
-import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -117,7 +117,7 @@ class QuicSessionTicketImplTest {
     @Test
     void ticketShouldContainCipher() {
         // Given
-        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], mock(NewSessionTicketMessage.class), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When
@@ -130,7 +130,7 @@ class QuicSessionTicketImplTest {
     @Test
     void ticketToStringShouldNotThrow() {
         // Given
-        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], new NewSessionTicketMessage(), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
+        NewSessionTicket tlsSessionTicket = new NewSessionTicket(new byte[32], mock(NewSessionTicketMessage.class), TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384);
         TransportParameters peerTransportParams = new TransportParameters();
 
         // When

@@ -48,7 +48,7 @@ import static tech.kwik.core.impl.Role.Server;
  * Quic transport parameter TLS extension.
  * see https://www.rfc-editor.org/rfc/rfc9001.html#name-quic-transport-parameters-e
  */
-public class QuicTransportParametersExtension extends Extension {
+public class QuicTransportParametersExtension implements Extension {
 
     // https://www.rfc-editor.org/rfc/rfc9221.html#name-quic-transport-parameter
     public static final int MAX_DATAGRAM_FRAME_SIZE = 0x20;

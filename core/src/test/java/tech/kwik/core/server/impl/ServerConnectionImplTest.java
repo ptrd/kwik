@@ -37,6 +37,7 @@ import tech.kwik.agent15.engine.TlsStatusEventHandler;
 import tech.kwik.agent15.engine.impl.TlsServerEngineImpl;
 import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
 import tech.kwik.agent15.extension.Extension;
+import tech.kwik.agent15.extension.KeyShareExtension;
 import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.common.EncryptionLevel;
@@ -59,7 +60,6 @@ import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.stream.StreamManager;
-import tech.kwik.core.test.ByteUtils;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.tls.QuicTransportParametersExtension;
@@ -85,9 +85,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static tech.kwik.core.QuicConstants.TransportParameterId.*;
+import static tech.kwik.core.test.ByteUtils.hexToBytes;
 
 
 class ServerConnectionImplTest {
+
+    public static final byte[] KEY_EXCHANGE_DATA = hexToBytes("045d58e52e3deee2e8b78ec51e2d0cedb5080c8244bd3f651219cc48f3d3d404399d6748ab3eaaca0e32b927fc5e8107628e636b614cab332d8637c1d61caccdda");
 
     public static final String DEFAULT_APPLICATION_PROTOCOL = "hq-29";
     private ServerConnectionImpl connection;
@@ -120,9 +123,7 @@ class ServerConnectionImplTest {
         ((MockTlsServerEngine) tlsServerEngine).injectErrorInReceivingClientHello(() -> new HandshakeFailureAlert(""));
 
         // When
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false,
-                List.of(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256), List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256), TlsConstants.NamedGroup.secp256r1, clientExtensions, null, ClientHello.PskKeyEstablishmentMode.both);
+        ClientHello ch = createDefaultClientHello(TlsConstants.CipherSuite.TLS_CHACHA20_POLY1305_SHA256);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
@@ -134,7 +135,7 @@ class ServerConnectionImplTest {
     void failingAlpnNegotiationLeadsToCloseConnection() throws Exception {
         // When
         List<Extension> clientExtensions = List.of(new ApplicationLayerProtocolNegotiationExtension("h2"), createTransportParametersExtension());
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        ClientHello ch = createDefaultClientHello(clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame), mock(PacketMetaData.class));
 
@@ -302,7 +303,7 @@ class ServerConnectionImplTest {
         // Given
         TransportParameters.VersionInformation versionInfo = new TransportParameters.VersionInformation(Version.QUIC_version_1, List.of(Version.QUIC_version_2, Version.QUIC_version_1));
         List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension(versionInfo));
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        ClientHello ch = createDefaultClientHello(clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
 
         // When
@@ -320,7 +321,7 @@ class ServerConnectionImplTest {
         // Given
         TransportParameters.VersionInformation versionInfo = new TransportParameters.VersionInformation(Version.QUIC_version_1, List.of(Version.parse(0x1a2a3a4a), Version.QUIC_version_1));
         List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension(versionInfo));
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        ClientHello ch = createDefaultClientHello(clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.QUIC_version_1, ch.getBytes());
 
         // When
@@ -445,7 +446,7 @@ class ServerConnectionImplTest {
         clearInvocations(connection.getSender());
 
         // When
-        ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, Collections.emptyList());
+        ClientHello ch = createDefaultClientHello(Collections.emptyList());
         CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
 
@@ -517,7 +518,7 @@ class ServerConnectionImplTest {
     @Test
     void receivingInitialPacketShouldSetAntiAmplification() throws Exception {
         // Given
-        byte[] odcid = ByteUtils.hexToBytes("67268378ae7dc13b");
+        byte[] odcid = hexToBytes("67268378ae7dc13b");
         connection = createServerConnection(tlsServerEngineFactory, false, odcid);
 
         // When
@@ -560,7 +561,7 @@ class ServerConnectionImplTest {
         clearInvocations(connection.getSender());
 
         // When
-        ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, Collections.emptyList());
+        ClientHello ch = createDefaultClientHello();
         CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
 
@@ -576,9 +577,8 @@ class ServerConnectionImplTest {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         CryptoStream cryptoStream = new CryptoStream(VersionHolder.with(Version.getDefault()), EncryptionLevel.Initial, Role.Server, mock(Logger.class));
         cryptoStream.setBufferMode();
-        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
 
-        ClientHello ch = new ClientHello("testserver", KeyUtils.generatePublicKey(), false, clientExtensions);
+        ClientHello ch = createDefaultClientHello();
         cryptoStream.add(new CryptoFrame(Version.getDefault(), ch.getBytes()));
         connection = createServerConnection(tlsServerEngineFactory, false, new byte[8], odcid, cid -> {}, cryptoStream);
 
@@ -789,9 +789,37 @@ class ServerConnectionImplTest {
     }
 
     private InitialPacket createInitialClientPacket(List<Extension> clientExtensions) {
-        ClientHello ch = new ClientHello("localhost", KeyUtils.generatePublicKey(), false, clientExtensions);
+        ClientHello ch = createDefaultClientHello(clientExtensions);
         CryptoFrame cryptoFrame = new CryptoFrame(Version.getDefault(), ch.getBytes());
         return new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, cryptoFrame);
+    }
+
+    private ClientHello createDefaultClientHello() {
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        return createDefaultClientHello(clientExtensions);
+    }
+
+    private ClientHello createDefaultClientHello(TlsConstants.CipherSuite cipherSuite) {
+        List<Extension> clientExtensions = List.of(alpn, createTransportParametersExtension());
+        return new ClientHello("localhost",
+                List.of(new KeyShareExtension.KeyShareEntry(TlsConstants.NamedGroup.secp256r1, KEY_EXCHANGE_DATA)), false,
+                List.of(cipherSuite),
+                List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256),
+                List.of(TlsConstants.NamedGroup.secp256r1),
+                clientExtensions,
+                null,
+                ClientHello.PskKeyEstablishmentMode.both);
+    }
+
+    private ClientHello createDefaultClientHello(List<Extension> clientExtensions) {
+        return new ClientHello("localhost",
+                List.of(new KeyShareExtension.KeyShareEntry(TlsConstants.NamedGroup.secp256r1, KEY_EXCHANGE_DATA)), false,
+                List.of(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256),
+                List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256),
+                List.of(TlsConstants.NamedGroup.secp256r1),
+                clientExtensions,
+                null,
+                ClientHello.PskKeyEstablishmentMode.both);
     }
 
     private static TransportParameters createDefaultTransportParameters() {
@@ -833,7 +861,7 @@ class ServerConnectionImplTest {
         private Supplier<TlsProtocolException> exceptionSupplier;
 
         public MockTlsServerEngine(X509Certificate serverCertificate, PrivateKey certificateKey, ServerMessageSender serverMessageSender, TlsStatusEventHandler tlsStatusHandler) {
-            super(serverCertificate, certificateKey, Collections.emptyList(), serverMessageSender, tlsStatusHandler, null);
+            super(List.of(serverCertificate), certificateKey, Collections.emptyList(), serverMessageSender, tlsStatusHandler, null, null);
         }
 
         @Override

@@ -1,8 +1,5 @@
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
-import org.gradle.api.tasks.testing.TestDescriptor
-import org.gradle.api.tasks.testing.TestListener
-import org.gradle.api.tasks.testing.TestResult
 
 plugins {
     id 'java'
@@ -52,7 +49,7 @@ repositories {
     mavenCentral()
 }
 
-ext.agent15_version = '3.3'
+ext.agent15_version = '4.0'
 ext.mockito_version = '5.23.0'
 
 // Resolvable configuration holding just the mockito-core jar, so it can be passed to the test JVM as a Java agent

@@ -23,7 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import tech.kwik.agent15.TlsConstants;
 import tech.kwik.agent15.engine.TlsClientEngine;
+import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
+import tech.kwik.agent15.extension.KeyShareExtension;
 import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.core.ConnectionConfig;
 import tech.kwik.core.ConnectionListener;
@@ -41,7 +44,6 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.StreamManager;
-import tech.kwik.core.test.ByteUtils;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
@@ -52,10 +54,6 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.URI;
 import java.nio.ByteBuffer;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.ECPublicKey;
-import java.security.spec.ECGenParameterSpec;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -68,11 +66,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static tech.kwik.agent15.TlsConstants.NamedGroup.secp256r1;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
+import static tech.kwik.core.test.ByteUtils.hexToBytes;
 
 class QuicClientConnectionImplTest {
+
+    public static final byte[] KEY_EXCHANGE_DATA = hexToBytes("045d58e52e3deee2e8b78ec51e2d0cedb5080c8244bd3f651219cc48f3d3d404399d6748ab3eaaca0e32b927fc5e8107628e636b614cab332d8637c1d61caccdda");
 
     private static Logger logger;
     private final byte[] destinationConnectionId = { 0x00, 0x01, 0x02, 0x03 };
@@ -865,7 +865,7 @@ class QuicClientConnectionImplTest {
         byte[] destinationConnectionId = { 0x0f, 0x0f, 0x0f, 0x0f };
         byte[] retryToken = { 0x01, 0x02, 0x03 };
         RetryPacket retryPacket = new RetryPacket(Version.getDefault(), sourceConnectionId, destinationConnectionId, originalDestinationConnectionId, retryToken);
-        FieldSetter.setField(retryPacket, RetryPacket.class.getDeclaredField("retryIntegrityTag"), ByteUtils.hexToBytes(integrityTagValue));
+        FieldSetter.setField(retryPacket, RetryPacket.class.getDeclaredField("retryIntegrityTag"), hexToBytes(integrityTagValue));
         return retryPacket;
     }
 
@@ -915,12 +915,16 @@ class QuicClientConnectionImplTest {
         connection.setPeerTransportParameters(params);
     }
 
-    private ClientHello createClientHello() throws Exception {
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
-        keyPairGenerator.initialize(new ECGenParameterSpec(secp256r1.toString()));
-        KeyPair keyPair = keyPairGenerator.genKeyPair();
-        ECPublicKey publicKey = (ECPublicKey) keyPair.getPublic();
-        return new ClientHello("example.com", publicKey);
+    private ClientHello createClientHello() {
+        return new ClientHello("localhost",
+                List.of(new KeyShareExtension.KeyShareEntry(TlsConstants.NamedGroup.secp256r1, KEY_EXCHANGE_DATA)),
+                false,
+                List.of(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256),
+                List.of(TlsConstants.SignatureScheme.rsa_pss_pss_sha256),
+                List.of(TlsConstants.NamedGroup.secp256r1),
+                List.of(new ApplicationLayerProtocolNegotiationExtension("hq-interop")),
+                null,
+                ClientHello.PskKeyEstablishmentMode.both);
     }
     //endregion
 }

@@ -721,6 +721,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         }
 
         @Override
+        public void send(HelloRetryRequest helloRetryRequest) {
+            CryptoStream cryptoStream = getCryptoStream(Initial);
+            cryptoStream.write(helloRetryRequest, false);
+            log.sentPacketInfo(cryptoStream.toStringSent());
+        }
+
+        @Override
         public void send(EncryptedExtensions ee) {
             getCryptoStream(EncryptionLevel.Handshake).write(ee, false);
         }
