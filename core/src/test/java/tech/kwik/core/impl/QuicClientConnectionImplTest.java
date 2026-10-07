@@ -31,6 +31,7 @@ import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.core.ConnectionConfig;
 import tech.kwik.core.ConnectionListener;
 import tech.kwik.core.ConnectionTerminatedEvent;
+import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.cc.FixedWindowCongestionController;
 import tech.kwik.core.cid.ConnectionIdInfo;
@@ -51,6 +52,7 @@ import tech.kwik.core.test.TestScheduledExecutor;
 import tech.kwik.core.tls.QuicTransportParametersExtension;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.Inet4Address;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -836,6 +838,122 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region named groups
+    @Test
+    void byDefaultAKeyShareIsOfferedForTheFirstOfTheSupportedGroups() throws Exception {
+        // When
+        QuicClientConnectionImpl connection = buildConnection(builder -> {});
+
+        // Then
+        assertThat(keyShareGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.secp256r1);
+        assertThat(supportedGroupsOf(connection)).contains(TlsConstants.NamedGroup.secp256r1,
+                TlsConstants.NamedGroup.secp384r1);
+    }
+
+    @Test
+    void whenOnlyPreferredGroupsAreSetTheseAreTheSupportedGroupsToo() throws Exception {
+        // When
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder
+                .preferredGroups(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)));
+
+        // Then
+        assertThat(keyShareGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1);
+        assertThat(supportedGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1);
+    }
+
+    @Test
+    void whenOnlySupportedGroupsAreSetAKeyShareIsOfferedForTheFirstOne() throws Exception {
+        // When
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder
+                .supportedGroups(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)));
+
+        // Then
+        assertThat(keyShareGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519);
+        assertThat(supportedGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1);
+    }
+
+    @Test
+    void whenPreferredGroupIsSetMoreThanOnceOnlyTheLastCallCounts() throws Exception {
+        // When
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder
+                .preferredGroups(List.of(TlsConstants.NamedGroup.secp521r1))
+                .preferredGroups(List.of(TlsConstants.NamedGroup.x25519)));
+
+        // Then
+        assertThat(keyShareGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519);
+    }
+
+    @Test
+    void whenSupportedGroupsAreSetMoreThanOnceOnlyTheLastCallCounts() throws Exception {
+        // When
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder
+                .supportedGroups(List.of(TlsConstants.NamedGroup.secp521r1, TlsConstants.NamedGroup.secp384r1))
+                .supportedGroups(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)));
+
+        // Then
+        assertThat(supportedGroupsOf(connection)).containsExactly(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1);
+    }
+
+    @Test
+    void preferredGroupMustBeOneOfTheSupportedGroups() {
+        assertThatThrownBy(() ->
+                buildConnection(builder -> builder
+                        .preferredGroups(List.of(TlsConstants.NamedGroup.x25519))
+                        .supportedGroups(List.of(TlsConstants.NamedGroup.secp256r1)))
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void preferredGroupsMustBeInTheSameOrderAsTheSupportedGroups() {
+        assertThatThrownBy(() ->
+                buildConnection(builder -> builder
+                        .preferredGroups(List.of(TlsConstants.NamedGroup.secp256r1, TlsConstants.NamedGroup.x25519))
+                        .supportedGroups(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)))
+        ).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void sameGroupCannotBePreferredTwice() {
+        assertThatThrownBy(() ->
+                buildConnection(builder -> builder
+                        .preferredGroups(List.of(TlsConstants.NamedGroup.secp256r1, TlsConstants.NamedGroup.secp256r1)))
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void preferredGroupsMustNotBeEmpty() {
+        assertThatThrownBy(() ->
+                buildConnection(builder -> builder.preferredGroups(List.of()))
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void supportedGroupsMustNotBeEmpty() {
+        assertThatThrownBy(() ->
+                buildConnection(builder -> builder.supportedGroups(List.of()))
+        ).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void configuredNamedGroupsArePassedToTlsEngine() throws Exception {
+        // Given
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder
+                .preferredGroups(List.of(TlsConstants.NamedGroup.x25519))
+                .supportedGroups(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)));
+        TlsClientEngine tlsEngine = mock(TlsClientEngine.class);
+        FieldSetter.setField(connection, "tlsEngine", tlsEngine);
+
+        // When
+        startHandshake(connection);
+
+        // Then
+        verify(tlsEngine).startHandshake(
+                eq(List.of(TlsConstants.NamedGroup.x25519)),
+                eq(List.of(TlsConstants.NamedGroup.x25519, TlsConstants.NamedGroup.secp256r1)),
+                anyList());
+    }
+    //endregion
+
     //region misc
     @Test
     void receivingNewTokenFrameWithEmptyTokenShouldLeadToConnectionError() {
@@ -880,6 +998,29 @@ class QuicClientConnectionImplTest {
         RetryPacket retryPacket = createRetryPacket(originalDestinationConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
         return retryPacket;
+    }
+
+    private QuicClientConnectionImpl buildConnection(Consumer<QuicClientConnection.Builder> configure) throws Exception {
+        QuicClientConnection.Builder builder = QuicClientConnectionImpl.newBuilder()
+                .uri(new URI("//localhost:443"))
+                .applicationProtocol("hq-interop")
+                .logger(logger);
+        configure.accept(builder);
+        return (QuicClientConnectionImpl) builder.build();
+    }
+
+    private List<TlsConstants.NamedGroup> keyShareGroupsOf(QuicClientConnectionImpl connection) throws Exception {
+        return (List<TlsConstants.NamedGroup>) new FieldReader(connection, QuicClientConnectionImpl.class.getDeclaredField("keyShareGroups")).read();
+    }
+
+    private List<TlsConstants.NamedGroup> supportedGroupsOf(QuicClientConnectionImpl connection) throws Exception {
+        return (List<TlsConstants.NamedGroup>) new FieldReader(connection, QuicClientConnectionImpl.class.getDeclaredField("supportedGroups")).read();
+    }
+
+    private void startHandshake(QuicClientConnectionImpl connection) throws Exception {
+        Method startHandshake = QuicClientConnectionImpl.class.getDeclaredMethod("startHandshake", String.class, boolean.class);
+        startHandshake.setAccessible(true);
+        startHandshake.invoke(connection, "hq-interop", false);
     }
 
     private void simulateSuccessfulConnect() throws Exception {

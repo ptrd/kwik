@@ -137,6 +137,33 @@ public interface QuicClientConnection extends QuicConnection {
 
         Builder cipherSuite(TlsConstants.CipherSuite cipherSuite);
 
+        /**
+         * Sets the named groups to generate a key share for in the client hello. The groups are used in the order of
+         * the given list, the first being the most preferred.
+         * Offering a key share for more than one group avoids the extra round trip of a HelloRetryRequest when the
+         * server does not support the client's first choice.
+         * The preferred groups are automatically advertised as supported groups too; when supported groups are set
+         * explicitly with {@link #supportedGroups(List)}, each preferred group must be one of them and the order of
+         * the preferred groups must match the order of the supported groups.
+         * If no preferred group is set, the first supported group is used (or a default, when supported groups are not
+         * set either).
+         * Calling this method more than once replaces the groups set by the previous call.
+         * @param namedGroups  the named groups to generate a key share for, must not be empty
+         * @return  the builder
+         */
+        Builder preferredGroups(List<TlsConstants.NamedGroup> namedGroups);
+
+        /**
+         * Sets the named groups to advertise as supported groups in the client hello. The groups are advertised in the
+         * order of the given list, the first being the most preferred.
+         * If no supported group is set, the preferred groups are used as supported groups (or a default, when
+         * preferred groups are not set either).
+         * Calling this method more than once replaces the groups set by the previous call.
+         * @param namedGroups  the named groups to advertise as supported, must not be empty
+         * @return  the builder
+         */
+        Builder supportedGroups(List<TlsConstants.NamedGroup> namedGroups);
+
         Builder noServerCertificateCheck();
 
         /**
