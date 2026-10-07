@@ -1,6 +1,14 @@
 # Releases
 
+## 0.12 (2026-10-07)
 
+- upgrade agent15 to 4.0, which provides Post-Quantum Hybrid Key Agreement Mechanisms for TLS 1.3
+- added builder methods to set the TLS named groups
+- added option to set the connection id length
+- several fixes w.r.t. connection id handling
+- fix: loss detection on fast machines
+- fix: survive `PortUnreachableException` in receive loop (Windows only)
+- contains preparations for connection migration and path validation, not yet complete and therefore disabled by default
 
 ## 0.11 (2026-07-11)
 
