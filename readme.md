@@ -5,9 +5,6 @@
 Kwik is an implementation of the [QUIC](https://en.wikipedia.org/wiki/QUIC) protocol in (100%) Java. 
 Kwik started as client (library) only, but since May 2021 it supports both client and server.
 
-**If you are upgrading from a version prior to 0.10, read the [CHANGELOG](https://github.com/ptrd/kwik/blob/master/CHANGELOG.md)
-for upgrade instructions.**
-
 QUIC is a brand-new transport protocol developed by the IETF, and is the transport layer for the (also new) HTTP3 protocol.
 Although necessary for HTTP3, QUIC is more than just the transport protocol for HTTP3: most people consider QUIC as the 
 "next generation TCP". It has similar properties as TCP, e.g. provide a reliable ordered stream, but is better in many ways:
@@ -23,9 +20,7 @@ my [presentation on Luminis DevCon 2019](https://youtu.be/eR2tPOLQRws).
 If you're looking for a Java HTTP3 client or server, check out [Flupke](https://github.com/ptrd/flupke), which is built on top of Kwik.
 
 Kwik is created and maintained by Peter Doornbosch. 
-The latest greatest can always be found on [BitBucket](https://bitbucket.org/pjtr/kwik)
-or [GitHub](https://github.com/ptrd/kwik).
-
+The latest greatest can always be found on [GitHub](https://github.com/ptrd/kwik).
 
 ## Status
 
@@ -58,12 +53,14 @@ and QUIC v2 ([RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)).
 * Compatible Version Negotiation [RFC 9368](https://www.rfc-editor.org/rfc/rfc9368.html)
 * QUIC V2 [RFC 9369](https://www.rfc-editor.org/rfc/rfc9369.html)
 * Unreliable Datagram Extension [RFC 9221](https://www.rfc-editor.org/rfc/rfc9221.html)
-* QUIC Stream Resets with Partial Delivery (https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset)
-  
+* QUIC Stream Resets with Partial Delivery (https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset) 
+
 Client only:
 
 * connection migration (use the interactive mode of the sample client to try it)
 
+Also, Kwik supports Post-Quantum Hybrid Key Agreement Mechanisms as defined in 
+[RFC10024: Post-Quantum Traditional (PQ/T) Hybrid Key Agreement Mechanisms for TLS 1.3](https://www.rfc-editor.org/info/rfc10024/). 
 
 ### Is Kwik ready for production use?
 

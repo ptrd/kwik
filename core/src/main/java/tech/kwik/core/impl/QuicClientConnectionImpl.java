@@ -47,7 +47,6 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
-import tech.kwik.core.receive.Receiver;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
@@ -66,12 +65,7 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.SecureRandom;
-import java.security.UnrecoverableKeyException;
+import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -84,8 +78,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static tech.kwik.agent15.TlsConstants.NamedGroup.*;
 import static tech.kwik.agent15.TlsConstants.SignatureScheme.*;
-import static tech.kwik.core.common.KwikConstants.MAX_SUPPORTED_PACKET_SIZE;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 import static tech.kwik.core.common.EncryptionLevel.App;
 import static tech.kwik.core.common.EncryptionLevel.Handshake;
@@ -118,6 +112,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     // "Values below 1200 are invalid."
     public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
     public static final int DEFAULT_MAX_UDP_PAYLOAD_SIZE = MAX_SUPPORTED_PACKET_SIZE;
+    public static final List<TlsConstants.NamedGroup> DEFAULT_KEY_SHARE_GROUPS = List.of(secp256r1);
+    public static final List<TlsConstants.NamedGroup> DEFAULT_SUPPORTED_GROUPS = List.of(secp256r1, secp384r1, secp521r1, x25519, x448);
 
     public enum EarlyDataStatus {
         None,
@@ -156,6 +152,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private boolean ignoreVersionNegotiation;
     private volatile EarlyDataStatus earlyDataStatus = None;
     private final List<TlsConstants.CipherSuite> cipherSuites;
+    private final List<TlsConstants.NamedGroup> keyShareGroups;
+    private final List<TlsConstants.NamedGroup> supportedGroups;
 
     private final GlobalAckGenerator ackGenerator;
     private Integer clientHelloEnlargement;
@@ -172,6 +170,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                                      Version originalVersion, Version preferredVersion, Logger log,
                                      String proxyHost, Path secretsFile, Integer initialRtt, Integer cidLength,
                                      List<TlsConstants.CipherSuite> cipherSuites,
+                                     List<TlsConstants.NamedGroup> keyShareGroups,
+                                     List<TlsConstants.NamedGroup> supportedGroups,
                                      X509Certificate clientCertificate, PrivateKey clientCertificateKey,
                                      DatagramSocketFactory socketFactory) throws UnknownHostException, SocketException {
         super(originalVersion, Role.Client, secretsFile, connectionProperties, "", log);
@@ -187,6 +187,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         usingIPv4 = InetTools.isIPv4(serverAddress);
         this.sessionTicket = sessionTicket;
         this.cipherSuites = cipherSuites;
+        this.keyShareGroups = keyShareGroups;
+        this.supportedGroups = supportedGroups;
         this.clientCertificate = clientCertificate;
         this.clientCertificateKey = clientCertificateKey;
         this.socketFactory = socketFactory != null? socketFactory: (address) -> new DatagramSocket();
@@ -570,7 +572,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             List<TlsConstants.SignatureScheme> supportedSignatureAlgorithms = List.of(
                     rsa_pss_rsae_sha256, rsa_pss_rsae_sha384, rsa_pss_rsae_sha512,
                     ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512);
-            tlsEngine.startHandshake(TlsConstants.NamedGroup.secp256r1, supportedSignatureAlgorithms);
+            tlsEngine.startHandshake(keyShareGroups, supportedGroups, supportedSignatureAlgorithms);
         }
         catch (IOException e) {
             // Will not happen, as our ClientMessageSender implementation will not throw.
@@ -1519,6 +1521,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private Integer initialRtt;
         private Integer connectionIdLength;
         private List<TlsConstants.CipherSuite> cipherSuites = new ArrayList<>();
+        private List<TlsConstants.NamedGroup> keyShareGroups = List.of();
+        private List<TlsConstants.NamedGroup> supportedGroups = List.of();
         private boolean omitCertificateCheck;
         private Integer quantumReadinessTest;
         private X509Certificate clientCertificate;
@@ -1551,11 +1555,13 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (cipherSuites.isEmpty()) {
                 cipherSuites.add(TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256);
             }
+            determineNamedGroups();
 
             QuicClientConnectionImpl quicConnection =
                     new QuicClientConnectionImpl(host, port, ipVersionOption, applicationProtocol, connectTimeoutInMillis, connectionProperties, sessionTicket, Version.of(quicVersion),
                             Version.of(preferredVersion), log, proxyHost, secretsFile, initialRtt, connectionIdLength,
-                            cipherSuites, clientCertificate, clientCertificateKey, socketFactory);
+                            cipherSuites, keyShareGroups, supportedGroups, clientCertificate, clientCertificateKey,
+                            socketFactory);
 
             if (omitCertificateCheck) {
                 quicConnection.trustAnyServerCertificate();
@@ -1582,6 +1588,35 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             }
 
             return quicConnection;
+        }
+
+        /**
+         * Determines the named groups to use for the key share and the supported groups extension, applying defaults
+         * for whatever is not set explicitly.
+         */
+        private void determineNamedGroups() {
+            if (keyShareGroups.isEmpty() && supportedGroups.isEmpty()) {
+                keyShareGroups = DEFAULT_KEY_SHARE_GROUPS;
+                supportedGroups = DEFAULT_SUPPORTED_GROUPS;
+            }
+            else if (keyShareGroups.isEmpty()) {
+                // Offer a key share for the most preferred of the supported groups.
+                keyShareGroups = List.of(supportedGroups.get(0));
+            }
+            else if (supportedGroups.isEmpty()) {
+                supportedGroups = keyShareGroups;
+            }
+            // https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.8
+            // "Each KeyShareEntry value MUST correspond to a group offered in the "supported_groups" extension and
+            //  MUST appear in the same order."
+            List<TlsConstants.NamedGroup> keySharesInSupportedGroupsOrder = supportedGroups.stream()
+                    .filter(keyShareGroups::contains)
+                    .collect(Collectors.toList());
+            if (!keyShareGroups.equals(keySharesInSupportedGroupsOrder)) {
+                throw new IllegalStateException("Each preferred group must be a supported group too and the preferred "
+                        + "groups must be in the same order as the supported groups; preferred: " + keyShareGroups
+                        + ", supported: " + supportedGroups);
+            }
         }
 
         private void checkBuilderArguments() {
@@ -1775,6 +1810,32 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder cipherSuite(TlsConstants.CipherSuite cipherSuite) {
             cipherSuites.add(Objects.requireNonNull(cipherSuite));
+            return this;
+        }
+
+        @Override
+        public Builder preferredGroups(List<TlsConstants.NamedGroup> namedGroups) {
+            if (namedGroups.isEmpty()) {
+                throw new IllegalArgumentException("At least one preferred group is required");
+            }
+            if (namedGroups.stream().distinct().count() != namedGroups.size()) {
+                // https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.8
+                // "Clients MUST NOT offer multiple KeyShareEntry values for the same group."
+                throw new IllegalArgumentException("Duplicate preferred group(s): " + namedGroups);
+            }
+            keyShareGroups = List.copyOf(namedGroups);
+            return this;
+        }
+
+        @Override
+        public Builder supportedGroups(List<TlsConstants.NamedGroup> namedGroups) {
+            if (namedGroups.isEmpty()) {
+                throw new IllegalArgumentException("At least one supported group is required");
+            }
+            if (namedGroups.stream().distinct().count() != namedGroups.size()) {
+                throw new IllegalArgumentException("Duplicate supported group(s): " + namedGroups);
+            }
+            supportedGroups = List.copyOf(namedGroups);
             return this;
         }
 
