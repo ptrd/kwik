@@ -27,6 +27,7 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
+import tech.kwik.core.frame.CompositeFrame;
 import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.QuicFrame;
@@ -194,7 +195,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     @Override
     public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
-        if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame)) {
+        QuicFrame pathFrame = frame instanceof CompositeFrame? ((CompositeFrame) frame).getFirstFrame(): frame;
+        if (! (pathFrame instanceof PathChallengeFrame || pathFrame instanceof PathResponseFrame)) {
             throw new IllegalArgumentException("Only path challenge/response frames can be sent to an alternate address");
         }
         sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
@@ -354,9 +356,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     void sendIfAny() throws IOException {
         AssembledDatagram assembled;
         do {
-            assembled = assemblePacket();
-            if (!assembled.isEmpty()) {
-                send(assembled);
+            // Assembling and sending must be atomic with respect to a change of the (client) address, as the packets
+            // are assembled for a given address (e.g. contain the connection ID used on that path); the socket
+            // manager synchronizes such changes on itself.
+            synchronized (socketManager) {
+                assembled = assemblePacket();
+                if (!assembled.isEmpty()) {
+                    send(assembled);
+                }
             }
         }
         while (!assembled.isEmpty());
@@ -523,7 +530,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
     public SendStatistics getStatistics() {
         return new SendStatistics(datagramsSent, packetsSent, bytesSent, dataSent, recoveryManager.getLost(),
-                rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt());
+                rttEstimater.getSmoothedRtt(), rttEstimater.getRttVar(), rttEstimater.getLatestRtt(),
+                recoveryManager.getPtoCount());
     }
 
     @Override
@@ -571,4 +579,3 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         recoveryManager.reset(pnSpace);
     }
 }
-

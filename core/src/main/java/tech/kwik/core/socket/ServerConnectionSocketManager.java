@@ -63,7 +63,8 @@ public class ServerConnectionSocketManager implements SocketManager {
         return clientAddress;
     }
 
-    public void changeClientAddress(InetSocketAddress clientAddress) {
+    // Synchronized for the same reason as the address changes in ClientSocketManager (see SenderImpl.sendIfAny).
+    public synchronized void changeClientAddress(InetSocketAddress clientAddress) {
         this.clientAddress = clientAddress;
     }
 }
