@@ -192,11 +192,11 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     @Override
-    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
+    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address, SendOptions sendOptions) {
         if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame)) {
             throw new IllegalArgumentException("Only path challenge/response frames can be sent to an alternate address");
         }
-        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
+        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address, sendOptions);
         wakeUpSenderLoop();
     }
 

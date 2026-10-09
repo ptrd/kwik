@@ -34,17 +34,27 @@ public class SendItem {
     private final QuicPacket packet;
     private final Consumer<QuicPacket> packetLostCallback;
     private final InetSocketAddress clientAddress;
+    private final SendOptions sendOptions;
 
     public SendItem(QuicPacket packet, Consumer<QuicPacket> packetLostCallback, InetSocketAddress clientAddress) {
         this.packet = Objects.requireNonNull(packet);
         this.packetLostCallback = Objects.requireNonNull(packetLostCallback);
         this.clientAddress = Objects.requireNonNull(clientAddress);
+        this.sendOptions = SendOptions.getDefault();
     }
 
     public SendItem(QuicPacket packet, InetSocketAddress clientAddress) {
         this.packet = Objects.requireNonNull(packet);
         this.clientAddress = Objects.requireNonNull(clientAddress);
         this.packetLostCallback = EMPTY_CALLBACK;
+        this.sendOptions = SendOptions.getDefault();
+    }
+
+    public SendItem(QuicPacket packet, InetSocketAddress clientAddress, SendOptions sendOptions) {
+        this.packet = Objects.requireNonNull(packet);
+        this.clientAddress = Objects.requireNonNull(clientAddress);
+        this.packetLostCallback = EMPTY_CALLBACK;
+        this.sendOptions = sendOptions;
     }
 
     public QuicPacket getPacket() {
@@ -62,5 +72,9 @@ public class SendItem {
 
     public InetSocketAddress getClientAddress() {
         return clientAddress;
+    }
+
+    public SendOptions getSendOptions() {
+        return sendOptions;
     }
 }

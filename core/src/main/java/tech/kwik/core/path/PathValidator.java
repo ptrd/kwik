@@ -28,6 +28,7 @@ import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.util.OneShotRateLimiter;
@@ -156,7 +157,7 @@ public class PathValidator {
             byte[] challenge = generateChallenge();
             pathValidationsByChallenge.put(convertToLong(challenge), validation);
             PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
-            sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate());
+            sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate(), SendOptions.noPadding());
             validation.incrementChallengeRepeatCount();
 
             // And schedule the next check

@@ -111,12 +111,14 @@ public class GlobalPacketAssembler {
         int minPacketSize = 19;  // Is mininum size for short header packet, long header packet is at least 24
         int remaining = Integer.min(remainingCwndSize, maxDatagramSize);
 
+        SendOptions sendOptions = SendOptions.empty();
         for (EncryptionLevel level: enabledLevels) {
             PacketAssembler assembler = this.packetAssembler[level.ordinal()];
             if (assembler != null) {
                 Optional<SendItem> item = assembler.assemble(remaining, maxDatagramSize - size, clientAddress);
                 if (item.isPresent()) {
                     packets.add(item.get());
+                    sendOptions = sendOptions.merge(item.get().getSendOptions());
                     int packetSize = item.get().getPacket().estimateLength(0);
                     size += packetSize;
                     remaining -= packetSize;
@@ -151,7 +153,7 @@ public class GlobalPacketAssembler {
             }
         }
 
-        if (hasPathChallengeOrResponse && size < 1200) {
+        if (hasPathChallengeOrResponse && size < 1200 && !sendOptions.doNotPad()) {
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
             // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
             //  maximum datagram size of 1200 bytes, unless the anti-amplification limit for the path does not permit
@@ -171,7 +173,7 @@ public class GlobalPacketAssembler {
         }
 
         if (!packets.isEmpty()) {
-            return new AssembledDatagram(packets, minDatagramSize);
+            return new AssembledDatagram(packets, minDatagramSize, sendOptions);
         }
         else {
             return AssembledDatagram.empty();

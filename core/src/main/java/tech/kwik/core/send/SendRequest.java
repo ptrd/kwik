@@ -33,4 +33,8 @@ public interface SendRequest {
     Consumer<QuicFrame> getLostCallback();
 
     InetSocketAddress getAlternateAddress();
+
+    default SendOptions getSendOptions() {
+        return SendOptions.getDefault();
+    }
 }

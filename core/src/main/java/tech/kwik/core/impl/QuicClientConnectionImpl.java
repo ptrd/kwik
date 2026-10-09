@@ -47,6 +47,7 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
@@ -893,7 +894,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.warn("Cannot send path challenge to alternate address, because it is not set");
                 return;
             }
-            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress());
+            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress(), SendOptions.getDefault());
         }
     }
 

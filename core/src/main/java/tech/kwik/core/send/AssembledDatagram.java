@@ -20,6 +20,7 @@ package tech.kwik.core.send;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Result of a packet assembly operation: a list of QUIC packets to coalesce into one UDP datagram,
@@ -30,21 +31,24 @@ public class AssembledDatagram {
     private final List<SendItem> items;
     private final int minDatagramSize;
     private final InetSocketAddress clientAddress;
+    private final SendOptions sendOptions;
 
     private AssembledDatagram() {
         this.items = List.of();
         this.minDatagramSize = 0;
         this.clientAddress = null;
+        this.sendOptions = SendOptions.getDefault();
     }
 
     static AssembledDatagram empty() {
         return new AssembledDatagram();
     }
 
-    public AssembledDatagram(List<SendItem> items, int minDatagramSize) {
+    public AssembledDatagram(List<SendItem> items, int minDatagramSize, SendOptions sendOptions) {
         assert items != null && !items.isEmpty();
         this.items = items;
         this.minDatagramSize = minDatagramSize;
+        this.sendOptions = Objects.requireNonNull(sendOptions);
         this.clientAddress = items.get(0).getClientAddress();
         assert items.stream().allMatch(item -> item.getClientAddress().equals(clientAddress));
     }
@@ -66,5 +70,12 @@ public class AssembledDatagram {
      */
     public int getMinDatagramSize() {
         return minDatagramSize;
+    }
+
+    /**
+     * Returns the (merged) send options of the packets in this datagram.
+     */
+    public SendOptions getSendOptions() {
+        return sendOptions;
     }
 }
