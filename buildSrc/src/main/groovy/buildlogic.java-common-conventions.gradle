@@ -69,6 +69,7 @@ dependencies {
 
 tasks.named('test') {
     jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
+    enableAssertions = true
     useJUnitPlatform()
     testLogging {
         showStandardStreams = true
