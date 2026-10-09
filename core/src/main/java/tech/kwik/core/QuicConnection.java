@@ -141,4 +141,15 @@ public interface QuicConnection extends DatagramExtension {
     void close(long applicationErrorCode, String errorReason);
 
     Statistics getStats();
+
+    /**
+     * Derives keying material from the TLS 1.3 session using the exporter API (RFC 8446, Section 7.5).
+     *
+     * @param label       the exporter label (e.g. "EXPORTER-my-protocol")
+     * @param context     the context value (may be empty)
+     * @param length      desired output length in bytes
+     * @return the derived keying material
+     * @throws IllegalStateException if the handshake is not complete
+     */
+    byte[] exportKeyingMaterial(String label, byte[] context, int length);
 }
