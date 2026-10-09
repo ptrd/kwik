@@ -106,10 +106,10 @@ class SenderImplTest extends AbstractSenderTest {
         ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
         ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
         packet1.setPacketNumber(10);
-        sender.send(new AssembledDatagram(new SendItem(packet1, clientAddress)));
+        sender.send(new AssembledDatagram(List.of(new SendItem(packet1, clientAddress)), 0));
         packet1.setPacketNumber(11);
         packet2.setPacketNumber(12);
-        sender.send(new AssembledDatagram(List.of(new SendItem(packet1, clientAddress), new SendItem(packet2, clientAddress))));
+        sender.send(new AssembledDatagram(List.of(new SendItem(packet1, clientAddress), new SendItem(packet2, clientAddress)), 0));
 
         assertThat(sender.getStatistics().datagramsSent()).isEqualTo(2);
         assertThat(sender.getStatistics().packetsSent()).isEqualTo(3);
@@ -166,7 +166,7 @@ class SenderImplTest extends AbstractSenderTest {
     private void setupMockPacketAssember() throws Exception {
         packetAssembler = mock(GlobalPacketAssembler.class);
         when(packetAssembler.assemble(anyInt(), anyInt(), any(InetSocketAddress.class)))
-                .thenReturn(new AssembledDatagram(List.of(new SendItem(new MockPacket(0, 1200, ""), clientAddress))));
+                .thenReturn(new AssembledDatagram(List.of(new SendItem(new MockPacket(0, 1200, ""), clientAddress)), 0));
         when(packetAssembler.nextDelayedSendTime()).thenReturn(Optional.empty());
         FieldSetter.setField(sender, sender.getClass().getDeclaredField("packetAssembler"), packetAssembler);
     }
@@ -234,7 +234,7 @@ class SenderImplTest extends AbstractSenderTest {
         // When
         InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new AckFrame(0));
         initialPacket.setPacketNumber(1);
-        sender.send(new AssembledDatagram(mutableListOf(new SendItem(initialPacket, getArbitraryLocalAddress()))));
+        sender.send(new AssembledDatagram(mutableListOf(new SendItem(initialPacket, getArbitraryLocalAddress())), 0));
 
         // Then
         verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));

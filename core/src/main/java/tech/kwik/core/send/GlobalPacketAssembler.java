@@ -169,7 +169,12 @@ public class GlobalPacketAssembler {
             }
         }
 
-        return new AssembledDatagram(packets, minDatagramSize);
+        if (!packets.isEmpty()) {
+            return new AssembledDatagram(packets, minDatagramSize);
+        }
+        else {
+            return AssembledDatagram.empty();
+        }
     }
 
     protected int addPadding(List<SendItem> packets, int currentEstimatedSize, int requiredMinimumSize) {

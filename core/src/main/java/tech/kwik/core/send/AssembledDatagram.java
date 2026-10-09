@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.send;
 
+import java.net.InetSocketAddress;
 import java.util.List;
 
 /**
@@ -28,20 +29,24 @@ public class AssembledDatagram {
 
     private final List<SendItem> items;
     private final int minDatagramSize;
+    private final InetSocketAddress clientAddress;
 
-    public AssembledDatagram(SendItem item) {
-        this.items = List.of(item);
+    private AssembledDatagram() {
+        this.items = List.of();
         this.minDatagramSize = 0;
+        this.clientAddress = null;
     }
 
-    public AssembledDatagram(List<SendItem> items) {
-        this.items = items;
-        this.minDatagramSize = 0;
+    static AssembledDatagram empty() {
+        return new AssembledDatagram();
     }
 
     public AssembledDatagram(List<SendItem> items, int minDatagramSize) {
+        assert items != null && !items.isEmpty();
         this.items = items;
         this.minDatagramSize = minDatagramSize;
+        this.clientAddress = items.get(0).getClientAddress();
+        assert items.stream().allMatch(item -> item.getClientAddress().equals(clientAddress));
     }
 
     public List<SendItem> getItems() {
@@ -50,6 +55,10 @@ public class AssembledDatagram {
 
     public boolean isEmpty() {
         return items.isEmpty();
+    }
+
+    public InetSocketAddress getClientAddress() {
+        return clientAddress;
     }
 
     /**
