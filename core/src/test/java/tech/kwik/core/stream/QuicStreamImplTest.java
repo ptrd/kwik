@@ -346,7 +346,10 @@ class QuicStreamImplTest {
         });
         blockingReader.start();
 
-        Thread.sleep(3);
+        long deadline = System.currentTimeMillis() + 1000;
+        while (blockingReader.getState() != Thread.State.TIMED_WAITING && System.currentTimeMillis() < deadline) {
+            Thread.sleep(1);
+        }
         assertThat(blockingReader.getState()).isEqualTo(Thread.State.TIMED_WAITING);
 
         inputStream.close();
