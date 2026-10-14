@@ -123,6 +123,103 @@ class PathValidatorTest {
     }
     //endregion
 
+    //region padding and anti-amplification limit
+    @Test
+    void whenEnoughDataIsReceivedOnNewPathPathChallengeIsPadded() {
+        // Given
+        // Credit 3 * 434 = 1302: padded challenge (1200) plus two unpadded retries (2 * 50)
+        PacketMetaData packetMetaData = metaDataFor(434, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+    }
+
+    @Test
+    void whenNotEnoughDataIsReceivedOnNewPathPathChallengeIsNotPadded() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(433, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenCreditIsJustEnoughForOnePaddedChallengeItIsNotPaddedToLeaveRoomForRetries() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(400, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenFirstPathChallengeIsPaddedRetriesCanStillBeSent() {
+        // Given
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(434, new InetSocketAddress("localhost", 59643)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(1000);
+        testClock.fastForward(2000);
+
+        // Then
+        verify(sender, times(2)).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenAntiAmplificationLimitDoesNotPermitEvenUnpaddedPathChallengeNothingIsSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(16, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
+    }
+
+    @Test
+    void dataReceivedOnNewPathDuringValidationIsTakenIntoAccountForPadding() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(200, newAddress));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+        clearInvocations(sender);
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(400, newAddress));
+        testClock.fastForward(1000);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+    }
+
+    @Test
+    void dataSentOnNewPathIsTakenIntoAccountForPadding() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(600, newAddress));  // credit 1800, padded challenge leaves 600
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(1000);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+    //endregion
+
     //region no unused peer connection ids
     @Test
     void whenNoUnusedPeerConnectionIdIsAvailablePathValidationIsNotStarted() {

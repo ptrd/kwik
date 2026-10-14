@@ -22,6 +22,7 @@ import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 
 import java.nio.ByteBuffer;
+import java.util.stream.Stream;
 
 /**
  * A composite frame that combines two frames that should be sent together.
@@ -55,5 +56,9 @@ public class CompositeFrame extends QuicFrame {
     @Override
     public String toString() {
         return frame1.toString() + ", " + frame2.toString();
+    }
+
+    public Stream<QuicFrame> getFrames() {
+        return Stream.of(frame1, frame2);
     }
 }

@@ -36,6 +36,8 @@ public class PathValidation implements Comparable<PathValidation> {
     private Instant addressLastUsed;
 
     private int challengeRepeatCount = 0;
+    private long bytesReceived;
+    private long bytesSent;
 
     public PathValidation(InetSocketAddress addressToValidate, boolean startedByProbingPacket, Instant start) {
         this.addressToValidate = addressToValidate;
@@ -102,6 +104,25 @@ public class PathValidation implements Comparable<PathValidation> {
 
     public void setValidated() {
         status = Status.Validated;
+    }
+
+    public void addBytesReceived(int count) {
+        bytesReceived += count;
+    }
+
+    public void addBytesSent(int count) {
+        bytesSent += count;
+    }
+
+    /**
+     * Returns the number of bytes that can still be sent on the path to be validated without exceeding the
+     * anti-amplification limit.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#section-8
+     * "an endpoint MUST limit the amount of data it sends to the unvalidated address to three times the amount of
+     *  data received from that address."
+     */
+    public long getAntiAmplificationCredit() {
+        return 3 * bytesReceived - bytesSent;
     }
 
     public Instant startedAt() {

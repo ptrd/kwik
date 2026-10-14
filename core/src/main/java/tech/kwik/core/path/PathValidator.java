@@ -37,6 +37,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Map;
@@ -49,6 +50,12 @@ import java.util.concurrent.ScheduledExecutorService;
 public class PathValidator {
 
     private static final Random randomGenerator = new SecureRandom();
+    // Size of a datagram containing a path challenge that is expanded with padding.
+    static final int PADDED_PATH_CHALLENGE_DATAGRAM_SIZE = 1200;
+    // Upper bound for the size of a datagram containing a path challenge without padding: a short header packet with
+    // flags (1), max length destination connection id (20), max length packet number (4), path challenge frame (9)
+    // and AEAD tag (16).
+    static final int MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE = 1 + 20 + 4 + 9 + 16;
     private final VersionHolder version;
     private volatile InetSocketAddress currentAddress;
     private final SenderImpl sender;
@@ -102,7 +109,13 @@ public class PathValidator {
                     migrateConnection(packetSourceAddress);
                 }
             }
-            else if (! pathValidationInProgress(packetSourceAddress)) {
+            else if (pathValidationInProgress(packetSourceAddress)) {
+                PathValidation validation = pathValidationsByAddress.get(packetSourceAddress);
+                if (validation != null) {
+                    validation.addBytesReceived(metaData.getDatagramSize());
+                }
+            }
+            else {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
                 // "If the recipient has no unused connection IDs from the peer, it will not be able to send anything on
                 //  the new path until the peer provides one; ..."
@@ -118,7 +131,7 @@ public class PathValidator {
                     // https://www.rfc-editor.org/rfc/rfc9000.html#section-9
                     // "An endpoint MUST perform path validation (Section 8.2) if it detects any change to a peer's address, "
                     logger.info(String.format("Potential address migration? %s -> %s; starting path validation", currentAddress, packetSourceAddress));
-                    startValidation(packet, packetSourceAddress);
+                    startValidation(packet, metaData, packetSourceAddress);
                 }
             }
         }
@@ -131,8 +144,9 @@ public class PathValidator {
         return connectionIdProvider.unusedPeerConnectionIdAvailable();
     }
 
-    private void startValidation(QuicPacket packet, InetSocketAddress packetSourceAddress) {
+    private void startValidation(QuicPacket packet, PacketMetaData metaData, InetSocketAddress packetSourceAddress) {
         PathValidation validation = new PathValidation(packetSourceAddress, isProbingPacket(packet), clock.instant());
+        validation.addBytesReceived(metaData.getDatagramSize());
         pathValidationsByAddress.put(packetSourceAddress, validation);
 
         doValidation(validation);
@@ -146,19 +160,32 @@ public class PathValidator {
         //  than it would send an Initial packet. "
         int initialPto = 1000;
         int delay = initialPto * (int) (Math.pow(2, validation.getChallengeRepeatCount()));
+        long timeout = (long) (3 * initialPto * 1.05f);
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.4
         // "Endpoints SHOULD abandon path validation based on a timer."
-        if (clock.instant().isAfter(validation.startedAt().plusMillis((long) (3 * initialPto * 1.05f)))) {
+        if (clock.instant().isAfter(validation.startedAt().plusMillis(timeout))) {
             logger.info("Path validation failed for " + validation.getAddressToValidate() + " after " + validation.getChallengeRepeatCount() + " attempts and timeout of " + (3 * initialPto) + "ms");
             remove(validation);
         }
         else {
-            byte[] challenge = generateChallenge();
-            pathValidationsByChallenge.put(convertToLong(challenge), validation);
-            PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
-            sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate(), SendOptions.noPadding());
-            validation.incrementChallengeRepeatCount();
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
+            // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
+            //  maximum datagram size of 1200 bytes, unless the anti-amplification limit for the path does not permit
+            //  sending a datagram of this size."
+            // Padding must not consume all credit: enough must be left to send (unpadded) path challenges in the
+            // remaining attempts, in case this one gets lost.
+            long credit = validation.getAntiAmplificationCredit();
+            long reserved = (long) remainingAttempts(validation, delay, timeout) * MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE;
+            if (credit - PADDED_PATH_CHALLENGE_DATAGRAM_SIZE >= reserved) {
+                sendPathChallenge(validation, SendOptions.getDefault(), PADDED_PATH_CHALLENGE_DATAGRAM_SIZE);
+            }
+            else if (credit >= MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE) {
+                sendPathChallenge(validation, SendOptions.noPadding(), MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE);
+            }
+            else {
+                logger.info("Anti-amplification limit prevents sending path challenge to " + validation.getAddressToValidate());
+            }
 
             // And schedule the next check
             executor.schedule(() -> {
@@ -167,6 +194,30 @@ public class PathValidator {
                 }
             }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
         }
+    }
+
+    /**
+     * Computes how many more path challenges will be sent (after the current one) before the validation times out,
+     * given the delay until the next attempt and the doubling of the delay with each attempt.
+     */
+    private int remainingAttempts(PathValidation validation, long delay, long timeout) {
+        long elapsed = Duration.between(validation.startedAt(), clock.instant()).toMillis();
+        int remaining = 0;
+        while (elapsed + delay <= timeout) {
+            remaining++;
+            elapsed += delay;
+            delay *= 2;
+        }
+        return remaining;
+    }
+
+    private void sendPathChallenge(PathValidation validation, SendOptions sendOptions, int datagramSize) {
+        byte[] challenge = generateChallenge();
+        pathValidationsByChallenge.put(convertToLong(challenge), validation);
+        PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
+        sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate(), sendOptions);
+        validation.addBytesSent(datagramSize);
+        validation.incrementChallengeRepeatCount();
     }
 
     private void remove(PathValidation validation) {
