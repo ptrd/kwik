@@ -284,6 +284,60 @@ class PathValidatorTest {
     }
 
     @Test
+    void whenPathResponseMatchesPaddedPathChallengePathIsValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(1200, newAddress));
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isTrue();
+    }
+
+    @Test
+    void whenPathResponseMatchesUnpaddedPathChallengePathIsNotValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(200, newAddress));
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isFalse();
+    }
+
+    @Test
+    void whenPathResponseMatchesUnpaddedRetryOfPaddedPathChallengePathIsNotValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(600, newAddress));  // first padded, retry not
+        clearInvocations(sender);
+        testClock.fastForward(1000);
+        PathChallengeFrame retryChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), retryChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isFalse();
+    }
+
+    @Test
+    void initialAddressIsConsideredValidatedWithFullSizePacket() {
+        assertThat(pathValidator.isValidatedWithFullSizePacket(defaultClientAddress)).isTrue();
+    }
+
+    @Test
     void whenMatchingPathResponseIsReceivedOnDifferentPathPathIsValidated() {
         // Given
         InetSocketAddress challengeAddress = new InetSocketAddress("localhost", 59643);

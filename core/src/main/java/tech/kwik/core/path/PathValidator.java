@@ -63,7 +63,7 @@ public class PathValidator {
     private final Logger logger;
     private final ServerConnectionSocketManager socketManager;
     private final Clock clock;
-    private final Map<Long, PathValidation> pathValidationsByChallenge;
+    private final Map<Long, SentChallenge> pathValidationsByChallenge;
     private final Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
     private final ScheduledExecutorService executor;
     private volatile long highestReceivedPacketNumber;
@@ -178,10 +178,10 @@ public class PathValidator {
             long credit = validation.getAntiAmplificationCredit();
             long reserved = (long) remainingAttempts(validation, delay, timeout) * MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE;
             if (credit - PADDED_PATH_CHALLENGE_DATAGRAM_SIZE >= reserved) {
-                sendPathChallenge(validation, SendOptions.getDefault(), PADDED_PATH_CHALLENGE_DATAGRAM_SIZE);
+                sendPathChallenge(validation, SendOptions.getDefault(), PADDED_PATH_CHALLENGE_DATAGRAM_SIZE, true);
             }
             else if (credit >= MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE) {
-                sendPathChallenge(validation, SendOptions.noPadding(), MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE);
+                sendPathChallenge(validation, SendOptions.noPadding(), MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE, false);
             }
             else {
                 logger.info("Anti-amplification limit prevents sending path challenge to " + validation.getAddressToValidate());
@@ -211,9 +211,9 @@ public class PathValidator {
         return remaining;
     }
 
-    private void sendPathChallenge(PathValidation validation, SendOptions sendOptions, int datagramSize) {
+    private void sendPathChallenge(PathValidation validation, SendOptions sendOptions, int datagramSize, boolean padded) {
         byte[] challenge = generateChallenge();
-        pathValidationsByChallenge.put(convertToLong(challenge), validation);
+        pathValidationsByChallenge.put(convertToLong(challenge), new SentChallenge(validation, padded));
         PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
         sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate(), sendOptions);
         validation.addBytesSent(datagramSize);
@@ -222,7 +222,7 @@ public class PathValidator {
 
     private void remove(PathValidation validation) {
         pathValidationsByAddress.remove(validation.getAddressToValidate());
-        pathValidationsByChallenge.values().removeIf(v -> v == validation);
+        pathValidationsByChallenge.values().removeIf(sent -> sent.validation == validation);
     }
 
     private void purgeOldValidations() {
@@ -289,10 +289,11 @@ public class PathValidator {
         //  which the PATH_CHALLENGE was sent."
         Long challenge = convertToLong(pathResponseFrame.getData());
         if (pathValidationsByChallenge.containsKey(challenge)) {
-            PathValidation pathValidation = pathValidationsByChallenge.remove(challenge);
-            pathValidation.setValidated();
+            SentChallenge sentChallenge = pathValidationsByChallenge.remove(challenge);
+            PathValidation pathValidation = sentChallenge.validation;
+            pathValidation.setValidated(sentChallenge.padded);
             InetSocketAddress validatedAddress = pathValidation.getAddressToValidate();
-            logger.info("Path validated: " + validatedAddress);
+            logger.info("Path validated: " + validatedAddress + (sentChallenge.padded? " (with full size packet)": " (with small packet)"));
             if (! pathValidation.isStartedByProbingPacket()) {
                 logger.info("Immediately migrating connection to validated address: " + validatedAddress);
                 migrateConnection(validatedAddress);
@@ -306,5 +307,21 @@ public class PathValidator {
     public boolean isValidated(InetSocketAddress newAddress) {
         PathValidation validation = pathValidationsByAddress.get(newAddress);
         return validation != null && validation.isValidated(clock.instant());
+    }
+
+    public boolean isValidatedWithFullSizePacket(InetSocketAddress address) {
+        PathValidation validation = pathValidationsByAddress.get(address);
+        return validation != null && validation.isValidated(clock.instant()) && validation.isValidatedWithFullSizePacket();
+    }
+
+    private static class SentChallenge {
+        final PathValidation validation;
+        // Whether the datagram containing the path challenge was expanded to 1200 bytes.
+        final boolean padded;
+
+        SentChallenge(PathValidation validation, boolean padded) {
+            this.validation = validation;
+            this.padded = padded;
+        }
     }
 }
