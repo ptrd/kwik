@@ -21,9 +21,6 @@ package tech.kwik.core.packet;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
-import tech.kwik.core.generic.IntegerTooLargeException;
-import tech.kwik.core.generic.InvalidIntegerEncodingException;
-import tech.kwik.core.generic.VariableLengthInteger;
 import tech.kwik.core.impl.InvalidPacketException;
 import tech.kwik.core.impl.QuicConnectionImpl;
 import tech.kwik.core.impl.Role;
@@ -42,38 +39,17 @@ import static tech.kwik.core.impl.QuicConnectionImpl.VersionNegotiationStatus.Ve
  */
 public class ServerRolePacketParser extends PacketParser {
 
-    private final boolean retryRequired;
     private final Supplier<QuicConnectionImpl.VersionNegotiationStatus> versionNegotiationStatusSupplier;
 
-    public ServerRolePacketParser(ConnectionSecrets secrets, VersionHolder quicVersion, int cidLength, boolean retryRequired,
+    public ServerRolePacketParser(ConnectionSecrets secrets, VersionHolder quicVersion, int cidLength,
                                   PacketFilter processor, Supplier<QuicConnectionImpl.VersionNegotiationStatus> versionNegotiationStatusSupplier, Logger logger) {
         super(secrets, quicVersion, cidLength, processor, Role.Server, logger);
-        this.retryRequired = retryRequired;
         this.versionNegotiationStatusSupplier = versionNegotiationStatusSupplier;
     }
 
     @Override
     protected Aead getAead(QuicPacket packet, ByteBuffer data) throws MissingKeysException, InvalidPacketException, TransportError {
         Aead aead;
-
-        if (retryRequired && packet instanceof InitialPacket) {
-            // Check whether the packet has a (retry) token
-            try {
-                data.mark();
-                int destCidLength = data.get(5) & 0xff;
-                int srcCidLength = data.get(6 + destCidLength) & 0xff;
-                data.position(7 + destCidLength + srcCidLength);
-                int tokenLength = VariableLengthInteger.parseInt(data);
-                data.reset();
-                if (tokenLength == 0) {
-                    // If the packet has no token, it uses the secrets based on the original destination connection id.
-                    return connectionSecrets.getOriginalClientInitialAead();
-                }
-            }
-            catch (InvalidIntegerEncodingException | IntegerTooLargeException | IndexOutOfBoundsException | IllegalArgumentException e) {
-                throw new InvalidPacketException("malformed initial packet");
-            }
-        }
 
         if (packet.getVersion().equals(quicVersion.getVersion())) {
             aead = connectionSecrets.getPeerAead(packet.getEncryptionLevel());
