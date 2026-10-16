@@ -73,11 +73,12 @@ public class ServerConnectionFactory {
      * @param clientAddress the address of the client
      * @param scid          the source connection id used by the client
      * @param originalDcid  the original destination id used by the client
+     * @param retryScid     the source connection id of the Retry packet sent by the server, or null if no retry was sent
      * @param cryptoStream  stream containing crypto data already received on encryption level Initial
      * @return
      */
-    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid, CryptoStream cryptoStream) {
-        ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, cryptoStream,
+    public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream) {
+        ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, retryScid, cryptoStream,
                 tlsServerEngineFactory, configuration, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
 
         log.info("Creating new connection with version " + version + " for odcid " + Bytes.bytesToHex(originalDcid)

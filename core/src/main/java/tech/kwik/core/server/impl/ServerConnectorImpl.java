@@ -86,6 +86,7 @@ public class ServerConnectorImpl implements ServerConnector {
     private final Context context;
     private final ServerConnectionRegistryImpl connectionRegistry;
     private final int connectionIdLength;
+    private final RetryTokenManager retryTokenManager;
     private volatile boolean acceptingNewConnections;
     private final Thread serverReceiveLoop;
     private volatile boolean closing;
@@ -134,6 +135,8 @@ public class ServerConnectorImpl implements ServerConnector {
         this.supportedVersions = supportedVersions;
         this.log = Objects.requireNonNull(log);
         connectionIdLength = configuration.connectionIdLength();
+        retryTokenManager = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always?
+                new RetryTokenManager(connectionIdLength): null;
 
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
@@ -410,7 +413,7 @@ public class ServerConnectorImpl implements ServerConnector {
     private ServerConnectionProxy createNewConnection(int versionValue, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid) {
         Version version = Version.parse(versionValue);
         ServerConnectionProxy connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, originalDcid,
-                serverConnectionFactory, connectionRegistry, log);
+                serverConnectionFactory, connectionRegistry, retryTokenManager, this::sendPacket, log);
         // Register new connection now with the original connection id, as retransmitted initial packets with the
         // same original dcid might be received (for example when the server response does not reach the client).
         // Such packets must _not_ lead to new connection candidate. Moreover, if it is an initial packet, it must be

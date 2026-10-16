@@ -20,6 +20,7 @@ package tech.kwik.core.server.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
@@ -32,6 +33,8 @@ import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
+import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.packet.RetryPacket;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.server.ServerConnectionConfig;
 import tech.kwik.core.server.ServerConnectionFactory;
@@ -48,9 +51,12 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.*;
 
 
@@ -67,6 +73,7 @@ class ServerConnectionCandidateTest {
     private byte[] scid;
     private byte[] odcid;
     private Version version = Version.getDefault();
+    private StatelessPacketSender packetSender;
 
     @BeforeEach
     void initObjectUnderTest() throws Exception {
@@ -85,6 +92,7 @@ class ServerConnectionCandidateTest {
         clientAddress = new InetSocketAddress("localhost", 55333);
         scid = new byte[0];
         odcid = new byte[8];
+        packetSender = mock(StatelessPacketSender.class);
     }
 
     @Test
@@ -93,7 +101,7 @@ class ServerConnectionCandidateTest {
         byte[] initialPacketBytes = TestUtils.createValidInitial(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), clientAddress);
@@ -109,7 +117,7 @@ class ServerConnectionCandidateTest {
     void whenClientHelloIsSplitOverMultiplePacketsAllShouldContributeToAntiAmplificationLimit() throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -129,7 +137,7 @@ class ServerConnectionCandidateTest {
         byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(initialPacketBytes), clientAddress);
@@ -145,7 +153,7 @@ class ServerConnectionCandidateTest {
         byte[] initialPacketBytes = TestUtils.createValidInitialNoPadding(version);
         odcid = Arrays.copyOfRange(initialPacketBytes, 6, 6 + 8);
         scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         ByteBuffer datagramBytes = ByteBuffer.allocate(1200);
@@ -166,7 +174,7 @@ class ServerConnectionCandidateTest {
         scid = Arrays.copyOfRange(initialPacketBytes, 6 + 8 + 1, 6 + 8 + 1 + 8);
         byte[] datagramData = new byte[1500];  // Simulating a second 300-byte packet in the same datagram.
         System.arraycopy(initialPacketBytes, 0, datagramData, 0, initialPacketBytes.length);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(datagramData), clientAddress);
@@ -197,7 +205,7 @@ class ServerConnectionCandidateTest {
             datagramData.put(packetData);
         }
 
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         connectionCandidate.parsePackets(0, Instant.now(), datagramData, clientAddress);
@@ -213,7 +221,7 @@ class ServerConnectionCandidateTest {
     void firstInitialPacketWithoutCryptoFrameShouldNotCreateConnection() throws Exception {
         // Given
         List<QuicFrame> frames = List.of(new PingFrame(), new Padding(1164));
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
@@ -231,7 +239,7 @@ class ServerConnectionCandidateTest {
         CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
         AckFrame ackFrame = new AckFrame(0);
         List<QuicFrame> frames = List.of(firstCryptoFrame, ackFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - ackFrame.getFrameLength()));
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
@@ -250,7 +258,7 @@ class ServerConnectionCandidateTest {
         CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
         ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault());
         List<QuicFrame> frames = List.of(firstCryptoFrame, ccFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - ccFrame.getFrameLength()));
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
@@ -269,7 +277,7 @@ class ServerConnectionCandidateTest {
         CryptoFrame firstCryptoFrame = new CryptoFrame(version, validClientHelloBytes);
         PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(Version.getDefault(), new byte[8]);
         List<QuicFrame> frames = List.of(firstCryptoFrame, pathChallengeFrame, new Padding(1200 - firstCryptoFrame.getFrameLength() - pathChallengeFrame.getFrameLength()));
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
@@ -288,7 +296,7 @@ class ServerConnectionCandidateTest {
         ByteBuffer.wrap(firstHalfOfClientHello).putInt(0x010007d0); // 0x01 = handshake, 0x0007d0 = length (2000 bytes)
         CryptoFrame firstCryptoFrame = new CryptoFrame(version, firstHalfOfClientHello);
         List<QuicFrame> frames = List.of(firstCryptoFrame);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte data[] = createInitialPacketBytes(scid, odcid, frames);
@@ -304,7 +312,7 @@ class ServerConnectionCandidateTest {
     void whenClientHelloIsSplitOverTwoPacketsThenLastPacketShouldCreateConnection()  throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -325,7 +333,7 @@ class ServerConnectionCandidateTest {
     void whenClientHelloIsSplitOverTwoPacketsWithSmallCryptoFramesThenNoConnectionShouldBeCreated()  throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames(650);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -346,7 +354,7 @@ class ServerConnectionCandidateTest {
     void whenClientHelloIsSplitOverTwoPacketsWithDifferentVersionsThenNoConnectionShouldBeCreated()  throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -366,7 +374,7 @@ class ServerConnectionCandidateTest {
     void whenClientHelloIsSplitOverTwoPacketsWithDifferentScidsThenNoConnectionShouldBeCreated()  throws Exception {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -387,7 +395,7 @@ class ServerConnectionCandidateTest {
         // Given
         CryptoFrame[] cryptoFrames = createSplitClientHelloCryptoFrames();
 
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, clientAddress, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte[] datagram1 = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -424,7 +432,7 @@ class ServerConnectionCandidateTest {
 
         InetSocketAddress address1 = new InetSocketAddress("localhost", 55333);
         InetSocketAddress address2 = new InetSocketAddress("localhost", 41975);
-        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, address1, scid, odcid, serverConnectionFactory, connectionRegistry, logger);
+        ServerConnectionCandidate connectionCandidate = new ServerConnectionCandidate(context, version, address1, scid, odcid, serverConnectionFactory, connectionRegistry, null, packetSender, logger);
 
         // When
         byte datagram1[] = createInitialPacketBytes(scid, odcid, List.of(cryptoFrames[0], new Padding(1200 - cryptoFrames[0].getFrameLength())));
@@ -441,6 +449,150 @@ class ServerConnectionCandidateTest {
         assertThat(createdServerConnection).isNull();
     }
 
+    //region retry
+    @Test
+    void whenRetryIsRequiredInitialWithoutTokenShouldLeadToRetryPacketAndNoConnection() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        ServerConnectionCandidate connectionCandidate = createCandidate(odcid, retryTokenManager);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, null)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        verify(packetSender).send(eq(clientAddress), argThat(p -> p instanceof RetryPacket), isNull());
+        assertThat(createdServerConnection).isNull();
+        verify(connectionRegistry, never()).registerConnection(any(ServerConnectionProxy.class), any(byte[].class));
+    }
+
+    @Test
+    void whenRetryIsRequiredRetryPacketShouldContainTokenForOriginalDestinationConnectionId() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        ServerConnectionCandidate connectionCandidate = createCandidate(odcid, retryTokenManager);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, null)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        RetryPacket retryPacket = captureSentRetryPacket();
+        assertThat(retryPacket.getDestinationConnectionId()).isEqualTo(scid);
+        assertThat(retryPacket.getSourceConnectionId()).hasSize(8);
+        Optional<byte[]> tokenOdcid = retryTokenManager.validateToken(retryPacket.getRetryToken(), clientAddress, retryPacket.getSourceConnectionId());
+        assertThat(tokenOdcid).hasValue(odcid);
+    }
+
+    @Test
+    void whenRetryIsRequiredCandidateShouldBeRemovedFromRegistryImmediatelyAfterSendingRetry() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        ServerConnectionCandidate connectionCandidate = createCandidate(odcid, retryTokenManager);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, null)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        verify(connectionRegistry).deregisterConnection(connectionCandidate, odcid);
+    }
+
+    @Test
+    void whenRetryIsRequiredInitialWithValidTokenShouldCreateConnectionWithOriginalDestinationConnectionId() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        ServerConnectionCandidate firstCandidate = createCandidate(odcid, retryTokenManager);
+        firstCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, null)), clientAddress);
+        testExecutor.check();
+        RetryPacket retryPacket = captureSentRetryPacket();
+        clearInvocations(packetSender);
+        byte[] retryScid = retryPacket.getSourceConnectionId();
+
+        // When
+        ServerConnectionCandidate secondCandidate = createCandidate(retryScid, retryTokenManager);
+        secondCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(retryScid, retryPacket.getRetryToken())), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNotNull();
+        assertThat(createdServerConnection.getOriginalDestinationConnectionId()).isEqualTo(odcid);
+        verify(packetSender, never()).send(any(), any(), any());
+    }
+
+    @Test
+    void whenRetryIsRequiredInitialWithInvalidTokenShouldLeadToInvalidTokenErrorAndNoConnection() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        byte[] retryScid = retryTokenManager.generateRetrySourceConnectionId();
+        byte[] token = retryTokenManager.createToken(clientAddress, odcid, retryScid);
+        token[token.length - 1] ^= 0x01;
+        ServerConnectionCandidate connectionCandidate = createCandidate(retryScid, retryTokenManager);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(retryScid, token)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        verify(packetSender).send(eq(clientAddress), argThat(p -> isConnectionClose(p, 0x0b)), notNull());
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void whenRetryIsRequiredTokenSentToOriginalDestinationConnectionIdShouldBeRejected() throws Exception {
+        // Given
+        RetryTokenManager retryTokenManager = new RetryTokenManager(8, clock);
+        byte[] retryScid = retryTokenManager.generateRetrySourceConnectionId();
+        byte[] token = retryTokenManager.createToken(clientAddress, odcid, retryScid);
+        ServerConnectionCandidate connectionCandidate = createCandidate(odcid, retryTokenManager);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, token)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        verify(packetSender).send(eq(clientAddress), argThat(p -> isConnectionClose(p, 0x0b)), notNull());
+        assertThat(createdServerConnection).isNull();
+    }
+
+    @Test
+    void whenRetryIsNotRequiredInitialShouldCreateConnectionWithoutRetry() throws Exception {
+        // Given
+        ServerConnectionCandidate connectionCandidate = createCandidate(odcid, null);
+
+        // When
+        connectionCandidate.parsePackets(0, Instant.now(), ByteBuffer.wrap(createClientInitial(odcid, null)), clientAddress);
+        testExecutor.check();
+
+        // Then
+        assertThat(createdServerConnection).isNotNull();
+        verify(packetSender, never()).send(any(), any(), any());
+    }
+
+    private ServerConnectionCandidate createCandidate(byte[] dcid, RetryTokenManager retryTokenManager) {
+        return new ServerConnectionCandidate(context, version, clientAddress, scid, dcid, serverConnectionFactory, connectionRegistry, retryTokenManager, packetSender, logger);
+    }
+
+    private byte[] createClientInitial(byte[] dcid, byte[] token) throws Exception {
+        CryptoFrame clientHello = new CryptoFrame(version, new ClientHelloBuilder().buildBinary());
+        return createInitialPacketBytes(version, scid, dcid, token, 0, List.of(clientHello, new Padding(1200 - clientHello.getFrameLength())));
+    }
+
+    private RetryPacket captureSentRetryPacket() {
+        ArgumentCaptor<QuicPacket> captor = ArgumentCaptor.forClass(QuicPacket.class);
+        verify(packetSender).send(eq(clientAddress), captor.capture(), isNull());
+        assertThat(captor.getValue()).isInstanceOf(RetryPacket.class);
+        return (RetryPacket) captor.getValue();
+    }
+
+    private boolean isConnectionClose(QuicPacket packet, int errorCode) {
+        return packet instanceof InitialPacket && packet.getFrames().stream()
+                .anyMatch(f -> f instanceof ConnectionCloseFrame && ((ConnectionCloseFrame) f).getErrorCode() == errorCode);
+    }
+    //endregion
+
     byte[] createInitialPacketBytes(byte[] scid, byte[] odcid, List<QuicFrame> frames) throws Exception {
         return createInitialPacketBytes(version, scid, odcid, 0, frames);
     }
@@ -454,7 +606,11 @@ class ServerConnectionCandidateTest {
     }
 
     byte[] createInitialPacketBytes(Version version, byte[] scid, byte[] odcid, int packetNumber, List<QuicFrame> frames) throws Exception {
-        InitialPacket initialPacket = new InitialPacket(version, scid, odcid, null, frames);
+        return createInitialPacketBytes(version, scid, odcid, null, packetNumber, frames);
+    }
+
+    byte[] createInitialPacketBytes(Version version, byte[] scid, byte[] odcid, byte[] token, int packetNumber, List<QuicFrame> frames) throws Exception {
+        InitialPacket initialPacket = new InitialPacket(version, scid, odcid, token, frames);
         initialPacket.setPacketNumber(packetNumber);
         ConnectionSecrets secrets = new ConnectionSecrets(VersionHolder.with(version), Role.Client, null, mock(Logger.class));
         secrets.computeInitialKeys(odcid);
@@ -496,8 +652,8 @@ class ServerConnectionCandidateTest {
         }
 
         @Override
-        public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid, CryptoStream cryptoStream) {
-            ServerConnectionImpl newConnection = super.createNewConnection(version, clientAddress, originalScid, originalDcid, cryptoStream);
+        public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] originalScid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream) {
+            ServerConnectionImpl newConnection = super.createNewConnection(version, clientAddress, originalScid, originalDcid, retryScid, cryptoStream);
             createdServerConnection = newConnection;
             return newConnection;
         }
