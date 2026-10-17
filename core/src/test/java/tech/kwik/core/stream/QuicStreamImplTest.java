@@ -938,6 +938,10 @@ class QuicStreamImplTest {
 
         // Simulate the sender thread executing the send request and the receiver thread processing a flow control
         // update, both before the writer thread returns from queueing that send request.
+        // The race (which in reality of course occurs between two threads) is simulated by performing the action of
+        // "the other" thread (calling scheduleSendStreamFrameRequest() from streamNotBlocked()) during the invocation
+        // of the send method, which is called by scheduleSendStreamFrameRequest() (from the write()); so a recursive
+        // call to scheduleSendStreamFrameRequest() is made, which should not be lost.
         AtomicBoolean raced = new AtomicBoolean();
         doAnswer(invocation -> {
             if (raced.compareAndSet(false, true)) {
