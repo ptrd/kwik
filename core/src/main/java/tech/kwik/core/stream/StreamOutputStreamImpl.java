@@ -126,11 +126,12 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
     }
 
     private void scheduleSendStreamFrameRequest(boolean flush) {
-        int queued = sendRequestsQueued.get();
-        if (queued == 0) {
-            // This is a race condition, but not a problem when one superfluous send request is queued.
+        // The request must be counted before it is queued: once queued, the sender thread can execute it right away.
+        // Counting it afterwards would let another thread (e.g. the receiver thread processing a flow control update)
+        // see a negative count in between and conclude that a request is still pending, while it has just been
+        // executed: the stream would never send again.
+        if (sendRequestsQueued.compareAndSet(0, 1)) {
             quicStream.connection.send(this::sendStreamFrame, MIN_FRAME_SIZE, getEncryptionLevel(), this::retransmitStreamFrame, flush);
-            sendRequestsQueued.incrementAndGet();
         }
     }
 

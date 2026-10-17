@@ -922,6 +922,42 @@ class QuicStreamImplTest {
         StreamFrame frame2 = (StreamFrame) captureSendFunction(connection, 2).apply(1000);
         assertThat(frame2.getLength()).isLessThanOrEqualTo(233);
     }
+
+    @Test
+    void flowControlUpdateRacingWithQueueingSendRequestShouldNotBeLost() throws Exception {
+        // Given
+        FlowControl flowController = new FlowControl(Role.Client, 100000, 100, 100, 100);
+        QuicStreamImpl stream = new QuicStreamImpl(1, role, connection, streamManager, flowController);
+        stream.getOutputStream().write(new byte[1024]);
+
+        StreamFrame frame1 = (StreamFrame) captureSendFunction(connection).apply(1000);
+        assertThat(frame1.getLength()).isEqualTo(100);
+        // Stream is blocked now
+        assertThat(captureSendFunction(connection).apply(1000)).isNull();
+        clearInvocations(connection);
+
+        // Simulate the sender thread executing the send request and the receiver thread processing a flow control
+        // update, both before the writer thread returns from queueing that send request.
+        AtomicBoolean raced = new AtomicBoolean();
+        doAnswer(invocation -> {
+            if (raced.compareAndSet(false, true)) {
+                Function<Integer, QuicFrame> sendFunction = invocation.getArgument(0);
+                assertThat(sendFunction.apply(1000)).isNull();    // still blocked
+                flowController.process(new MaxStreamDataFrame(1, 233));
+            }
+            return null;
+        }).when(connection).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
+        clearInvocations(connection);
+
+        // When
+        stream.getOutputStream().write(new byte[10]);
+
+        // Then
+        StreamFrame frame2 = (StreamFrame) captureSendFunction(connection, 2).apply(1000);
+        assertThat(frame2).isNotNull();
+        assertThat(frame2.getOffset()).isEqualTo(100);
+        assertThat(frame2.getLength()).isEqualTo(133);
+    }
     //endregion
 
     //region output reset
