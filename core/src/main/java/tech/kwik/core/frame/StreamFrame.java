@@ -31,22 +31,28 @@ import tech.kwik.core.stream.StreamElement;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FRAME_ENCODING_ERROR;
 
 
 public class StreamFrame extends QuicFrame implements StreamElement {
 
-    private StreamType streamType;
+    private static final byte[] EMPTY_DATA = new byte[0];
+
+    // Stream frames can be buffered in large numbers (in send, retransmit and receive buffers), so the fields are kept
+    // to a minimum to reduce memory footprint. With a 12 byte object header (compressed class pointers) and objects
+    // aligned to 8 bytes, the fields below result in an object size of 32 bytes.
+    // The frame length is stored (and not computed on the fly) because it is used often when assembling packets;
+    // as it never exceeds the max packet size (1500), a short suffices. The isFinal boolean could be stored in the MSB
+    // of the frameLength, but that wouldn't make the object smaller because of padding (unless +UseCompactObjectHeaders).
     private int streamId;
     private long offset;
-    private int length;
     private byte[] streamData;
+    private short frameLength;
     private boolean isFinal;
-    private int frameLength;
 
     public StreamFrame() {
+        streamData = EMPTY_DATA;
     }
 
     public StreamFrame(int streamId, byte[] applicationData, boolean fin) {
@@ -66,7 +72,6 @@ public class StreamFrame extends QuicFrame implements StreamElement {
     }
 
     public StreamFrame(Version quicVersion, int streamId, long streamOffset, byte[] applicationData, int dataOffset, int dataLength, boolean fin) {
-        streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
         this.streamId = streamId;
         this.offset = streamOffset;
         this.streamData = new byte[dataLength];
@@ -74,19 +79,19 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         // it will not reuse the data buffer (or at least, the range that is used by this frame) and its content
         // will never change.
         ByteBuffer.wrap(streamData).put(applicationData, dataOffset, dataLength);
-        this.length = dataLength;
+
         isFinal = fin;
 
-        frameLength = 1  // frame type
+        frameLength = (short) (1  // frame type
                 + VariableLengthInteger.bytesNeeded(streamId)
                 + VariableLengthInteger.bytesNeeded(offset)
-                + VariableLengthInteger.bytesNeeded(length)
-                + length;
+                + VariableLengthInteger.bytesNeeded(dataLength)
+                + dataLength);
     }
 
     @Override
     public void serialize(ByteBuffer buffer) {
-        if (frameLength > buffer.remaining()) {
+        if ((int) frameLength > buffer.remaining()) {
             throw new IllegalArgumentException();
         }
 
@@ -98,7 +103,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         buffer.put(frameType);
         VariableLengthInteger.encode(streamId, buffer);
         VariableLengthInteger.encode(offset, buffer);
-        VariableLengthInteger.encode(length, buffer);
+        VariableLengthInteger.encode(streamData.length, buffer);
         buffer.put(streamData);
     }
 
@@ -116,11 +121,11 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         isFinal = ((frameType & 0x01) == 0x01);
 
         streamId = parseVariableLengthIntegerLimitedToInt(buffer);  // Kwik does not support stream id's larger than max int.
-        streamType = Stream.of(StreamType.values()).filter(t -> t.value == (streamId & 0x03)).findFirst().get();
 
         if (withOffset) {
             offset = VariableLengthInteger.parseLong(buffer);
         }
+        int length;
         if (withLength) {
             length = VariableLengthInteger.parseInt(buffer);
             if (length > buffer.remaining()) {
@@ -133,7 +138,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
 
         streamData = new byte[length];
         buffer.get(streamData);
-        frameLength = buffer.position() - startPosition;
+        frameLength = (short) (buffer.position() - startPosition);
 
         log.decrypted("Stream data", streamData);
 
@@ -142,7 +147,8 @@ public class StreamFrame extends QuicFrame implements StreamElement {
 
     @Override
     public String toString() {
-        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + length + (isFinal? ",fin": "") + "]";
+        StreamType streamType = StreamType.values()[streamId & 0x03];
+        return "StreamFrame[" + streamId + "(" + streamType.abbrev + ")" + "," + offset + "," + streamData.length + (isFinal? ",fin": "") + "]";
     }
 
     @Override
@@ -152,14 +158,14 @@ public class StreamFrame extends QuicFrame implements StreamElement {
         StreamFrame that = (StreamFrame) o;
         return streamId == that.streamId &&
                 offset == that.offset &&
-                length == that.length &&
+                streamData.length == that.streamData.length &&
                 isFinal == that.isFinal &&
                 Arrays.equals(streamData, that.streamData);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(streamId, offset, length);
+        return Objects.hash(streamId, offset, streamData.length);
     }
 
     @Override
@@ -168,7 +174,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
             return Long.compare(this.offset, other.getOffset());
         }
         else {
-            return Long.compare(this.length, other.getLength());
+            return Long.compare(streamData.length, other.getLength());
         }
     }
 
@@ -185,7 +191,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
      * @return  data length
      */
     public int getLength() {
-        return length;
+        return streamData.length;
     }
 
     public byte[] getStreamData() {
@@ -194,7 +200,7 @@ public class StreamFrame extends QuicFrame implements StreamElement {
 
     @Override
     public long getUpToOffset() {
-        return offset + length;
+        return offset + streamData.length;
     }
 
     public boolean isFinal() {
