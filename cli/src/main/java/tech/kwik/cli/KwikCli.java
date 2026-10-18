@@ -116,6 +116,9 @@ public class KwikCli {
         if (cmd.hasOption("noCertificateCheck")) {
             connectionBuilder.noServerCertificateCheck();
         }
+        if (cmd.hasOption("noHostnameVerification")) {
+            connectionBuilder.noServerHostnameVerification();
+        }
         if (cmd.hasOption("trustStore")) {
             String password = cmd.hasOption("trustStorePassword")? cmd.getOptionValue("trustStorePassword"): "";
             connectionBuilder.customTrustStore(KeyStore.getInstance(new File(cmd.getOptionValue("trustStore")), password.toCharArray()));
@@ -880,6 +883,7 @@ public class KwikCli {
         cmdLineOptions.addOption(null, "initialRtt", true, "custom initial RTT value (default is 500)");
         cmdLineOptions.addOption(null, "chacha20", false, "use ChaCha20 as only cipher suite");
         cmdLineOptions.addOption(null, "noCertificateCheck", false, "do not check server certificate");
+        cmdLineOptions.addOption(null, "noHostnameVerification", false, "do not verify that server certificate matches host name");
         cmdLineOptions.addOption(null, "saveServerCertificates", true, "store server certificates in given file");
         cmdLineOptions.addOption(null, "quantumReadinessTest", true, "add number of random bytes to client hello");
         cmdLineOptions.addOption(null, "clientCertificate", true, "certificate (file) for client authentication");

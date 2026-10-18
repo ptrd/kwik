@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.DefaultHostnameVerifier;
+import tech.kwik.agent15.engine.HostnameVerifier;
 import tech.kwik.agent15.engine.TlsClientEngine;
 import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
 import tech.kwik.agent15.extension.KeyShareExtension;
@@ -56,6 +58,7 @@ import java.lang.reflect.Method;
 import java.net.Inet4Address;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -954,6 +957,32 @@ class QuicClientConnectionImplTest {
     }
     //endregion
 
+    //region server certificate verification
+    @Test
+    void byDefaultServerHostnameShouldBeVerified() throws Exception {
+        // Given
+        QuicClientConnectionImpl connection = buildConnection(builder -> {});
+
+        // When
+        HostnameVerifier hostnameVerifier = getHostnameVerifier(connection);
+
+        // Then
+        assertThat(hostnameVerifier).isInstanceOf(DefaultHostnameVerifier.class);
+    }
+
+    @Test
+    void whenServerHostnameVerificationIsDisabledAnyHostnameShouldBeAccepted() throws Exception {
+        // Given
+        QuicClientConnectionImpl connection = buildConnection(builder -> builder.noServerHostnameVerification());
+
+        // When
+        HostnameVerifier hostnameVerifier = getHostnameVerifier(connection);
+
+        // Then
+        assertThat(hostnameVerifier.verify("some.other.host", mock(X509Certificate.class))).isTrue();
+    }
+    //endregion
+
     //region misc
     @Test
     void receivingNewTokenFrameWithEmptyTokenShouldLeadToConnectionError() {
@@ -998,6 +1027,11 @@ class QuicClientConnectionImplTest {
         RetryPacket retryPacket = createRetryPacket(originalDestinationConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
         connection.process(retryPacket, null);
         return retryPacket;
+    }
+
+    private HostnameVerifier getHostnameVerifier(QuicClientConnectionImpl connection) throws Exception {
+        Object tlsEngine = new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        return (HostnameVerifier) new FieldReader(tlsEngine, tlsEngine.getClass().getDeclaredField("hostnameVerifier")).read();
     }
 
     private QuicClientConnectionImpl buildConnection(Consumer<QuicClientConnection.Builder> configure) throws Exception {

@@ -1343,13 +1343,22 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 }
         };
 
+        printSecurityWarning("Server certificate validation is disabled");
+        tlsEngine.setTrustManager(trustAllCerts);
+        tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
+    }
+
+    protected void disableHostnameVerification() {
+        printSecurityWarning("Server hostname verification is disabled");
+        tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
+    }
+
+    private void printSecurityWarning(String reason) {
         String propValue = System.getProperty("tech.kwik.core.no-security-warnings");
         boolean suppressWarning = propValue != null && propValue.toLowerCase().equals("true");
         if (! suppressWarning) {
-            System.out.println("SECURITY WARNING: INSECURE configuration! Server certificate validation is disabled; QUIC connections may be subject to man-in-the-middle attacks!");
+            System.out.println("SECURITY WARNING: INSECURE configuration! " + reason + "; QUIC connections may be subject to man-in-the-middle attacks!");
         }
-        tlsEngine.setTrustManager(trustAllCerts);
-        tlsEngine.setHostnameVerifier((hostname, serverCertificate) -> true);
     }
 
     protected void setTrustManager(X509TrustManager customTrustManager) {
@@ -1400,6 +1409,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         private List<TlsConstants.NamedGroup> keyShareGroups = List.of();
         private List<TlsConstants.NamedGroup> supportedGroups = List.of();
         private boolean omitCertificateCheck;
+        private boolean omitHostnameVerification;
         private Integer quantumReadinessTest;
         private X509Certificate clientCertificate;
         private PrivateKey clientCertificateKey;
@@ -1445,6 +1455,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
             if (customTrustManager != null) {
                 quicConnection.setTrustManager(customTrustManager);
+            }
+
+            if (omitHostnameVerification) {
+                quicConnection.disableHostnameVerification();
             }
 
             if (keyManager != null) {
@@ -1718,6 +1732,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         @Override
         public Builder noServerCertificateCheck() {
             omitCertificateCheck = true;
+            return this;
+        }
+
+        @Override
+        public Builder noServerHostnameVerification() {
+            omitHostnameVerification = true;
             return this;
         }
 

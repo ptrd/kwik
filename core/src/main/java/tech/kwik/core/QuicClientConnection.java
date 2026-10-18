@@ -167,6 +167,15 @@ public interface QuicClientConnection extends QuicConnection {
         Builder noServerCertificateCheck();
 
         /**
+         * Disables verification of the server's host name against the server certificate. The server certificate (chain)
+         * is still validated against the (default or custom) trust store / trust manager.
+         * Use with care: any server holding a certificate that is trusted by the trust store can impersonate the server.
+         * Useful when the server is reached via an address that does not match the certificate, e.g. in NATed networks.
+         * @return  the builder
+         */
+        Builder noServerHostnameVerification();
+
+        /**
          * Sets the custom trust store that will be used to validate the server's certificate.
          * If not set, the default trust store of the Java runtime environment will be used.
          * This is an alternative for calling {@link #customTrustManager(X509TrustManager)}, under the hood both
