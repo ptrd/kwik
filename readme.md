@@ -144,6 +144,12 @@ checking. The builder has a method for this:
 
     builder.noServerCertificateCheck()
 
+When the server is reached via an address that does not match its certificate (e.g. a server without a DNS name, or
+in NATed networks like SD-WANs), you can disable just the host name verification, while the server certificate is still
+validated against the (default or custom) trust store:
+
+    builder.noServerHostnameVerification()
+
 The builder has a lot more methods for configuring the connection, most of which are self-explanatory; see the [Builder interface in QuicClientConnection](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/QuicClientConnection.java#L77).
 
 The builder method `logger()` requires an implementation of the [Logger interface](https://github.com/ptrd/kwik/blob/master/core/src/main/java/tech/kwik/core/log/Logger.java); Kwik provides two convenient implementations
@@ -279,6 +285,8 @@ Usage of the sample client:
                                     (n)one to disable
      -L,--logFile <arg>             file to write log message too
         --noCertificateCheck        do not check server certificate
+        --noHostnameVerification    do not verify that server certificate matches
+                                    host name
      -O,--output <arg>              write server response to file
      -R,--resumption key <arg>      session ticket file
         --reservedVersion           use reserved version to trigger version
