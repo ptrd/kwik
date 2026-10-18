@@ -46,13 +46,13 @@ import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.frame.ConnectionCloseFrame;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.FrameProcessor;
+import tech.kwik.core.frame.QuicFrame;
 import tech.kwik.core.impl.*;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
-import tech.kwik.core.packet.RetryPacket;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
@@ -72,7 +72,6 @@ import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -103,7 +102,7 @@ class ServerConnectionImplTest {
     @BeforeEach
     void setupObjectUnderTest() throws Exception {
         tlsServerEngineFactory = createTlsServerEngine();
-        connection = createServerConnection(tlsServerEngineFactory, false, new byte[8]);
+        connection = createServerConnection(tlsServerEngineFactory, new byte[8]);
     }
     //endregion
 
@@ -362,7 +361,7 @@ class ServerConnectionImplTest {
     @Test
     void retransmittedOriginalInitialMessageIsProcessedToo() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+        connection = createServerConnection(tlsServerEngineFactory, odcid);
         CryptoFrame firstFrame = mock(CryptoFrame.class);
         CryptoFrame secondFrame = mock(CryptoFrame.class);
         InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
@@ -382,7 +381,7 @@ class ServerConnectionImplTest {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
 
         // When
-        connection = createServerConnection(tlsServerEngineFactory, false, clientSourceCid, odcid, cid -> {});
+        connection = createServerConnection(tlsServerEngineFactory, null, clientSourceCid, odcid, cid -> {});
 
         // Then
         assertThat(connection.getConnectionIdManager().getPeerConnectionId(connection.getInitialRemoteAddress())).isEqualTo(clientSourceCid);
@@ -391,110 +390,47 @@ class ServerConnectionImplTest {
 
     //region retry
     @Test
-    void whenRetryIsRequiredFirstInitialLeadsToRetryPacket() throws Exception {
-        // Given
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-
-        // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-
-        // Then
-        verify(socketManager).send(argThat(this::isRetry), any(InetSocketAddress.class));
-    }
-
-    @Test
-    void whenRetryIsRequiredAllRetryPacketsContainsSameToken() throws Exception {
-        // Given
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-        byte[] retryToken = captureRetryToken(socketManager);
-        clearInvocations(socketManager);
-
-        // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), mock(PacketMetaData.class));
-
-        // Then
-        verify(socketManager).send(argThat(byteArray -> Arrays.equals(getRetryToken(byteArray), retryToken)), any(InetSocketAddress.class));
-    }
-
-    @Test
-    void whenRetryIsRequiredDifferentDestinationConnectionIdsGetDifferentToken() throws Exception {
-        // Given
-        byte[] dcid1 = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
-        ServerConnectionImpl connection1 = createServerConnection(createTlsServerEngine(), true, dcid1);
-        connection1.process(new InitialPacket(Version.getDefault(), new byte[8], dcid1, null, new CryptoFrame()), metaDataForNow());
-        ServerConnectionSocketManager socketManager1 = getSocketManager(connection1);
-        byte[] retryToken1 = captureRetryToken(socketManager1);
-
-        // When
-        byte[] dcid2 = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
-        ServerConnectionImpl connection2 = createServerConnection(createTlsServerEngine(), true, dcid2);
-        connection2.process(new InitialPacket(Version.getDefault(), new byte[8], dcid2, null, new CryptoFrame()), mock(PacketMetaData.class));
-
-        // Then
-        ServerConnectionSocketManager socketManager2 = getSocketManager(connection2);
-        byte[] retryToken2 = captureRetryToken(socketManager2);
-        assertThat(retryToken2).isNotEqualTo(retryToken1);
-    }
-
-    @Test
-    void whenRetryIsRequiredInitialWithTokenIsProcessed() throws Exception {
-        // Given
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-        byte[] retryToken = captureRetryToken(socketManager);
-        clearInvocations(connection.getSender());
-
-        // When
-        ClientHello ch = createDefaultClientHello(Collections.emptyList());
-        CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
-
-        // Then
-        verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
-                && ((ConnectionCloseFrame) frame).getErrorCode() == 256 + TlsConstants.AlertDescription.missing_extension.value), any(EncryptionLevel.class));
-    }
-
-    @Test
-    void whenRetryIsRequiredInitialWithInvalidTokenConnectionIsClosed() throws Exception {
-        // Given
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-        byte[] retryToken = captureRetryToken(socketManager);
-        byte[] incorrectToken = Arrays.copyOfRange(retryToken, 0, retryToken.length - 1);
-
-        // When
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], incorrectToken, new CryptoFrame()), mock(PacketMetaData.class));
-
-        // Then
-        verify(connection.getSender()).send(argThat(frame -> frame instanceof ConnectionCloseFrame
-                && ((ConnectionCloseFrame) frame).getErrorCode() == 0x0b), any(EncryptionLevel.class));
-    }
-
-    @Test
-    void whenRetryIsRequiredSecondInitialShouldReturnSameRetryPacket() throws Exception {
+    void whenCreatedAfterRetryTransportParametersShouldContainRetrySourceConnectionId() throws Exception {
         // Given
         byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
-        connection = createServerConnection(createTlsServerEngine(), true, odcid);
-        ConnectionSecrets clientConnectionSecrets = new ConnectionSecrets(VersionHolder.withDefault(), Role.Client, null, mock(Logger.class));
-        clientConnectionSecrets.computeInitialKeys(odcid);
-
-        InitialPacket initialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
-        initialPacket.setPacketNumber(0);
-
-        InitialPacket secondInitialPacket = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame(Version.getDefault(), new byte[38]));
-        secondInitialPacket.setPacketNumber(1);
-
-        connection.getPacketProcessorChain().processPacket(initialPacket, metaDataForNow());
-        byte[] retryPacket1 = captureRetryPacket(socketManager);
-        clearInvocations(socketManager);
+        byte[] retryScid = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        connection = createServerConnection(tlsServerEngineFactory, retryScid, new byte[8], odcid, cid -> {});
+        QuicFrame clientHello = createInitialClientPacket(createDefaultTransportParameters()).getFrames().get(0);
 
         // When
-        connection.getPacketProcessorChain().processPacket(secondInitialPacket, metaDataForNow());
-        byte[] retryPacket2 = captureRetryPacket(socketManager);
+        connection.process(new InitialPacket(Version.getDefault(), new byte[8], retryScid, null, clientHello), mock(PacketMetaData.class));
 
         // Then
-        assertThat(retryPacket1).isEqualTo(retryPacket2);
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getRetrySourceConnectionId()).isEqualTo(retryScid);
+        assertThat(tpExtension.getTransportParameters().getOriginalDestinationConnectionId()).isEqualTo(odcid);
+    }
+
+    @Test
+    void whenCreatedWithoutRetryTransportParametersShouldNotContainRetrySourceConnectionId() throws Exception {
+        // When
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), mock(PacketMetaData.class));
+
+        // Then
+        TlsServerEngine tlsEngine = (TlsServerEngine) new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        QuicTransportParametersExtension tpExtension = (QuicTransportParametersExtension) tlsEngine.getServerExtensions().stream().filter(ext -> ext instanceof QuicTransportParametersExtension).findFirst().get();
+        assertThat(tpExtension.getTransportParameters().getRetrySourceConnectionId()).isNull();
+    }
+
+    @Test
+    void whenCreatedAfterRetryInitialPacketsWithRetrySourceConnectionIdShouldBeAccepted() throws Exception {
+        // Given
+        byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        byte[] retryScid = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        connection = createServerConnection(tlsServerEngineFactory, retryScid, new byte[8], odcid, cid -> {});
+
+        // When
+        boolean accepted = connection.checkDestinationConnectionId(new InitialPacket(Version.getDefault(), new byte[8], retryScid, null, new CryptoFrame()));
+
+        // Then
+        assertThat(accepted).isTrue();
+        assertThat(connection.getOriginalDestinationConnectionId()).isEqualTo(odcid);
     }
     //endregion
 
@@ -504,7 +440,7 @@ class ServerConnectionImplTest {
         // Given
         byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         AtomicBoolean closeCallbackIsCalled = new AtomicBoolean(false);
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8], odcid, cid -> closeCallbackIsCalled.set(true));
+        connection = createServerConnection(createTlsServerEngine(), null, new byte[8], odcid, cid -> closeCallbackIsCalled.set(true));
 
         // When
         connection.abortConnection(new RuntimeException("injected error"));
@@ -519,7 +455,7 @@ class ServerConnectionImplTest {
     void receivingInitialPacketShouldSetAntiAmplification() throws Exception {
         // Given
         byte[] odcid = hexToBytes("67268378ae7dc13b");
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+        connection = createServerConnection(tlsServerEngineFactory, odcid);
 
         // When
         byte[] validInitial = TestUtils.createValidInitial(Version.getDefault());
@@ -553,20 +489,15 @@ class ServerConnectionImplTest {
     }
 
     @Test
-    void whenRetryIsRequiredInitialWithValidTokenDisablesAntiAmplificationLimit() throws Exception {
+    void whenCreatedAfterRetryAntiAmplificationLimitShouldNotBeSet() throws Exception {
         // Given
-        connection = createServerConnection(createTlsServerEngine(), true, new byte[8]);
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], null, new CryptoFrame()), metaDataForNow());
-        byte[] retryToken = captureRetryToken(socketManager);
-        clearInvocations(connection.getSender());
+        connection = createServerConnection(tlsServerEngineFactory, new byte[8], new byte[8], new byte[8], cid -> {});
 
         // When
-        ClientHello ch = createDefaultClientHello();
-        CryptoFrame initialCrypto = new CryptoFrame(Version.getDefault(), ch.getBytes());
-        connection.process(new InitialPacket(Version.getDefault(), new byte[8], new byte[8], retryToken, initialCrypto), mock(PacketMetaData.class));
+        connection.increaseAntiAmplificationLimit(1200);
 
         // Then
-        verify(connection.getSender()).unsetAntiAmplificationLimit();
+        verify(connection.getSender(), never()).setAntiAmplificationLimit(anyInt());
     }
     //endregion
 
@@ -580,7 +511,7 @@ class ServerConnectionImplTest {
 
         ClientHello ch = createDefaultClientHello();
         cryptoStream.add(new CryptoFrame(Version.getDefault(), ch.getBytes()));
-        connection = createServerConnection(tlsServerEngineFactory, false, new byte[8], odcid, cid -> {}, cryptoStream);
+        connection = createServerConnection(tlsServerEngineFactory, null, new byte[8], odcid, cid -> {}, cryptoStream);
 
         // When
         connection.process(new InitialPacket(Version.getDefault(), new byte[8], odcid, null, new CryptoFrame()), mock(PacketMetaData.class));
@@ -592,7 +523,7 @@ class ServerConnectionImplTest {
     @Test
     void retransmittedInitialPacketShouldBeAccepted() throws Exception {
         byte[] odcid = new byte[] { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
-        connection = createServerConnection(tlsServerEngineFactory, false, odcid);
+        connection = createServerConnection(tlsServerEngineFactory, odcid);
         CryptoFrame firstFrame = mock(CryptoFrame.class);
         CryptoFrame secondFrame = mock(CryptoFrame.class);
         InitialPacket packet1 = new InitialPacket(Version.getDefault(), new byte[8], odcid, null, firstFrame);
@@ -724,25 +655,25 @@ class ServerConnectionImplTest {
         return Stream.of(withOriginalDestinationConnectionId, withPreferredAddress, withRetrySourceConnectionId, withStatelessResetToken);
     }
 
-    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] odcid) throws Exception {
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] odcid) throws Exception {
         if (odcid == null) {
             odcid = new byte[]{ 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
         }
-        return createServerConnection(tlsServerEngineFactory, retryRequired, new byte[8], odcid, cid -> {});
+        return createServerConnection(tlsServerEngineFactory, null, new byte[8], odcid, cid -> {});
     }
-    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
-        return createServerConnection(tlsServerEngineFactory, retryRequired, clientCid, odcid, closeCallback, null);
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] retryScid, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
+        return createServerConnection(tlsServerEngineFactory, retryScid, clientCid, odcid, closeCallback, null);
     }
 
-    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, boolean retryRequired, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback, CryptoStream cryptoStream) throws Exception {
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] retryScid, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback, CryptoStream cryptoStream) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         ApplicationProtocolConnectionFactory applicationProtocolConnectionFactory = mock(ApplicationProtocolConnectionFactory.class);
         when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(Mockito.mock(ApplicationProtocolConnection.class));
         applicationProtocolRegistry.registerApplicationProtocol("hq-29", applicationProtocolConnectionFactory);
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
-                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid, cryptoStream,
-                tlsServerEngineFactory, getDefaultConfiguration(retryRequired),
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid, retryScid, cryptoStream,
+                tlsServerEngineFactory, getDefaultConfiguration(),
                 applicationProtocolRegistry, Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
@@ -753,7 +684,7 @@ class ServerConnectionImplTest {
         return connection;
     }
 
-    private static ServerConnectionConfig getDefaultConfiguration(boolean retryRequired) {
+    private static ServerConnectionConfig getDefaultConfiguration() {
         return ServerConnectionConfig.builder()
                 .maxIdleTimeoutInSeconds(30)
                 .maxUnidirectionalStreamBufferSize(1_000_000)
@@ -761,7 +692,6 @@ class ServerConnectionImplTest {
                 .maxConnectionBufferSize(10_000_000)
                 .maxOpenPeerInitiatedUnidirectionalStreams(10)
                 .maxOpenPeerInitiatedBidirectionalStreams(100)
-                .retryRequired(retryRequired)
                 .connectionIdLength(8)
                 .build();
     }
@@ -905,31 +835,6 @@ class ServerConnectionImplTest {
         public byte[] getServerApplicationTrafficSecret() {
             return new byte[32];
         }
-    }
-
-    boolean isRetry(ByteBuffer byteArray) {
-        return RetryPacket.isRetry((byteArray.get(0) & 0x30) >> 4, Version.QUIC_version_1);
-    }
-
-    ServerConnectionSocketManager getSocketManager(ServerConnectionImpl connection) throws NoSuchFieldException {
-        return (ServerConnectionSocketManager) new FieldReader(connection, ServerConnectionImpl.class.getDeclaredField("socketManager")).read();
-    }
-
-    byte[] getRetryToken(ByteBuffer retryPacketBytes) {
-        int tokenStart = 1 + 4 + 1 + 8 + 1 + 8;
-        return Arrays.copyOfRange(retryPacketBytes.array(), tokenStart, tokenStart + ServerConnectionImpl.TOKEN_SIZE);
-    }
-
-    byte[] captureRetryToken(ServerConnectionSocketManager socketManager) throws Exception {
-        ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
-        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
-        return getRetryToken(argumentCaptor.getValue());
-    }
-
-    byte[] captureRetryPacket(ServerConnectionSocketManager socketManager) throws Exception {
-        ArgumentCaptor<ByteBuffer> argumentCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
-        verify(socketManager).send(argumentCaptor.capture(), any(InetSocketAddress.class));
-        return argumentCaptor.getValue().array();
     }
 
     /**

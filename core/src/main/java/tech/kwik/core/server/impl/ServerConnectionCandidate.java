@@ -25,6 +25,7 @@ import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.crypto.MissingKeysException;
+import tech.kwik.core.frame.ConnectionCloseFrame;
 import tech.kwik.core.frame.CryptoFrame;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PingFrame;
@@ -35,6 +36,7 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.DatagramFilter;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
+import tech.kwik.core.packet.RetryPacket;
 import tech.kwik.core.server.ServerConnectionFactory;
 import tech.kwik.core.server.ServerConnectionRegistry;
 import tech.kwik.core.util.Bytes;
@@ -45,11 +47,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static tech.kwik.core.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 
 /**
  * A server connection candidate: whether an initial packet causes a new server connection to be created will not be
@@ -83,6 +88,13 @@ import java.util.concurrent.locks.ReentrantLock;
  * </pre>
  * When new connection IDs are sent to the peer, additional entries will be added to the registry to ensure these new
  * connection IDs also map to the same connection. </p>
+ * <p>
+ * When retry is required, a candidate that receives a valid initial packet without a token responds with a Retry
+ * packet and will never create a connection. The client will send a new initial packet (containing the retry token)
+ * to the connection ID the server chose in the Retry packet; as this connection ID is unknown to the registry, a new
+ * candidate is created for it. That candidate validates the token, which contains the original destination connection
+ * ID, and only when valid, creates the server connection. Because the token is self-contained (see RetryTokenManager),
+ * no state needs to be shared between the two candidates. </p>
  */
 public class ServerConnectionCandidate implements ServerConnectionProxy, DatagramFilter {
 
@@ -109,10 +121,26 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     private final List<InitialPacket> bufferedInitialPackets = new ArrayList<>();
     private int bufferedDatagramDataSize;
     private volatile boolean inError;
+    private final RetryTokenManager retryTokenManager;
+    private final StatelessPacketSender packetSender;
+    private byte[] validatedOriginalDcid;
 
-
+    /**
+     * Creates a server connection candidate.
+     * @param context
+     * @param version
+     * @param clientAddress
+     * @param scid  the source connection ID of the initial packet
+     * @param dcid  the destination connection ID of the initial packet
+     * @param serverConnectionFactory
+     * @param connectionRegistry
+     * @param retryTokenManager  the retry token manager when retry is required, null otherwise
+     * @param packetSender       sender for packets that are sent by the candidate itself (i.e. Retry packets)
+     * @param log
+     */
     public ServerConnectionCandidate(Context context, Version version, InetSocketAddress clientAddress, byte[] scid, byte[] dcid,
-                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry, Logger log) {
+                                     ServerConnectionFactory serverConnectionFactory, ServerConnectionRegistry connectionRegistry,
+                                     RetryTokenManager retryTokenManager, StatelessPacketSender packetSender, Logger log) {
         this.executor = context.getSharedServerExecutor();
         this.scheduledExecutor = context.getSharedScheduledExecutor();
         this.quicVersion = version;
@@ -121,6 +149,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
         this.dcid = dcid;
         this.serverConnectionFactory = serverConnectionFactory;
         this.connectionRegistry = connectionRegistry;
+        this.retryTokenManager = retryTokenManager;
+        this.packetSender = packetSender;
         this.log = log;
 
         filterChain =
@@ -168,10 +198,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 catch (TransportError e) {
                     // Won't happen (yet), because the only filter the actually throws is the parser, which is not yet used here!
                     log.warn("Dropped initial packet due to transport error: " + e.getMessage());
-                    inError = true;
-                    // Clean up faster
-                    cleanupTask.cancel(true);
-                    scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
+                    enterErrorState();
                 }
             }
         });
@@ -190,6 +217,11 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                     log.received(timeReceived, datagramNumber, packet);
 
                     checkGenuineFirstFlight(packet);
+                    if (retryTokenManager != null && validatedOriginalDcid == null) {
+                        if (!checkRetryToken(packet, metaData)) {
+                            return;
+                        }
+                    }
                     bufferedInitialPackets.add(packet);
                 }
                 catch (InvalidPacketException | DecryptionException e) {
@@ -215,6 +247,15 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
                 cleanupTask.cancel(true);
             }
         }
+        catch (InvalidTokenException invalidToken) {
+            log.warn("Dropped initial packet with invalid token (no connection created)");
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.1.2
+            // "If a server receives a client Initial that contains an invalid Retry token but is otherwise valid,
+            //  it knows the client will not accept another Retry token. (...) Instead, the server SHOULD immediately
+            //  close (Section 10.2) the connection with an INVALID_TOKEN error. "
+            sendInvalidTokenError(metaData.sourceAddress());
+            enterErrorState();
+        }
         catch (TlsProtocolException | TransportError | UnacceptablePacketException invalidTlsMesssage) {
             // Trying to start a connection with data that is not a valid ClientHello message, but be a deliberate action
             log.warn("Dropped initial packet that did not contain valid CH (no connection created): "
@@ -225,10 +266,68 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
             // initial packet (if the attacker is able to send a second packet that arrives before the second packet
             // from the original sender), but such an attack would be possible anyway (by injecting some data in the
             // crypto stream). So, switching to error state doesn't make it worse.
-            inError = true;
-            // Clean up faster
-            cleanupTask.cancel(true);
-            scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
+            enterErrorState();
+        }
+    }
+
+    private void enterErrorState() {
+        inError = true;
+        // Clean up faster
+        cleanupTask.cancel(true);
+        scheduledExecutor.schedule(this::removeFromConnectionRegistry, 2, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Checks the (retry) token of the given initial packet; if it does not have one, a Retry packet is sent.
+     * @param packet     the initial packet to check
+     * @param metaData   packet meta data (for the source address to send the Retry packet to)
+     * @return  true if the packet contains a valid token and processing can continue, false if a Retry packet was sent
+     * @throws InvalidTokenException  if the packet contains a token that is not valid
+     */
+    private boolean checkRetryToken(InitialPacket packet, PacketMetaData metaData) throws InvalidTokenException {
+        byte[] token = packet.getToken();
+        if (token == null || token.length == 0) {
+            sendRetry(metaData.sourceAddress());
+            return false;
+        }
+        else {
+            // As this server never sends NEW_TOKEN frames, any token must be a retry token.
+            Optional<byte[]> originalDcid = retryTokenManager.validateToken(token, metaData.sourceAddress(), dcid);
+            if (originalDcid.isPresent()) {
+                validatedOriginalDcid = originalDcid.get();
+                return true;
+            }
+            else {
+                throw new InvalidTokenException();
+            }
+        }
+    }
+
+    private void sendRetry(InetSocketAddress clientAddress) {
+        byte[] retryScid = retryTokenManager.generateRetrySourceConnectionId();
+        byte[] token = retryTokenManager.createToken(clientAddress, dcid, retryScid);
+        packetSender.send(clientAddress, new RetryPacket(quicVersion, retryScid, scid, dcid, token), null);
+
+        // Retry is sent instead of creating a connection, so this candidate will never lead to a connection. As the
+        // token is self-contained, there is no need to keep any state: remove the candidate immediately. A repeated
+        // initial packet (e.g. because the Retry was lost) will create a new candidate that sends a new Retry packet;
+        // this is no problem, because each token is valid and the client will only accept one Retry packet.
+        cleanupTask.cancel(true);
+        removeFromConnectionRegistry();
+    }
+
+    private void sendInvalidTokenError(InetSocketAddress clientAddress) {
+        ConnectionCloseFrame connectionClose = new ConnectionCloseFrame(quicVersion, INVALID_TOKEN.value, null);
+        InitialPacket closePacket = new InitialPacket(quicVersion, dcid, scid, null, connectionClose);
+        closePacket.setPacketNumber(0);
+        ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());
+        connectionSecrets.computeInitialKeys(dcid);
+        try {
+            packetSender.send(clientAddress, closePacket, connectionSecrets.getOwnAead(EncryptionLevel.Initial));
+        }
+        catch (MissingKeysException e) {
+            // Impossible, as initial keys have just been computed.
+            throw new RuntimeException(e);
         }
     }
 
@@ -294,12 +393,14 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
 
     private void createAndRegisterServerConnection(InitialPacket initialPacket, PacketMetaData metaData, ByteBuffer datagramData, int receivedDataSize) {
         Version quicVersion = initialPacket.getVersion();
-        byte[] originalDcid = initialPacket.getDestinationConnectionId();
+        // When the client has sent a (valid) retry token, the original destination connection ID is the one from the token.
+        byte[] originalDcid = validatedOriginalDcid != null? validatedOriginalDcid: initialPacket.getDestinationConnectionId();
+        byte[] retryScid = validatedOriginalDcid != null? dcid: null;
 
         registrationLock.lock();
         try {
             if (!closed) {
-                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid, null);
+                ServerConnectionImpl connection = serverConnectionFactory.createNewConnection(quicVersion, clientAddress, initialPacket.getSourceConnectionId(), originalDcid, retryScid, null);
 
                 // Pass the initial packet for processing, so it is processed on the server thread (enabling thread confinement concurrency strategy)
                 ServerConnectionProxy connectionThread = serverConnectionFactory.createServerConnectionProxy(connection, bufferedInitialPackets, datagramData, metaData);
@@ -393,5 +494,8 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     @Override
     public String toString() {
         return "ServerConnectionCandidate[" + Bytes.bytesToHex(dcid) + "]";
+    }
+
+    private static class InvalidTokenException extends Exception {
     }
 }

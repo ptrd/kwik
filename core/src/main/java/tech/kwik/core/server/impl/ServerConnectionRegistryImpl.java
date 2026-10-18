@@ -96,8 +96,11 @@ public class ServerConnectionRegistryImpl implements ServerConnectionRegistry {
     }
 
     ServerConnectionProxy removeConnection(ServerConnectionImpl connection) {
-        // Remove the entry this is registered with the original dcid
+        // Remove the entry that is registered with the original dcid or retry dcid.
         ServerConnectionProxy removed = currentConnections.remove(connectionSource(connection.getOriginalDestinationConnectionId()));
+        if (removed == null) {  // If the connection was established after a retry, the connection was initially registered with the retry dcid, not the original dcid.
+            removed = currentConnections.remove(connectionSource(connection.getRetrySourceConnectionId()));
+        }
 
         // Remove all entries that are registered with the active cids
         List<ServerConnectionProxy> removedConnections = connection.getActiveConnectionIds().stream()

@@ -223,7 +223,7 @@ class ServerConnectorImplTest {
         testExecutor.check();
 
         // Then
-        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any(), any());
         verify(connection).processPacket(any(QuicPacket.class), any(PacketMetaData.class));
     }
 
@@ -243,12 +243,12 @@ class ServerConnectorImplTest {
         server.process(createPacket(buffer));
         testExecutor.check();
 
-        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
+        verify(connectionFactory).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any(), any());
         clearInvocations(connectionFactory);
 
         // When
         server.process(createPacket(buffer));
-        verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any());
+        verify(connectionFactory, never()).createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any(), any());
     }
 
     @Test
@@ -403,7 +403,7 @@ class ServerConnectorImplTest {
 
     private ServerConnectionFactory installServerConnectionFactoryReturning(ServerConnectionImpl connection) throws Exception {
         ServerConnectionFactory connectionFactory = mock(ServerConnectionFactory.class);
-        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any()))
+        when(connectionFactory.createNewConnection(any(Version.class), any(InetSocketAddress.class), any(byte[].class), any(byte[].class), any(), any()))
                 .thenReturn(connection);
         when(connectionFactory.createServerConnectionProxy(any(ServerConnectionImpl.class), any(List.class), any(ByteBuffer.class), any(PacketMetaData.class)))
                 .thenAnswer(i -> new ServerConnectionThreadDummy(i.getArgument(0), (InitialPacket) ((List) i.getArgument(1)).get(0), ((PacketMetaData) i.getArgument(3))));

@@ -62,17 +62,13 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static tech.kwik.core.QuicConstants.TransportErrorCode.INVALID_TOKEN;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.PROTOCOL_VIOLATION;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.TRANSPORT_PARAMETER_ERROR;
 import static tech.kwik.core.common.EncryptionLevel.Initial;
@@ -83,14 +79,12 @@ import static tech.kwik.core.impl.QuicConnectionImpl.VersionNegotiationStatus.Ve
 
 public class ServerConnectionImpl extends QuicConnectionImpl implements ServerConnection, TlsStatusEventHandler {
 
-    static final int TOKEN_SIZE = 37;
-    private final Random random;
     private final SenderImpl sender;
     private final Version originalVersion;
     private final InetSocketAddress initialClientAddress;
     private final boolean usingIPv4;
     private final CryptoStream bufferedInitialCrypto;
-    private final boolean retryRequired;
+    private final byte[] retrySourceConnectionId;
     private final GlobalAckGenerator ackGenerator;
     private final TlsServerEngine tlsEngine;
     private final PathValidator pathValidator;
@@ -98,7 +92,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private final ApplicationProtocolRegistry applicationProtocolRegistry;
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final StreamManager streamManager;
-    private final byte[] token;
     private final ConnectionIdManager connectionIdManager;
     private final ServerConnectionSocketManager socketManager;
     private volatile String negotiatedApplicationProtocol;
@@ -118,6 +111,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param initialClientAddress        the initial client address (after handshake, clients can move to different address)
      * @param peerCid                     the connection id of the client
      * @param originalDcid                the original destination connection id used by the client
+     * @param retryScid                   the source connection id of the Retry packet sent to the client (and validated by
+     *                                    receiving a valid retry token), or null if no Retry packet was sent
      * @param cryptoStream                stream containing already received crypto data for encryption level Initial
      * @param tlsServerEngineFactory      factory for creating tls engine
      * @param configuration               connection configuration settings
@@ -127,7 +122,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param log                         logger
      */
     public ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
-                                byte[] peerCid, byte[] originalDcid, CryptoStream cryptoStream, TlsServerEngineFactory tlsServerEngineFactory,
+                                byte[] peerCid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream, TlsServerEngineFactory tlsServerEngineFactory,
                                 ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
                                 ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, configuration, Bytes.bytesToHex(originalDcid), new LogProxy(log, originalDcid));
@@ -135,7 +130,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.initialClientAddress = initialClientAddress;
         usingIPv4 = InetTools.isIPv4(initialClientAddress.getAddress());
         this.bufferedInitialCrypto = cryptoStream;
-        this.retryRequired = configuration.retryRequired() == ServerConnectionConfig.RetryRequired.Always;
+        this.retrySourceConnectionId = retryScid;
         this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
@@ -160,7 +155,11 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         sender = new SenderImpl(quicVersion, getMaxPacketSize(), socketManager, this, Bytes.bytesToHex(originalDcid), configuration.initialRtt(), this.log);
         connectionIdManager.setSender(sender);
 
-        if (! retryRequired) {
+        if (retrySourceConnectionId != null) {
+            // Receiving a valid retry token implies the client address is validated.
+            addressValidated = true;
+        }
+        else {
             sender.setAntiAmplificationLimit(0);
         }
         idleTimer.setPtoSupplier(sender::getPto);
@@ -174,16 +173,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
         ackGenerator = sender.getGlobalAckGenerator();
 
-        if (retryRequired) {
-            random = new SecureRandom();
-            token = new byte[TOKEN_SIZE];
-            random.nextBytes(token);
-        }
-        else {
-            random = null;
-            token = null;
-        }
-        connectionSecrets.computeInitialKeys(originalDcid);
+        // After a retry, the client uses the retry source connection ID as destination connection ID, which determines the initial keys.
+        connectionSecrets.computeInitialKeys(retrySourceConnectionId != null? retrySourceConnectionId: originalDcid);
         sender.start(connectionSecrets);
 
         streamManager = new StreamManager(this, Role.Server, log, configuration, callbackThread);
@@ -206,7 +197,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     PacketParser createParser() {
-        return new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(), retryRequired,
+        return new ServerRolePacketParser(connectionSecrets, quicVersion, getSourceConnectionIdLength(),
                 processorChain, () -> versionNegotiationStatus, log);
     }
 
@@ -261,6 +252,13 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     protected void cryptoProcessingErrorOcurred(Exception exception) {
     }
 
+    /**
+     * Retrieves the initial connection used by this endpoint. This is the value that the endpoint included in the
+     * Source Connection ID field of the first Initial packet it sends (has sent) for the connection.
+     * Should not be confused with the original destination connection ID, which is the connection ID the client used
+     * in its very first Initial packet.
+     * @return the initial connection id
+     */
     public byte[] getInitialConnectionId() {
         return connectionIdManager.getInitialConnectionId();
     }
@@ -382,9 +380,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
         serverTransportParams.setDisableMigration(true);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
+        // "When the handshake includes a Retry (Figure 8), the server sets original_destination_connection_id to S1,
+        //  retry_source_connection_id to S2, and initial_source_connection_id to S3."
         serverTransportParams.setOriginalDestinationConnectionId(connectionIdManager.getOriginalDestinationConnectionId());
-        if (retryRequired) {
-            serverTransportParams.setRetrySourceConnectionId(connectionIdManager.getInitialConnectionId());
+        if (retrySourceConnectionId != null) {
+            serverTransportParams.setRetrySourceConnectionId(retrySourceConnectionId);
         }
         tlsEngine.setSelectedApplicationLayerProtocol(negotiatedApplicationProtocol);
         tlsEngine.addServerExtensions(new QuicTransportParametersExtension(quicVersion.getVersion(), serverTransportParams, Role.Server));
@@ -469,7 +470,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     @Override
     protected boolean checkDestinationConnectionId(QuicPacket packet) {
         byte[] cid = packet.getDestinationConnectionId();
-        if ((packet instanceof InitialPacket || packet instanceof ZeroRttPacket) && Arrays.equals(cid, getOriginalDestinationConnectionId())) {
+        if ((packet instanceof InitialPacket || packet instanceof ZeroRttPacket) &&
+                (Arrays.equals(cid, getOriginalDestinationConnectionId()) || Arrays.equals(cid, getInitialConnectionId()) || Arrays.equals(cid, retrySourceConnectionId))) {
             return true;
         }
         else {
@@ -479,35 +481,9 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
 
     @Override
     public ProcessResult process(InitialPacket packet, PacketMetaData metaData) {
-        assert(Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getInitialConnectionId()) || Arrays.equals(packet.getDestinationConnectionId(), connectionIdManager.getOriginalDestinationConnectionId()));
-
         connectionState = Handshaking;
-        if (retryRequired) {
-            if (packet.getToken() == null) {
-                sendRetry();
-                connectionSecrets.recomputeInitialKeys(connectionIdManager.getInitialConnectionId());
-                return ProcessResult.Abort;  // No further packet processing (e.g. ack generation).
-            }
-            else if (!MessageDigest.isEqual(packet.getToken(), token)) {
-                // https://tools.ietf.org/html/draft-ietf-quic-transport-33#section-8.1.2
-                // "If a server receives a client Initial that can be unprotected but contains an invalid Retry token,
-                // (...), the server SHOULD immediately close (Section 10.2) the connection with an INVALID_TOKEN error."
-                immediateCloseWithError(INVALID_TOKEN.value, null);
-                return ProcessResult.Abort;
-            }
-            else {
-                // Receiving a valid token implies address is validated.
-                addressValidated = true;
-                sender.unsetAntiAmplificationLimit();
-                // Valid token, proceed as usual.
-                processFrames(packet, metaData);
-                return ProcessResult.Continue;
-            }
-        }
-        else {
-            processFrames(packet, metaData);
-            return ProcessResult.Continue;
-        }
+        processFrames(packet, metaData);
+        return ProcessResult.Continue;
     }
 
     @Override
@@ -516,19 +492,6 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
             if (bufferedInitialCrypto.getBufferedMessagesCount() > 0) {
                 bufferedInitialCrypto.processBufferedMessages();
             }
-        }
-    }
-
-    private void sendRetry() {
-        try {
-            RetryPacket retry = new RetryPacket(quicVersion.getVersion(), connectionIdManager.getInitialConnectionId(), connectionIdManager.getInitialPeerConnectionId(), getOriginalDestinationConnectionId(), token);
-            byte[] packetBytes = retry.generatePacketBytes(null);  // Retry packet is not encrypted, so no keys needed.
-            Instant timeSent = socketManager.send(ByteBuffer.wrap(packetBytes), initialClientAddress);
-            log.sent(timeSent, retry);
-            log.getQLog().emitPacketSentEvent(retry, timeSent);
-        }
-        catch (IOException e) {
-            log.error("Sending retry packet failed", e);
         }
     }
 
@@ -760,8 +723,19 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         return connectionState == Status.Closed;
     }
 
+    /**
+     * Returns the original destination connection ID, i.e. the connection ID the client used as destination in its
+     * very first initial packet.
+     * Should not be confused with the initial connection ID, which is the first (hence "initial") connection ID generated
+     * by this server to identify this connection.
+     * @return
+     */
     public byte[] getOriginalDestinationConnectionId() {
         return connectionIdManager.getOriginalDestinationConnectionId();
+    }
+
+    public byte[] getRetrySourceConnectionId() {
+        return retrySourceConnectionId;
     }
 
     public List<byte[]> getActiveConnectionIds() {
