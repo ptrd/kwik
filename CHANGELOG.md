@@ -1,5 +1,10 @@
 # Releases
 
+## 0.12.1 (2026-10-18)
+
+- server retry is now handled statelessly (before a connection is created), using encrypted retry tokens
+- fix: stream send request could get lost when a flow control update raced with queueing it, possibly stalling the stream
+
 ## 0.12 (2026-10-07)
 
 - upgrade agent15 to 4.0, which provides Post-Quantum Hybrid Key Agreement Mechanisms for TLS 1.3
