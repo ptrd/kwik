@@ -83,6 +83,18 @@ class StreamManagerTest {
     }
     //endregion
 
+    @Test
+    void lostConnectionCreditIsRetransmittedWithTheLatestLimit() {
+        ArgumentCaptor<Consumer<QuicFrame>> callbacks = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<MaxDataFrame> frames = ArgumentCaptor.forClass(MaxDataFrame.class);
+        streamManager.updateConnectionFlowControl(4_096);
+        streamManager.updateConnectionFlowControl(4_096);
+        verify(quicConnection, times(2)).send(frames.capture(), callbacks.capture(), eq(true));
+        callbacks.getAllValues().get(0).accept(frames.getAllValues().get(0));
+        verify(quicConnection, times(3)).send(frames.capture(), any(Consumer.class), eq(true));
+        assertThat(frames.getValue().getMaxData()).isEqualTo(18_192);
+    }
+
     //region stream creation
     @Test
     void serverInitiatedStreamShouldHaveOddId() {
