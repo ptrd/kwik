@@ -139,9 +139,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 return false;
             }
 
-            addWithoutOverlap(frame);
-
             long previousContiguousUpToOffset = contiguousUpToOffset;
+            if (! addContiguous(frame)) {
+                addOutOfOrder(frame);
+            }
+
             while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
                 StreamElement nextFrame = outOfOrderFrames.pollFirst();
                 if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
@@ -176,11 +178,25 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
     }
 
+    private boolean addContiguous(StreamElement frame) {
+        if (frame.getOffset() == contiguousUpToOffset) {
+            // Frame is exactly the next contiguous frame: add it to the contiguous queue and update the offset.
+            contiguousFrames.add(frame);
+            // The contiguous offset never advances beyond the discard offset, so that the status methods
+            // (e.g. bytesAvailable) do not account for data that will never be read.
+            contiguousUpToOffset = Long.min(frame.getUpToOffset(), discardBeyondOffset);
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
     public long bufferedOutOfOrderData() {
         return bufferedOutOfOrderData;
     }
 
-    private void addWithoutOverlap(StreamElement frame) {
+    private void addOutOfOrder(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
         if (before != null && overlapping(before, frame)) {
