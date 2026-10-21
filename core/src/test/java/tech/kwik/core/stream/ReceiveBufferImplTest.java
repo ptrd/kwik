@@ -583,6 +583,56 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementIsZeroAfterPartialRetransmitOfContiguousData() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(50, 100));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+    }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementIsZeroAfterDuplicateOfContiguousData() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 50));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+    }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFrameCoversOutOfOrderFrame() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 20));
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 150));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(150);
+    }
+
+    @Test
+    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFramePartiallyOverlapsOutOfOrderFrame() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 150));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(200);
+    }
     // endregion
 
     // region memory management

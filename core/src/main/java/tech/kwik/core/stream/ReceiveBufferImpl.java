@@ -146,6 +146,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
             while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
                 StreamElement nextFrame = outOfOrderFrames.pollFirst();
+                bufferedOutOfOrderData -= nextFrame.getLength();
                 if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
                     if (nextFrame.getOffset() < contiguousUpToOffset) {
                         nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
@@ -156,7 +157,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     // The contiguous offset never advances beyond the discard offset, so that the status methods
                     // (e.g. bytesAvailable) do not account for data that will never be read.
                     contiguousUpToOffset = Long.min(nextFrame.getUpToOffset(), discardBeyondOffset);
-                    bufferedOutOfOrderData -= nextFrame.getLength();
                 }
             }
             return contiguousUpToOffset > previousContiguousUpToOffset;
