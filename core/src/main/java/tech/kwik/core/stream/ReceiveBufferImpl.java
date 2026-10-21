@@ -128,16 +128,18 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     @Override
     public boolean add(StreamElement frame) {
         try {
-            if (frame.getLength() > 0) {
-                if (frame.getOffset() >= discardBeyondOffset) {
-                    // All data of this frame is at or beyond the discard offset, so it will never be read: drop it.
-                    return false;
-                }
-                addWithoutOverlap(frame);
-            }
             if (frame.isFinal()) {
                 streamEndOffset = frame.getUpToOffset();
             }
+            if (frame.getLength() == 0) {
+                return false;
+            }
+            if (frame.getOffset() >= discardBeyondOffset) {
+                // All data of this frame is at or beyond the discard offset, so it will never be read: drop it.
+                return false;
+            }
+
+            addWithoutOverlap(frame);
 
             long previousContiguousUpToOffset = contiguousUpToOffset;
             while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
