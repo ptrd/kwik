@@ -25,6 +25,14 @@ import java.io.InputStream;
 
 public abstract class StreamInputStream extends InputStream {
 
+    void enableReceiveWindowAutoTuning(long minimum, long maximum) {
+        throw new UnsupportedOperationException();
+    }
+
+    long getReceiveWindowSize() {
+        throw new UnsupportedOperationException();
+    }
+
     abstract long addDataFrom(StreamFrame frame) throws TransportError;
 
     abstract long getCurrentReceiveOffset();
