@@ -147,7 +147,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
                 StreamElement nextFrame = outOfOrderFrames.pollFirst();
                 bufferedOutOfOrderData -= nextFrame.getLength();
-                if (nextFrame.getUpToOffset() > contiguousUpToOffset) {
+                // Only frames that contain data that can still be read are moved to the contiguous frames, others are
+                // dropped (which is the case when all data is before the contiguous offset or beyond the discard offset).
+                if (Long.min(nextFrame.getUpToOffset(), discardBeyondOffset) > contiguousUpToOffset) {
                     if (nextFrame.getOffset() < contiguousUpToOffset) {
                         nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
                     }

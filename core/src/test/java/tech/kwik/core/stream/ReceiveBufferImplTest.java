@@ -538,6 +538,25 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.bytesAvailable()).isEqualTo(1000);
         assertThat(receiveBuffer.read(ByteBuffer.allocate(1000))).isEqualTo(1000);
     }
+
+    @Test
+    void retransmittedFramesStraddlingDiscardOffsetDoNotCauseOverlap() {
+        // Given
+        receiveBuffer.discardDataBeyond(100);
+        receiveBuffer.add(new DataFrame(0, 150));
+
+        // When  (retransmissions of 50..149, which straddles the discard offset)
+        for (int i = 0; i < 10; i++) {
+            receiveBuffer.add(new DataFrame(50, 100));
+        }
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        ByteBuffer buffer = ByteBuffer.allocate(1000);
+        assertThat(receiveBuffer.read(buffer)).isEqualTo(100);
+        checkData(buffer);
+        assertThat(receiveBuffer.allRead()).isTrue();
+    }
     // endregion
 
     // region out-of-order data measurement
