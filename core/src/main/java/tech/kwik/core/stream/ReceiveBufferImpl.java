@@ -188,6 +188,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 bufferedOutOfOrderData -= before.getLength();
             }
             else {
+                // Remove overlap by shrinking the new frame to start at the end of the "before" frame.
                 combinedWithBefore = shrinkFrame(frame, before.getUpToOffset(), frame.getUpToOffset());
                 // Special case: because the shrunk frame got a new (start) offset, it could now overlap with a different
                 // "before", that was after the original "before".
@@ -221,6 +222,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 bufferedOutOfOrderData -= after.getLength();
             }
             else {
+                // Remove overlap by shrinking the new frame to end at the start of the "after" frame.
                 newCombined = shrinkFrame(frameToAdd, frameToAdd.getOffset(), after.getOffset());
             }
             after = outOfOrderFrames.higher(newCombined);
@@ -385,6 +387,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             return isFinal;
         }
 
+        @Override
         public int compareTo(StreamElement other) {
             if (this.offset != other.getOffset()) {
                 return Long.compare(this.offset, other.getOffset());

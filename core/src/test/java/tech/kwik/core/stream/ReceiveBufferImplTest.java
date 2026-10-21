@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2023, 2024, 2025, 2026 Peter Doornbosch
+ *
+ * This file is part of Kwik, an implementation of the QUIC protocol in Java.
+ *
+ * Kwik is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Kwik is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package tech.kwik.core.stream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -130,6 +148,22 @@ class ReceiveBufferImplTest {
 
         // Then
         assertThat(receiveBuffer.readOffset()).isEqualTo(85);
+    }
+
+    @Test
+    void emtpyNonFinalFrameChangesNothing() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 50));
+        receiveBuffer.add(new DataFrame(50, 50));
+        receiveBuffer.add(new DataFrame(555, 100));
+
+        // When
+        boolean newData = receiveBuffer.add(new DataFrame(100, 0, false));
+
+        // Then
+        assertThat(newData).isFalse();
+        assertThat(receiveBuffer.bytesAvailable()).isEqualTo(100);
+        assertThat(receiveBuffer.readOffset()).isEqualTo(0);
     }
     // endregion
 
@@ -301,7 +335,7 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.allRead()).isTrue();
         assertThat(receiveBuffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
     }
-    // end region
+    // endregion
 
     // region discard data beyond offset
     @Test
@@ -1004,6 +1038,7 @@ class ReceiveBufferImplTest {
     }
     // endregion
 
+    // region helper methods
     private void checkData(ByteBuffer buffer) {
         for (int i = 0; i < buffer.position(); i++) {
             assertThat(buffer.get(i)).isEqualTo((byte) i);
@@ -1079,4 +1114,5 @@ class ReceiveBufferImplTest {
             return "" + offset + ".." + (offset + data.length - 1);
         }
     }
+    // endregion
 }
