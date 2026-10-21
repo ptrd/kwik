@@ -955,6 +955,47 @@ class ReceiveBufferImplTest {
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         checkDataCanBeReadAfterAdding(750);
     }
+
+    @Test
+    void whenFrameLargerThanMaxCombinedFrameSizeContainsExistingFrameNoDataIsLost() {
+        // Given                        1000..1099
+        receiveBuffer.add(new DataFrame(1000, 100));
+
+        // When                         10..3009 (larger than max combined frame size)
+        receiveBuffer.add(new DataFrame(10, 3000));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(3010, new DataFrame(0, 10));
+    }
+
+    @Test
+    void whenFrameIsContainedInExistingFrameLargerThanMaxCombinedFrameSizeOverlapIsRemoved() {
+        // Given                        1000..3999 (larger than max combined frame size)
+        receiveBuffer.add(new DataFrame(1000, 3000));
+
+        // When                         1500..1999
+        receiveBuffer.add(new DataFrame(1500, 500));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(4000, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void whenFrameIsContainedInFrameCombinedUpToMaxCombinedFrameSizeOverlapIsRemoved() {
+        // Given                        1000..2199, 2100..3299, 3200..3499 (combined into 1000..3499, exactly max size)
+        receiveBuffer.add(new DataFrame(1000, 1200));
+        receiveBuffer.add(new DataFrame(2100, 1200));
+        receiveBuffer.add(new DataFrame(3200, 300));
+
+        // When                         1500..1999
+        receiveBuffer.add(new DataFrame(1500, 500));
+
+        // Then
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        checkDataCanBeReadAfterAdding(3500, new DataFrame(0, 1000));
+    }
     // endregion
 
     // region contains and combine helper methods

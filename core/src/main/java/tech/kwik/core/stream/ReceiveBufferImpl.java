@@ -198,11 +198,17 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return bufferedOutOfOrderData;
     }
 
+    /**
+     * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap and either the
+     * combined length does not exceed the maximum combined frame size or one frame contains the other. Overlapping
+     * frames that cannot be combined are shrunk to remove the overlap.
+     * @param frame  the frame to add
+     */
     private void addOutOfOrder(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
         if (before != null && overlapping(before, frame)) {
-            if (combinedLength(before, frame) <= maxCombinedFrameSize) {
+            if (canCombine(before, frame)) {
                 combinedWithBefore = combine(before, frame);
                 outOfOrderFrames.remove(before);
                 bufferedOutOfOrderData -= before.getLength();
@@ -236,7 +242,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
         while (after != null && overlapping(frameToAdd, after)) {
             StreamElement newCombined;
-            if (combinedLength(frameToAdd, after) <= maxCombinedFrameSize) {
+            if (canCombine(frameToAdd, after)) {
                 newCombined = combine(frameToAdd, after);
                 outOfOrderFrames.remove(after);
                 bufferedOutOfOrderData -= after.getLength();
@@ -249,6 +255,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             frameToAdd = newCombined;
         }
         return frameToAdd;
+    }
+
+    /**
+     * Returns whether two (overlapping) frames can be combined: either the combination does not exceed the maximum
+     * combined frame size, or one of the frames contains the other, in which case the combination is just the
+     * containing frame and combining does not lead to a larger frame.
+     */
+    private boolean canCombine(StreamElement frame1, StreamElement frame2) {
+        return combinedLength(frame1, frame2) <= maxCombinedFrameSize
+                || contains(frame1, frame2) || contains(frame2, frame1);
     }
 
     static boolean overlapping(StreamElement frame1, StreamElement frame2) {
