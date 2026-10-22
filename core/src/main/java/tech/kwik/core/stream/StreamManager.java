@@ -348,12 +348,7 @@ public class StreamManager {
     }
 
     private void retransmitMaxData(QuicFrame lostFrame) {
-        updateFlowControlLock.lock();
-        try {
-            connection.send(new MaxDataFrame(flowControlMax), this::retransmitMaxData, true);
-        } finally {
-            updateFlowControlLock.unlock();
-        }
+        connection.send(new MaxDataFrame(flowControlMax), this::retransmitMaxData, true);
     }
 
     private void checkConnectionFlowControl(QuicStreamImpl receivingStream, StreamFrame frame) throws TransportError {
