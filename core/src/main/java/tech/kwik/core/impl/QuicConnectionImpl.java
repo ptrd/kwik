@@ -42,6 +42,7 @@ import tech.kwik.core.util.ProgressivelyIncreasingRateLimiter;
 import tech.kwik.core.util.RateLimiter;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -504,7 +505,26 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
         // "Responses to path validation using PATH_RESPONSE frames are sent just once."
-        send(response, f -> {});
+        InetSocketAddress alternatePath = getAlternatePath(metaData);
+        if (alternatePath != null) {
+            // The response goes back over the path the challenge arrived on: the peer might be probing a new path
+            // precisely because the current one stopped working, in which case a response on the current path
+            // would never arrive.
+            getSender().sendAlternateAddress(response, alternatePath);
+        }
+        else {
+            send(response, f -> {});
+        }
+    }
+
+    /**
+     * Determines whether a packet was received over another network path than the one currently in use.
+     * @param metaData  the meta data of the received packet
+     * @return  the address to pass to {@link tech.kwik.core.send.Sender#sendAlternateAddress(QuicFrame, InetSocketAddress)} to send over
+     * the path the packet was received on, or null if it was received over the current path
+     */
+    protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
+        return null;
     }
 
     @Override

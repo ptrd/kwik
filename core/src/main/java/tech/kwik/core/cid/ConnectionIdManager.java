@@ -146,7 +146,6 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     public void handshakeFinished() {
-        assert role == Server;
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long

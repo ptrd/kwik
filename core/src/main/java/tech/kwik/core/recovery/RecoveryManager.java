@@ -567,6 +567,13 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             resetLossDetectionTimeout();
         }
     }
+    /**
+     * @return  the number of consecutive probe timeouts, i.e. without receiving an acknowledgement in between.
+     */
+    public int getPtoCount() {
+        return ptoCount;
+    }
+
     public long getLost() {
         return Stream.of(lossDetectors).mapToLong(ld -> ld.getLost()).sum();
     }

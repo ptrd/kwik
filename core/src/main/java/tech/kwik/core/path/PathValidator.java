@@ -251,6 +251,14 @@ public class PathValidator {
         }
     }
 
+    /**
+     * @return  true if the given address is validated or being validated, which implies a connection ID of the peer
+     * has been assigned to it, so packets can be sent to it
+     */
+    public boolean isValidatedOrInProgress(InetSocketAddress address) {
+        return isValidated(address) || pathValidationInProgress(address);
+    }
+
     public boolean isValidated(InetSocketAddress newAddress) {
         PathValidation validation = pathValidationsByAddress.get(newAddress);
         return validation != null && validation.isValidated(clock.instant());

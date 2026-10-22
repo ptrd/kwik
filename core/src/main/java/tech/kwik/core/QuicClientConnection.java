@@ -51,6 +51,21 @@ public interface QuicClientConnection extends QuicConnection {
 
     InetSocketAddress getServerAddress();
 
+    /**
+     * Migrates the connection to a new local address (a new UDP port on the same interface), as specified by
+     * https://www.rfc-editor.org/rfc/rfc9000.html#section-9.
+     * The new path is validated before it is used: only when the server has responded to a PATH_CHALLENGE sent from
+     * the new address, the connection switches to it, retires the connection ID used on the old path and closes the
+     * old socket. When validation fails, the connection is left unchanged.
+     * Typical use is moving away from a network path that stopped delivering packets, e.g. because a router hashes
+     * the flow (address and port tuple) onto a path that is broken, see {@link Statistics#consecutivePtoCount()}.
+     * @param timeout  how long to wait for the new path to be validated
+     * @return  true if the connection migrated, false if it could not (handshake not confirmed, peer disabled active
+     * migration, no unused peer connection ID available, or path validation failed)
+     * @throws SocketException  when a socket for the new address cannot be created
+     */
+    boolean migrate(Duration timeout) throws SocketException;
+
     List<X509Certificate> getServerCertificateChain();
 
     boolean isConnected();
