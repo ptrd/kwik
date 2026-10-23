@@ -41,6 +41,9 @@ import java.util.stream.Collectors;
 public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
+    // Estimated memory overhead (in bytes) of a buffered frame, i.e. memory used by a buffered frame on top of the
+    // stream data it contains (the frame object, its byte array header, the collection node, etc.).
+    static final int FRAME_OVERHEAD = 128;
 
     private final NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
     private final Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
@@ -49,6 +52,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long streamEndOffset = -1;
     private volatile long bufferedOutOfOrderData;
     private volatile int outOfOrderFrameCount;
+    // The number of contiguous frames is tracked by two counters, so that each counter has only one writer: the number
+    // added is only updated by the add method (producer), the number removed only by the read method (consumer).
+    private volatile long contiguousFramesAdded;
+    private volatile long contiguousFramesRemoved;
     private final int maxCombinedFrameSize;
     private volatile boolean discarded;
     private volatile long discardBeyondOffset = Long.MAX_VALUE;
@@ -111,6 +118,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             totalBytesRead += bytesToRead;
             if (readUpToOffset == maxOffset) {
                 contiguousFrames.poll();
+                contiguousFramesRemoved++;
                 nextFrame = contiguousFrames.peek();
             }
         }
@@ -159,6 +167,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     }
                     // First add frame and ...
                     contiguousFrames.add(nextFrame);
+                    contiguousFramesAdded++;
                     // ... then update the offset (otherwise: race condition).
                     // The contiguous offset never advances beyond the discard offset, so that the status methods
                     // (e.g. bytesAvailable) do not account for data that will never be read.
@@ -188,6 +197,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         if (frame.getOffset() == contiguousUpToOffset) {
             // Frame is exactly the next contiguous frame: add it to the contiguous queue and update the offset.
             contiguousFrames.add(frame);
+            contiguousFramesAdded++;
             // The contiguous offset never advances beyond the discard offset, so that the status methods
             // (e.g. bytesAvailable) do not account for data that will never be read.
             contiguousUpToOffset = Long.min(frame.getUpToOffset(), discardBeyondOffset);
@@ -200,6 +210,15 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     public long bufferedOutOfOrderData() {
         return bufferedOutOfOrderData;
+    }
+
+    /**
+     * Returns an estimate of the memory used by this buffer: the buffered data plus an estimated overhead per frame.
+     * @return  the estimated memory usage in bytes
+     */
+    long estimatedMemoryUsage() {
+        long frameCount = contiguousFramesAdded - contiguousFramesRemoved + outOfOrderFrameCount;
+        return bytesAvailable() + bufferedOutOfOrderData + frameCount * FRAME_OVERHEAD;
     }
 
     /**
@@ -478,6 +497,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         outOfOrderFrameCount = 0;
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
+        contiguousFramesRemoved = contiguousFramesAdded;
     }
 
     @Override

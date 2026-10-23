@@ -658,6 +658,107 @@ class ReceiveBufferImplTest {
     }
     // endregion
 
+    // region memory usage estimation
+    @Test
+    void estimatedMemoryUsageOfEmptyBufferIsZero() {
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
+    void estimatedMemoryUsageIncludesContiguousDataAndFrameOverhead() {
+        // When
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.add(new DataFrame(100, 200));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(300 + 2 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageDecreasesWhenDataIsRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.add(new DataFrame(100, 200));
+
+        // When
+        receiveBuffer.read(ByteBuffer.allocate(150));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(150 + 1 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageIsZeroWhenAllDataIsRead() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.add(new DataFrame(100, 200));
+
+        // When
+        receiveBuffer.read(ByteBuffer.allocate(1000));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
+    void estimatedMemoryUsageIncludesOutOfOrderDataAndFrameOverhead() {
+        // When
+        receiveBuffer.add(new DataFrame(200, 100));
+        receiveBuffer.add(new DataFrame(500, 300));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(400 + 2 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageAccountsForCombinedOutOfOrderFrames() {
+        // Given
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // When                         overlapping, so combined into 200..349
+        receiveBuffer.add(new DataFrame(250, 100));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(150 + 1 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageIncludesBothContiguousAndOutOfOrderFrames() {
+        // When
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(200 + 2 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageIsUpdatedWhenOutOfOrderFramesBecomeContiguous() {
+        // Given
+        receiveBuffer.add(new DataFrame(100, 100));
+        receiveBuffer.add(new DataFrame(300, 100));
+
+        // When
+        receiveBuffer.add(new DataFrame(0, 100));
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(300 + 3 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void estimatedMemoryUsageIsZeroWhenAllDataIsDiscarded() {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 100));
+        receiveBuffer.add(new DataFrame(200, 100));
+
+        // When
+        receiveBuffer.discardAllData();
+
+        // Then
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+    // endregion
+
     // region memory management
     @Test
     void duplicatedFramesAreCombinedToReduceMemoryUsage() {
