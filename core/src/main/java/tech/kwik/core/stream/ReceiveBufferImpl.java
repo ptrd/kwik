@@ -19,7 +19,9 @@
 package tech.kwik.core.stream;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableSet;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -210,7 +212,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private void addOutOfOrder(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
-        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && fragmented(frame)))) {
+        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && fragmented(frame.getLength())))) {
             if (canCombine(before, frame)) {
                 combinedWithBefore = combine(before, frame);
                 outOfOrderFrames.remove(before);
@@ -249,35 +251,55 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     StreamElement combineWithElementsAfter(StreamElement frameToAdd) {
+        // To avoid copying the (growing) combined data for each frame that is combined, first collect the frames to
+        // combine and only copy the data once at the end.
+        List<StreamElement> framesToCombine = null;
+        long startOffset = frameToAdd.getOffset();
+        long upToOffset = frameToAdd.getUpToOffset();
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
-        while (after != null && (overlapping(frameToAdd, after) || (adjacent(frameToAdd, after) && fragmented(frameToAdd)))) {
-            StreamElement newCombined;
-            if (canCombine(frameToAdd, after)) {
-                newCombined = combine(frameToAdd, after);
+        while (after != null) {
+            boolean overlapping = upToOffset > after.getOffset();
+            boolean adjacent = upToOffset == after.getOffset();
+            boolean heavilyFragmented = fragmented(upToOffset - startOffset);
+            if (! (overlapping || (adjacent && heavilyFragmented))) {
+                break;
+            }
+            if (canCombine(startOffset, upToOffset, after.getOffset(), after.getUpToOffset())) {
+                if (framesToCombine == null) {
+                    framesToCombine = new ArrayList<>();
+                    framesToCombine.add(frameToAdd);
+                }
+                framesToCombine.add(after);
+                upToOffset = Long.max(upToOffset, after.getUpToOffset());
                 outOfOrderFrames.remove(after);
                 outOfOrderFrameCount--;
                 bufferedOutOfOrderData -= after.getLength();
-            }
-            else if (adjacent(frameToAdd, after)) {
-                // Adjacent (not overlapping) and too large to combine: nothing to do (and continuing would loop forever).
-                break;
+                after = outOfOrderFrames.higher(after);
             }
             else {
-                // Remove overlap by shrinking the new frame to end at the start of the "after" frame.
-                newCombined = shrinkFrame(frameToAdd, frameToAdd.getOffset(), after.getOffset());
+                if (!adjacent) {
+                    // Remove overlap by shrinking the new frame to end at the start of the "after" frame.
+                    upToOffset = after.getOffset();
+                }
+                // Too large to combine; after shrinking, the combination with "after" would still be too large.
+                break;
             }
-            after = outOfOrderFrames.higher(newCombined);
-            frameToAdd = newCombined;
         }
-        return frameToAdd;
+        if (framesToCombine == null) {
+            return shrinkFrame(frameToAdd, startOffset, upToOffset);
+        }
+        else {
+            return combine(framesToCombine, startOffset, upToOffset);
+        }
     }
 
     /**
      * Returns whether the out-of-order frames are fragmented too much, i.e. there are many small frames.
-     * @param inProgress  the frame that is being added, which is not (yet) counted in the buffered data and frame count
+     * @param inProgressLength  the length of the frame that is being added, which is not (yet) counted in the buffered
+     *                          data and frame count
      */
-    private boolean fragmented(StreamElement inProgress) {
-        long data = bufferedOutOfOrderData + inProgress.getLength();
+    private boolean fragmented(long inProgressLength) {
+        long data = bufferedOutOfOrderData + inProgressLength;
         return data < (outOfOrderFrameCount + 1) * 90L && data > 10 * 1024;
     }
 
@@ -287,8 +309,13 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * containing frame and combining does not lead to a larger frame.
      */
     private boolean canCombine(StreamElement frame1, StreamElement frame2) {
-        return combinedLength(frame1, frame2) <= maxCombinedFrameSize
-                || contains(frame1, frame2) || contains(frame2, frame1);
+        return canCombine(frame1.getOffset(), frame1.getUpToOffset(), frame2.getOffset(), frame2.getUpToOffset());
+    }
+
+    private boolean canCombine(long offset1, long upToOffset1, long offset2, long upToOffset2) {
+        return Long.max(upToOffset1, upToOffset2) - Long.min(offset1, offset2) <= maxCombinedFrameSize
+                || (offset1 <= offset2 && upToOffset1 >= upToOffset2)
+                || (offset2 <= offset1 && upToOffset2 >= upToOffset1);
     }
 
     static boolean overlapping(StreamElement frame1, StreamElement frame2) {
@@ -335,6 +362,49 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return new SimpleStreamElement(frame1.getOffset(), combinedData, frame1.isFinal() || frame2.isFinal());
     }
 
+    /**
+     * Combines a list of frames, ordered by offset and together covering the given range without gaps, into one frame
+     * covering that range, copying the data only once. When one frame covers the whole range, no data is copied and
+     * that frame is returned (or a shrunk copy of it, when it extends beyond the range).
+     * @param frames  the frames to combine, ordered by offset; the first frame must start at startOffset and each frame
+     *                must start at or before the end of the frames before it; except for the first, frames must not
+     *                overlap
+     * @param startOffset  the start offset of the combined frame, which must be equal to the offset of the first frame
+     * @param upToOffset  the offset up to which (exclusive) the frames are combined; data beyond this offset is dropped
+     * @return  a frame covering startOffset (inclusive) to upToOffset (exclusive)
+     */
+    static StreamElement combine(List<StreamElement> frames, long startOffset, long upToOffset) {
+        assert !frames.isEmpty();
+        assert frames.get(0).getOffset() == startOffset;
+
+        // As frames are ordered by offset, only the frames starting at the start offset can contain all others.
+        for (int i = 0; i < frames.size() && frames.get(i).getOffset() == startOffset; i++) {
+            StreamElement frame = frames.get(i);
+            if (frame.getUpToOffset() >= upToOffset) {
+                // One frame contains all others: no need to copy.
+                return shrinkFrame(frame, startOffset, upToOffset);
+            }
+        }
+
+        byte[] combinedData = new byte[(int) (upToOffset - startOffset)];
+        long filledUpToOffset = startOffset;
+        for (StreamElement frame : frames) {
+            assert frame.getOffset() <= filledUpToOffset;
+            long copyUpToOffset = Long.min(frame.getUpToOffset(), upToOffset);
+            if (copyUpToOffset > filledUpToOffset) {
+                System.arraycopy(frame.getStreamData(), (int) (filledUpToOffset - frame.getOffset()),
+                        combinedData, (int) (filledUpToOffset - startOffset), (int) (copyUpToOffset - filledUpToOffset));
+                filledUpToOffset = copyUpToOffset;
+            }
+        }
+        assert filledUpToOffset == upToOffset;
+        // Final is a property of the stream end offset, so it only applies when the combined frame ends there. As no
+        // frame contains all others, the last frame is the only frame that can end at the up-to offset.
+        StreamElement lastFrame = frames.get(frames.size() - 1);
+        boolean isFinal = lastFrame.isFinal() && lastFrame.getUpToOffset() == upToOffset;
+        return new SimpleStreamElement(startOffset, combinedData, isFinal);
+    }
+
     private static StreamElement shrinkFrame(StreamElement frame, long newStartOffset, long newUpToOffset) {
         assert newStartOffset >= frame.getOffset();
         assert newStartOffset <= frame.getUpToOffset();
@@ -347,7 +417,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
         byte[] limitedData = new byte[newLength];
         System.arraycopy(frame.getStreamData(), (int) (newStartOffset - frame.getOffset()), limitedData, 0, newLength);
-        return new SimpleStreamElement(newStartOffset, limitedData, frame.isFinal());
+        return new SimpleStreamElement(newStartOffset, limitedData, frame.isFinal() && newUpToOffset == frame.getUpToOffset());
     }
 
 

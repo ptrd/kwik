@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -1124,8 +1125,8 @@ class ReceiveBufferImplTest {
     @Test
     void combineAdjacentFrames() {
         // Given
-        DataFrame frame1 = new DataFrame(100, 30);
-        DataFrame frame2 = new DataFrame(130, 60);
+        DataFrame frame1 = new DataFrame(100, 30);  // 100..129
+        DataFrame frame2 = new DataFrame(130, 60);  // 130..189
 
         // When
         StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
@@ -1134,6 +1135,135 @@ class ReceiveBufferImplTest {
         assertThat(combined.getLength()).isEqualTo(90);
         assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
+    @Test
+    void combineListOfAdjacentFrames() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 30);  // 100..129
+        DataFrame frame2 = new DataFrame(130, 60);  // 130..189
+        DataFrame frame3 = new DataFrame(190, 10);  // 190..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2, frame3), 100, 200);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(100);
+        checkFrameData(combined);
+    }
+
+    @Test
+    void combineListOfOverlappingAndAdjacentFrames() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 50);  // 100..149
+        DataFrame frame2 = new DataFrame(140, 30);  // 140..169
+        DataFrame frame3 = new DataFrame(170, 20);  // 170..189
+        DataFrame frame4 = new DataFrame(190, 10);  // 185..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2, frame3, frame4), 100, 200);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(100);
+        checkFrameData(combined);
+    }
+
+    @Test
+    void combineListOfFramesWhereFirstContainsAllOthers() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 100);  // 100..199
+        DataFrame frame2 = new DataFrame(120, 10);   // 120..129
+        DataFrame frame3 = new DataFrame(150, 50);   // 150..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2, frame3), 100, 200);
+
+        // Then
+        assertThat(combined).isSameAs(frame1);
+    }
+
+    @Test
+    void combineListOfFramesWhereLaterFrameContainsAllOthers() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 10);  // 100..109
+        DataFrame frame2 = new DataFrame(100, 50);  // 100..149
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 150);
+
+        // Then
+        assertThat(combined).isSameAs(frame2);
+    }
+
+    @Test
+    void combineListOfFramesUpToOffsetBeforeEndOfLastFrame() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 50);  // 100..149
+        DataFrame frame2 = new DataFrame(150, 50);  // 150..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 170);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(70);
+        checkFrameData(combined);
+    }
+
+    @Test
+    void combineListOfSingleFrameUpToOffsetBeforeEndOfFrame() {
+        // Given
+        DataFrame frame = new DataFrame(100, 100);  // 100..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame), 100, 150);
+
+        // Then
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(50);
+        checkFrameData(combined);
+    }
+
+    @Test
+    void combineListOfFramesKeepsFinalFlag() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 10);
+        DataFrame frame2 = new DataFrame(110, 10, true);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 120);
+
+        // Then
+        assertThat(combined.isFinal()).isTrue();
+    }
+
+    @Test
+    void combineListOfFramesIsNotFinalWhenEndOfFinalFrameIsDropped() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 10);               // 100..109
+        DataFrame frame2 = new DataFrame(110, 10, true);  // 110..119
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 115);
+
+        // Then
+        assertThat(combined.getLength()).isEqualTo(15);
+        assertThat(combined.isFinal()).isFalse();
+    }
+
+    @Test
+    void combineListOfSingleFinalFrameIsNotFinalWhenEndIsDropped() {
+        // Given
+        DataFrame frame = new DataFrame(100, 100, true);  // 100..199
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame), 100, 150);
+
+        // Then
+        assertThat(combined.getLength()).isEqualTo(50);
+        assertThat(combined.isFinal()).isFalse();
     }
 
     @Test
@@ -1200,6 +1330,14 @@ class ReceiveBufferImplTest {
     // endregion
 
     // region helper methods
+    private void checkFrameData(StreamElement frame) {
+        byte[] data = frame.getStreamData();
+        assertThat(data).hasSize(frame.getLength());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(data[i]).isEqualTo((byte) (frame.getOffset() + i));
+        }
+    }
+
     private void checkData(ByteBuffer buffer) {
         for (int i = 0; i < buffer.position(); i++) {
             assertThat(buffer.get(i)).isEqualTo((byte) i);
