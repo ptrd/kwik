@@ -31,6 +31,7 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.function.LongSupplier;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
 import static tech.kwik.core.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
@@ -51,11 +52,14 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile boolean reset;
     private volatile Thread blockingReaderThread;
     private final ReceiveBuffer receiveBuffer;
+    private final LongSupplier nanoTime;
     private final Object addMonitor = new Object();
     private long lastCommunicatedMaxData;
     private final long receiverMaxDataIncrement;
+    private final long initialReceiveBufferSize;
+    private volatile ReceiveWindowAutoTuner autoTuner;
     private long largestOffsetReceived;
-    private long receiverFlowControlLimit;
+    private volatile long receiverFlowControlLimit;
     private volatile boolean aborted;
     private volatile long finalSize = -1;
     // https://www.ietf.org/archive/id/draft-ietf-quic-reliable-stream-reset-07.html
@@ -64,13 +68,36 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile long resetAtReliableSize;
 
     public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
+        this(quicStream, receiveBufferSize, log, System::nanoTime);
+    }
+
+    StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log, LongSupplier nanoTime) {
         this.quicStream = quicStream;
         this.log = log;
+        this.nanoTime = nanoTime;
         receiveBuffer = new ReceiveBufferImpl();
 
         receiverFlowControlLimit = receiveBufferSize;
+        initialReceiveBufferSize = receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;
         receiverMaxDataIncrement = (long) (receiverFlowControlLimit * receiverMaxDataIncrementFactor);
+    }
+
+    @Override
+    void enableReceiveWindowAutoTuning(long minimum, long maximum) {
+        synchronized (addMonitor) {
+            if (closed || aborted || reset || autoTuner != null) {
+                throw new IllegalStateException("Receive window tuning cannot be enabled in this state");
+            }
+            autoTuner = new ReceiveWindowAutoTuner(initialReceiveBufferSize, minimum, maximum, nanoTime.getAsLong());
+        }
+    }
+
+    @Override
+    long getReceiveWindowSize() {
+        synchronized (addMonitor) {
+            return autoTuner == null ? initialReceiveBufferSize : autoTuner.window();
+        }
     }
 
     /**
@@ -169,17 +196,19 @@ class StreamInputStreamImpl extends StreamInputStream {
                 if (aborted || closed || reset) {
                     throw new StreamClosedException(aborted ? "Connection closed" : closed ? "Stream closed" : "Stream reset by peer");
                 }
-
+                long rttNanos = autoTuner == null ? 0L : Math.max(1L, quicStream.connection.getStats().smoothedRtt()) * 1_000_000L;
+                int bytesRead;
+                long advertisedLimit = -1L;
+                boolean inputClosed = false;
                 synchronized (addMonitor) {
-                    int bytesRead = receiveBuffer.read(ByteBuffer.wrap(buffer, offset, len));
+                    bytesRead = receiveBuffer.read(ByteBuffer.wrap(buffer, offset, len));
                     if (bytesRead > 0) {
-                        updateAllowedFlowControl(bytesRead);
+                        advertisedLimit = updateAllowedFlowControl(bytesRead, rttNanos);
                         if (resetAt && !reset && receiveBuffer.readOffset() >= resetAtReliableSize) {
                             // All reliable data has been delivered; now signal the reset.
                             reset = true;
-                            quicStream.inputClosed();
+                            inputClosed = true;
                         }
-                        return bytesRead;
                     }
                     else if (bytesRead < 0) {
                         // End of stream
@@ -188,12 +217,24 @@ class StreamInputStreamImpl extends StreamInputStream {
                     }
 
                     // Nothing read: block until bytes can be read, read timeout or abort
-                    try {
-                        addMonitor.wait(waitPeriod);
+                    if (bytesRead == 0) {
+                        try {
+                            addMonitor.wait(waitPeriod);
+                        }
+                        catch (InterruptedException e) {
+                        }
                     }
-                    catch (InterruptedException e) {
-                        // Nothing to do here: read will be abort in next loop iteration with IOException
+                }
+
+                if (bytesRead > 0) {
+                    quicStream.updateConnectionFlowControl(bytesRead);
+                    if (advertisedLimit >= 0L) {
+                        quicStream.connection.send(new MaxStreamDataFrame(quicStream.streamId, advertisedLimit), this::retransmitMaxData, true);
                     }
+                    if (inputClosed) {
+                        quicStream.inputClosed();
+                    }
+                    return bytesRead;
                 }
 
                 if (receiveBuffer.bytesAvailable() == 0) {
@@ -251,15 +292,22 @@ class StreamInputStreamImpl extends StreamInputStream {
         }
     }
 
-    private void updateAllowedFlowControl(int bytesRead) {
-        // Slide flow control window forward (with as many bytes as are read)
-        receiverFlowControlLimit += bytesRead;
-        quicStream.updateConnectionFlowControl(bytesRead);
-        // Avoid sending flow control updates with every single read; check diff with last send max data
-        if (receiverFlowControlLimit - lastCommunicatedMaxData > receiverMaxDataIncrement) {
-            quicStream.connection.send(new MaxStreamDataFrame(quicStream.streamId, receiverFlowControlLimit), this::retransmitMaxData, true);
-            lastCommunicatedMaxData = receiverFlowControlLimit;
+    private long updateAllowedFlowControl(int bytesRead, long rttNanos) {
+        long increment = receiverMaxDataIncrement;
+        if (autoTuner == null) {
+            receiverFlowControlLimit += bytesRead;
+        } else {
+            long window = autoTuner.consumed(bytesRead, largestOffsetReceived - receiveBuffer.readOffset(), nanoTime.getAsLong(), rttNanos);
+            long consumedOffset = receiveBuffer.readOffset();
+            long limit = consumedOffset + Math.min(window, ((1L << 62) - 1) - consumedOffset);
+            receiverFlowControlLimit = Math.max(receiverFlowControlLimit, limit);
+            increment = Math.max(1L, window / 10);
         }
+        if (receiverFlowControlLimit - lastCommunicatedMaxData > increment) {
+            lastCommunicatedMaxData = receiverFlowControlLimit;
+            return receiverFlowControlLimit;
+        }
+        return -1L;
     }
 
     private void retransmitMaxData(QuicFrame lostFrame) {
