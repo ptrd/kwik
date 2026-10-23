@@ -81,6 +81,33 @@ class StreamInputStreamImplTest {
         assertThat(incr).isEqualTo(550);
     }
 
+    // region addDataFrom - final size validation
+    @Test
+    void addDataFromThrowsFinalSizeErrorWhenFinalFrameEndsBelowLargestOffsetReceived() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[900], false));
+
+        // When/Then: final size 600 is below the largest offset received (900)
+        assertThatThrownBy(() ->
+                streamInputStream.addDataFrom(new StreamFrame(0, 500, new byte[100], true)))
+                .isInstanceOf(TransportError.class)
+                .extracting(e -> ((TransportError) e).getErrorCode())
+                .isEqualTo(QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR);
+    }
+
+    @Test
+    void addDataFromAcceptsFinalFrameEndingAtLargestOffsetReceived() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[900], false));
+
+        // When
+        long incr = streamInputStream.addDataFrom(new StreamFrame(0, 900, new byte[0], true));
+
+        // Then
+        assertThat(incr).isEqualTo(0);
+    }
+    // endregion
+
     // region terminateAt - frame validation
 
     @Test

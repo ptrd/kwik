@@ -95,6 +95,12 @@ class StreamInputStreamImpl extends StreamInputStream {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
         if (frame.isFinal()) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "FINAL_SIZE_ERROR (0x06): (...) an endpoint received a STREAM frame (...) containing a final size that
+            //  was lower than the size of stream data that was already received,"
+            if (frame.getUpToOffset() < largestOffsetReceived) {
+                throw new TransportError(FINAL_SIZE_ERROR);
+            }
             finalSize = frame.getUpToOffset();
         }
 
