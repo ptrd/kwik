@@ -760,6 +760,245 @@ class ReceiveBufferImplTest {
     }
     // endregion
 
+    // region compaction of contiguous frames
+    private static final int SMALL_BUFFER_SIZE = 10_000;
+
+    @Test
+    void whenManySmallFramesAreAddedInOrderWithoutReadingMemoryUsageIsLimited() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int i = 0; i < SMALL_BUFFER_SIZE; i++) {
+            buffer.add(new DataFrame(i, 1));
+        }
+
+        // Then
+        assertThat(buffer.estimatedMemoryUsage())
+                .isGreaterThan(SMALL_BUFFER_SIZE)
+                .isLessThan(SMALL_BUFFER_SIZE * 2);
+
+        checkAllDataCanBeRead(buffer, SMALL_BUFFER_SIZE);
+    }
+
+    @Test
+    void whenMemoryUsageIsLowFramesAreNotCompacted() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int i = 0; i < 10; i++) {
+            buffer.add(new DataFrame(i, 1));
+        }
+
+        // Then
+        assertThat(buffer.countContiguousFrames()).isEqualTo(10);
+    }
+
+    @Test
+    void whenFrameDoesNotFitInChunkItIsSpreadOverNextChunk() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+
+        // When
+        buffer.add(new DataFrame(offset, 2000));
+        buffer.add(new DataFrame(offset + 2000, 2000));
+
+        // Then
+        checkAllDataCanBeRead(buffer, offset + 4000);
+    }
+
+    @Test
+    void whenLargeFrameIsAddedAfterPartlyFilledChunkTheChunkIsFilledFirst() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 10));
+
+        // When
+        buffer.add(new DataFrame(offset + 10, 3 * MAX_COMBINED_FRAME_SIZE));
+
+        // Then
+        checkAllDataCanBeRead(buffer, offset + 10 + 3 * MAX_COMBINED_FRAME_SIZE);
+    }
+
+    @Test
+    void whenOutOfOrderFramesBecomeContiguousTheyAreCompactedToo() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        for (int i = 1; i < 20; i++) {
+            buffer.add(new DataFrame(offset + 2 * i, 1));  // offset + 2, offset + 4, offset + 6, ...
+        }
+
+        // When
+        for (int i = 0; i < 20; i++) {
+            buffer.add(new DataFrame(offset + 2 * i + 1, 1));  // offset + 1, offset + 3, offset + 5, ...
+        }
+        buffer.add(new DataFrame(offset, 1));  // offset + 0, to make the whole range contiguous
+
+        // Then
+        assertThat(buffer.countOutOfOrderFrames()).isEqualTo(0);
+        checkAllDataCanBeRead(buffer, offset + 40);
+    }
+
+    @Test
+    void whenReadBufferIsSmallerThenChunkNextReadReadsFromChunk() {
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 70));
+        ByteBuffer readData = ByteBuffer.allocate(offset + 100);
+
+        // When
+        buffer.read(ByteBuffer.wrap(readData.array(), 0, offset + 50));
+        readData.position((int) buffer.readOffset());
+        buffer.read(ByteBuffer.wrap(readData.array(), readData.position(), readData.remaining()));
+
+        // Then
+        checkData(readData);
+    }
+    @Test
+    void afterPartialReadFromChunkNextReadAfterAddContinuesFromChunk() {
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 40));
+        ByteBuffer readData = ByteBuffer.allocate(offset + 100);
+
+        // When
+        buffer.read(readData);
+        buffer.add(new DataFrame(offset + 40, 30));
+        buffer.read(readData);
+
+        // Then
+        checkData(readData);
+    }
+
+    @Test
+    void whenAddingAndReadingSmallFramesAllDataIsReadCorrectly() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        Random random = new Random(7);
+        int streamSize = 100_000;
+        ByteBuffer readData = ByteBuffer.allocate(streamSize);
+
+        // When
+        int offset = 0;
+        while (offset < streamSize) {
+            int length = Integer.min(1 + random.nextInt(100), streamSize - offset);
+            buffer.add(new DataFrame(offset, length));
+            offset += length;
+            if (random.nextInt(10) == 0) {
+                buffer.read(ByteBuffer.wrap(readData.array(), readData.position(), random.nextInt(1000)));
+                readData.position((int) buffer.readOffset());
+            }
+        }
+        buffer.read(readData);
+
+        // Then
+        assertThat(readData.position()).isEqualTo(streamSize);
+        checkData(readData);
+    }
+
+    @Test
+    void whenFinalFrameEndsInChunkEndOfStreamIsDetected() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+
+        // When
+        buffer.add(new DataFrame(offset, 10, true));
+
+        // Then
+        checkAllDataCanBeRead(buffer, offset + 10);
+        assertThat(buffer.allDataReceived()).isTrue();
+        assertThat(buffer.allRead()).isTrue();
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenDataIsDiscardedBeyondOffsetInChunkOnlyDataBeforeOffsetIsRead() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 100));
+
+        // When
+        buffer.discardDataBeyond(offset + 50);
+
+        // Then
+        assertThat(buffer.bytesAvailable()).isEqualTo(offset + 50);
+        checkAllDataCanBeRead(buffer, offset + 50);
+        assertThat(buffer.allRead()).isTrue();
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenAllDataIsDiscardedMemoryUsageIsZero() {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 10));
+
+        // When
+        buffer.discardAllData();
+
+        // Then
+        assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
+    void whenSmallFramesAreAddedAndReadConcurrentlyAllDataIsReadCorrectly() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int streamSize = 1_000_000;
+        Thread producer = new Thread(() -> {
+            Random random = new Random(11);
+            int offset = 0;
+            while (offset < streamSize) {
+                int length = Integer.min(1 + random.nextInt(50), streamSize - offset);
+                buffer.add(new DataFrame(offset, length, offset + length == streamSize));
+                offset += length;
+            }
+        });
+
+        // When
+        producer.start();
+        ByteBuffer readData = ByteBuffer.allocate(streamSize);
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (buffer.read(ByteBuffer.wrap(readData.array(), readData.position(), Integer.min(997, readData.remaining()))) >= 0
+                && System.currentTimeMillis() < deadline) {
+            readData.position((int) buffer.readOffset());
+        }
+        producer.join();
+
+        // Then
+        assertThat(readData.position()).isEqualTo(streamSize);
+        checkData(readData);
+    }
+
+    /**
+     * Adds small in-order frames until the overhead is so high that new frames are compacted.
+     * @return  the offset up to which data has been added
+     */
+    private int fillWithSmallFramesUntilCompacting(ReceiveBufferImpl buffer) {
+        int offset = 0;
+        while (!buffer.overheadIsHigh()) {
+            buffer.add(new DataFrame(offset, 1));
+            offset++;
+        }
+        return offset;
+    }
+
+    private void checkAllDataCanBeRead(ReceiveBufferImpl buffer, int length) {
+        ByteBuffer readData = ByteBuffer.allocate(length + 100);
+        while (buffer.read(readData) > 0) {
+        }
+        assertThat(readData.position()).isEqualTo(length);
+        checkData(readData);
+    }
+    // endregion
+
     // region memory management
     @Test
     void duplicatedFramesAreCombinedToReduceMemoryUsage() {

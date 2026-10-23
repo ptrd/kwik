@@ -49,6 +49,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private final NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
     private final Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
+    // The last contiguous frame, when it is a chunk that is not yet completely filled; only accessed by the producer
+    // (except for estimating memory usage).
+    private volatile ChunkStreamElement openChunk;
     private volatile long contiguousUpToOffset = 0;
     private volatile long readUpToOffset = 0;
     private volatile long streamEndOffset = -1;
@@ -60,6 +63,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long contiguousFramesRemoved;
     private final int maxCombinedFrameSize;
     private final long maxMemoryUsage;
+    private final long maxOverhead;
+    private final int chunkCapacity;
     private volatile boolean discarded;
     private volatile long discardBeyondOffset = Long.MAX_VALUE;
 
@@ -88,6 +93,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     public ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize) {
         this.maxCombinedFrameSize = maxCombinedFrameSize;
         this.maxMemoryUsage = MAX_MEMORY_FACTOR * bufferSize;
+        // As the amount of buffered data never exceeds the buffer size, the remainder is available for overhead.
+        this.maxOverhead = maxMemoryUsage - bufferSize;
+        // Chunks must be small enough for the unused capacity of a chunk to stay well within the overhead budget.
+        this.chunkCapacity = (int) Long.max(1, Long.min(maxCombinedFrameSize, maxOverhead / 4));
     }
 
     @Override
@@ -121,13 +130,21 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             if (readUpToOffset >= discardOffset) {
                 break;
             }
-            // Never return data at or beyond the discard offset.
-            long maxOffset = Long.min(discardOffset, nextFrame.getUpToOffset());
-            int bytesToRead = (int) Long.min(buffer.remaining(), maxOffset - readUpToOffset);
+            // Never return data at or beyond the discard offset, nor beyond the contiguous offset, as the frame can be a
+            // chunk that is only partly filled (the contiguous offset is updated after the data is written to the chunk,
+            // so reading it first guarantees that the data up to it is visible).
+            long maxOffset = min(discardOffset, contiguousUpToOffset, nextFrame.getUpToOffset());
+            if (maxOffset <= readUpToOffset) {
+                // Only possible when the frame is a partly filled chunk of which all data that is filled has been read.
+                break;
+            }
+            int bytesToRead = (int) min(buffer.remaining(), maxOffset - readUpToOffset);
             buffer.put(nextFrame.getStreamData(), (int) (readUpToOffset - nextFrame.getOffset()), bytesToRead);
             readUpToOffset += bytesToRead;
             totalBytesRead += bytesToRead;
-            if (readUpToOffset == maxOffset) {
+            // Only remove the frame when it is read up to its end; for a chunk this means that it has been filled
+            // completely, so that the producer will not add data to it anymore.
+            if (readUpToOffset == nextFrame.getUpToOffset()) {
                 contiguousFrames.poll();
                 contiguousFramesRemoved++;
                 nextFrame = contiguousFrames.peek();
@@ -162,6 +179,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             }
 
             long previousContiguousUpToOffset = contiguousUpToOffset;
+            // Add frame directly to contiguous collection if it is contiguous, add to out of order collection otherwise.
             if (! addContiguous(frame)) {
                 addOutOfOrder(frame);
             }
@@ -176,13 +194,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     if (nextFrame.getOffset() < contiguousUpToOffset) {
                         nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
                     }
-                    // First add frame and ...
-                    contiguousFrames.add(nextFrame);
-                    contiguousFramesAdded++;
-                    // ... then update the offset (otherwise: race condition).
-                    // The contiguous offset never advances beyond the discard offset, so that the status methods
-                    // (e.g. bytesAvailable) do not account for data that will never be read.
-                    contiguousUpToOffset = Long.min(nextFrame.getUpToOffset(), discardBeyondOffset);
+                    appendContiguous(nextFrame);
                 }
             }
             return contiguousUpToOffset > previousContiguousUpToOffset;
@@ -204,19 +216,62 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
     }
 
+    /**
+     * Adds a frame to the contiguous frames collection if it matches exactly with the data that is present in it
+     * (no gap, no overlap).
+     * @param frame  the frame to add
+     * @return       whether the frame is actually added
+     */
     private boolean addContiguous(StreamElement frame) {
         if (frame.getOffset() == contiguousUpToOffset) {
             // Frame is exactly the next contiguous frame: add it to the contiguous queue and update the offset.
-            contiguousFrames.add(frame);
-            contiguousFramesAdded++;
-            // The contiguous offset never advances beyond the discard offset, so that the status methods
-            // (e.g. bytesAvailable) do not account for data that will never be read.
-            contiguousUpToOffset = Long.min(frame.getUpToOffset(), discardBeyondOffset);
+            appendContiguous(frame);
             return true;
         }
         else {
             return false;
         }
+    }
+
+    /**
+     * Appends a frame that starts exactly at the contiguous offset to the contiguous frames and updates the contiguous
+     * offset. When the overhead is high, small frames are not added as separate frames, but their data is copied into a
+     * chunk, to limit the memory overhead of many small frames.
+     * @param frame  the frame to append, which must start at the contiguous offset
+     */
+    private void appendContiguous(StreamElement frame) {
+        assert frame.getOffset() == contiguousUpToOffset;
+        int bytesConsumedFromFrame = 0;
+        if (openChunk != null) {
+            // A chunk must be filled completely before any other frame is added after it, because the reader only
+            // moves on to the next frame when it has read the chunk up to its (fixed) end.
+            bytesConsumedFromFrame = openChunk.append(frame, 0);
+            if (openChunk.isFull()) {
+                openChunk = null;
+            }
+        }
+        int remainingBytesInFrame = frame.getLength() - bytesConsumedFromFrame;
+        if (remainingBytesInFrame > 0) {
+            if (remainingBytesInFrame < chunkCapacity && overheadIsHigh()) {
+                ChunkStreamElement chunk = new ChunkStreamElement(frame.getOffset() + bytesConsumedFromFrame, chunkCapacity);
+                int appended = chunk.append(frame, bytesConsumedFromFrame);
+                assert appended == remainingBytesInFrame;
+                contiguousFrames.add(chunk);
+                contiguousFramesAdded++;
+                openChunk = chunk;
+            }
+            else {
+                // overhead is not high or remaining is larger than what fits in a chunk: add the (shrunk) frame
+                contiguousFrames.add(bytesConsumedFromFrame == 0?
+                        frame:
+                        shrinkFrame(frame, frame.getOffset() + bytesConsumedFromFrame, frame.getUpToOffset()));
+                contiguousFramesAdded++;
+            }
+        }
+        // Only update the offset after the frame (or its data) has been added (otherwise: race condition).
+        // The contiguous offset never advances beyond the discard offset, so that the status methods
+        // (e.g. bytesAvailable) do not account for data that will never be read.
+        contiguousUpToOffset = Long.min(frame.getUpToOffset(), discardBeyondOffset);
     }
 
     public long bufferedOutOfOrderData() {
@@ -228,8 +283,28 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * @return  the estimated memory usage in bytes
      */
     long estimatedMemoryUsage() {
+        return bytesAvailable() + bufferedOutOfOrderData + estimatedOverhead();
+    }
+
+    /**
+     * Returns an estimate of the memory used by this buffer on top of the buffered data: the estimated overhead per
+     * frame and the unused capacity of a chunk.
+     * @return  the estimated overhead in bytes
+     */
+    long estimatedOverhead() {
         long frameCount = contiguousFramesAdded - contiguousFramesRemoved + outOfOrderFrameCount;
-        return bytesAvailable() + bufferedOutOfOrderData + frameCount * FRAME_OVERHEAD;
+        ChunkStreamElement chunk = openChunk;
+        long unusedChunkCapacity = chunk != null? chunk.freeSpace(): 0;
+        return frameCount * FRAME_OVERHEAD + unusedChunkCapacity;
+    }
+
+    /**
+     * Returns whether the overhead is so high that new (small) contiguous frames are compacted into chunks.
+     * Compacting starts at half the overhead budget, so that the overhead of the frames buffered before compacting
+     * started, plus the overhead of the chunks, stays within the budget.
+     */
+    boolean overheadIsHigh() {
+        return estimatedOverhead() > maxOverhead / 2;
     }
 
     /**
@@ -387,9 +462,17 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 overlap,
                 combinedData,
                 frame1.getLength(),
-                (int) (frame2.getLength() - overlap));
+                (frame2.getLength() - overlap));
 
         return new SimpleStreamElement(frame1.getOffset(), combinedData, frame1.isFinal() || frame2.isFinal());
+    }
+
+    static long min(long l1, long l2) {
+        return Long.min(l1, l2);
+    }
+
+    static long min(long l1, long l2, long l3) {
+        return Long.min(Long.min(l1, l2), l3);
     }
 
     /**
@@ -469,7 +552,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
     }
 
-    // For testing only
+    // region For testing only!
     int checkOverlap() {
         return countOverlap(contiguousFrames.iterator()) + countOverlap(outOfOrderFrames.iterator());
     }
@@ -478,9 +561,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return outOfOrderFrames.stream().mapToInt(StreamElement::getLength).max().orElse(0);
     }
 
+    // Only for testing! Don't use for production code, size() is O(n)!
     int countOutOfOrderFrames() {
         return outOfOrderFrames.size();
     }
+
+    // Only for testing! Don't use for production code, size() is O(n)!
+    int countContiguousFrames() {
+        return contiguousFrames.size();
+    }
+    // endregion
 
     private int countOverlap(Iterator<StreamElement> iterator) {
         int overlap = 0;
@@ -509,6 +599,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
         contiguousFramesRemoved = contiguousFramesAdded;
+        openChunk = null;
     }
 
     @Override
@@ -524,9 +615,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     private static class SimpleStreamElement implements StreamElement {
-        private final long offset;
-        private final byte[] data;
-        private final boolean isFinal;
+        protected final long offset;
+        protected final byte[] data;
+        protected final boolean isFinal;
 
         public SimpleStreamElement(long offset, byte[] data, boolean isFinal) {
             this.offset = offset;
@@ -572,6 +663,48 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         @Override
         public String toString() {
             return "" + offset + ".." + (offset + data.length - 1);
+        }
+    }
+
+    /**
+     * A contiguous frame with a fixed capacity, that is filled with data from (small) frames. The data up to the
+     * contiguous offset can be read, while the producer is still adding data to it.
+     */
+    private static class ChunkStreamElement extends SimpleStreamElement {
+        private int filled;
+
+        public ChunkStreamElement(long offset, int capacity) {
+            super(offset, new byte[capacity], false);
+        }
+
+        /**
+         * Copies as much data from the given frame as fits into this chunk.
+         * @param frame  the frame to copy data from
+         * @param fromIndex  the index in the frame data (not offset!) to start copying from; the stream offset of this
+         *                   data must be equal to the offset up to which this chunk is filled
+         * @return  the number of bytes copied
+         */
+        int append(StreamElement frame, int fromIndex) {
+            assert fromIndex < frame.getLength();
+            // Check stream offset of first byte to copy matches
+            assert frame.getOffset() + fromIndex == offset + filled;
+            int count = Integer.min(freeSpace(), frame.getLength() - fromIndex);
+            System.arraycopy(frame.getStreamData(), fromIndex, data, filled, count);
+            filled += count;
+            return count;
+        }
+
+        int freeSpace() {
+            return data.length - filled;
+        }
+
+        boolean isFull() {
+            return filled == data.length;
+        }
+
+        @Override
+        public String toString() {
+            return "" + offset + ".." + (offset + filled - 1 + " (+" + freeSpace() + ")");
         }
     }
 }
