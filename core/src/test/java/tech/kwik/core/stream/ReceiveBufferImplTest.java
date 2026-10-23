@@ -20,9 +20,12 @@ package tech.kwik.core.stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.frame.StreamFrame;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -1326,6 +1329,97 @@ class ReceiveBufferImplTest {
             System.out.println("Assert failed while adding " + frame + " to " + bufferContentBefore + " resulting in " + receiveBuffer.toDebugString(5000));
             throw e;
         }
+    }
+
+    @Test
+    void fuzzTestAddingRandomFramesAndReadingAllData() {
+        for (int round = 0; round < 100; round++) {
+            addRandomFramesAndReadAllData(new Random().nextLong());
+        }
+    }
+
+    private void addRandomFramesAndReadAllData(long seed) {
+        Random random = new Random(seed);
+        int streamSize = 10_000;
+        byte[] original = new byte[streamSize];
+        random.nextBytes(original);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        // One byte extra, to detect reading more data than the stream contains.
+        ByteBuffer readData = ByteBuffer.allocate(streamSize + 1);
+
+        int framesAdded = 0;
+        int totalBytesRead = 0;
+        while (!buffer.allRead()) {
+            assertThat(framesAdded).as("frames added (seed %d)", seed).isLessThan(1_000_000);
+            int length = random.nextInt(1201);
+            int offset = random.nextInt(streamSize - length + 1);
+            StreamFrame streamFrame = new StreamFrame(0, offset, original, offset, length, offset + length == streamSize);
+            buffer.add(streamFrame);
+            framesAdded++;
+            int bytesRead = buffer.read(readData);
+            if (bytesRead >= 0) {
+                totalBytesRead += bytesRead;
+            }
+        }
+
+        checkAllDataRead(original, readData, totalBytesRead, seed);
+    }
+
+    @Test
+    void fuzzTestAddingSmallAdjacentFramesInRandomOrderAndReadingAllData() {
+        for (int round = 0; round < 20; round++) {
+            addSmallAdjacentFramesInRandomOrderAndReadAllData(new Random().nextLong());
+        }
+    }
+
+    private void addSmallAdjacentFramesInRandomOrderAndReadAllData(long seed) {
+        Random random = new Random(seed);
+        // Stream must be large enough to make the out-of-order buffer considered fragmented (more than 10 KB of small frames).
+        int streamSize = 100_000;
+        int maxFrameLength = 100;
+        byte[] original = new byte[streamSize];
+        random.nextBytes(original);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        // One byte extra, to detect reading more data than the stream contains.
+        ByteBuffer readData = ByteBuffer.allocate(streamSize + 1);
+
+        // Split the stream in small adjacent frames (on average smaller than the fragmentation threshold) ...
+        List<StreamFrame> frames = new ArrayList<>();
+        int offset = 0;
+        while (offset < streamSize) {
+            int length = Integer.min(1 + random.nextInt(maxFrameLength), streamSize - offset);
+            frames.add(new StreamFrame(0, offset, original, offset, length, offset + length == streamSize));
+            offset += length;
+        }
+        // ... and add them in random order, sometimes repeating a frame that was already added.
+        Collections.shuffle(frames, random);
+
+        int totalBytesRead = 0;
+        boolean framesCombined = false;
+        for (int i = 0; i < frames.size(); i++) {
+            buffer.add(frames.get(i));
+            if (random.nextInt(10) == 0) {
+                buffer.add(frames.get(random.nextInt(i + 1)));
+            }
+            // As frames do not partially overlap, a frame larger than the maximum frame length can only be the result
+            // of combining adjacent frames.
+            framesCombined |= buffer.maxOutOfOrderFrameSize() > maxFrameLength;
+            int bytesRead = buffer.read(readData);
+            if (bytesRead >= 0) {
+                totalBytesRead += bytesRead;
+            }
+        }
+
+        assertThat(buffer.allRead()).as("all read (seed %d)", seed).isTrue();
+        assertThat(framesCombined).as("adjacent frames combined (seed %d)", seed).isTrue();
+        checkAllDataRead(original, readData, totalBytesRead, seed);
+    }
+
+    private void checkAllDataRead(byte[] original, ByteBuffer readData, int totalBytesRead, long seed) {
+        int streamSize = original.length;
+        assertThat(totalBytesRead).as("bytes read (seed %d)", seed).isEqualTo(streamSize);
+        assertThat(readData.position()).as("bytes read (seed %d)", seed).isEqualTo(streamSize);
+        assertThat(Arrays.copyOf(readData.array(), streamSize)).as("data read (seed %d)", seed).isEqualTo(original);
     }
     // endregion
 
