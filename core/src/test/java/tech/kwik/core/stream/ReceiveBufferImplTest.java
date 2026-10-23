@@ -21,6 +21,7 @@ package tech.kwik.core.stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.kwik.core.frame.StreamFrame;
+import tech.kwik.core.impl.TransportError;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFramesAreReceivedButNotTheStartOfTheStreamThenNoDataIsAvailable() {
+    void whenFramesAreReceivedButNotTheStartOfTheStreamThenNoDataIsAvailable() throws Exception {
         // When
         receiveBuffer.add(new DataFrame(100, 900));
 
@@ -64,7 +65,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenStartOfStreamIsReceivedThenDataIsAvailable() {
+    void whenStartOfStreamIsReceivedThenDataIsAvailable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 500));
 
@@ -81,7 +82,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void attemptToReadZeroBytesIsOkAndJustReturnsZeroBytes() {
+    void attemptToReadZeroBytesIsOkAndJustReturnsZeroBytes() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 500));
 
@@ -93,7 +94,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void overlappingFramesDoNotDuplicateData() {
+    void overlappingFramesDoNotDuplicateData() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 500));
 
@@ -110,7 +111,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void receivingOldDataShouldNotInfluenceBytesAvailable() {
+    void receivingOldDataShouldNotInfluenceBytesAvailable() throws Exception {
         receiveBuffer.add(new DataFrame(0, 12));
         receiveBuffer.add(new DataFrame(12, 9));
         receiveBuffer.add(new DataFrame(9, 9));
@@ -119,7 +120,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void streamDataIsAlwaysInOrderWhenReceivingDuplicateDataWithWeirdOffsets() {
+    void streamDataIsAlwaysInOrderWhenReceivingDuplicateDataWithWeirdOffsets() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(10, 10));
         receiveBuffer.add(new DataFrame(11, 8));
@@ -143,7 +144,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void readingDataUpdatesTheReadOffset() {
+    void readingDataUpdatesTheReadOffset() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(70, 30));
         receiveBuffer.add(new DataFrame(0, 70));
@@ -156,7 +157,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void emtpyNonFinalFrameChangesNothing() {
+    void emtpyNonFinalFrameChangesNothing() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 50));
         receiveBuffer.add(new DataFrame(50, 50));
@@ -174,7 +175,7 @@ class ReceiveBufferImplTest {
 
     // region normal stream completion
     @Test
-    void finalFrameReceivedDoesNotMeanAllDataIsReceived() {
+    void finalFrameReceivedDoesNotMeanAllDataIsReceived() throws Exception {
         // When
         receiveBuffer.add(new DataFrame(100, 900, true));
 
@@ -183,7 +184,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void onlyWhenAllDataIncludingFinalFrameIsReceivedAllDataReceivedIsTrue() {
+    void onlyWhenAllDataIncludingFinalFrameIsReceivedAllDataReceivedIsTrue() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 900, true));
 
@@ -195,7 +196,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void emtpyFinalFrameEndsStream() {
+    void emtpyFinalFrameEndsStream() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000, false));
 
@@ -207,7 +208,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataIsReceivedDoesNotMeansAllDataIsRead() {
+    void whenAllDataIsReceivedDoesNotMeansAllDataIsRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100, true));
 
@@ -220,7 +221,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataIsReadThenAllDataIsRead() {
+    void whenAllDataIsReadThenAllDataIsRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100, true));
 
@@ -233,7 +234,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataIsReadThenReadReturnsMinusOne() {
+    void whenAllDataIsReadThenReadReturnsMinusOne() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100, true));
         receiveBuffer.read(ByteBuffer.allocate(100));
@@ -248,7 +249,7 @@ class ReceiveBufferImplTest {
 
     // region abnormal stream completion
     @Test
-    void whenAllDataDiscardedNothingCanBeRead() {
+    void whenAllDataDiscardedNothingCanBeRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -260,7 +261,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataDiscardedThenNoDataIsAvailable() {
+    void whenAllDataDiscardedThenNoDataIsAvailable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -272,7 +273,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataDiscardedThenAllDataIsReceived() {
+    void whenAllDataDiscardedThenAllDataIsReceived() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -284,7 +285,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataDiscardedThenAllDataIsRead() {
+    void whenAllDataDiscardedThenAllDataIsRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -296,7 +297,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDataIsDiscardedAfterPartialReadStatusMethodsRemainConsistent() {
+    void whenDataIsDiscardedAfterPartialReadStatusMethodsRemainConsistent() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.read(ByteBuffer.allocate(50));
@@ -314,7 +315,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDataIsDiscardedReadOffsetReflectsBytesActuallyRead() {
+    void whenDataIsDiscardedReadOffsetReflectsBytesActuallyRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.read(ByteBuffer.allocate(50));
@@ -327,7 +328,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenContiguousFrameArrivesAfterDiscardNoDataBecomesReadable() {
+    void whenContiguousFrameArrivesAfterDiscardNoDataBecomesReadable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.discardAllData();
@@ -344,7 +345,7 @@ class ReceiveBufferImplTest {
 
     // region discard data beyond offset
     @Test
-    void whenDiscardDataBeyondIsSetDataBeyondTheOffsetIsNotAvailable() {
+    void whenDiscardDataBeyondIsSetDataBeyondTheOffsetIsNotAvailable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
 
@@ -356,7 +357,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void readReturnsDataOnlyUpToDiscardOffset() {
+    void readReturnsDataOnlyUpToDiscardOffset() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.discardDataBeyond(400);
@@ -372,7 +373,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataUpToDiscardOffsetIsReadThenAllRead() {
+    void whenAllDataUpToDiscardOffsetIsReadThenAllRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.discardDataBeyond(400);
@@ -385,7 +386,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenReadReachesDiscardOffsetThenReadReturnsMinusOne() {
+    void whenReadReachesDiscardOffsetThenReadReturnsMinusOne() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.discardDataBeyond(400);
@@ -399,7 +400,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataUpToDiscardOffsetIsReceivedThenAllDataReceived() {
+    void whenAllDataUpToDiscardOffsetIsReceivedThenAllDataReceived() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(400);
 
@@ -413,7 +414,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDiscardOffsetIsSetAfterDataIsReceivedThenAllDataReceived() {
+    void whenDiscardOffsetIsSetAfterDataIsReceivedThenAllDataReceived() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
 
@@ -427,7 +428,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void frameEntirelyBeyondDiscardOffsetIsNotAdded() {
+    void frameEntirelyBeyondDiscardOffsetIsNotAdded() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 400));
         receiveBuffer.discardDataBeyond(400);
@@ -442,7 +443,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderFrameEntirelyBeyondDiscardOffsetIsNotAdded() {
+    void outOfOrderFrameEntirelyBeyondDiscardOffsetIsNotAdded() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(400);
 
@@ -455,7 +456,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void frameStraddlingDiscardOffsetIsAvailableUpToTheOffset() {
+    void frameStraddlingDiscardOffsetIsAvailableUpToTheOffset() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(400);
 
@@ -471,7 +472,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void dataBeforeDiscardOffsetSpreadOverMultipleFramesIsFullyAvailable() {
+    void dataBeforeDiscardOffsetSpreadOverMultipleFramesIsFullyAvailable() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(400);
 
@@ -488,7 +489,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void discardOffsetCanOnlyDecrease() {
+    void discardOffsetCanOnlyDecrease() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.discardDataBeyond(400);
@@ -502,7 +503,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void loweringDiscardOffsetBelowReadOffsetIsHandledGracefully() {
+    void loweringDiscardOffsetBelowReadOffsetIsHandledGracefully() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.read(ByteBuffer.allocate(500));   // read offset is now 500
@@ -517,7 +518,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void readingExactlyUpToDiscardOffsetInChunksDoesNotReadBeyondIt() {
+    void readingExactlyUpToDiscardOffsetInChunksDoesNotReadBeyondIt() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
         receiveBuffer.discardDataBeyond(400);
@@ -535,7 +536,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDiscardDataBeyondIsNotCalledAllDataRemainsAvailable() {
+    void whenDiscardDataBeyondIsNotCalledAllDataRemainsAvailable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
 
@@ -545,7 +546,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void retransmittedFramesStraddlingDiscardOffsetDoNotCauseOverlap() {
+    void retransmittedFramesStraddlingDiscardOffsetDoNotCauseOverlap() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(100);
         receiveBuffer.add(new DataFrame(0, 150));
@@ -566,7 +567,7 @@ class ReceiveBufferImplTest {
 
     // region out-of-order data measurement
     @Test
-    void outOfOrderBufferedDataShouldBeMeasured() {
+    void outOfOrderBufferedDataShouldBeMeasured() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 100));
 
@@ -575,7 +576,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementIsDecreasedWhenBecomingContiguous() {
+    void outOfOrderBufferedDataMeasurementIsDecreasedWhenBecomingContiguous() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 100));
         receiveBuffer.add(new DataFrame(500, 300));
@@ -590,7 +591,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementDropsToZeroWhenAllGapsFilled() {
+    void outOfOrderBufferedDataMeasurementDropsToZeroWhenAllGapsFilled() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 120));
         receiveBuffer.add(new DataFrame(800, 100));
@@ -609,7 +610,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementIsZeroAfterPartialRetransmitOfContiguousData() {
+    void outOfOrderBufferedDataMeasurementIsZeroAfterPartialRetransmitOfContiguousData() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -621,7 +622,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementIsZeroAfterDuplicateOfContiguousData() {
+    void outOfOrderBufferedDataMeasurementIsZeroAfterDuplicateOfContiguousData() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
 
@@ -633,7 +634,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFrameCoversOutOfOrderFrame() {
+    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFrameCoversOutOfOrderFrame() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 20));
 
@@ -646,7 +647,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFramePartiallyOverlapsOutOfOrderFrame() {
+    void outOfOrderBufferedDataMeasurementIsZeroWhenContiguousFramePartiallyOverlapsOutOfOrderFrame() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 100));
 
@@ -666,7 +667,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIncludesContiguousDataAndFrameOverhead() {
+    void estimatedMemoryUsageIncludesContiguousDataAndFrameOverhead() throws Exception {
         // When
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.add(new DataFrame(100, 200));
@@ -676,7 +677,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageDecreasesWhenDataIsRead() {
+    void estimatedMemoryUsageDecreasesWhenDataIsRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.add(new DataFrame(100, 200));
@@ -689,7 +690,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIsZeroWhenAllDataIsRead() {
+    void estimatedMemoryUsageIsZeroWhenAllDataIsRead() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.add(new DataFrame(100, 200));
@@ -702,7 +703,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIncludesOutOfOrderDataAndFrameOverhead() {
+    void estimatedMemoryUsageIncludesOutOfOrderDataAndFrameOverhead() throws Exception {
         // When
         receiveBuffer.add(new DataFrame(200, 100));
         receiveBuffer.add(new DataFrame(500, 300));
@@ -712,7 +713,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageAccountsForCombinedOutOfOrderFrames() {
+    void estimatedMemoryUsageAccountsForCombinedOutOfOrderFrames() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 100));
 
@@ -724,7 +725,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIncludesBothContiguousAndOutOfOrderFrames() {
+    void estimatedMemoryUsageIncludesBothContiguousAndOutOfOrderFrames() throws Exception {
         // When
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.add(new DataFrame(200, 100));
@@ -734,7 +735,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIsUpdatedWhenOutOfOrderFramesBecomeContiguous() {
+    void estimatedMemoryUsageIsUpdatedWhenOutOfOrderFramesBecomeContiguous() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 100));
         receiveBuffer.add(new DataFrame(300, 100));
@@ -747,7 +748,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void estimatedMemoryUsageIsZeroWhenAllDataIsDiscarded() {
+    void estimatedMemoryUsageIsZeroWhenAllDataIsDiscarded() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 100));
         receiveBuffer.add(new DataFrame(200, 100));
@@ -764,7 +765,7 @@ class ReceiveBufferImplTest {
     private static final int SMALL_BUFFER_SIZE = 10_000;
 
     @Test
-    void whenManySmallFramesAreAddedInOrderWithoutReadingMemoryUsageIsLimited() {
+    void whenManySmallFramesAreAddedInOrderWithoutReadingMemoryUsageIsLimited() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
 
@@ -782,7 +783,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenMemoryUsageIsLowFramesAreNotCompacted() {
+    void whenMemoryUsageIsLowFramesAreNotCompacted() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
 
@@ -796,7 +797,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFrameDoesNotFitInChunkItIsSpreadOverNextChunk() {
+    void whenFrameDoesNotFitInChunkItIsSpreadOverNextChunk() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -810,7 +811,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenLargeFrameIsAddedAfterPartlyFilledChunkTheChunkIsFilledFirst() {
+    void whenLargeFrameIsAddedAfterPartlyFilledChunkTheChunkIsFilledFirst() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -824,7 +825,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenOutOfOrderFramesBecomeContiguousTheyAreCompactedToo() {
+    void whenOutOfOrderFramesBecomeContiguousTheyAreCompactedToo() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -844,7 +845,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenReadBufferIsSmallerThenChunkNextReadReadsFromChunk() {
+    void whenReadBufferIsSmallerThenChunkNextReadReadsFromChunk() throws Exception {
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
         buffer.add(new DataFrame(offset, 70));
@@ -858,8 +859,9 @@ class ReceiveBufferImplTest {
         // Then
         checkData(readData);
     }
+
     @Test
-    void afterPartialReadFromChunkNextReadAfterAddContinuesFromChunk() {
+    void afterPartialReadFromChunkNextReadAfterAddContinuesFromChunk() throws Exception {
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
         buffer.add(new DataFrame(offset, 40));
@@ -875,7 +877,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAddingAndReadingSmallFramesAllDataIsReadCorrectly() {
+    void whenAddingAndReadingSmallFramesAllDataIsReadCorrectly() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         Random random = new Random(7);
@@ -901,7 +903,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFinalFrameEndsInChunkEndOfStreamIsDetected() {
+    void whenFinalFrameEndsInChunkEndOfStreamIsDetected() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -917,7 +919,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDataIsDiscardedBeyondOffsetInChunkOnlyDataBeforeOffsetIsRead() {
+    void whenDataIsDiscardedBeyondOffsetInChunkOnlyDataBeforeOffsetIsRead() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -934,7 +936,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenAllDataIsDiscardedMemoryUsageIsZero() {
+    void whenAllDataIsDiscardedMemoryUsageIsZero() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int offset = fillWithSmallFramesUntilCompacting(buffer);
@@ -957,7 +959,12 @@ class ReceiveBufferImplTest {
             int offset = 0;
             while (offset < streamSize) {
                 int length = Integer.min(1 + random.nextInt(50), streamSize - offset);
-                buffer.add(new DataFrame(offset, length, offset + length == streamSize));
+                try {
+                    buffer.add(new DataFrame(offset, length, offset + length == streamSize));
+                }
+                catch (TransportError e) {
+                    throw new RuntimeException(e);
+                }
                 offset += length;
             }
         });
@@ -981,7 +988,7 @@ class ReceiveBufferImplTest {
      * Adds small in-order frames until the overhead is so high that new frames are compacted.
      * @return  the offset up to which data has been added
      */
-    private int fillWithSmallFramesUntilCompacting(ReceiveBufferImpl buffer) {
+    private int fillWithSmallFramesUntilCompacting(ReceiveBufferImpl buffer) throws Exception {
         int offset = 0;
         while (!buffer.overheadIsHigh()) {
             buffer.add(new DataFrame(offset, 1));
@@ -1001,7 +1008,7 @@ class ReceiveBufferImplTest {
 
     // region memory management
     @Test
-    void duplicatedFramesAreCombinedToReduceMemoryUsage() {
+    void duplicatedFramesAreCombinedToReduceMemoryUsage() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 120));
 
@@ -1015,7 +1022,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void duplicatedFramesAreCombinedToReduceMemoryUsage2() {
+    void duplicatedFramesAreCombinedToReduceMemoryUsage2() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 100));
         receiveBuffer.add(new DataFrame(200, 120));
@@ -1030,7 +1037,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void duplicatedFramesAreCombinedToReduceMemoryUsage3() {
+    void duplicatedFramesAreCombinedToReduceMemoryUsage3() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(200, 120));
         receiveBuffer.add(new DataFrame(320, 100));
@@ -1045,7 +1052,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenDuplicatedFramesWithDifferentFinalFlagAreCombinedFinalIsStillSet() {
+    void whenDuplicatedFramesWithDifferentFinalFlagAreCombinedFinalIsStillSet() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(20, 100));
 
@@ -1058,7 +1065,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void containingFramesAreCombinedToReduceMemoryUsage() {
+    void containingFramesAreCombinedToReduceMemoryUsage() throws Exception {
         // Given                        200..299
         receiveBuffer.add(new DataFrame(200, 100));
 
@@ -1072,7 +1079,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void containingFramesAreCombinedToReduceMemoryUsage2() {
+    void containingFramesAreCombinedToReduceMemoryUsage2() throws Exception {
         // Given                        220..259
         receiveBuffer.add(new DataFrame(220, 60));
 
@@ -1086,7 +1093,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void overlappingFramesAreCombinedToReduceMemoryUsage1() {
+    void overlappingFramesAreCombinedToReduceMemoryUsage1() throws Exception {
         // Given                        100..189
         receiveBuffer.add(new DataFrame(100, 90));
 
@@ -1100,7 +1107,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void overlappingFramesAreCombinedToReduceMemoryUsage2() {
+    void overlappingFramesAreCombinedToReduceMemoryUsage2() throws Exception {
         // Given                        150..249
         receiveBuffer.add(new DataFrame(150, 100));
 
@@ -1114,7 +1121,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void overlappingFramesAreCombinedToReduceMemoryUsage3() {
+    void overlappingFramesAreCombinedToReduceMemoryUsage3() throws Exception {
         // Given                        50..99 100..199 300..399 400..449
         receiveBuffer.add(new DataFrame(100, 100));
         receiveBuffer.add(new DataFrame(300, 100));
@@ -1131,7 +1138,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage1() {
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage1() throws Exception {
         // Given          50..99 100..199 200..299 300..349
         receiveBuffer.add(new DataFrame(50, 50));
         receiveBuffer.add(new DataFrame(100, 100));
@@ -1148,7 +1155,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage2() {
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage2() throws Exception {
         // Given          100..199 200..299 300..349
         receiveBuffer.add(new DataFrame(100, 100));
         receiveBuffer.add(new DataFrame(200, 100));
@@ -1164,7 +1171,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage3() {
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage3() throws Exception {
         // Given          20..60 100..199 200..299 300..349
         receiveBuffer.add(new DataFrame(20, 40));
         receiveBuffer.add(new DataFrame(100, 100));
@@ -1181,7 +1188,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void multipleOverlappingFramesWithGapsAreCombinedToReduceMemoryUsage1() {
+    void multipleOverlappingFramesWithGapsAreCombinedToReduceMemoryUsage1() throws Exception {
         // Given          50..99 110..189 200..289 300..349
         receiveBuffer.add(new DataFrame(50, 50));
         receiveBuffer.add(new DataFrame(110, 80));
@@ -1198,7 +1205,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage() {
+    void multipleOverlappingFramesAreCombinedToReduceMemoryUsage() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 100));
         receiveBuffer.add(new DataFrame(200, 100));
@@ -1215,7 +1222,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void frameShouldNotBeCombinedWithBeforeWhenLargerThanMax() {
+    void frameShouldNotBeCombinedWithBeforeWhenLargerThanMax() throws Exception {
         // Given                        1000..1999 2200..3199 3500..4499
         receiveBuffer.add(new DataFrame(1000, 1000));
         receiveBuffer.add(new DataFrame(2200, 1000));
@@ -1234,7 +1241,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void frameShouldNotBeCombinedWithAfterWhenLargerThanMax() {
+    void frameShouldNotBeCombinedWithAfterWhenLargerThanMax() throws Exception {
         // Given                        1000..1999 2200..3199 3500..4499
         receiveBuffer.add(new DataFrame(1000, 1000));
         receiveBuffer.add(new DataFrame(2200, 1000));
@@ -1253,7 +1260,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenShrunkFrameOverlapsWithFormerNextThatHoweverBecomesBefore() {
+    void whenShrunkFrameOverlapsWithFormerNextThatHoweverBecomesBefore() throws Exception {
         // Given                        1000..3499
         receiveBuffer.add(new DataFrame(1000, 2500));
         //                              2501..3500
@@ -1270,7 +1277,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void addZeroSizeFrame() {
+    void addZeroSizeFrame() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(100, 100));
 
@@ -1288,7 +1295,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFramesAreAddedToContiguousStreamOverlapIsRemoved() {
+    void whenFramesAreAddedToContiguousStreamOverlapIsRemoved() throws Exception {
         // Given                        0..249  500..749
         receiveBuffer.add(new DataFrame(0, 250));
         receiveBuffer.add(new DataFrame(500, 250));
@@ -1302,7 +1309,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFrameLargerThanMaxCombinedFrameSizeContainsExistingFrameNoDataIsLost() {
+    void whenFrameLargerThanMaxCombinedFrameSizeContainsExistingFrameNoDataIsLost() throws Exception {
         // Given                        1000..1099
         receiveBuffer.add(new DataFrame(1000, 100));
 
@@ -1315,7 +1322,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFrameIsContainedInExistingFrameLargerThanMaxCombinedFrameSizeOverlapIsRemoved() {
+    void whenFrameIsContainedInExistingFrameLargerThanMaxCombinedFrameSizeOverlapIsRemoved() throws Exception {
         // Given                        1000..3999 (larger than max combined frame size)
         receiveBuffer.add(new DataFrame(1000, 3000));
 
@@ -1328,7 +1335,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFrameIsContainedInFrameCombinedUpToMaxCombinedFrameSizeOverlapIsRemoved() {
+    void whenFrameIsContainedInFrameCombinedUpToMaxCombinedFrameSizeOverlapIsRemoved() throws Exception {
         // Given                        1000..2199, 2100..3299, 3200..3499 (combined into 1000..3499, exactly max size)
         receiveBuffer.add(new DataFrame(1000, 1200));
         receiveBuffer.add(new DataFrame(2100, 1200));
@@ -1611,7 +1618,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFragmentedAdjacentFramesArrivingInAscendingOrderAreCombined() {
+    void whenFragmentedAdjacentFramesArrivingInAscendingOrderAreCombined() throws Exception {
         // When
         for (int offset = 1; offset <= 20000; offset++) {
             receiveBuffer.add(new DataFrame(offset, 1));
@@ -1622,7 +1629,7 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void whenFragmentedAdjacentFramesArrivingInDescendingOrderAreCombined() {
+    void whenFragmentedAdjacentFramesArrivingInDescendingOrderAreCombined() throws Exception {
         // When
         for (int offset = 20000; offset >= 1; offset--) {
             receiveBuffer.add(new DataFrame(offset, 1));
@@ -1632,7 +1639,7 @@ class ReceiveBufferImplTest {
         checkAdjacentFramesAreCombined(20000);
     }
 
-    private void checkAdjacentFramesAreCombined(int framesAdded) {
+    private void checkAdjacentFramesAreCombined(int framesAdded) throws Exception {
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(framesAdded);
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         // Combining only starts when the buffer is considered fragmented, so not all frames will be combined.
@@ -1649,7 +1656,7 @@ class ReceiveBufferImplTest {
 
     // region stress test
     @Test
-    void testRandomStreamElementAdditions() {
+    void testRandomStreamElementAdditions() throws Exception {
         Random random = new Random();
         int streamEnd = 100_000;
         int added = 0;
@@ -1673,13 +1680,13 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void fuzzTestAddingRandomFramesAndReadingAllData() {
+    void fuzzTestAddingRandomFramesAndReadingAllData() throws Exception {
         for (int round = 0; round < 100; round++) {
             addRandomFramesAndReadAllData(new Random().nextLong());
         }
     }
 
-    private void addRandomFramesAndReadAllData(long seed) {
+    private void addRandomFramesAndReadAllData(long seed) throws Exception {
         Random random = new Random(seed);
         int streamSize = 10_000;
         byte[] original = new byte[streamSize];
@@ -1707,13 +1714,13 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void fuzzTestAddingSmallAdjacentFramesInRandomOrderAndReadingAllData() {
+    void fuzzTestAddingSmallAdjacentFramesInRandomOrderAndReadingAllData() throws Exception {
         for (int round = 0; round < 20; round++) {
             addSmallAdjacentFramesInRandomOrderAndReadAllData(new Random().nextLong());
         }
     }
 
-    private void addSmallAdjacentFramesInRandomOrderAndReadAllData(long seed) {
+    private void addSmallAdjacentFramesInRandomOrderAndReadAllData(long seed) throws Exception {
         Random random = new Random(seed);
         // Stream must be large enough to make the out-of-order buffer considered fragmented (more than 10 KB of small frames).
         int streamSize = 100_000;
@@ -1779,8 +1786,10 @@ class ReceiveBufferImplTest {
         }
     }
 
-    private void checkDataCanBeReadAfterAdding(int length, DataFrame... dataFrames) {
-        Arrays.stream(dataFrames).forEach(f -> receiveBuffer.add(f));
+    private void checkDataCanBeReadAfterAdding(int length, DataFrame... dataFrames) throws Exception {
+        for (DataFrame frame : dataFrames) {
+            receiveBuffer.add(frame);
+        }
         ByteBuffer readBytes = ByteBuffer.allocate(length);
         int bytesRead = receiveBuffer.read(readBytes);
         assertThat(bytesRead).isEqualTo(length);

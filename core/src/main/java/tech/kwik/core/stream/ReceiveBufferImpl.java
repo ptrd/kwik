@@ -18,6 +18,8 @@
  */
 package tech.kwik.core.stream;
 
+import tech.kwik.core.impl.TransportError;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -179,7 +181,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     @Override
-    public boolean add(StreamElement frame) {
+    public boolean add(StreamElement frame) throws TransportError {
         try {
             if (frame.isFinal()) {
                 streamEndOffset = frame.getUpToOffset();

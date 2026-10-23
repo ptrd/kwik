@@ -18,6 +18,8 @@
  */
 package tech.kwik.core.stream;
 
+import tech.kwik.core.impl.TransportError;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -33,8 +35,9 @@ public interface ReceiveBuffer {
      * @return true if the frame adds new readable bytes to this stream, false otherwise. Readable means that the newly
      * added bytes can be consumed by the read method; i.e. there are no gaps between the current read position and the
      * bytes that are added by the frame.
+     * @throws TransportError  when adding the frame would make the buffer use an excessive amount of memory
      */
-    boolean add(StreamElement frame);
+    boolean add(StreamElement frame) throws TransportError;
 
     /**
      * Returns the number of bytes that can be read from this stream.
