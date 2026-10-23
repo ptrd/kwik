@@ -20,6 +20,7 @@ package tech.kwik.core.stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.kwik.core.QuicConstants;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.impl.TransportError;
 
@@ -1003,6 +1004,104 @@ class ReceiveBufferImplTest {
         }
         assertThat(readData.position()).isEqualTo(length);
         checkData(readData);
+    }
+    // endregion
+
+    // region memory limit
+    @Test
+    void whenManySmallFramesWithGapsAreAddedTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        long maxMemoryUsage = ReceiveBufferImpl.MAX_MEMORY_FACTOR * SMALL_BUFFER_SIZE;
+
+        // When
+        TransportError error = null;
+        for (int i = 0; i < SMALL_BUFFER_SIZE / 2 && error == null; i++) {
+            try {
+                buffer.add(new DataFrame(2 * i + 1, 1));
+            }
+            catch (TransportError transportError) {
+                error = transportError;
+            }
+        }
+
+        // Then
+        assertThat(error).isNotNull();
+        assertThat(error.getErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR);
+        // Exceeded by at most the frame that caused the error
+        assertThat(buffer.estimatedMemoryUsage()).isLessThanOrEqualTo(maxMemoryUsage + 1 + ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void whenFramesWithGapsAreNotSmallNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int offset = 100; offset < SMALL_BUFFER_SIZE; offset += 200) {
+            buffer.add(new DataFrame(offset, 100));
+        }
+
+        // Then
+        assertThat(buffer.estimatedMemoryUsage()).isLessThanOrEqualTo(ReceiveBufferImpl.MAX_MEMORY_FACTOR * SMALL_BUFFER_SIZE);
+    }
+
+    @Test
+    void whenManySmallFramesAreAddedInOrderWithoutReadingNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int i = 0; i < SMALL_BUFFER_SIZE; i++) {
+            buffer.add(new DataFrame(i, 1));
+        }
+
+        // Then
+        checkAllDataCanBeRead(buffer, SMALL_BUFFER_SIZE);
+    }
+
+    @Test
+    void whenSmallAdjacentFramesAreAddedInRandomOrderAfterFirstIsLostNoTransportErrorIsThrown() throws Exception {
+        // Given
+        // Note that out-of-order adjacent frames are only combined when the buffer is fragmented, which requires
+        // more than 10 KB of out-of-order data; with a small buffer size, the memory limit could be exceeded before
+        // that, so this test uses a large buffer size.
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int streamSize = 100_000;
+        Random random = new Random(13);
+        List<DataFrame> frames = new ArrayList<>();
+        int offset = 0;
+        while (offset < streamSize) {
+            int length = Integer.min(1 + random.nextInt(100), streamSize - offset);
+            frames.add(new DataFrame(offset, length));
+            offset += length;
+        }
+        DataFrame firstFrame = frames.remove(0);
+        Collections.shuffle(frames, random);
+
+        // When
+        for (DataFrame frame : frames) {
+            buffer.add(frame);
+        }
+        buffer.add(firstFrame);
+
+        // Then
+        checkAllDataCanBeRead(buffer, streamSize);
+    }
+
+    @Test
+    void whenAllDataIsDiscardedNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.discardAllData();
+
+        // When
+        for (int i = 0; i < SMALL_BUFFER_SIZE / 2; i++) {
+            buffer.add(new DataFrame(2 * i + 1, 1));
+        }
+
+        // Then
+        assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
     }
     // endregion
 

@@ -30,6 +30,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
+import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
+
 /**
  * A receive buffer implementation.
  * This implementation is not thread-safe, but concurrent access by separate producer and consumer threads is supported,
@@ -212,6 +214,14 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     }
                     appendContiguous(nextFrame);
                 }
+            }
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-21.7
+            // "QUIC deployments SHOULD provide mitigations for stream fragmentation attacks. Mitigations could consist of
+            //  (...) limiting the size of tracking data structures, (...)"
+            // As contiguous frames are compacted when the overhead is high, this limit can only be exceeded by out-of-order
+            // frames that cannot be combined (e.g. small frames with gaps in between).
+            if (!discarded && estimatedMemoryUsage() > maxMemoryUsage) {
+                throw new TransportError(INTERNAL_ERROR, "excessive memory use by stream data fragmentation");
             }
             return contiguousUpToOffset > previousContiguousUpToOffset;
         }
