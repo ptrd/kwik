@@ -76,6 +76,7 @@ public class StreamManager {
     private long totalReceivedMaxOffset;
     private long absoluteUnidirectionalStreamIdLimit;
     private long absoluteBidirectionalStreamIdLimit;
+    private final ConnectionMemoryBudget receiveMemoryBudget;
 
 
     /**
@@ -101,6 +102,7 @@ public class StreamManager {
         updateFlowControlLock = new ReentrantLock();
         nextStreamIdBidirectional = new AtomicInteger();
         nextStreamIdUnidirectional = new AtomicInteger();
+        receiveMemoryBudget = new ConnectionMemoryBudget();
 
         initStreamIds();
 
@@ -116,6 +118,7 @@ public class StreamManager {
         absoluteBidirectionalStreamIdLimit = computeMaxStreamIdLimit((int) Long.min(Integer.MAX_VALUE, config.maxTotalPeerInitiatedBidirectionalStreams()), role.other(), true);
 
         initConnectionFlowControl(config.maxConnectionBufferSize());
+        receiveMemoryBudget.setConnectionBufferSize(config.maxConnectionBufferSize());
 
     }
 
@@ -547,6 +550,10 @@ public class StreamManager {
 
     public long getMaxBidirectionalStreamBufferSize() {
         return config.maxBidirectionalStreamBufferSize();
+    }
+
+    ConnectionMemoryBudget getReceiveMemoryBudget() {
+        return receiveMemoryBudget;
     }
 
     public void setDefaultUnidirectionalStreamReceiveBufferSize(long newSize) {

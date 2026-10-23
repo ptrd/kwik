@@ -28,6 +28,7 @@ import java.util.NavigableSet;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
@@ -125,6 +126,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private final int chunkCapacity;
     private volatile boolean discarded;
     private volatile long discardBeyondOffset = Long.MAX_VALUE;
+    private final ConnectionMemoryBudget connectionMemoryBudget;
+    // The overhead that is reported to the connection memory budget, i.e. this buffer's share in the connection overhead.
+    private final AtomicLong reportedOverhead = new AtomicLong();
 
     /**
      * Creates a receive buffer with the given buffer size.
@@ -132,7 +136,22 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      *                    e.g. by flow control); used to limit the memory the buffer may use.
      */
     public ReceiveBufferImpl(long bufferSize) {
-        this(bufferSize, DEFAULT_MAX_COMBINED_FRAME_SIZE);
+        this(bufferSize, null);
+    }
+
+    /**
+     * Creates a receive buffer with the given buffer size, that shares the given memory budget with the other receive
+     * buffers of the connection.
+     * @param bufferSize  the maximum amount of stream data that can be buffered at any time (as enforced by the caller,
+     *                    e.g. by flow control); used to limit the memory the buffer may use.
+     * @param connectionMemoryBudget  the memory budget of the connection, or null if there is no connection limit
+     */
+    public ReceiveBufferImpl(long bufferSize, ConnectionMemoryBudget connectionMemoryBudget) {
+        this(bufferSize, DEFAULT_MAX_COMBINED_FRAME_SIZE, connectionMemoryBudget);
+    }
+
+    ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize) {
+        this(bufferSize, maxCombinedFrameSize, null);
     }
 
     /**
@@ -147,9 +166,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      *                    e.g. by flow control); used to limit the memory the buffer may use.
      * @param maxCombinedFrameSize  the maximum size of a combined frame (i.e. when frames are combined to remove
      *                              overlap, the resulting frame will not be larger than this size).
+     * @param connectionMemoryBudget  the memory budget of the connection, or null if there is no connection limit
      */
-    public ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize) {
+    public ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize, ConnectionMemoryBudget connectionMemoryBudget) {
         this.maxCombinedFrameSize = maxCombinedFrameSize;
+        this.connectionMemoryBudget = connectionMemoryBudget;
         this.maxMemoryUsage = MAX_MEMORY_FACTOR * bufferSize;
         // As the amount of buffered data never exceeds the buffer size, the remainder is available for overhead.
         this.maxOverhead = maxMemoryUsage - bufferSize;
@@ -220,6 +241,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             purgeAllData();
         }
 
+        if (totalBytesRead > 0) {
+            reportOverhead();
+        }
         return totalBytesRead;
     }
 
@@ -292,8 +316,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             //  (...) limiting the size of tracking data structures, (...)"
             // As contiguous frames are compacted when the overhead is high, this limit can only be exceeded by out-of-order
             // frames that cannot be combined (e.g. small frames with gaps in between).
+            reportOverhead();
             if (estimatedMemoryUsage() > maxMemoryUsage) {
                 throw new TransportError(INTERNAL_ERROR, "excessive memory use by stream data fragmentation");
+            }
+            if (connectionMemoryBudget != null && connectionMemoryBudget.isExceeded()) {
+                throw new TransportError(INTERNAL_ERROR, "excessive memory use by stream data fragmentation on connection");
             }
             return contiguousUpToOffset > previousContiguousUpToOffset;
         }
@@ -699,17 +727,38 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         purgeAllData();
     }
 
+    /**
+     * Reports the change in overhead (since the last report) to the connection memory budget. As this method can be
+     * called concurrently by the producer and the consumer, the reported overhead is updated atomically, such that the
+     * total reported to the connection memory budget always equals the last value of the reported overhead.
+     * When all data is purged, the overhead is zero; the discarded flag is used for this instead of the frame counts, as
+     * these can be (temporarily) incorrect when purging runs concurrently with the consumer.
+     */
+    private void reportOverhead() {
+        if (connectionMemoryBudget != null) {
+            long currentOverhead = discarded? 0: estimatedOverhead();
+            long previousOverhead = reportedOverhead.getAndSet(currentOverhead);
+            connectionMemoryBudget.update(currentOverhead - previousOverhead);
+        }
+    }
+
     @Override
     public void discardDataBeyond(long offset) {
-        // This method may be called from any thread (not just the producer or consumer thread), so it must only touch
-        // the volatile discardBeyondOffset and nothing else. In particular it must not write contiguousUpToOffset
-        // (which is owned by the producer/add thread) nor modify the buffered frames (outOfOrderFrames,
-        // contiguousFrames), as that would break the lock-free producer/consumer cooperation this class relies on (see
-        // class javadoc). Instead, data beyond the offset is handled lazily: add() drops frames that fall entirely
-        // beyond the offset (both new and buffered out-of-order frames), read() never returns data beyond it, and the
-        // status methods cap their result at it.
+        // This method may be called from any thread (not just the producer or consumer thread), so it must not write
+        // contiguousUpToOffset (which is owned by the producer/add thread) nor modify the buffered frames
+        // (outOfOrderFrames, contiguousFrames), as that would break the lock-free producer/consumer cooperation this
+        // class relies on (see class javadoc). Instead, data beyond the offset is handled lazily: add() drops frames
+        // that fall entirely beyond the offset (both new and buffered out-of-order frames), read() never returns data
+        // beyond it, and the status methods cap their result at it.
         // The offset can only decrease (a reset can only lower the reliable size, never raise it).
         discardBeyondOffset = Long.min(discardBeyondOffset, offset);
+        // The only exception is when everything up to the offset has already been read: as no data will ever be read
+        // anymore, all data is purged, just like discardAllData does (purgeAllData can run concurrently with add).
+        // When read runs concurrently, at least one of both purges, as both write their own offset before reading the
+        // other's.
+        if (readUpToOffset >= discardBeyondOffset) {
+            purgeAllData();
+        }
     }
 
     private void purgeAllData() {
@@ -723,6 +772,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         contiguousFrames.clear();
         contiguousFramesRemoved = contiguousFramesAdded;  // atomic operation, added - removed can never be negative
         openChunk = null;
+        reportOverhead();
     }
 
     private static class SimpleStreamElement implements StreamElement {

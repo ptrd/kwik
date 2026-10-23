@@ -63,10 +63,10 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile boolean resetAt;
     private volatile long resetAtReliableSize;
 
-    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, ConnectionMemoryBudget connectionMemoryBudget, Logger log) {
         this.quicStream = quicStream;
         this.log = log;
-        receiveBuffer = new ReceiveBufferImpl(receiveBufferSize);
+        receiveBuffer = new ReceiveBufferImpl(receiveBufferSize, connectionMemoryBudget);
 
         receiverFlowControlLimit = receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;

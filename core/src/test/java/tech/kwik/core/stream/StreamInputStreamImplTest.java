@@ -46,7 +46,7 @@ class StreamInputStreamImplTest {
         streamManager = mock(StreamManager.class);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
-        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, mock(Logger.class));
+        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, null, mock(Logger.class));
     }
 
     @Test

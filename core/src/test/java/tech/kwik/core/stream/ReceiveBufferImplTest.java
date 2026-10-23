@@ -1293,6 +1293,188 @@ class ReceiveBufferImplTest {
     }
     // endregion
 
+    // region connection memory budget
+    @Test
+    void connectionMemoryBudgetContainsOverheadOfAllBuffers() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer1 = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        ReceiveBufferImpl buffer2 = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+
+        // When
+        buffer1.add(new DataFrame(0, 100));
+        buffer1.add(new DataFrame(200, 100));
+        buffer2.add(new DataFrame(100, 100));
+
+        // Then
+        assertThat(budget.getOverhead()).isEqualTo(3 * ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void whenDataIsReadOverheadIsRemovedFromConnectionMemoryBudget() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        buffer.add(new DataFrame(0, 100));
+        buffer.add(new DataFrame(100, 100));
+
+        // When
+        buffer.read(ByteBuffer.allocate(150));
+
+        // Then
+        assertThat(budget.getOverhead()).isEqualTo(ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
+    void whenAllDataIsReadConnectionMemoryBudgetIsZero() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        int offset = 0;
+        while (!buffer.overheadIsHigh()) {
+            buffer.add(new DataFrame(offset, 1));
+            offset++;
+        }
+        // Final frame that is compacted into a chunk that is not completely filled
+        buffer.add(new DataFrame(offset, 10, true));
+
+        // When
+        checkAllDataCanBeRead(buffer, offset + 10);
+
+        // Then
+        assertThat(budget.getOverhead()).isEqualTo(0);
+    }
+
+    @Test
+    void whenAllDataIsDiscardedConnectionMemoryBudgetIsZero() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        buffer.add(new DataFrame(0, 100));
+        buffer.add(new DataFrame(200, 100));
+
+        // When
+        buffer.discardAllData();
+
+        // Then
+        assertThat(budget.getOverhead()).isEqualTo(0);
+    }
+
+    @Test
+    void whenDataBeyondReadOffsetIsDiscardedConnectionMemoryBudgetIsZero() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        buffer.add(new DataFrame(0, 100));
+        buffer.add(new DataFrame(200, 100));
+        buffer.read(ByteBuffer.allocate(100));
+
+        // When
+        buffer.discardDataBeyond(100);
+
+        // Then
+        assertThat(budget.getOverhead()).isEqualTo(0);
+    }
+
+    @Test
+    void whenDataBeyondReadOffsetIsDiscardedAllDataIsPurged() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.add(new DataFrame(0, 100));
+        buffer.add(new DataFrame(100, 100));
+        buffer.add(new DataFrame(300, 100));
+        buffer.read(ByteBuffer.allocate(150));
+
+        // When
+        buffer.discardDataBeyond(120);
+
+        // Then
+        assertThat(buffer.estimatedOverhead()).isEqualTo(0);
+        assertThat(buffer.bufferedOutOfOrderData()).isEqualTo(0);
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenDataBeyondUnreadOffsetIsDiscardedDataBeforeOffsetCanStillBeRead() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.add(new DataFrame(0, 100));
+        buffer.add(new DataFrame(100, 100));
+        buffer.read(ByteBuffer.allocate(50));
+
+        // When
+        buffer.discardDataBeyond(120);
+
+        // Then
+        assertThat(buffer.estimatedOverhead()).isEqualTo(2 * ReceiveBufferImpl.FRAME_OVERHEAD);
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(70);
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+    }
+
+    @Test
+    void whenEmptyFinalFrameIsReceivedAfterAllDataIsReadConnectionMemoryBudgetIsZero() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        int offset = 0;
+        while (!buffer.overheadIsHigh()) {
+            buffer.add(new DataFrame(offset, 1));
+            offset++;
+        }
+        // Frame that is compacted into a chunk that is not completely filled (so the chunk remains after reading)
+        buffer.add(new DataFrame(offset, 10));
+        checkAllDataCanBeRead(buffer, offset + 10);
+        assertThat(budget.getOverhead()).isGreaterThan(0);
+
+        // When
+        buffer.add(new DataFrame(offset + 10, 0, true));
+
+        // Then
+        assertThat(buffer.read(ByteBuffer.allocate(10))).isEqualTo(-1);
+        assertThat(budget.getOverhead()).isEqualTo(0);
+    }
+
+    @Test
+    void whenSmallFramesWithGapsAreSpreadOverManyBuffersTransportErrorIsThrown() throws Exception {
+        // Given
+        int connectionBufferSize = SMALL_BUFFER_SIZE;
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(connectionBufferSize);
+        long maxOverhead = (ReceiveBufferImpl.MAX_MEMORY_FACTOR - 1) * connectionBufferSize;
+        List<ReceiveBufferImpl> buffers = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            buffers.add(new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget));
+        }
+
+        // When
+        TransportError error = null;
+        for (int i = 0; i < SMALL_BUFFER_SIZE / 2 && error == null; i++) {
+            for (ReceiveBufferImpl buffer : buffers) {
+                try {
+                    buffer.add(new DataFrame(2 * i + 1, 1));
+                }
+                catch (TransportError transportError) {
+                    error = transportError;
+                    break;
+                }
+            }
+        }
+
+        // Then
+        assertThat(error).isNotNull();
+        assertThat(error.getErrorCode()).isEqualTo(QuicConstants.TransportErrorCode.INTERNAL_ERROR);
+        // Exceeded by at most the frame that caused the error
+        assertThat(budget.getOverhead()).isLessThanOrEqualTo(maxOverhead + ReceiveBufferImpl.FRAME_OVERHEAD);
+        // Each buffer is well within its own limit
+        assertThat(buffers.get(0).estimatedMemoryUsage()).isLessThan(ReceiveBufferImpl.MAX_MEMORY_FACTOR * SMALL_BUFFER_SIZE / 10);
+    }
+
+    private ConnectionMemoryBudget createConnectionMemoryBudget(long connectionBufferSize) {
+        ConnectionMemoryBudget budget = new ConnectionMemoryBudget();
+        budget.setConnectionBufferSize(connectionBufferSize);
+        return budget;
+    }
+    // endregion
+
     // region memory management
     @Test
     void duplicatedFramesAreCombinedToReduceMemoryUsage() throws Exception {
