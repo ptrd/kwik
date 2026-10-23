@@ -46,6 +46,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long readUpToOffset = 0;
     private volatile long streamEndOffset = -1;
     private volatile long bufferedOutOfOrderData;
+    private volatile int outOfOrderFrameCount;
     private final int maxCombinedFrameSize;
     private volatile boolean discarded;
     private volatile long discardBeyondOffset = Long.MAX_VALUE;
@@ -146,6 +147,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
             while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.first().getOffset() <= contiguousUpToOffset) {
                 StreamElement nextFrame = outOfOrderFrames.pollFirst();
+                outOfOrderFrameCount--;
                 bufferedOutOfOrderData -= nextFrame.getLength();
                 // Only frames that contain data that can still be read are moved to the contiguous frames, others are
                 // dropped (which is the case when all data is before the contiguous offset or beyond the discard offset).
@@ -199,19 +201,25 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     /**
-     * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap and either the
-     * combined length does not exceed the maximum combined frame size or one frame contains the other. Overlapping
-     * frames that cannot be combined are shrunk to remove the overlap.
+     * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap (or are adjacent
+     * while the buffer is fragmented, i.e. contains many small frames) and either the combined length does not exceed
+     * the maximum combined frame size or one frame contains the other. Overlapping frames that cannot be combined are
+     * shrunk to remove the overlap; adjacent frames that cannot be combined are left as they are.
      * @param frame  the frame to add
      */
     private void addOutOfOrder(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
-        if (before != null && overlapping(before, frame)) {
+        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && fragmented(frame)))) {
             if (canCombine(before, frame)) {
                 combinedWithBefore = combine(before, frame);
                 outOfOrderFrames.remove(before);
+                outOfOrderFrameCount--;
                 bufferedOutOfOrderData -= before.getLength();
+            }
+            else if (adjacent(before, frame)) {
+                // Adjacent (not overlapping) and too large to combine: nothing to do.
+                combinedWithBefore = frame;
             }
             else {
                 // Remove overlap by shrinking the new frame to start at the end of the "before" frame.
@@ -224,6 +232,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     StreamElement newBefore = outOfOrderFrames.lower(combinedWithBefore);
                     combinedWithBefore = combine(newBefore, combinedWithBefore);
                     outOfOrderFrames.remove(newBefore);
+                    outOfOrderFrameCount--;
                     bufferedOutOfOrderData -= newBefore.getLength();
                 }
             }
@@ -234,18 +243,24 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         StreamElement combinedWithAfter = combineWithElementsAfter(combinedWithBefore);
         // In certain cases, the combined could exactly match an existing, so only count when really added.
         if (outOfOrderFrames.add(combinedWithAfter)) {
+            outOfOrderFrameCount++;
             bufferedOutOfOrderData += combinedWithAfter.getLength();
         }
     }
 
     StreamElement combineWithElementsAfter(StreamElement frameToAdd) {
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
-        while (after != null && overlapping(frameToAdd, after)) {
+        while (after != null && (overlapping(frameToAdd, after) || (adjacent(frameToAdd, after) && fragmented(frameToAdd)))) {
             StreamElement newCombined;
             if (canCombine(frameToAdd, after)) {
                 newCombined = combine(frameToAdd, after);
                 outOfOrderFrames.remove(after);
+                outOfOrderFrameCount--;
                 bufferedOutOfOrderData -= after.getLength();
+            }
+            else if (adjacent(frameToAdd, after)) {
+                // Adjacent (not overlapping) and too large to combine: nothing to do (and continuing would loop forever).
+                break;
             }
             else {
                 // Remove overlap by shrinking the new frame to end at the start of the "after" frame.
@@ -258,7 +273,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     /**
-     * Returns whether two (overlapping) frames can be combined: either the combination does not exceed the maximum
+     * Returns whether the out-of-order frames are fragmented too much, i.e. there are many small frames.
+     * @param inProgress  the frame that is being added, which is not (yet) counted in the buffered data and frame count
+     */
+    private boolean fragmented(StreamElement inProgress) {
+        long data = bufferedOutOfOrderData + inProgress.getLength();
+        return data < (outOfOrderFrameCount + 1) * 90L && data > 10 * 1024;
+    }
+
+    /**
+     * Returns whether two overlapping or adjacent frames can be combined: either the combination does not exceed the maximum
      * combined frame size, or one of the frames contains the other, in which case the combination is just the
      * containing frame and combining does not lead to a larger frame.
      */
@@ -272,13 +296,23 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return frame1.getUpToOffset() > frame2.getOffset();
     }
 
+    static boolean adjacent(StreamElement frame1, StreamElement frame2) {
+        assert frame1.getOffset() <= frame2.getOffset();
+        return frame1.getUpToOffset() == frame2.getOffset();
+    }
+
     static long combinedLength(StreamElement frame1, StreamElement frame2) {
         return Long.max(frame1.getUpToOffset(), frame2.getUpToOffset()) - Long.min(frame1.getOffset(), frame2.getOffset());
     }
 
+    /**
+     * Combines two overlapping or adjacent frames into one frame that covers both.
+     * @param frame1  the frame with the lowest (or equal) offset
+     * @param frame2  the frame that overlaps with or directly follows frame1
+     */
     static StreamElement combine(StreamElement frame1, StreamElement frame2) {
         assert frame1.getOffset() <= frame2.getOffset();
-        assert frame1.getUpToOffset() > frame2.getOffset();
+        assert frame1.getUpToOffset() >= frame2.getOffset();
 
         if (contains(frame1, frame2)) {
             return frame1;
@@ -371,6 +405,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // another thread may be adding (see the catch block in add()).
         discarded = true;
         outOfOrderFrames.clear();
+        outOfOrderFrameCount = 0;
         bufferedOutOfOrderData = 0;
         contiguousFrames.clear();
     }

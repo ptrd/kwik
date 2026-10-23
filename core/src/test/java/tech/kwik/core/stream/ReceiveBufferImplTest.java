@@ -1120,6 +1120,57 @@ class ReceiveBufferImplTest {
         assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
         checkData(ByteBuffer.wrap(combined.getStreamData()));
     }
+
+    @Test
+    void combineAdjacentFrames() {
+        // Given
+        DataFrame frame1 = new DataFrame(100, 30);
+        DataFrame frame2 = new DataFrame(130, 60);
+
+        // When
+        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+
+        assertThat(combined.getOffset()).isEqualTo(100);
+        assertThat(combined.getLength()).isEqualTo(90);
+        assertThat(ReceiveBufferImpl.combinedLength(frame1, frame2)).isEqualTo(combined.getLength());
+        checkData(ByteBuffer.wrap(combined.getStreamData()));
+    }
+
+    @Test
+    void whenFragmentedAdjacentFramesArrivingInAscendingOrderAreCombined() {
+        // When
+        for (int offset = 1; offset <= 20000; offset++) {
+            receiveBuffer.add(new DataFrame(offset, 1));
+        }
+
+        // Then
+        checkAdjacentFramesAreCombined(20000);
+    }
+
+    @Test
+    void whenFragmentedAdjacentFramesArrivingInDescendingOrderAreCombined() {
+        // When
+        for (int offset = 20000; offset >= 1; offset--) {
+            receiveBuffer.add(new DataFrame(offset, 1));
+        }
+
+        // Then
+        checkAdjacentFramesAreCombined(20000);
+    }
+
+    private void checkAdjacentFramesAreCombined(int framesAdded) {
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(framesAdded);
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        // Combining only starts when the buffer is considered fragmented, so not all frames will be combined.
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isLessThan(framesAdded * 3 / 4);
+        assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
+
+        receiveBuffer.add(new DataFrame(0, 1));
+        ByteBuffer readBytes = ByteBuffer.allocate(framesAdded + 1);
+        assertThat(receiveBuffer.read(readBytes)).isEqualTo(framesAdded + 1);
+        checkData(readBytes);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
+    }
     // endregion
 
     // region stress test
