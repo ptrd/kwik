@@ -35,10 +35,11 @@ class ReceiveBufferImplTest {
 
     private ReceiveBufferImpl receiveBuffer;
     private static final int MAX_COMBINED_FRAME_SIZE = 2500;
+    private static final int BUFFER_SIZE = 1024 * 1024;
 
     @BeforeEach
     void setUpObjectUnderTest() {
-        receiveBuffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        receiveBuffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
     }
 
     // region reading data
@@ -1444,7 +1445,7 @@ class ReceiveBufferImplTest {
         int streamSize = 10_000;
         byte[] original = new byte[streamSize];
         random.nextBytes(original);
-        ReceiveBufferImpl buffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         // One byte extra, to detect reading more data than the stream contains.
         ByteBuffer readData = ByteBuffer.allocate(streamSize + 1);
 
@@ -1480,7 +1481,7 @@ class ReceiveBufferImplTest {
         int maxFrameLength = 100;
         byte[] original = new byte[streamSize];
         random.nextBytes(original);
-        ReceiveBufferImpl buffer = new ReceiveBufferImpl(MAX_COMBINED_FRAME_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         // One byte extra, to detect reading more data than the stream contains.
         ByteBuffer readData = ByteBuffer.allocate(streamSize + 1);
 

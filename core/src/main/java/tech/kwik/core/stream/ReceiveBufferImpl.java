@@ -44,6 +44,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     // Estimated memory overhead (in bytes) of a buffered frame, i.e. memory used by a buffered frame on top of the
     // stream data it contains (the frame object, its byte array header, the collection node, etc.).
     static final int FRAME_OVERHEAD = 128;
+    // Maximum memory a receive buffer may use, expressed as a multiple of the buffer size.
+    static final int MAX_MEMORY_FACTOR = 2;
 
     private final NavigableSet<StreamElement> outOfOrderFrames = new ConcurrentSkipListSet<>();
     private final Queue<StreamElement> contiguousFrames = new ConcurrentLinkedQueue<>();
@@ -57,26 +59,35 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private volatile long contiguousFramesAdded;
     private volatile long contiguousFramesRemoved;
     private final int maxCombinedFrameSize;
+    private final long maxMemoryUsage;
     private volatile boolean discarded;
     private volatile long discardBeyondOffset = Long.MAX_VALUE;
 
-    public ReceiveBufferImpl() {
-        this(DEFAULT_MAX_COMBINED_FRAME_SIZE);
+    /**
+     * Creates a receive buffer with the given buffer size.
+     * @param bufferSize  the maximum amount of stream data that can be buffered at any time (as enforced by the caller,
+     *                    e.g. by flow control); used to limit the memory the buffer may use.
+     */
+    public ReceiveBufferImpl(long bufferSize) {
+        this(bufferSize, DEFAULT_MAX_COMBINED_FRAME_SIZE);
     }
 
     /**
-     * Creates a receive buffer with the given maximum combined frame size.
+     * Creates a receive buffer with the given buffer size and maximum combined frame size.
      * The maximum combined frame size must balance between the following two goals:
      * - the larger, the more bytes are copied when combining frames
      * - the smaller, the more memory overhead there will be for buffering out-of-order frames
      * Note that in normal circumstances, frames will usually not overlap (as this is inefficient use of network and
      * other resources). However, attackers could send overlapping frames in order to try to make the endpoint use more
      * memory than anticipated.
+     * @param bufferSize  the maximum amount of stream data that can be buffered at any time (as enforced by the caller,
+     *                    e.g. by flow control); used to limit the memory the buffer may use.
      * @param maxCombinedFrameSize  the maximum size of a combined frame (i.e. when frames are combined to remove
      *                              overlap, the resulting frame will not be larger than this size).
      */
-    public ReceiveBufferImpl(int maxCombinedFrameSize) {
+    public ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize) {
         this.maxCombinedFrameSize = maxCombinedFrameSize;
+        this.maxMemoryUsage = MAX_MEMORY_FACTOR * bufferSize;
     }
 
     @Override
