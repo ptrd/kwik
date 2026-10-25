@@ -41,9 +41,23 @@ import java.util.stream.Collectors;
 public class ReceiveBufferImpl implements ReceiveBuffer {
 
     private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
-    // Estimated memory overhead (in bytes) of a buffered frame, i.e. memory used by a buffered frame on top of the
-    // stream data it contains (the frame object, its byte array header, the collection node, etc.).
-    static final int FRAME_OVERHEAD = 128;
+    /**
+     * Estimated memory overhead (in bytes) of a buffered frame, i.e. memory used by a buffered frame on top of the
+     * stream data it contains. With a 64-bit JVM using compressed oops and compressed class pointers (the default for
+     * heaps smaller than 32 GB: 12 byte object header, 4 byte references, 8 byte object alignment), the overhead is:
+     * - the frame object: 32 bytes (both StreamFrame and SimpleStreamElement / ChunkStreamElement)
+     * - the byte array holding the data: 16 bytes header plus 0 to 7 bytes of alignment padding
+     * - for a frame in outOfOrderFrames: the ConcurrentSkipListSet is backed by a ConcurrentSkipListMap, which uses a
+     *   24 byte Node per element (the value is the shared Boolean.TRUE) plus on average 0.5 Index object of 24 bytes
+     *   (an element gets an index with probability 1/4, each additional level with probability 1/2), so 36 bytes
+     * - for a frame in contiguousFrames: the ConcurrentLinkedQueue uses a 24 byte Node per element
+     * Total: about 88 bytes for an out-of-order frame and about 76 bytes for a contiguous frame (measured with JOL:
+     * 87 and 75), with a maximum of about 91 bytes when padding is maximal. The estimate is an upper bound for this
+     * (default) case, and also for compact object headers (-XX:+UseCompactObjectHeaders), where the overhead is lower
+     * (about 79 and 59 bytes). Without compressed oops (e.g. heap larger than 32 GB) references are 8 bytes, resulting
+     * in about 121 and 91 bytes, so in that case the estimate is too low for out-of-order frames.
+     */
+    static final int FRAME_OVERHEAD = 96;
     // Maximum memory a receive buffer may use, expressed as a multiple of the buffer size.
     static final int MAX_MEMORY_FACTOR = 2;
 
