@@ -1071,11 +1071,8 @@ class ReceiveBufferImplTest {
     @Test
     void whenSmallAdjacentFramesAreAddedInRandomOrderAfterFirstIsLostNoTransportErrorIsThrown() throws Exception {
         // Given
-        // Note that out-of-order adjacent frames are only combined when the buffer is fragmented, which requires
-        // more than 10 KB of out-of-order data; with a small buffer size, the memory limit could be exceeded before
-        // that, so this test uses a large buffer size.
-        ReceiveBufferImpl buffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int streamSize = 100_000;
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(streamSize, MAX_COMBINED_FRAME_SIZE);
         Random random = new Random(13);
         List<DataFrame> frames = new ArrayList<>();
         int offset = 0;
@@ -1095,6 +1092,54 @@ class ReceiveBufferImplTest {
 
         // Then
         checkAllDataCanBeRead(buffer, streamSize);
+    }
+
+    @Test
+    void whenSmallAdjacentFramesAreAddedInAscendingOrderAfterFirstIsLostNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        Random random = new Random(17);
+        int offset = 100;
+
+        // When
+        while (offset < SMALL_BUFFER_SIZE) {
+            int length = Integer.min(1 + random.nextInt(100), SMALL_BUFFER_SIZE - offset);
+            buffer.add(new DataFrame(offset, length));
+            offset += length;
+        }
+        buffer.add(new DataFrame(0, 100));
+
+        // Then
+        checkAllDataCanBeRead(buffer, SMALL_BUFFER_SIZE);
+    }
+
+    @Test
+    void whenSingleByteFramesAreAddedInAscendingOrderAfterFirstIsLostNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int offset = 1; offset < SMALL_BUFFER_SIZE; offset++) {
+            buffer.add(new DataFrame(offset, 1));
+        }
+        buffer.add(new DataFrame(0, 1));
+
+        // Then
+        checkAllDataCanBeRead(buffer, SMALL_BUFFER_SIZE);
+    }
+
+    @Test
+    void whenSingleByteFramesAreAddedInDescendingOrderNoTransportErrorIsThrown() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+
+        // When
+        for (int offset = SMALL_BUFFER_SIZE - 1; offset >= 0; offset--) {
+            buffer.add(new DataFrame(offset, 1));
+        }
+
+        // Then
+        checkAllDataCanBeRead(buffer, SMALL_BUFFER_SIZE);
     }
 
     @Test
@@ -1749,7 +1794,7 @@ class ReceiveBufferImplTest {
     private void checkAdjacentFramesAreCombined(int framesAdded) throws Exception {
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(framesAdded);
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
-        // Combining only starts when the buffer is considered fragmented, so not all frames will be combined.
+        // Combining only starts when the overhead is high, so not all frames will be combined.
         assertThat(receiveBuffer.countOutOfOrderFrames()).isLessThan(framesAdded * 3 / 4);
         assertThat(receiveBuffer.maxOutOfOrderFrameSize()).isLessThanOrEqualTo(MAX_COMBINED_FRAME_SIZE);
 
@@ -1829,16 +1874,16 @@ class ReceiveBufferImplTest {
 
     private void addSmallAdjacentFramesInRandomOrderAndReadAllData(long seed) throws Exception {
         Random random = new Random(seed);
-        // Stream must be large enough to make the out-of-order buffer considered fragmented (more than 10 KB of small frames).
+        // Buffer size equals stream size, so the overhead of small out-of-order frames becomes high enough to combine them.
         int streamSize = 100_000;
         int maxFrameLength = 100;
         byte[] original = new byte[streamSize];
         random.nextBytes(original);
-        ReceiveBufferImpl buffer = new ReceiveBufferImpl(BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(streamSize, MAX_COMBINED_FRAME_SIZE);
         // One byte extra, to detect reading more data than the stream contains.
         ByteBuffer readData = ByteBuffer.allocate(streamSize + 1);
 
-        // Split the stream in small adjacent frames (on average smaller than the fragmentation threshold) ...
+        // Split the stream in small adjacent frames ...
         List<StreamFrame> frames = new ArrayList<>();
         int offset = 0;
         while (offset < streamSize) {

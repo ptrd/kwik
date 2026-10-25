@@ -325,7 +325,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     /**
-     * Returns whether the overhead is so high that new (small) contiguous frames are compacted into chunks.
+     * Returns whether the overhead is so high that new (small) contiguous frames are compacted into chunks and adjacent
+     * out-of-order frames are combined.
      * Compacting starts at half the overhead budget, so that the overhead of the frames buffered before compacting
      * started, plus the overhead of the chunks, stays within the budget.
      */
@@ -335,7 +336,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
     /**
      * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap (or are adjacent
-     * while the buffer is fragmented, i.e. contains many small frames) and either the combined length does not exceed
+     * while the overhead is high, i.e. there are many small frames) and either the combined length does not exceed
      * the maximum combined frame size or one frame contains the other. Overlapping frames that cannot be combined are
      * shrunk to remove the overlap; adjacent frames that cannot be combined are left as they are.
      * @param frame  the frame to add
@@ -343,7 +344,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private void addOutOfOrder(StreamElement frame) {
         StreamElement before = outOfOrderFrames.lower(frame);
         StreamElement combinedWithBefore;
-        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && fragmented(frame.getLength())))) {
+        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && overheadIsHigh()))) {
             if (canCombine(before, frame)) {
                 combinedWithBefore = combine(before, frame);
                 outOfOrderFrames.remove(before);
@@ -391,8 +392,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         while (after != null) {
             boolean overlapping = upToOffset > after.getOffset();
             boolean adjacent = upToOffset == after.getOffset();
-            boolean heavilyFragmented = fragmented(upToOffset - startOffset);
-            if (! (overlapping || (adjacent && heavilyFragmented))) {
+            // Evaluated in each iteration, as combining frames decreases the overhead.
+            if (! (overlapping || (adjacent && overheadIsHigh()))) {
                 break;
             }
             if (canCombine(startOffset, upToOffset, after.getOffset(), after.getUpToOffset())) {
@@ -422,16 +423,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         else {
             return combine(framesToCombine, startOffset, upToOffset);
         }
-    }
-
-    /**
-     * Returns whether the out-of-order frames are fragmented too much, i.e. there are many small frames.
-     * @param inProgressLength  the length of the frame that is being added, which is not (yet) counted in the buffered
-     *                          data and frame count
-     */
-    private boolean fragmented(long inProgressLength) {
-        long data = bufferedOutOfOrderData + inProgressLength;
-        return data < (outOfOrderFrameCount + 1) * 90L && data > 10 * 1024;
     }
 
     /**
