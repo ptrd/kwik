@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -955,16 +956,22 @@ class ReceiveBufferImplTest {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
         int streamSize = 1_000_000;
+        AtomicReference<Exception> producerError = new AtomicReference<>();
         Thread producer = new Thread(() -> {
             Random random = new Random(11);
             int offset = 0;
             while (offset < streamSize) {
                 int length = Integer.min(1 + random.nextInt(50), streamSize - offset);
+                // Mimic flow control: never add data beyond the read offset plus the buffer size.
+                while (offset + length > buffer.readOffset() + SMALL_BUFFER_SIZE) {
+                    Thread.yield();
+                }
                 try {
                     buffer.add(new DataFrame(offset, length, offset + length == streamSize));
                 }
-                catch (TransportError e) {
-                    throw new RuntimeException(e);
+                catch (Exception e) {
+                    producerError.set(e);
+                    return;
                 }
                 offset += length;
             }
@@ -975,12 +982,13 @@ class ReceiveBufferImplTest {
         ByteBuffer readData = ByteBuffer.allocate(streamSize);
         long deadline = System.currentTimeMillis() + 30_000;
         while (buffer.read(ByteBuffer.wrap(readData.array(), readData.position(), Integer.min(997, readData.remaining()))) >= 0
-                && System.currentTimeMillis() < deadline) {
+                && producerError.get() == null && System.currentTimeMillis() < deadline) {
             readData.position((int) buffer.readOffset());
         }
         producer.join();
 
         // Then
+        assertThat(producerError.get()).isNull();
         assertThat(readData.position()).isEqualTo(streamSize);
         checkData(readData);
     }
