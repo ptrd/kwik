@@ -41,6 +41,36 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
  * - there is only one producer thread and only one consumer thread
  * - the producer thread only calls the add method
  * - the consumer thread never calls the add method
+ *
+ * Memory usage is limited to MAX_MEMORY_FACTOR times the buffer size; when the estimated memory usage (buffered data
+ * plus FRAME_OVERHEAD per buffered frame) exceeds this limit, add throws an INTERNAL_ERROR transport error. Example
+ * scenarios, with a buffer size of 250_000 (the default max stream data), so a limit of 500_000 bytes, and nothing
+ * read by the application (unless stated otherwise):
+ * Scenarios that lead to too much memory overhead:
+ * - out-of-order frames of 1 byte with 1 byte gaps (offsets 1, 3, 5, ...): error after about 5150 frames, i.e. at
+ *   offset 10_000 (each frame costs 1 + 96 bytes)
+ * - out-of-order frames of 20 bytes with 1 byte gaps: error after about 4300 frames (offset 90_000)
+ * - out-of-order frames of 50 bytes with 10 byte gaps: error after about 3400 frames (offset 205_000)
+ * - out-of-order frames of 90 bytes with 1 byte gaps: error after about 2700 frames (offset 245_000)
+ * In general: out-of-order frames that cannot be combined because of the gaps in between, and that are smaller than
+ * about FRAME_OVERHEAD bytes, can exceed the limit before the buffer is full.
+ * Scenarios that do not lead to too much memory overhead:
+ * - in-order frames of any size that are read by the application while they arrive: usage stays (close to) 0
+ * - in-order frames of 1 byte (or 10 bytes), never read: about 1.5 times the buffer size, as small contiguous frames
+ *   are compacted into chunks when the overhead is high
+ * - in-order frames of 1200 bytes (typical for full packets): about 1.1 times the buffer size
+ * - out-of-order frames of 1200 bytes, with every other frame lost: about 0.5 times the buffer size
+ * - out-of-order adjacent frames of any size (e.g. 1, 10 or 100 bytes, offsets starting at 1): about 1.5 times the
+ *   buffer size, as adjacent out-of-order frames are combined when the overhead is high
+ * - out-of-order frames of 95 or 100 bytes with 1 byte gaps: about 1.99 and 1.94 times the buffer size (just within
+ *   the limit)
+ * - out-of-order frames of 200 bytes with 200 byte gaps: about 0.75 times the buffer size
+ * - out-of-order frames of 10 bytes with 100 byte gaps: about 0.95 times the buffer size (the gaps limit the number of
+ *   frames)
+ * - in-order frames of 1 byte up to half of the buffer, followed by out-of-order frames of 200 bytes with 1 byte gaps:
+ *   about 1.75 times the buffer size
+ * - overlapping frames (e.g. 1200 byte frames retransmitted with shifted boundaries, followed by 1 byte frames within
+ *   the already received data): about 1.1 times the buffer size, as overlap is removed and frames are combined
  */
 public class ReceiveBufferImpl implements ReceiveBuffer {
 
