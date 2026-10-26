@@ -435,6 +435,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     void abort() {
         aborted = true;
+        sendBuffer.clear();
         interruptBlockingThread();
     }
 }

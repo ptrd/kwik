@@ -362,6 +362,7 @@ class StreamInputStreamImpl extends StreamInputStream {
 
     void abort() {
         aborted = true;
+        receiveBuffer.discardAllData();
         interruptBlockingReader();
     }
 
