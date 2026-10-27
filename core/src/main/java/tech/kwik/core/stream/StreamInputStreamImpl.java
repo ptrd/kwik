@@ -184,6 +184,7 @@ class StreamInputStreamImpl extends StreamInputStream {
                             // All reliable data has been delivered; now signal the reset.
                             reset = true;
                             quicStream.inputClosed();
+                            receiveBuffer.discardAllData();
                         }
                         return bytesRead;
                     }
@@ -355,6 +356,7 @@ class StreamInputStreamImpl extends StreamInputStream {
                 reset = true;
                 interruptBlockingReader();
                 quicStream.inputClosed();
+                receiveBuffer.discardAllData();
             }
         }
         return largestOffsetIncrement;
