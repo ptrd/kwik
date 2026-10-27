@@ -201,11 +201,14 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             readUpToOffset += bytesToRead;
             totalBytesRead += bytesToRead;
             // Only remove the frame when it is read up to its end; for a chunk this means that it has been filled
-            // completely, so that the producer will not add data to it anymore.
-            if (readUpToOffset == nextFrame.getUpToOffset()) {
+            // completely, or end of stream is reached, so that the producer will not add data to it anymore.
+            if (readUpToOffset == nextFrame.getUpToOffset() || readUpToOffset == streamEndOffset) {
                 contiguousFrames.poll();
                 contiguousFramesRemoved++;
                 nextFrame = contiguousFrames.peek();
+                if (readUpToOffset == streamEndOffset) {
+                    openChunk = null;
+                }
             }
         }
         return totalBytesRead;
