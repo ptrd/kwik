@@ -937,6 +937,24 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenEmptyFinalFrameIsReceivedAfterAllDataInChunkIsReadMemoryIsReleased() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 10));
+        checkAllDataCanBeRead(buffer, offset + 10);
+
+        // When
+        buffer.add(new DataFrame(offset + 10, 0, true));
+
+        // Then
+        assertThat(buffer.read(ByteBuffer.allocate(100))).isEqualTo(-1);
+        assertThat(buffer.allRead()).isTrue();
+        assertThat(buffer.countContiguousFrames()).isEqualTo(0);
+        assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
     void whenDataIsDiscardedBeyondOffsetInChunkOnlyDataBeforeOffsetIsRead() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);

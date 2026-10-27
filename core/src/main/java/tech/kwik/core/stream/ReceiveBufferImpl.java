@@ -174,6 +174,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     @Override
     public int read(ByteBuffer buffer) {
         if (allRead()) {
+            // When end of stream becomes known after all data was read (e.g. an empty final frame), a partly filled
+            // chunk might still be present, as it is only removed when it is read up to its end or end of stream.
+            if (readUpToOffset == streamEndOffset && contiguousFrames.poll() != null) {
+                contiguousFramesRemoved++;
+                openChunk = null;
+            }
             return -1;
         }
 
