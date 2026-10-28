@@ -1838,6 +1838,30 @@ class ReceiveBufferImplTest {
         checkData(readBytes);
         assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(0);
     }
+
+    @Test
+    void whenDuplicateOfFrameIsCombinedWithAdjacentFrameOriginalFrameShouldBeRemoved() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        // Two adjacent frames that are not combined, because the overhead is not (yet) high.
+        buffer.add(new DataFrame(100, 10));
+        buffer.add(new DataFrame(110, 10));
+        assertThat(buffer.countOutOfOrderFrames()).isEqualTo(2);
+        // Small frames with gaps in between (that cannot be combined) to make the overhead high.
+        int offset = 1000;
+        while (!buffer.overheadIsHigh()) {
+            buffer.add(new DataFrame(offset, 1));
+            offset += 2;
+        }
+        long bufferedBefore = buffer.bufferedOutOfOrderData();
+
+        // When
+        buffer.add(new DataFrame(100, 10));
+
+        // Then
+        assertThat(buffer.checkOverlap()).isEqualTo(0);
+        assertThat(buffer.bufferedOutOfOrderData()).isEqualTo(bufferedBefore);
+    }
     // endregion
 
     // region stress test

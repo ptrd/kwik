@@ -391,7 +391,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * @param frame  the frame to add
      */
     private void addOutOfOrder(StreamElement frame) {
-        StreamElement before = outOfOrderFrames.lower(frame);
+        // Use floor, so that an existing frame equal to the new frame is found as "before" (and combined with it);
+        // otherwise, if the new frame is combined with frames after it, the existing frame would remain.
+        StreamElement before = outOfOrderFrames.floor(frame);
         StreamElement combinedWithBefore;
         if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && overheadIsHigh()))) {
             if (canCombine(before, frame)) {
