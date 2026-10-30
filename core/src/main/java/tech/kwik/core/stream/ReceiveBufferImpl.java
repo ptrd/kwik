@@ -176,10 +176,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         if (allRead()) {
             // When end of stream becomes known after all data was read (e.g. an empty final frame), a partly filled
             // chunk might still be present, as it is only removed when it is read up to its end or end of stream.
-            if (readUpToOffset == streamEndOffset && contiguousFrames.poll() != null) {
-                contiguousFramesRemoved++;
-                openChunk = null;
-            }
+            purgeAllData();
             return -1;
         }
 
@@ -192,6 +189,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             // Long.MAX_VALUE when discardDataBeyond was not called).
             long discardOffset = discardBeyondOffset;
             if (readUpToOffset >= discardOffset) {
+                purgeAllData();
                 break;
             }
             // Never return data at or beyond the discard offset, nor beyond the contiguous offset, as the frame can be a
@@ -208,14 +206,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             totalBytesRead += bytesToRead;
             // Only remove the frame when it is read up to its end; for a chunk this means that it has been filled
             // completely, or end of stream is reached, so that the producer will not add data to it anymore.
-            if (readUpToOffset == nextFrame.getUpToOffset() || readUpToOffset == streamEndOffset) {
+            if (readUpToOffset == nextFrame.getUpToOffset()) {
                 contiguousFrames.poll();
                 contiguousFramesRemoved++;
                 nextFrame = contiguousFrames.peek();
-                if (readUpToOffset == streamEndOffset) {
-                    openChunk = null;
-                }
             }
+            if (readUpToOffset == streamEndOffset) {
+                purgeAllData();
+                break;
+            }
+
         }
         return totalBytesRead;
     }
@@ -662,12 +662,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // The discarded flag remains needed to make add() tolerate the races caused by clearing the buffers below while
         // another thread may be adding (see the catch block in add()).
         discarded = true;
-        outOfOrderFrames.clear();
-        outOfOrderFrameCount = 0;
-        bufferedOutOfOrderData = 0;
-        contiguousFrames.clear();
-        contiguousFramesRemoved = contiguousFramesAdded;
-        openChunk = null;
+        purgeAllData();
     }
 
     @Override
@@ -680,6 +675,15 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // beyond the offset, read() never returns data beyond it, and the status methods cap their result at it.
         // The offset can only decrease (a reset can only lower the reliable size, never raise it).
         discardBeyondOffset = Long.min(discardBeyondOffset, offset);
+    }
+
+    private void purgeAllData() {
+        outOfOrderFrames.clear();
+        outOfOrderFrameCount = 0;
+        bufferedOutOfOrderData = 0;
+        contiguousFrames.clear();
+        contiguousFramesRemoved = contiguousFramesAdded;  // atomic operation, added - removed can never be negative
+        openChunk = null;
     }
 
     private static class SimpleStreamElement implements StreamElement {

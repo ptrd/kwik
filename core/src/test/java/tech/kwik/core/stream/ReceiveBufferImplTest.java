@@ -538,6 +538,24 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenAllDataUpToDiscardOffsetIsReadThenFrameStraddlingDiscardOffsetIsRemoved() throws Exception {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.discardDataBeyond(400);   // discard offset is larger than read offset (0)
+
+        // When
+        int bytesRead = receiveBuffer.read(ByteBuffer.allocate(1000));
+        int readResult = receiveBuffer.read(ByteBuffer.allocate(1000));
+
+        // Then
+        assertThat(bytesRead).isEqualTo(400);
+        assertThat(readResult).isEqualTo(-1);
+        // The frame (0..999) is only read up to the discard offset (400), but as nothing beyond it will ever be read,
+        // it should be removed, just like a frame that is read up to its end.
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
     void whenDiscardDataBeyondIsNotCalledAllDataRemainsAvailable() throws Exception {
         // Given
         receiveBuffer.add(new DataFrame(0, 1000));
