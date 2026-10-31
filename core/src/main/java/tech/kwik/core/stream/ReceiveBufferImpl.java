@@ -243,6 +243,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
             if (frame.isFinal()) {
                 streamEndOffset = frame.getUpToOffset();
+                if (readUpToOffset == streamEndOffset) {
+                    // All data data read already
+                    purgeAllData();
+                }
             }
             if (frame.getLength() == 0) {
                 return false;

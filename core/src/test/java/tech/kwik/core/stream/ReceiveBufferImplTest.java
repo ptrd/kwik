@@ -1002,6 +1002,38 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenEmptyFinalFrameIsReceivedAfterAllDataInChunkIsReadNoMemoryIsUsedWithoutReadingAgain() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 10));
+        checkAllDataCanBeRead(buffer, offset + 10);
+
+        // When
+        buffer.add(new DataFrame(offset + 10, 0, true));
+
+        // Then
+        assertThat(buffer.allRead()).isTrue();
+        assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
+    void whenDuplicateFinalFrameIsReceivedAfterAllDataInChunkIsReadNoMemoryIsUsedWithoutReadingAgain() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        int offset = fillWithSmallFramesUntilCompacting(buffer);
+        buffer.add(new DataFrame(offset, 10));
+        checkAllDataCanBeRead(buffer, offset + 10);
+
+        // When  (retransmission of already read data, now with fin bit)
+        buffer.add(new DataFrame(offset, 10, true));
+
+        // Then
+        assertThat(buffer.allRead()).isTrue();
+        assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
     void whenDataIsDiscardedBeyondOffsetInChunkOnlyDataBeforeOffsetIsRead() throws Exception {
         // Given
         ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
