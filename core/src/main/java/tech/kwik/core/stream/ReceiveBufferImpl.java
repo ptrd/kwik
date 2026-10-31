@@ -278,12 +278,18 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     appendContiguous(nextFrame);
                 }
             }
+            if (discarded) {
+                // discardAllData may have run concurrently, after which this method could have added data to the
+                // (just cleared) buffers; as no data will ever be read anymore, release it.
+                purgeAllData();
+                return false;
+            }
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-21.7
             // "QUIC deployments SHOULD provide mitigations for stream fragmentation attacks. Mitigations could consist of
             //  (...) limiting the size of tracking data structures, (...)"
             // As contiguous frames are compacted when the overhead is high, this limit can only be exceeded by out-of-order
             // frames that cannot be combined (e.g. small frames with gaps in between).
-            if (!discarded && estimatedMemoryUsage() > maxMemoryUsage) {
+            if (estimatedMemoryUsage() > maxMemoryUsage) {
                 throw new TransportError(INTERNAL_ERROR, "excessive memory use by stream data fragmentation");
             }
             return contiguousUpToOffset > previousContiguousUpToOffset;
@@ -297,6 +303,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             // been called, it doesn't matter whether the add method fails or not. It should just not throw an exception
             // in that case.
             if (discarded) {
+                purgeAllData();
                 return false;
             }
             else {
