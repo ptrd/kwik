@@ -743,6 +743,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             long currentOverhead = discarded? 0: estimatedOverhead();
             long previousOverhead = reportedOverhead.getAndSet(currentOverhead);
             connectionMemoryBudget.update(currentOverhead - previousOverhead);
+            if (discarded) {
+                // All data was purged concurrently (after which the purge reported zero), so the overhead reported
+                // above may be outdated: report zero again.
+                connectionMemoryBudget.update(-reportedOverhead.getAndSet(0));
+            }
         }
     }
 
