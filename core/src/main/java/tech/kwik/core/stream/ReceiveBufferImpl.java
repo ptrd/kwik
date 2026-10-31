@@ -234,6 +234,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     @Override
     public boolean add(StreamElement frame) throws TransportError {
         try {
+            if (discardBeyondOffset != Long.MAX_VALUE) {
+                dropOutOfOrderFramesBeyondDiscardOffset();
+            }
+
             if (frame.isFinal()) {
                 streamEndOffset = frame.getUpToOffset();
             }
@@ -347,6 +351,19 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // The contiguous offset never advances beyond the discard offset, so that the status methods
         // (e.g. bytesAvailable) do not account for data that will never be read.
         contiguousUpToOffset = Long.min(frame.getUpToOffset(), discardBeyondOffset);
+    }
+
+    /**
+     * Removes the out-of-order frames that start at or beyond the discard offset, as their data will never be read.
+     * Must only be called by the producer (as it modifies the out-of-order frames).
+     */
+    private void dropOutOfOrderFramesBeyondDiscardOffset() {
+        long discardOffset = discardBeyondOffset;
+        while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.last().getOffset() >= discardOffset) {
+            StreamElement droppedFrame = outOfOrderFrames.pollLast();
+            outOfOrderFrameCount--;
+            bufferedOutOfOrderData -= droppedFrame.getLength();
+        }
     }
 
     public long bufferedOutOfOrderData() {
@@ -672,7 +689,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // (which is owned by the producer/add thread) nor modify the buffered frames (outOfOrderFrames,
         // contiguousFrames), as that would break the lock-free producer/consumer cooperation this class relies on (see
         // class javadoc). Instead, data beyond the offset is handled lazily: add() drops frames that fall entirely
-        // beyond the offset, read() never returns data beyond it, and the status methods cap their result at it.
+        // beyond the offset (both new and buffered out-of-order frames), read() never returns data beyond it, and the
+        // status methods cap their result at it.
         // The offset can only decrease (a reset can only lower the reliable size, never raise it).
         discardBeyondOffset = Long.min(discardBeyondOffset, offset);
     }

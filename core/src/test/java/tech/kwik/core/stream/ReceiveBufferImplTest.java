@@ -1208,6 +1208,28 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(buffer.estimatedMemoryUsage()).isEqualTo(0);
     }
+
+    @Test
+    void framesBeyondDiscardOffsetDoNotCountForMemoryLimit() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        long maxMemoryUsage = ReceiveBufferImpl.MAX_MEMORY_FACTOR * SMALL_BUFFER_SIZE;
+        // Fill the buffer with small frames with gaps, up to just below the memory limit
+        long offset = SMALL_BUFFER_SIZE / 2 + 1;
+        while (buffer.estimatedMemoryUsage() + 1 + ReceiveBufferImpl.FRAME_OVERHEAD <= maxMemoryUsage) {
+            buffer.add(new DataFrame(offset, 1));
+            offset += 2;
+        }
+        buffer.discardDataBeyond(SMALL_BUFFER_SIZE / 10);
+
+        // When
+        for (int i = 0; i < 100; i++) {
+            buffer.add(new DataFrame(2 * i + 1, 1));
+        }
+
+        // Then
+        assertThat(buffer.estimatedMemoryUsage()).isLessThanOrEqualTo(100 * (1 + ReceiveBufferImpl.FRAME_OVERHEAD));
+    }
     // endregion
 
     // region memory management
