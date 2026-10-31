@@ -407,10 +407,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      */
     private void dropOutOfOrderFramesBeyondDiscardOffset() {
         long discardOffset = discardBeyondOffset;
+        boolean dropped = false;
         while (!outOfOrderFrames.isEmpty() && outOfOrderFrames.last().getOffset() >= discardOffset) {
             StreamElement droppedFrame = outOfOrderFrames.pollLast();
             outOfOrderFrameCount--;
             bufferedOutOfOrderData -= droppedFrame.getLength();
+            dropped = true;
+        }
+        if (dropped) {
+            // Report here, as add might return (without reporting) before it adds anything.
+            reportOverhead();
         }
     }
 

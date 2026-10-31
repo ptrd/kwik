@@ -1435,6 +1435,25 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenOutOfOrderFramesBeyondDiscardOffsetAreDroppedConnectionMemoryBudgetIsUpdated() throws Exception {
+        // Given
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(SMALL_BUFFER_SIZE);
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE, budget);
+        buffer.add(new DataFrame(200, 100));
+        buffer.add(new DataFrame(400, 100));
+        buffer.discardDataBeyond(300);
+
+        // When
+        // Frames beyond the discard offset are dropped when the next frame is added, even when that frame itself is
+        // dropped too (because it is beyond the discard offset).
+        buffer.add(new DataFrame(500, 100));
+
+        // Then
+        assertThat(buffer.estimatedOverhead()).isEqualTo(ReceiveBufferImpl.FRAME_OVERHEAD);
+        assertThat(budget.getOverhead()).isEqualTo(ReceiveBufferImpl.FRAME_OVERHEAD);
+    }
+
+    @Test
     void whenSmallInOrderFramesAreSpreadOverManyBuffersFramesAreCompactedBeforeConnectionMemoryBudgetIsExceeded() throws Exception {
         // Given
         int streamBufferSize = 100_000;
