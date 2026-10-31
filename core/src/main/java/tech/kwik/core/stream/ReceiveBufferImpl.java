@@ -443,9 +443,13 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * out-of-order frames are combined.
      * Compacting starts at half the overhead budget, so that the overhead of the frames buffered before compacting
      * started, plus the overhead of the chunks, stays within the budget.
+     * The same holds for the connection memory budget: without compacting when the overhead of all buffers together
+     * is high, in-order traffic with small frames on many streams would exceed the connection budget before any of
+     * the buffers would start compacting.
      */
     boolean overheadIsHigh() {
-        return estimatedOverhead() > maxOverhead / 2;
+        return estimatedOverhead() > maxOverhead / 2
+                || connectionMemoryBudget != null && connectionMemoryBudget.overheadIsHigh();
     }
 
     /**

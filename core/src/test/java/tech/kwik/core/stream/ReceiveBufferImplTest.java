@@ -1435,6 +1435,35 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenSmallInOrderFramesAreSpreadOverManyBuffersFramesAreCompactedBeforeConnectionMemoryBudgetIsExceeded() throws Exception {
+        // Given
+        int streamBufferSize = 100_000;
+        int connectionBufferSize = 200_000;
+        ConnectionMemoryBudget budget = createConnectionMemoryBudget(connectionBufferSize);
+        List<ReceiveBufferImpl> buffers = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            buffers.add(new ReceiveBufferImpl(streamBufferSize, MAX_COMBINED_FRAME_SIZE, budget));
+        }
+
+        // When
+        // Fill the connection buffer (i.e. use all connection flow control credit) with 1-byte frames, spread evenly
+        // over the buffers, so that none of the buffers gets enough overhead to start compacting on its own.
+        int framesPerBuffer = connectionBufferSize / buffers.size();
+        for (int i = 0; i < framesPerBuffer; i++) {
+            for (ReceiveBufferImpl buffer : buffers) {
+                buffer.add(new DataFrame(i, 1));
+            }
+        }
+
+        // Then
+        long maxOverhead = (ReceiveBufferImpl.MAX_MEMORY_FACTOR - 1) * connectionBufferSize;
+        assertThat(budget.getOverhead()).isLessThan(maxOverhead);
+        for (ReceiveBufferImpl buffer : buffers) {
+            checkAllDataCanBeRead(buffer, framesPerBuffer);
+        }
+    }
+
+    @Test
     void whenSmallFramesWithGapsAreSpreadOverManyBuffersTransportErrorIsThrown() throws Exception {
         // Given
         int connectionBufferSize = SMALL_BUFFER_SIZE;
