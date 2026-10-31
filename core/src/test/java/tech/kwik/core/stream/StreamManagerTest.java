@@ -55,9 +55,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.FLOW_CONTROL_ERROR;
-import static tech.kwik.core.QuicConstants.TransportErrorCode.STREAM_LIMIT_ERROR;
+import static tech.kwik.core.QuicConstants.TransportErrorCode.*;
 
 class StreamManagerTest {
 
@@ -775,6 +773,62 @@ class StreamManagerTest {
                 streamManager.process(new StreamFrame(1, 9L, new byte[1], false)))
                 .isInstanceOf(TransportError.class)
                 .extracting("errorCode").isEqualTo(FLOW_CONTROL_ERROR);
+    }
+    //endregion
+
+    //region memory limit
+    @Test
+    void shouldThrowTransportErrorWhenMemoryUsageOfAllStreamsTogetherExceedsLimit() throws Exception {
+        // Given: small frames with gaps spread over a few streams, each stream staying far below its own memory limit
+        int[] streamIds = { 1, 5, 9, 13 };  // peer initiated (as role is client) bidirectional streams
+        long maxOverhead = (ReceiveBufferImpl.MAX_MEMORY_FACTOR - 1) * defaultConfig.maxConnectionBufferSize();
+        int frameCount = 0;
+        while ((frameCount + 1) * ReceiveBufferImpl.FRAME_OVERHEAD <= maxOverhead) {
+            streamManager.process(smallFrameWithGap(frameCount, streamIds));
+            frameCount++;
+        }
+        StreamFrame frameExceedingLimit = smallFrameWithGap(frameCount, streamIds);
+
+        assertThatThrownBy(() ->
+                // When
+                streamManager.process(frameExceedingLimit))
+                // Then
+                .isInstanceOf(TransportError.class)
+                .extracting("errorCode").isEqualTo(INTERNAL_ERROR);
+    }
+
+    @Test
+    void memoryUsedByClosedStreamDoesNotCountForConnectionMemoryLimit() throws Exception {
+        // Given
+        Map<Integer, QuicStream> openStreams = new HashMap<>();
+        streamManager.setPeerInitiatedStreamCallback(stream -> openStreams.put(stream.getStreamId(), stream));
+        long maxOverhead = (ReceiveBufferImpl.MAX_MEMORY_FACTOR - 1) * defaultConfig.maxConnectionBufferSize();
+        // Enough frames to use two thirds of the connection overhead limit
+        int frameCount = (int) (maxOverhead * 2 / 3 / ReceiveBufferImpl.FRAME_OVERHEAD);
+        for (int i = 0; i < frameCount; i++) {
+            streamManager.process(smallFrameWithGap(i, new int[] { 1 }));
+        }
+        callbackExecutor.clockAdvanced();
+
+        // When
+        openStreams.get(1).getInputStream().close();
+
+        // Then
+        assertThatCode(() -> {
+            for (int i = 0; i < frameCount; i++) {
+                streamManager.process(smallFrameWithGap(i, new int[] { 5 }));
+            }
+        }).doesNotThrowAnyException();
+    }
+
+    /**
+     * Creates a stream frame with 1 byte of data for one of the given streams: consecutive frames are spread over the
+     * streams and frames for the same stream have a gap in between, so they cannot be combined.
+     */
+    private StreamFrame smallFrameWithGap(int frameNumber, int[] streamIds) {
+        int streamId = streamIds[frameNumber % streamIds.length];
+        long offset = 2L * (frameNumber / streamIds.length) + 1;
+        return new StreamFrame(streamId, offset, new byte[1], false);
     }
     //endregion
 
