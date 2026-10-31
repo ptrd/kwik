@@ -585,6 +585,23 @@ class ReceiveBufferImplTest {
     }
 
     @Test
+    void whenReadExactlyUpToDiscardOffsetNoMemoryIsUsedAnymore() throws Exception {
+        // Given
+        receiveBuffer.add(new DataFrame(0, 1000));
+        receiveBuffer.add(new DataFrame(1000, 1000));
+        receiveBuffer.add(new DataFrame(2000, 1000));
+        receiveBuffer.discardDataBeyond(500);
+
+        // When
+        int bytesRead = receiveBuffer.read(ByteBuffer.allocate(500));
+
+        // Then
+        assertThat(bytesRead).isEqualTo(500);
+        assertThat(receiveBuffer.allRead()).isTrue();
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
     void outOfOrderFrameStraddlingDiscardOffsetOnlyBuffersDataUpToDiscardOffset() throws Exception {
         // Given
         receiveBuffer.discardDataBeyond(1000);

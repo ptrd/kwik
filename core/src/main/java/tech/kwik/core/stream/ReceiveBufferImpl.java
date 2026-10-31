@@ -189,7 +189,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             // Long.MAX_VALUE when discardDataBeyond was not called).
             long discardOffset = discardBeyondOffset;
             if (readUpToOffset >= discardOffset) {
-                purgeAllData();
                 break;
             }
             // Never return data at or beyond the discard offset, nor beyond the contiguous offset, as the frame can be a
@@ -215,8 +214,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 purgeAllData();
                 break;
             }
-
         }
+
+        if (readUpToOffset >= discardBeyondOffset) {
+            purgeAllData();
+        }
+
         return totalBytesRead;
     }
 
