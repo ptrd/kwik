@@ -583,6 +583,18 @@ class ReceiveBufferImplTest {
         checkData(buffer);
         assertThat(receiveBuffer.allRead()).isTrue();
     }
+
+    @Test
+    void outOfOrderFrameStraddlingDiscardOffsetOnlyBuffersDataUpToDiscardOffset() throws Exception {
+        // Given
+        receiveBuffer.discardDataBeyond(1000);
+
+        // When
+        receiveBuffer.add(new DataFrame(500, 1200));
+
+        // Then
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(500);
+    }
     // endregion
 
     // region out-of-order data measurement

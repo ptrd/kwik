@@ -248,6 +248,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 // All data of this frame is at or beyond the discard offset, so it will never be read: drop it.
                 return false;
             }
+            if (frame.getUpToOffset() >= discardBeyondOffset) {
+                frame = shrinkFrame(frame, frame.getOffset(), discardBeyondOffset);
+            }
 
             long previousContiguousUpToOffset = contiguousUpToOffset;
             // Add frame directly to contiguous collection if it is contiguous, add to out of order collection otherwise.
