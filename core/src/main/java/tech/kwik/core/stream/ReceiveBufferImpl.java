@@ -279,8 +279,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 }
             }
             if (discarded) {
-                // discardAllData may have run concurrently, after which this method could have added data to the
-                // (just cleared) buffers; as no data will ever be read anymore, release it.
+                // All data may have been purged concurrently (by read or discardAllData), after which this method could
+                // have added data to the (just cleared) buffers; as no data will ever be read anymore, release it.
                 purgeAllData();
                 return false;
             }
@@ -296,12 +296,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
         catch (Exception e) {
             // Because the add method is the only method making modifications to the outOfOrderFrames, race conditions
-            // will not occur. However, there is one exception: the discardAllData method. Concurrent call to this method
-            // can cause a race condition, which can lead to various runtime exceptions in the code block wrapped by this
-            // try-catch (e.g. NoSuchElementException, NullPointerException, etc.). Preventing them would require either
-            // a lock or a lot of additional and ugly code, while not needed because when the discardAllData method has
-            // been called, it doesn't matter whether the add method fails or not. It should just not throw an exception
-            // in that case.
+            // will not occur. However, there is one exception: the purgeAllData method (called by read and
+            // discardAllData). Concurrent call to this method can cause a race condition, which can lead to various
+            // runtime exceptions in the code block wrapped by this try-catch (e.g. NoSuchElementException,
+            // NullPointerException, etc.). Preventing them would require either a lock or a lot of additional and ugly
+            // code, while not needed because when the purgeAllData method has been called, it doesn't matter whether
+            // the add method fails or not. It should just not throw an exception in that case.
             if (discarded) {
                 purgeAllData();
                 return false;
@@ -693,9 +693,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // Discarding all data is equivalent to discarding everything from offset 0 onward: no data will ever be read
         // anymore.
         discardBeyondOffset = 0;
-        // The discarded flag remains needed to make add() tolerate the races caused by clearing the buffers below while
-        // another thread may be adding (see the catch block in add()).
-        discarded = true;
         purgeAllData();
     }
 
@@ -713,6 +710,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     private void purgeAllData() {
+        // Only called when no data will ever be read anymore. As this method can run concurrently with add (when called
+        // by read or discardAllData), it first sets the discarded flag, which makes add() tolerate the races caused by
+        // clearing the buffers below (see the catch block in add()).
+        discarded = true;
         outOfOrderFrames.clear();
         outOfOrderFrameCount = 0;
         bufferedOutOfOrderData = 0;
