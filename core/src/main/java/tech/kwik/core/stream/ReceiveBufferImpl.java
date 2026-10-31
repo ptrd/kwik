@@ -237,7 +237,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     @Override
     public boolean add(StreamElement frame) throws TransportError {
         try {
-            if (discardBeyondOffset != Long.MAX_VALUE) {
+            // Read the volatile discard offset once, as discardAllData or discardDataBeyond may run on another thread:
+            // when lowered between the checks below, the frame could be shrunk to end before its start.
+            long discardOffset = discardBeyondOffset;
+            if (discardOffset != Long.MAX_VALUE) {
                 dropOutOfOrderFramesBeyondDiscardOffset();
             }
 
@@ -251,12 +254,12 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             if (frame.getLength() == 0) {
                 return false;
             }
-            if (frame.getOffset() >= discardBeyondOffset) {
+            if (frame.getOffset() >= discardOffset) {
                 // All data of this frame is at or beyond the discard offset, so it will never be read: drop it.
                 return false;
             }
-            if (frame.getUpToOffset() >= discardBeyondOffset) {
-                frame = shrinkFrame(frame, frame.getOffset(), discardBeyondOffset);
+            if (frame.getUpToOffset() >= discardOffset) {
+                frame = shrinkFrame(frame, frame.getOffset(), discardOffset);
             }
 
             long previousContiguousUpToOffset = contiguousUpToOffset;
