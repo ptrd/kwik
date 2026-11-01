@@ -302,7 +302,9 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                     if (nextFrame.getOffset() < contiguousUpToOffset) {
                         nextFrame = shrinkFrame(nextFrame, contiguousUpToOffset, nextFrame.getUpToOffset());
                     }
-                    appendContiguous(nextFrame);
+                    // Moving a frame does not change the overhead, so compacting it would not help to stay within the
+                    // limit, while its data is likely to be read soon.
+                    appendContiguous(nextFrame, false);
                 }
             }
             if (discarded) {
@@ -352,7 +354,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private boolean addContiguous(StreamElement frame) {
         if (frame.getOffset() == contiguousUpToOffset) {
             // Frame is exactly the next contiguous frame: add it to the contiguous queue and update the offset.
-            appendContiguous(frame);
+            appendContiguous(frame, true);
             return true;
         }
         else {
@@ -365,8 +367,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * offset. When the overhead is high, small frames are not added as separate frames, but their data is copied into a
      * chunk, to limit the memory overhead of many small frames.
      * @param frame  the frame to append, which must start at the contiguous offset
+     * @param allowCompaction  whether a new chunk may be started for the frame (when overhead is high); an open chunk is
+     *                         always filled first, regardless of this flag, as no frame can be added after it before it
+     *                         is full
      */
-    private void appendContiguous(StreamElement frame) {
+    private void appendContiguous(StreamElement frame, boolean allowCompaction) {
         assert frame.getOffset() == contiguousUpToOffset;
         int bytesConsumedFromFrame = 0;
         if (openChunk != null) {
@@ -379,7 +384,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
         int remainingBytesInFrame = frame.getLength() - bytesConsumedFromFrame;
         if (remainingBytesInFrame > 0) {
-            if (remainingBytesInFrame < chunkCapacity && overheadIsHigh()) {
+            if (allowCompaction && remainingBytesInFrame < chunkCapacity && overheadIsHigh()) {
                 ChunkStreamElement chunk = new ChunkStreamElement(frame.getOffset() + bytesConsumedFromFrame, chunkCapacity);
                 int appended = chunk.append(frame, bytesConsumedFromFrame);
                 assert appended == remainingBytesInFrame;
@@ -388,7 +393,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 openChunk = chunk;
             }
             else {
-                // overhead is not high or remaining is larger than what fits in a chunk: add the (shrunk) frame
+                // compaction not allowed, overhead is not high or remaining is larger than what fits in a chunk: add the
+                // (shrunk) frame
                 contiguousFrames.add(bytesConsumedFromFrame == 0?
                         frame:
                         shrinkFrame(frame, frame.getOffset() + bytesConsumedFromFrame, frame.getUpToOffset()));
