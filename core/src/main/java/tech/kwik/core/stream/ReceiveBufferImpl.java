@@ -65,7 +65,7 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
  * Scenarios that do not lead to too much memory overhead:
  * <ul>
  *   <li>in-order frames of any size that are read by the application while they arrive: usage stays (close to) 0</li>
- *   <li>in-order frames of 1 byte (or 10 bytes), never read: about 1.5 times the buffer size, as small contiguous
+ *   <li>in-order frames of 1 byte (or 10 bytes), never read: about 1.55 times the buffer size, as small contiguous
  *   frames are compacted into chunks when the overhead is high</li>
  *   <li>in-order frames of 1200 bytes (typical for full packets): about 1.1 times the buffer size</li>
  *   <li>out-of-order frames of 1200 bytes, with every other frame lost: about 0.5 times the buffer size</li>
@@ -109,6 +109,14 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * overhead stays well within the budget; copying their data would cost more than it would gain.
      */
     static final int COMPACTION_THRESHOLD = 4 * FRAME_OVERHEAD;
+    /**
+     * Capacity of the chunks that small contiguous frames are compacted into. A chunk must be filled completely before
+     * another frame can be added after it, so frames that follow a partly filled chunk are (partly) copied into it, even
+     * when they are large: the smaller the chunk, the less data is copied. On the other hand, the chunk must be large
+     * compared to the frames that are compacted, for compaction to substantially reduce the overhead (which is at most
+     * 1/16 of the data for a chunk of this size).
+     */
+    static final int CHUNK_SIZE = 4 * COMPACTION_THRESHOLD;
     // Maximum memory a receive buffer may use, expressed as a multiple of the buffer size.
     static final int MAX_MEMORY_FACTOR = 2;
 
@@ -181,7 +189,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // As the amount of buffered data never exceeds the buffer size, the remainder is available for overhead.
         this.maxOverhead = maxMemoryUsage - bufferSize;
         // Chunks must be small enough for the unused capacity of a chunk to stay well within the overhead budget.
-        this.chunkCapacity = (int) Long.max(1, Long.min(maxCombinedFrameSize, maxOverhead / 4));
+        this.chunkCapacity = (int) Long.max(1, Long.min(CHUNK_SIZE, maxOverhead / 4));
     }
 
     @Override

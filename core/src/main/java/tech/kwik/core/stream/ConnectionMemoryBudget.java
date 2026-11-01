@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * grows by the chunks: per buffer at most one partly filled chunk (whose unused capacity counts as overhead) plus the
  * per-frame overhead of each chunk. Hence, in-order traffic stays within the budget as long as the number of streams
  * times the chunk size is well below half the maximum overhead. For the default server configuration (110 streams,
- * 10 MB connection buffer size) that is about 0.6 MB compared to 5 MB: in-order traffic with 1 to 100 byte frames
- * that uses all connection flow control credit results in about 5.2 to 5.6 MB overhead, whereas small out-of-order
+ * 10 MB connection buffer size) that is about 0.2 MB compared to 5 MB: in-order traffic with 1 to 100 byte frames
+ * that uses all connection flow control credit results in about 5.4 to 5.8 MB overhead, whereas small out-of-order
  * frames with gaps in between are stopped when the overhead reaches the maximum of 10 MB.
  * <p>
  * Thread-safe, as receive buffers update the overhead from both the receiver thread and application (reader) threads.
