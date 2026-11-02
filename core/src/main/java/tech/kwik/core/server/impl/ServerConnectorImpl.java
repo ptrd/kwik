@@ -18,6 +18,8 @@
  */
 package tech.kwik.core.server.impl;
 
+import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.KeyExchangeFactory;
 import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.QuicConstants;
@@ -57,9 +59,11 @@ import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -122,14 +126,14 @@ public class ServerConnectorImpl implements ServerConnector {
     }
 
     private ServerConnectorImpl(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, log);
+        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, List.of(), log);
     }
 
     private ServerConnectorImpl(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, String ecCurve, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, log);
+        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, List.of(), log);
     }
 
-    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) {
+    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups, Logger log) {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
@@ -141,7 +145,7 @@ public class ServerConnectorImpl implements ServerConnector {
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
         serverConnectionFactory = new ServerConnectionFactory(serverSocket, tlsEngineFactory,
-                configuration, applicationProtocolRegistry, connectionRegistry, this::closed, log);
+                configuration, supportedGroups, applicationProtocolRegistry, connectionRegistry, this::closed, log);
 
         supportedVersionIds = supportedVersions.stream()
                 .map(Version::of)
@@ -523,6 +527,7 @@ public class ServerConnectorImpl implements ServerConnector {
         private String certificateAlias;
         private char[] privateKeyPassword;
         private String ecCurve;
+        private List<TlsConstants.NamedGroup> supportedGroups = List.of();
 
         @Override
         public ServerConnector.Builder withPort(int port) {
@@ -589,6 +594,19 @@ public class ServerConnectorImpl implements ServerConnector {
         }
 
         @Override
+        public ServerConnector.Builder withSupportedGroups(List<TlsConstants.NamedGroup> namedGroups) {
+            // The TLS engine treats an empty list as "accept all groups", which must not happen by accident.
+            if (namedGroups.isEmpty()) {
+                throw new IllegalArgumentException("Supported groups must not be empty");
+            }
+            if (namedGroups.stream().distinct().count() != namedGroups.size()) {
+                throw new IllegalArgumentException("Duplicate supported group(s): " + namedGroups);
+            }
+            supportedGroups = List.copyOf(namedGroups);
+            return this;
+        }
+
+        @Override
         public ServerConnector.Builder withLogger(Logger log) {
             this.log = log;
             return this;
@@ -602,6 +620,7 @@ public class ServerConnectorImpl implements ServerConnector {
             if (certificateFile == null && keyStore == null) {
                 throw new IllegalStateException("server certificate not set");
             }
+            checkSupportedGroupsAvailable();
 
             if (socket == null) {
                 socket = new DatagramSocket(port);
@@ -615,7 +634,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 else {
                     tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
                 }
-                return new ServerConnectorImpl(socket, tlsEngineFactory, supportedVersions, configuration, log);
+                return new ServerConnectorImpl(socket, tlsEngineFactory, supportedVersions, configuration, supportedGroups, log);
             }
             catch (IOException e) {
                 // Impossible, exception is never thrown by TlsServerEngineFactory constructor.
@@ -624,6 +643,28 @@ public class ServerConnectorImpl implements ServerConnector {
             catch (InvalidKeySpecException e) {
                 // Impossible, exception is never thrown by TlsServerEngineFactory constructor.
                 throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * Checks that a key exchange is available for all configured groups. The TLS engine silently ignores groups
+         * that are not available, so without this check a server restricted to such groups would start normally and
+         * then fail every handshake.
+         */
+        private void checkSupportedGroupsAvailable() {
+            if (supportedGroups.isEmpty()) {
+                return;
+            }
+            Set<TlsConstants.NamedGroup> available = new HashSet<>();
+            for (KeyExchangeFactory factory : ServiceLoader.load(KeyExchangeFactory.class)) {
+                available.addAll(factory.getSupportedGroups());
+            }
+            List<TlsConstants.NamedGroup> missing = supportedGroups.stream()
+                    .filter(group -> !available.contains(group))
+                    .collect(Collectors.toList());
+            if (!missing.isEmpty()) {
+                throw new IllegalArgumentException("Named group(s) not available: " + missing
+                        + " (post-quantum hybrid groups require the agent15-pqc artifact and Java 25 or later)");
             }
         }
     }

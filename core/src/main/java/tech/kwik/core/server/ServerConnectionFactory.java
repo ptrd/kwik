@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server;
 
+import tech.kwik.agent15.TlsConstants;
 import tech.kwik.agent15.engine.TlsServerEngineFactory;
 import tech.kwik.core.crypto.CryptoStream;
 import tech.kwik.core.impl.Version;
@@ -49,9 +50,21 @@ public class ServerConnectionFactory {
     private final Consumer<ServerConnectionImpl> closeCallback;
     private final ServerConnectionRegistry connectionRegistry;
     private final ServerConnectionConfig configuration;
+    private final List<TlsConstants.NamedGroup> supportedGroups;
 
     public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
                                    ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                   ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
+    {
+        this(serverSocket, tlsServerEngineFactory, configuration, List.of(), applicationProtocolRegistry, connectionRegistry, closeCallback, log);
+    }
+
+    /**
+     * @param supportedGroups  the named groups accepted for key exchange; when empty, all available groups are accepted
+     */
+    public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
+                                   ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups,
+                                   ApplicationProtocolRegistry applicationProtocolRegistry,
                                    ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
     {
         if (configuration.connectionIdLength() > MAXIMUM_CONNECTION_ID_LENGTH || configuration.connectionIdLength() < MINIMUM_CONNECTION_ID_LENGTH) {
@@ -59,6 +72,7 @@ public class ServerConnectionFactory {
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
         this.configuration = configuration;
+        this.supportedGroups = supportedGroups;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.connectionRegistry = connectionRegistry;
         this.closeCallback = closeCallback;
@@ -79,7 +93,7 @@ public class ServerConnectionFactory {
      */
     public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream) {
         ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, retryScid, cryptoStream,
-                tlsServerEngineFactory, configuration, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
+                tlsServerEngineFactory, configuration, supportedGroups, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
 
         log.info("Creating new connection with version " + version + " for odcid " + Bytes.bytesToHex(originalDcid)
                 + " with " + clientAddress.getAddress().getHostAddress() + ": " + Bytes.bytesToHex(connection.getInitialConnectionId()));
