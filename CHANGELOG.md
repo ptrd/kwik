@@ -1,5 +1,10 @@
 # Releases
 
+## Unreleased
+
+- server: added `ServerConnector.Builder.withSupportedGroups` to restrict the TLS named groups accepted for key exchange,
+  which makes it possible to enforce a post-quantum key exchange on the server side
+
 ## 0.12.1 (2026-10-18)
 
 - server retry is now handled statelessly (before a connection is created), using encrypted retry tokens

@@ -18,6 +18,7 @@
  */
 package tech.kwik.core.server;
 
+import tech.kwik.agent15.TlsConstants;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.server.impl.ServerConnectorImpl;
@@ -91,12 +92,30 @@ public interface ServerConnector extends AutoCloseable {
 
         Builder withConfiguration(ServerConnectionConfig configuration);
 
+        /**
+         * Restricts the TLS named groups this server accepts for key exchange. A client that offers none of these groups
+         * fails the handshake. If this method is not called, all available groups are accepted.
+         * <p>
+         * The list is a set of acceptable groups, not an order of preference: the server selects the first key share of
+         * the client that is in the list. So, to enforce a post-quantum key exchange, the list must contain post-quantum
+         * groups only; with {@code X25519MLKEM768, x25519}, a client preferring {@code x25519} gets a classical exchange.
+         * <p>
+         * The post-quantum hybrid groups are provided by the {@code tech.kwik:agent15-pqc} artifact, which must be
+         * present at runtime and requires Java 25 or later.
+         * Calling this method more than once replaces the groups set by the previous call.
+         * @param namedGroups  the named groups to accept, must not be empty
+         * @return  the builder
+         * @throws IllegalArgumentException  if the list is empty or contains duplicates
+         */
+        Builder withSupportedGroups(List<TlsConstants.NamedGroup> namedGroups);
+
         Builder withLogger(Logger log);
 
         /**
          * Builds the server connector.
          * @return
          * @throws SocketException       if the connector could not create a DatagramSocket or could not bind it to the given port
+         * @throws IllegalArgumentException  if a group set with {@link #withSupportedGroups(List)} is not available at runtime
          * @throws CertificateException  if the certificate's signature algorithm is not supported, or the EC-curve cannot be determined.
          * In the latter case, use the
          * {@link #withKeyStore(KeyStore keyStore, String certificateAlias, char[] privateKeyPassword, String ecCurve)}

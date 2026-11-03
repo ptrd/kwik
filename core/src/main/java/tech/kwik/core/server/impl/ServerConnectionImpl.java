@@ -116,6 +116,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param cryptoStream                stream containing already received crypto data for encryption level Initial
      * @param tlsServerEngineFactory      factory for creating tls engine
      * @param configuration               connection configuration settings
+     * @param supportedGroups             the supported groups for this connection
      * @param applicationProtocolRegistry the registry for application protocols this server supports
      * @param connectionRegistry          the registry for server connections
      * @param closeCallback               callback for notifying interested parties this connection is closed
@@ -123,7 +124,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      */
     public ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                 byte[] peerCid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream, TlsServerEngineFactory tlsServerEngineFactory,
-                                ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups, ApplicationProtocolRegistry applicationProtocolRegistry,
                                 ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
         super(originalVersion, Role.Server, null, configuration, Bytes.bytesToHex(originalDcid), new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
@@ -136,6 +137,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.closeCallback = closeCallback;
 
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
+        tlsEngine.setSupportedGroups(supportedGroups);
         tlsEngine.addSupportedCiphers(List.of(
                 TlsConstants.CipherSuite.TLS_AES_128_GCM_SHA256,
                 TlsConstants.CipherSuite.TLS_AES_256_GCM_SHA384,

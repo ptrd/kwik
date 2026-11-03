@@ -673,7 +673,7 @@ class ServerConnectionImplTest {
 
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid, retryScid, cryptoStream,
-                tlsServerEngineFactory, getDefaultConfiguration(),
+                tlsServerEngineFactory, getDefaultConfiguration(), List.of(),
                 applicationProtocolRegistry, Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);

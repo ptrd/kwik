@@ -229,6 +229,16 @@ just don't set `maxOpenUnidirectionalStreams` as the default is 0, and provide a
             .maxOpenPeerInitiatedBidirectionalStreams(50)  // Mandatory setting to maximize concurrent streams on a connection.
             .build();
 
+By default, the server accepts every TLS named group that is available at runtime, so clients offering only classical
+groups can still connect. To enforce a post-quantum key exchange, add the `tech.kwik:agent15-pqc` artifact (requires
+Java 25 or later) and restrict the server to post-quantum groups:
+
+    builder.withSupportedGroups(List.of(TlsConstants.NamedGroup.X25519MLKEM768));
+
+Clients that do not offer one of these groups then fail the handshake. The list is not an order of preference: the
+client's preference decides among the listed groups, so adding a classical group to the list allows a classical key
+exchange. Building the `ServerConnector` fails if a listed group is not available.
+
 That concludes creating a server. You can find working examples in the
 [sample directory](https://github.com/ptrd/kwik/tree/master/samples/src/main/java/tech/kwik/sample).
 

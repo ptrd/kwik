@@ -4,6 +4,8 @@ module tech.kwik.core {
     requires io.whitfin.siphash;
     requires java.management;
 
+    uses tech.kwik.agent15.engine.KeyExchangeFactory;
+
     exports tech.kwik.core;
     exports tech.kwik.core.concurrent;
     exports tech.kwik.core.generic;
