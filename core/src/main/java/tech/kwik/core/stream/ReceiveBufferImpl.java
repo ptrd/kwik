@@ -627,7 +627,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 frame1.getLength(),
                 (frame2.getLength() - overlap));
 
-        return new SimpleStreamElement(frame1.getOffset(), combinedData, frame1.isFinal() || frame2.isFinal());
+        return new SimpleStreamElement(frame1.getOffset(), combinedData);
     }
 
     static long min(long l1, long l2) {
@@ -674,11 +674,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             }
         }
         assert filledUpToOffset == upToOffset;
-        // Final is a property of the stream end offset, so it only applies when the combined frame ends there. As no
-        // frame contains all others, the last frame is the only frame that can end at the up-to offset.
-        StreamElement lastFrame = frames.get(frames.size() - 1);
-        boolean isFinal = lastFrame.isFinal() && lastFrame.getUpToOffset() == upToOffset;
-        return new SimpleStreamElement(startOffset, combinedData, isFinal);
+        return new SimpleStreamElement(startOffset, combinedData);
     }
 
     private static StreamElement shrinkFrame(StreamElement frame, long newStartOffset, long newUpToOffset) {
@@ -693,7 +689,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
         byte[] limitedData = new byte[newLength];
         System.arraycopy(frame.getStreamData(), (int) (newStartOffset - frame.getOffset()), limitedData, 0, newLength);
-        return new SimpleStreamElement(newStartOffset, limitedData, frame.isFinal() && newUpToOffset == frame.getUpToOffset());
+        return new SimpleStreamElement(newStartOffset, limitedData);
     }
 
 
@@ -813,12 +809,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     private static class SimpleStreamElement implements StreamElement {
         protected final long offset;
         protected final byte[] data;
-        protected final boolean isFinal;
 
-        public SimpleStreamElement(long offset, byte[] data, boolean isFinal) {
+        public SimpleStreamElement(long offset, byte[] data) {
             this.offset = offset;
             this.data = data;
-            this.isFinal = isFinal;
         }
 
         @Override
@@ -843,7 +837,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
 
         @Override
         public boolean isFinal() {
-            return isFinal;
+            throw new UnsupportedOperationException("isFinal() is not supported on SimpleStreamElement");
         }
 
         @Override
@@ -870,7 +864,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         private int filled;
 
         public ChunkStreamElement(long offset, int capacity) {
-            super(offset, new byte[capacity], false);
+            super(offset, new byte[capacity]);
         }
 
         /**

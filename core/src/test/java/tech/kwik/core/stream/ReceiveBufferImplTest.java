@@ -2095,46 +2095,6 @@ class ReceiveBufferImplTest {
     }
 
     @Test
-    void combineListOfFramesKeepsFinalFlag() {
-        // Given
-        DataFrame frame1 = new DataFrame(100, 10);
-        DataFrame frame2 = new DataFrame(110, 10, true);
-
-        // When
-        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 120);
-
-        // Then
-        assertThat(combined.isFinal()).isTrue();
-    }
-
-    @Test
-    void combineListOfFramesIsNotFinalWhenEndOfFinalFrameIsDropped() {
-        // Given
-        DataFrame frame1 = new DataFrame(100, 10);               // 100..109
-        DataFrame frame2 = new DataFrame(110, 10, true);  // 110..119
-
-        // When
-        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame1, frame2), 100, 115);
-
-        // Then
-        assertThat(combined.getLength()).isEqualTo(15);
-        assertThat(combined.isFinal()).isFalse();
-    }
-
-    @Test
-    void combineListOfSingleFinalFrameIsNotFinalWhenEndIsDropped() {
-        // Given
-        DataFrame frame = new DataFrame(100, 100, true);  // 100..199
-
-        // When
-        StreamElement combined = ReceiveBufferImpl.combine(List.of(frame), 100, 150);
-
-        // Then
-        assertThat(combined.getLength()).isEqualTo(50);
-        assertThat(combined.isFinal()).isFalse();
-    }
-
-    @Test
     void whenFragmentedAdjacentFramesArrivingInAscendingOrderAreCombined() throws Exception {
         // When
         for (int offset = 1; offset <= 20000; offset++) {
