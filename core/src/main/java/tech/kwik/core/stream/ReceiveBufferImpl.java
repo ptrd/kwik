@@ -69,8 +69,9 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
  *   frames are compacted into chunks when the overhead is high</li>
  *   <li>in-order frames of 1200 bytes (typical for full packets): about 1.1 times the buffer size</li>
  *   <li>out-of-order frames of 1200 bytes, with every other frame lost: about 0.5 times the buffer size</li>
- *   <li>out-of-order adjacent frames of any size (e.g. 1, 10 or 100 bytes, offsets starting at 1): about 1.5 times the
- *   buffer size, as adjacent out-of-order frames are combined when the overhead is high</li>
+ *   <li>out-of-order adjacent small frames (e.g. 1, 10 or 100 bytes, offsets starting at 1): about 1.5 times the
+ *   buffer size, as adjacent small out-of-order frames are combined when the overhead is high; larger adjacent frames
+ *   (see {@link #COMPACTION_THRESHOLD}) are not combined, as their overhead is at most 25% of the data they contain</li>
  *   <li>out-of-order frames of 95 or 100 bytes with 1 byte gaps: about 1.99 and 1.94 times the buffer size (just
  *   within the limit)</li>
  *   <li>out-of-order frames of 200 bytes with 200 byte gaps: about 0.75 times the buffer size</li>
@@ -479,10 +480,10 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     }
 
     /**
-     * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap (or are adjacent
-     * while the overhead is high, i.e. there are many small frames) and either the combined length does not exceed
-     * the maximum combined frame size or one frame contains the other. Overlapping frames that cannot be combined are
-     * shrunk to remove the overlap; adjacent frames that cannot be combined are left as they are.
+     * Adds an out-of-order frame to the buffer, combining it with existing frames if they overlap (or are adjacent and
+     * both small, while the overhead is high, i.e. there are many small frames) and either the combined length does not
+     * exceed the maximum combined frame size or one frame contains the other. Overlapping frames that cannot be combined
+     * are shrunk to remove the overlap; adjacent frames that cannot be combined are left as they are.
      * @param frame  the frame to add
      */
     private void addOutOfOrder(StreamElement frame) {
@@ -490,7 +491,8 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // otherwise, if the new frame is combined with frames after it, the existing frame would remain.
         StreamElement before = outOfOrderFrames.floor(frame);
         StreamElement combinedWithBefore;
-        if (before != null && (overlapping(before, frame) || (adjacent(before, frame) && overheadIsHigh()))) {
+        if (before != null && (overlapping(before, frame)
+                || (adjacent(before, frame) && bothSmall(before.getLength(), frame.getLength()) && overheadIsHigh()))) {
             if (canCombine(before, frame)) {
                 combinedWithBefore = combine(before, frame);
                 outOfOrderFrames.remove(before);
@@ -539,7 +541,7 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
             boolean overlapping = upToOffset > after.getOffset();
             boolean adjacent = upToOffset == after.getOffset();
             // Evaluated in each iteration, as combining frames decreases the overhead.
-            if (! (overlapping || (adjacent && overheadIsHigh()))) {
+            if (! (overlapping || (adjacent && bothSmall(upToOffset - startOffset, after.getLength()) && overheadIsHigh()))) {
                 break;
             }
             if (canCombine(startOffset, upToOffset, after.getOffset(), after.getUpToOffset())) {
@@ -594,6 +596,16 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
     static boolean adjacent(StreamElement frame1, StreamElement frame2) {
         assert frame1.getOffset() <= frame2.getOffset();
         return frame1.getUpToOffset() == frame2.getOffset();
+    }
+
+    /**
+     * Returns whether two adjacent frames with the given lengths are both small enough (see
+     * {@link #COMPACTION_THRESHOLD}) to be combined. Larger frames are not combined, as their overhead is small enough
+     * and copying their data would cost more than it would gain. This also limits the amount of data copied when a
+     * combined frame grows by repeatedly combining it with small adjacent frames.
+     */
+    static boolean bothSmall(long length1, long length2) {
+        return length1 < COMPACTION_THRESHOLD && length2 < COMPACTION_THRESHOLD;
     }
 
     static long combinedLength(StreamElement frame1, StreamElement frame2) {
