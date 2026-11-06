@@ -33,6 +33,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ReceiveBufferImplTest {
 
@@ -1864,6 +1865,92 @@ class ReceiveBufferImplTest {
         // Then
         assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
         checkDataCanBeReadAfterAdding(3500, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void whenShrunkFrameIsCombinedWithNewBeforeItIsAlsoCombinedWithFrameAfter() throws Exception {
+        // Given                        1000..3499
+        receiveBuffer.add(new DataFrame(1000, 2500));
+        //                              2501..3500, shrunk to 3500..3500
+        receiveBuffer.add(new DataFrame(2501, 1000));
+        //                              3501..3599
+        receiveBuffer.add(new DataFrame(3501, 99));
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(3);
+
+        // When                         2502..3501, shrunk to 3500..3501, overlapping 3500..3500 (the new "before")
+        //                              and 3501..3599 (after)
+        receiveBuffer.add(new DataFrame(2502, 1000));
+
+        // Then                         1000..3499 3500..3599
+        assertThat(receiveBuffer.checkOverlap()).isEqualTo(0);
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(2);
+        assertThat(receiveBuffer.bufferedOutOfOrderData()).isEqualTo(2600);
+        checkDataCanBeReadAfterAdding(3600, new DataFrame(0, 1000));
+    }
+
+    @Test
+    void whenSmallFrameFillsGapBetweenSmallFramesWhileOverheadIsHighAllThreeAreCombined() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.add(new DataFrame(100, 10));
+        buffer.add(new DataFrame(120, 10));
+        makeOverheadHigh(buffer, 1000);
+        // As combining with the frame before reduces the overhead (before combining with the frame after), make sure it
+        // stays high.
+        buffer.add(new DataFrame(5000, 1));
+        int framesBefore = buffer.countOutOfOrderFrames();
+        long bufferedBefore = buffer.bufferedOutOfOrderData();
+
+        // When
+        buffer.add(new DataFrame(110, 10));
+
+        // Then                         100..129
+        assertThat(buffer.checkOverlap()).isEqualTo(0);
+        assertThat(buffer.countOutOfOrderFrames()).isEqualTo(framesBefore - 1);
+        assertThat(buffer.bufferedOutOfOrderData()).isEqualTo(bufferedBefore + 10);
+        buffer.add(new DataFrame(0, 100));
+        ByteBuffer readBytes = ByteBuffer.allocate(130);
+        assertThat(buffer.read(readBytes)).isEqualTo(130);
+        checkData(readBytes);
+    }
+
+    @Test
+    void whenOverheadIsHighAdjacentFramesAreCombinedWhenBothAreSmallerThanCompactionThreshold() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.add(new DataFrame(100, ReceiveBufferImpl.COMPACTION_THRESHOLD - 1));
+        makeOverheadHigh(buffer, 1000);
+        int framesBefore = buffer.countOutOfOrderFrames();
+
+        // When
+        buffer.add(new DataFrame(100 + ReceiveBufferImpl.COMPACTION_THRESHOLD - 1, 1));
+
+        // Then
+        assertThat(buffer.checkOverlap()).isEqualTo(0);
+        assertThat(buffer.countOutOfOrderFrames()).isEqualTo(framesBefore);
+    }
+
+    @Test
+    void whenOverheadIsHighAdjacentFramesAreNotCombinedWhenOneIsNotSmallerThanCompactionThreshold() throws Exception {
+        // Given
+        ReceiveBufferImpl buffer = new ReceiveBufferImpl(SMALL_BUFFER_SIZE, MAX_COMBINED_FRAME_SIZE);
+        buffer.add(new DataFrame(100, ReceiveBufferImpl.COMPACTION_THRESHOLD));
+        makeOverheadHigh(buffer, 1000);
+        int framesBefore = buffer.countOutOfOrderFrames();
+
+        // When
+        buffer.add(new DataFrame(100 + ReceiveBufferImpl.COMPACTION_THRESHOLD, 1));
+
+        // Then
+        assertThat(buffer.checkOverlap()).isEqualTo(0);
+        assertThat(buffer.countOutOfOrderFrames()).isEqualTo(framesBefore + 1);
+    }
+
+    @Test
+    void maxCombinedFrameSizeMustBeAtLeastTwiceCompactionThreshold() {
+        assertThatThrownBy(() -> new ReceiveBufferImpl(BUFFER_SIZE, 2 * ReceiveBufferImpl.COMPACTION_THRESHOLD - 1))
+                .isInstanceOf(IllegalArgumentException.class);
+        new ReceiveBufferImpl(BUFFER_SIZE, 2 * ReceiveBufferImpl.COMPACTION_THRESHOLD);
     }
     // endregion
 
