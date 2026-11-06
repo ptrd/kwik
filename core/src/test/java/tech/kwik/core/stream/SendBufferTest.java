@@ -20,10 +20,14 @@ package tech.kwik.core.stream;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SendBufferTest {
 
@@ -53,5 +57,88 @@ class SendBufferTest {
 
         // Then
         assertThat(writeCompleted.await(1, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void closeShouldFailWriteThatIsWaitingForBufferSpace() throws Exception {
+        // Given a full buffer and a writer blocked on it
+        int bufferSize = 100;
+        SendBuffer sendBuffer = new SendBuffer(bufferSize);
+        sendBuffer.write(new byte[bufferSize], 0, bufferSize);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        Thread writer = new Thread(() -> {
+            try {
+                sendBuffer.write(new byte[10], 0, 10);
+            }
+            catch (Exception e) {
+                thrownException.set(e);
+            }
+        });
+        writer.start();
+        waitUntilWaiting(writer);
+
+        // When
+        sendBuffer.close();
+
+        // Then
+        writer.join(1000);
+        boolean writerStillBlocked = writer.isAlive();
+        writer.interrupt();
+        assertThat(writerStillBlocked).isFalse();
+        assertThat(thrownException.get()).isInstanceOf(IOException.class);
+        assertThat(sendBuffer.getAvailableBytes()).isEqualTo(bufferSize);
+    }
+
+    @Test
+    void writeAfterCloseShouldFail() throws Exception {
+        // Given
+        SendBuffer sendBuffer = new SendBuffer(100);
+        sendBuffer.write(new byte[10], 0, 10);
+
+        // When
+        sendBuffer.close();
+
+        // Then
+        assertThatThrownBy(() -> sendBuffer.write(new byte[10], 0, 10))
+                .isInstanceOf(IOException.class);
+        assertThat(sendBuffer.getAvailableBytes()).isEqualTo(10);
+    }
+
+    @Test
+    void whenWriterIsInterruptedBeforeItBlocksWriteShouldFail() throws Exception {
+        // Given a full buffer
+        int bufferSize = 100;
+        SendBuffer sendBuffer = new SendBuffer(bufferSize);
+        sendBuffer.write(new byte[bufferSize], 0, bufferSize);
+
+        // When the blocked writer is interrupted before the writer has started to wait for buffer space
+        sendBuffer.interruptBlockedWriter();
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        Thread writer = new Thread(() -> {
+            try {
+                sendBuffer.write(new byte[10], 0, 10);
+            }
+            catch (Exception e) {
+                thrownException.set(e);
+            }
+        });
+        writer.start();
+
+        // Then
+        writer.join(1000);
+        boolean writerStillBlocked = writer.isAlive();
+        writer.interrupt();
+        assertThat(writerStillBlocked).isFalse();
+        assertThat(thrownException.get()).isInstanceOf(InterruptedException.class);
+    }
+
+    private void waitUntilWaiting(Thread thread) throws InterruptedException {
+        Instant deadline = Instant.now().plusSeconds(1);
+        while (thread.getState() != Thread.State.WAITING && Instant.now().isBefore(deadline)) {
+            Thread.sleep(1);
+        }
+        assertThat(thread.getState()).isEqualTo(Thread.State.WAITING);
     }
 }

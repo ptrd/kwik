@@ -44,6 +44,11 @@ public class SendBuffer {
     private final ReentrantLock bufferLock;
     private final Condition notFull;
     private volatile Thread blockingWriterThread;
+    // Indicates the stream is reset or aborted, so a write that has not completed yet must fail.
+    private volatile boolean writerInterrupted;
+    // Indicates the end of stream marker has been added, so no more data can be added.
+    // Thread safety: guarded by bufferLock.
+    private boolean closed;
 
 
     public SendBuffer(Integer sendBufferSize) {
@@ -65,37 +70,52 @@ public class SendBuffer {
      * @param data
      * @param off
      * @param len
-     * @throws IOException
+     * @throws IOException when the buffer is closed, also when it is closed while waiting for buffer space
      * @throws InterruptedException
      */
     public void write(byte[] data, int off, int len) throws IOException, InterruptedException {
-        int availableBufferSpace = maxBufferSize - bufferedBytes.get();
-        if (len > availableBufferSpace) {
-            // Wait for enough buffer space to become available
-            bufferLock.lock();
-            blockingWriterThread = Thread.currentThread();
-            try {
-                while (maxBufferSize - bufferedBytes.get() < len) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedException();
-                    }
-                    // Might throw InterruptedException, must be handled by caller
-                    notFull.await();
-                }
+        // Data is added while holding the lock, so it can never end up after the end of stream marker (see close()).
+        bufferLock.lock();
+        try {
+            if (maxBufferSize - bufferedBytes.get() < len) {
+                waitForBufferSpace(len);
+            }
+            if (writerInterrupted) {
+                throw new InterruptedException();
+            }
+            if (closed) {
+                throw new IOException("output stream already closed");
+            }
+            sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
+            bufferedBytes.getAndAdd(len);
+        }
+        finally {
+            bufferLock.unlock();
+        }
+    }
+
+    private void waitForBufferSpace(int len) throws InterruptedException {
+        // Thread safety: must be called with bufferLock held.
+        // The blocking writer must be registered before writerInterrupted is checked: interruptBlockedWriter sets the
+        // flag before reading the blocking writer, so either this thread sees the flag, or it will be interrupted.
+        blockingWriterThread = Thread.currentThread();
+        try {
+            while (maxBufferSize - bufferedBytes.get() < len && !closed && !writerInterrupted) {
                 if (Thread.currentThread().isInterrupted()) {
-                    // When an interrupt races with a signal, await() can return normally with the interrupt status set
-                    // (instead of throwing InterruptedException); the interrupted write must not complete.
                     throw new InterruptedException();
                 }
+                // Might throw InterruptedException, must be handled by caller
+                notFull.await();
             }
-            finally {
-                blockingWriterThread = null;
-                bufferLock.unlock();
+            if (Thread.currentThread().isInterrupted()) {
+                // When an interrupt races with a signal, await() can return normally with the interrupt status set
+                // (instead of throwing InterruptedException); the interrupted write must not complete.
+                throw new InterruptedException();
             }
         }
-
-        sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
-        bufferedBytes.getAndAdd(len);
+        finally {
+            blockingWriterThread = null;
+        }
     }
 
     public StreamFrame getStreamFrame(Version quicVersion, int streamId, long currentOffset, int maxBytesToSend) {
@@ -151,8 +171,34 @@ public class SendBuffer {
         return sendQueue.isEmpty();
     }
 
+    /**
+     * Adds the end of stream marker; after this, no more data can be written. A writer that is waiting for buffer
+     * space will fail.
+     */
     public void close() {
-        sendQueue.add(END_OF_STREAM_MARKER);
+        bufferLock.lock();
+        try {
+            closed = true;
+            sendQueue.add(END_OF_STREAM_MARKER);
+            notFull.signalAll();
+        }
+        finally {
+            bufferLock.unlock();
+        }
+    }
+
+    /**
+     * Makes a closed buffer accept data again; only to be used when the buffer is cleared, as that also removes the
+     * end of stream marker.
+     */
+    public void reopen() {
+        bufferLock.lock();
+        try {
+            closed = false;
+        }
+        finally {
+            bufferLock.unlock();
+        }
     }
 
     public void clear() {
@@ -167,7 +213,11 @@ public class SendBuffer {
         }
     }
 
+    /**
+     * Interrupts the writer that is waiting for buffer space and lets any write that has not completed yet fail.
+     */
     public void interruptBlockedWriter() {
+        writerInterrupted = true;
         Thread blocking = blockingWriterThread;
         if (blocking != null) {
             blocking.interrupt();

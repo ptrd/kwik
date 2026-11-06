@@ -180,6 +180,23 @@ class EarlyDataStreamTest {
     }
 
     @Test
+    void whenFinalEarlyDataWasNotAcceptedWritingRemainingShouldSendAllAgain() throws Exception {
+        // Given
+        stream.writeEarlyData(new byte[100], true, 10_000);
+        StreamFrame zeroRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.ZeroRTT);
+        assertThat(zeroRttData.isFinal()).isTrue();
+
+        // When
+        stream.writeRemaining(false);
+
+        // Then
+        StreamFrame oneRttData = captureFrameSentAndVerifyEncryptionLevel(connection, 1500, EncryptionLevel.App);
+        assertThat(oneRttData.getOffset()).isEqualTo(0);
+        assertThat(oneRttData.getLength()).isEqualTo(100);
+        assertThat(oneRttData.isFinal()).isTrue();
+    }
+
+    @Test
     void whenAllEarlyDataWasSentNoRemainingShouldBeSend() throws Exception {
         // Given
         stream.writeEarlyData(new byte[100], true, 10_000);

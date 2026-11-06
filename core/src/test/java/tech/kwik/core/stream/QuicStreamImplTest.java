@@ -44,8 +44,12 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Queue;
 import java.util.Random;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
@@ -1070,6 +1074,47 @@ class QuicStreamImplTest {
                 .isInstanceOf(InterruptedIOException.class)  // Require InterruptedIOException, as that proofs the write was blocked before being interrupted.
                 .hasMessageContaining("reset");
     }
+
+    @Test
+    void whenResetRacesWithWriterAboutToBlockWriteShouldFail() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        ReentrantLock bufferLock = getSendBufferLock(quicStream);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        AtomicBoolean writeSucceeded = new AtomicBoolean(false);
+        Thread writer = new Thread(() -> {
+            try {
+                quicStream.getOutputStream().write(new byte[10]);
+                writeSucceeded.set(true);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        });
+        // Holding the buffer lock lets the writer pass the stream state check, but not register itself as blocked writer.
+        bufferLock.lock();
+        try {
+            writer.start();
+            waitUntilQueuedOnLock(writer, bufferLock);
+
+            // When
+            quicStream.resetStream(9);
+        }
+        finally {
+            bufferLock.unlock();
+        }
+
+        // Then
+        writer.join(1000);
+        boolean writerStillBlocked = writer.isAlive();
+        writer.interrupt();
+        assertThat(writerStillBlocked).isFalse();
+        assertThat(writeSucceeded.get()).isFalse();
+        assertThat(thrownException.get())
+                .isInstanceOf(InterruptedIOException.class)
+                .hasMessageContaining("reset");
+    }
     //endregion
 
     //region output reliable reset (RESET_STREAM_AT)
@@ -1496,6 +1541,42 @@ class QuicStreamImplTest {
         assertThat(writerHasBeenBlocked).isTrue();
         assertThat(writerHasBeenUnblocked).isTrue();
     }
+
+    @Test
+    void whenAbortRacesWithWriterAboutToBlockWriterShouldBeInterrupted() throws Exception {
+        // Given
+        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        ReentrantLock bufferLock = getSendBufferLock(quicStream);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        Thread writer = new Thread(() -> {
+            try {
+                quicStream.getOutputStream().write(new byte[10]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        });
+        // Holding the buffer lock lets the writer pass the stream state check, but not register itself as blocked writer.
+        bufferLock.lock();
+        try {
+            writer.start();
+            waitUntilQueuedOnLock(writer, bufferLock);
+
+            // When
+            quicStream.abort();
+        }
+        finally {
+            bufferLock.unlock();
+        }
+
+        // Then
+        writer.join(1000);
+        boolean writerStillBlocked = writer.isAlive();
+        writer.interrupt();
+        assertThat(writerStillBlocked).isFalse();
+        assertThat(thrownException.get()).isInstanceOf(IOException.class);
+    }
     //endregion
 
     //region close
@@ -1666,6 +1747,56 @@ class QuicStreamImplTest {
         // Then
         verify(connection, never()).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
     }
+
+    @Test
+    void writeBlockedOnFullBufferShouldFailWhenStreamIsClosedMeanwhile() throws Exception {
+        // Given
+        int sendBufferSize = 100;
+        quicStream = new QuicStreamImpl(Version.getDefault(), 0, role, connection, streamManager,
+                new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger, sendBufferSize);
+        Queue<Function<Integer, QuicFrame>> sendRequests = new ConcurrentLinkedQueue<>();
+        doAnswer(invocation -> {
+            sendRequests.add(invocation.getArgument(0));
+            return null;
+        }).when(connection).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
+
+        OutputStream outputStream = quicStream.getOutputStream();
+        outputStream.write(new byte[sendBufferSize]);
+
+        AtomicReference<Exception> thrownException = new AtomicReference<>();
+        Thread blockedWriter = new Thread(() -> {
+            try {
+                outputStream.write(new byte[10]);
+            }
+            catch (IOException e) {
+                thrownException.set(e);
+            }
+        });
+        blockedWriter.start();
+        waitUntilWaiting(blockedWriter);
+
+        // When
+        outputStream.close();
+        // Sending empties the buffer, which wakes up the writer if it is still blocked.
+        List<StreamFrame> framesSent = new ArrayList<>();
+        framesSent.add((StreamFrame) sendRequests.poll().apply(1500));
+        blockedWriter.join(1000);
+        Function<Integer, QuicFrame> sendRequest;
+        while ((sendRequest = sendRequests.poll()) != null) {
+            QuicFrame frame = sendRequest.apply(1500);
+            if (frame != null) {
+                framesSent.add((StreamFrame) frame);
+            }
+        }
+
+        // Then
+        assertThat(blockedWriter.isAlive()).isFalse();
+        assertThat(thrownException.get()).isInstanceOf(IOException.class);
+        StreamFrame lastFrame = framesSent.get(framesSent.size() - 1);
+        assertThat(lastFrame.isFinal()).isTrue();
+        assertThat(lastFrame.getOffset() + lastFrame.getLength()).isEqualTo(sendBufferSize);
+        assertThat(framesSent.stream().mapToInt(StreamFrame::getLength).sum()).isEqualTo(sendBufferSize);
+    }
     //endregion
 
     //region retransmissions
@@ -1793,6 +1924,27 @@ class QuicStreamImplTest {
         catch (InvalidIntegerEncodingException | TransportError | IntegerTooLargeException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private ReentrantLock getSendBufferLock(QuicStreamImpl stream) throws NoSuchFieldException {
+        SendBuffer sendBuffer = (SendBuffer) new FieldReader(stream.getOutputStream(), "sendBuffer").read();
+        return (ReentrantLock) new FieldReader(sendBuffer, "bufferLock").read();
+    }
+
+    private void waitUntilQueuedOnLock(Thread thread, ReentrantLock lock) throws InterruptedException {
+        Instant deadline = Instant.now().plusSeconds(1);
+        while (!lock.hasQueuedThread(thread) && Instant.now().isBefore(deadline)) {
+            Thread.sleep(1);
+        }
+        assertThat(lock.hasQueuedThread(thread)).isTrue();
+    }
+
+    private void waitUntilWaiting(Thread thread) throws InterruptedException {
+        Instant deadline = Instant.now().plusSeconds(1);
+        while (thread.getState() != Thread.State.WAITING && Instant.now().isBefore(deadline)) {
+            Thread.sleep(1);
+        }
+        assertThat(thread.getState()).isEqualTo(Thread.State.WAITING);
     }
 
     private Function<Integer, QuicFrame> captureSendFunction(QuicConnectionImpl connection) {
