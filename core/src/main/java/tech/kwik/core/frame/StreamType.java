@@ -20,6 +20,8 @@ package tech.kwik.core.frame;
 
 enum StreamType {
 
+    // WARNING: the order of the constants must match their value (i.e. ordinal() == value), as StreamFrame looks up
+    // the stream type by indexing values() with the stream id's type bits.
     ClientInitiatedBidirectional(0, "CIB"),
     ServerInitiatedBidirectional(1, "SIB"),
     ClientInitiatedUnidirectional(2, "CIU"),

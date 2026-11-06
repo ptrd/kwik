@@ -81,6 +81,26 @@ class StreamFrameTest extends FrameTest {
                 .satisfies(e -> assertThat(((TransportError) e).getErrorCode()).isEqualTo(FRAME_ENCODING_ERROR));
     }
 
+    @Test
+    void serializingToBufferThatIsTooSmallShouldFail() throws Exception {
+        StreamFrame frame = new StreamFrame(16, 1000, generateByteArray(100), true);
+        ByteBuffer buffer = ByteBuffer.allocate(frame.getFrameLength() - 1);
+
+        assertThatThrownBy(() -> frame.serialize(buffer))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(buffer.position()).isEqualTo(0);
+    }
+
+    @Test
+    void serializingToBufferOfExactFrameLengthShouldSucceed() throws Exception {
+        StreamFrame frame = new StreamFrame(16, 1000, generateByteArray(100), true);
+        ByteBuffer buffer = ByteBuffer.allocate(frame.getFrameLength());
+
+        frame.serialize(buffer);
+
+        assertThat(buffer.remaining()).isEqualTo(0);
+    }
+
     private byte[] generateByteArray(int size) throws Exception {
         byte[] data = new byte[size];
         for (int i = 0; i < size; i++) {

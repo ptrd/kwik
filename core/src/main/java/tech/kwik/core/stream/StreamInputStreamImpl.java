@@ -63,10 +63,10 @@ class StreamInputStreamImpl extends StreamInputStream {
     private volatile boolean resetAt;
     private volatile long resetAtReliableSize;
 
-    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, Logger log) {
+    public StreamInputStreamImpl(QuicStreamImpl quicStream, long receiveBufferSize, ConnectionMemoryBudget connectionMemoryBudget, Logger log) {
         this.quicStream = quicStream;
         this.log = log;
-        receiveBuffer = new ReceiveBufferImpl();
+        receiveBuffer = new ReceiveBufferImpl(receiveBufferSize, connectionMemoryBudget);
 
         receiverFlowControlLimit = receiveBufferSize;
         lastCommunicatedMaxData = receiverFlowControlLimit;
@@ -95,6 +95,12 @@ class StreamInputStreamImpl extends StreamInputStream {
             throw new TransportError(FINAL_SIZE_ERROR);
         }
         if (frame.isFinal()) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1
+            // "FINAL_SIZE_ERROR (0x06): (...) an endpoint received a STREAM frame (...) containing a final size that
+            //  was lower than the size of stream data that was already received,"
+            if (frame.getUpToOffset() < largestOffsetReceived) {
+                throw new TransportError(FINAL_SIZE_ERROR);
+            }
             finalSize = frame.getUpToOffset();
         }
 
@@ -178,6 +184,7 @@ class StreamInputStreamImpl extends StreamInputStream {
                             // All reliable data has been delivered; now signal the reset.
                             reset = true;
                             quicStream.inputClosed();
+                            receiveBuffer.discardAllData();
                         }
                         return bytesRead;
                     }
@@ -349,6 +356,7 @@ class StreamInputStreamImpl extends StreamInputStream {
                 reset = true;
                 interruptBlockingReader();
                 quicStream.inputClosed();
+                receiveBuffer.discardAllData();
             }
         }
         return largestOffsetIncrement;
@@ -356,6 +364,7 @@ class StreamInputStreamImpl extends StreamInputStream {
 
     void abort() {
         aborted = true;
+        receiveBuffer.discardAllData();
         interruptBlockingReader();
     }
 

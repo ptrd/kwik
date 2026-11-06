@@ -27,6 +27,7 @@ import tech.kwik.core.impl.QuicConnectionImpl;
 import tech.kwik.core.impl.Role;
 import tech.kwik.core.impl.TransportError;
 import tech.kwik.core.log.Logger;
+import tech.kwik.core.test.FieldReader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,7 +46,7 @@ class StreamInputStreamImplTest {
         streamManager = mock(StreamManager.class);
 
         QuicStreamImpl quicStream = new QuicStreamImpl(0, Role.Client, mock(QuicConnectionImpl.class), streamManager, mock(FlowControl.class));
-        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, mock(Logger.class));
+        streamInputStream = new StreamInputStreamImpl(quicStream, 10_000L, null, mock(Logger.class));
     }
 
     @Test
@@ -80,6 +81,33 @@ class StreamInputStreamImplTest {
         // Then
         assertThat(incr).isEqualTo(550);
     }
+
+    // region addDataFrom - final size validation
+    @Test
+    void addDataFromThrowsFinalSizeErrorWhenFinalFrameEndsBelowLargestOffsetReceived() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[900], false));
+
+        // When/Then: final size 600 is below the largest offset received (900)
+        assertThatThrownBy(() ->
+                streamInputStream.addDataFrom(new StreamFrame(0, 500, new byte[100], true)))
+                .isInstanceOf(TransportError.class)
+                .extracting(e -> ((TransportError) e).getErrorCode())
+                .isEqualTo(QuicConstants.TransportErrorCode.FINAL_SIZE_ERROR);
+    }
+
+    @Test
+    void addDataFromAcceptsFinalFrameEndingAtLargestOffsetReceived() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[900], false));
+
+        // When
+        long incr = streamInputStream.addDataFrom(new StreamFrame(0, 900, new byte[0], true));
+
+        // Then
+        assertThat(incr).isEqualTo(0);
+    }
+    // endregion
 
     // region terminateAt - frame validation
 
@@ -217,6 +245,40 @@ class StreamInputStreamImplTest {
                 .isInstanceOf(StreamClosedException.class);
     }
 
+    @Test
+    void terminateAtReleasesBufferedDataBeyondReliableSizeWhenResetIsSignalledAfterReading() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[1000], false));
+        streamInputStream.addDataFrom(new StreamFrame(0, 2000, new byte[500], false));
+        streamInputStream.terminateAt(0, 3000, 700);
+
+        // When: all reliable data is read, so the reset is signalled
+        streamInputStream.read(new byte[1000], 0, 1000);
+
+        // Then: the data beyond the reliable size (both contiguous and out-of-order) is no longer buffered
+        ReceiveBufferImpl receiveBuffer = getReceiveBuffer();
+        assertThat(receiveBuffer.countContiguousFrames()).isEqualTo(0);
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(0);
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
+    @Test
+    void terminateAtReleasesBufferedDataBeyondReliableSizeWhenResetIsSignalledImmediately() throws Exception {
+        // Given
+        streamInputStream.addDataFrom(new StreamFrame(0, 0, new byte[1000], false));
+        streamInputStream.addDataFrom(new StreamFrame(0, 2000, new byte[500], false));
+        streamInputStream.read(new byte[800], 0, 800);  // read past the reliable size that follows
+
+        // When
+        streamInputStream.terminateAt(0, 3000, 700);
+
+        // Then: the data beyond the reliable size (both contiguous and out-of-order) is no longer buffered
+        ReceiveBufferImpl receiveBuffer = getReceiveBuffer();
+        assertThat(receiveBuffer.countContiguousFrames()).isEqualTo(0);
+        assertThat(receiveBuffer.countOutOfOrderFrames()).isEqualTo(0);
+        assertThat(receiveBuffer.estimatedMemoryUsage()).isEqualTo(0);
+    }
+
     // endregion
 
     // region terminateAt - flow control
@@ -280,4 +342,8 @@ class StreamInputStreamImplTest {
     }
 
     // endregion
+
+    private ReceiveBufferImpl getReceiveBuffer() throws Exception {
+        return (ReceiveBufferImpl) new FieldReader(streamInputStream, "receiveBuffer").read();
+    }
 }

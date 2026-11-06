@@ -96,7 +96,9 @@ public class CryptoStream {
         tlsMessageParser = new TlsMessageParser(this::quicExtensionsParser);
         dataToSend = new ArrayList<>();
         maxMessageSize = determineMaxMessageSize(role, encryptionLevel);
-        receiveBuffer = new ReceiveBufferImpl();
+        // Complete messages are read as soon as they are available, so the contiguous data never exceeds one message
+        // (including its 4-byte header), while out-of-order data is limited by the maximum stream gap.
+        receiveBuffer = new ReceiveBufferImpl(4 + maxMessageSize + MAX_STREAM_GAP);
     }
 
     public CryptoStream(VersionHolder quicVersion, EncryptionLevel encryptionLevel, Role role, Logger log) {
