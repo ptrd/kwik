@@ -644,36 +644,6 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         return Long.max(frame1.getUpToOffset(), frame2.getUpToOffset()) - Long.min(frame1.getOffset(), frame2.getOffset());
     }
 
-    /**
-     * Combines two overlapping or adjacent frames into one frame that covers both.
-     * @param frame1  the frame with the lowest (or equal) offset
-     * @param frame2  the frame that overlaps with or directly follows frame1
-     */
-    static StreamElement combine(StreamElement frame1, StreamElement frame2) {
-        assert frame1.getOffset() <= frame2.getOffset();
-        assert frame1.getUpToOffset() >= frame2.getOffset();
-
-        if (contains(frame1, frame2)) {
-            return frame1;
-        }
-        if (contains(frame2, frame1)) {
-            return frame2;
-        }
-
-        int overlap = (int) (frame1.getUpToOffset() - frame2.getOffset());
-        int newLength = frame1.getLength() + frame2.getLength() - overlap;
-        byte[] combinedData = new byte[newLength];
-        System.arraycopy(frame1.getStreamData(), 0, combinedData, 0, frame1.getLength());
-        System.arraycopy(
-                frame2.getStreamData(),
-                overlap,
-                combinedData,
-                frame1.getLength(),
-                (frame2.getLength() - overlap));
-
-        return new SimpleStreamElement(frame1.getOffset(), combinedData);
-    }
-
     static long min(long l1, long l2) {
         return Long.min(l1, l2);
     }

@@ -1919,7 +1919,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(100, 100);
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         // Then
         assertThat(combined.equals(frame1) || combined.equals(frame2)).isTrue();
@@ -1933,7 +1933,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(110, 30);
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
@@ -1949,7 +1949,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(100, 130);
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
@@ -1965,7 +1965,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(110, 90);
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
@@ -1981,7 +1981,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(190, 30);
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         // Then
         assertThat(combined.getOffset()).isEqualTo(100);
@@ -1997,7 +1997,7 @@ class ReceiveBufferImplTest {
         DataFrame frame2 = new DataFrame(130, 60);  // 130..189
 
         // When
-        StreamElement combined = ReceiveBufferImpl.combine(frame1, frame2);
+        StreamElement combined = combine(frame1, frame2);
 
         assertThat(combined.getOffset()).isEqualTo(100);
         assertThat(combined.getLength()).isEqualTo(90);
@@ -2273,6 +2273,20 @@ class ReceiveBufferImplTest {
     // endregion
 
     // region helper methods
+    private static StreamElement combine(StreamElement frame1, StreamElement frame2) {
+        return ReceiveBufferImpl.combine(List.of(frame1, frame2),
+                frame1.getOffset(), Long.max(frame1.getUpToOffset(), frame2.getUpToOffset()));
+    }
+
+    private static void makeOverheadHigh(ReceiveBufferImpl buffer, int startOffset) throws TransportError {
+        // Small frames with gaps in between (that cannot be combined).
+        int offset = startOffset;
+        while (!buffer.overheadIsHigh()) {
+            buffer.add(new DataFrame(offset, 1));
+            offset += 2;
+        }
+    }
+
     private void checkFrameData(StreamElement frame) {
         byte[] data = frame.getStreamData();
         assertThat(data).hasSize(frame.getLength());
