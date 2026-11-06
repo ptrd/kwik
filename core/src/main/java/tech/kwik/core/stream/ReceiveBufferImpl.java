@@ -490,39 +490,34 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         // Use floor, so that an existing frame equal to the new frame is found as "before" (and combined with it);
         // otherwise, if the new frame is combined with frames after it, the existing frame would remain.
         StreamElement before = outOfOrderFrames.floor(frame);
-        StreamElement combinedWithBefore;
+        // The frame before the new frame to combine it with (if any); the actual combining is done together with
+        // combining the frames after, so that the data is copied only once.
+        StreamElement combineWithBefore = null;
         if (before != null && (overlapping(before, frame)
                 || (adjacent(before, frame) && bothSmall(before.getLength(), frame.getLength()) && overheadIsHigh()))) {
             if (canCombine(before, frame)) {
-                combinedWithBefore = combine(before, frame);
-                outOfOrderFrames.remove(before);
-                outOfOrderFrameCount--;
-                bufferedOutOfOrderData -= before.getLength();
+                combineWithBefore = before;
             }
             else if (adjacent(before, frame)) {
                 // Adjacent (not overlapping) and too large to combine: nothing to do.
-                combinedWithBefore = frame;
             }
             else {
                 // Remove overlap by shrinking the new frame to start at the end of the "before" frame.
-                combinedWithBefore = shrinkFrame(frame, before.getUpToOffset(), frame.getUpToOffset());
+                frame = shrinkFrame(frame, before.getUpToOffset(), frame.getUpToOffset());
                 // Special case: because the shrunk frame got a new (start) offset, it could now overlap with a different
                 // "before", that was after the original "before".
                 // For example: when adding 2502..3501 to 1000..3499, 3500..3500 (with max 2500),
                 // after shrinking you get  3500..3501 and 3500..3500 becomes a new "before".
-                if (outOfOrderFrames.lower(combinedWithBefore) != before) {
-                    StreamElement newBefore = outOfOrderFrames.lower(combinedWithBefore);
-                    combinedWithBefore = combine(newBefore, combinedWithBefore);
-                    outOfOrderFrames.remove(newBefore);
-                    outOfOrderFrameCount--;
-                    bufferedOutOfOrderData -= newBefore.getLength();
+                // As out-of-order frames do not overlap, such a new "before" must start exactly at the end of the
+                // original "before", i.e. at the same offset as the shrunk frame, and be shorter (otherwise it would
+                // not be lower). Hence, it is contained in the shrunk frame, so the two can always be combined.
+                StreamElement newBefore = outOfOrderFrames.lower(frame);
+                if (newBefore != before) {
+                    combineWithBefore = newBefore;
                 }
             }
         }
-        else {
-            combinedWithBefore = frame;
-        }
-        StreamElement combinedWithAfter = combineWithElementsAfter(combinedWithBefore);
+        StreamElement combinedWithAfter = combineWithNeighbours(combineWithBefore, frame);
         // In certain cases, the combined could exactly match an existing, so only count when really added.
         if (outOfOrderFrames.add(combinedWithAfter)) {
             outOfOrderFrameCount++;
@@ -530,12 +525,32 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
         }
     }
 
-    StreamElement combineWithElementsAfter(StreamElement frameToAdd) {
+    /**
+     * Combines the frame to add with the given frame before it (if not null) and with the frames after it that it
+     * overlaps (or is adjacent to, when they are small and the overhead is high). The frames it is combined with are
+     * removed from the out-of-order frames; the combined frame is not added.
+     * @param before  the (out-of-order) frame before the frame to add, that must be combined with it, or null
+     * @param frameToAdd  the frame to add
+     * @return  the combined frame
+     */
+    StreamElement combineWithNeighbours(StreamElement before, StreamElement frameToAdd) {
         // To avoid copying the (growing) combined data for each frame that is combined, first collect the frames to
         // combine and only copy the data once at the end.
         List<StreamElement> framesToCombine = null;
         long startOffset = frameToAdd.getOffset();
         long upToOffset = frameToAdd.getUpToOffset();
+        if (before != null) {
+            // Before must start at or before the frame to add and overlap or be adjacent to it.
+            assert before.getOffset() <= frameToAdd.getOffset() && before.getUpToOffset() >= frameToAdd.getOffset();
+            outOfOrderFrames.remove(before);
+            outOfOrderFrameCount--;
+            bufferedOutOfOrderData -= before.getLength();
+            framesToCombine = new ArrayList<>();
+            framesToCombine.add(before);
+            framesToCombine.add(frameToAdd);
+            startOffset = before.getOffset();
+            upToOffset = Long.max(before.getUpToOffset(), upToOffset);
+        }
         StreamElement after = outOfOrderFrames.higher(frameToAdd);
         while (after != null) {
             boolean overlapping = upToOffset > after.getOffset();
