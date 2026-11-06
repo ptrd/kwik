@@ -4,6 +4,13 @@
 
 - server: added `ServerConnector.Builder.withSupportedGroups` to restrict the TLS named groups accepted for key exchange,
   which makes it possible to enforce a post-quantum key exchange on the server side
+- client: added `QuicClientConnection.Builder.noServerHostnameVerification()` (and CLI option `--noHostnameVerification`)
+  to skip the host name check while still validating the server certificate
+- improved receive buffer implementation: reduced memory overhead and fragmentation for out-of-order and small frames,
+  memory overhead is now limited (both per stream and per connection), and buffered data is properly discarded
+  when a stream is reset or aborted
+- fix: lost connection flow-control credit (`MAX_DATA`) was not retransmitted
+- fix: receiving a final size lower than the offset of already received data now raises a transport error
 
 ## 0.12.1 (2026-10-18)
 
