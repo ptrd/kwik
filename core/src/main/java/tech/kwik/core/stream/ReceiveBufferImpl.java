@@ -86,7 +86,15 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
  */
 public class ReceiveBufferImpl implements ReceiveBuffer {
 
-    private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 5120;
+    /**
+     * Default maximum size of a frame that results from combining frames. As small adjacent frames are only combined
+     * when both are smaller than {@link #COMPACTION_THRESHOLD}, this limit is only relevant for overlapping frames. It
+     * limits the amount of data copied for each frame added (e.g. by an attacker sending frames that each extend the
+     * previous by one byte), while overlapping frames that cannot be combined are shrunk instead and remain large
+     * enough to keep their overhead small. It is larger than a full packet, so overlapping (retransmitted) frames of
+     * typical size can still be combined. Must be at least twice the compaction threshold (see constructor).
+     */
+    private static final int DEFAULT_MAX_COMBINED_FRAME_SIZE = 2048;
     /**
      * Estimated memory overhead (in bytes) of a buffered frame, i.e. memory used by a buffered frame on top of the
      * stream data it contains. With a 64-bit JVM using compressed oops and compressed class pointers (the default for
@@ -180,10 +188,17 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
      * @param bufferSize  the maximum amount of stream data that can be buffered at any time (as enforced by the caller,
      *                    e.g. by flow control); used to limit the memory the buffer may use.
      * @param maxCombinedFrameSize  the maximum size of a combined frame (i.e. when frames are combined to remove
-     *                              overlap, the resulting frame will not be larger than this size).
+     *                              overlap, the resulting frame will not be larger than this size); must be at least
+     *                              twice {@link #COMPACTION_THRESHOLD}.
      * @param connectionMemoryBudget  the memory budget of the connection, or null if there is no connection limit
+     * @throws IllegalArgumentException  if maxCombinedFrameSize is less than twice {@link #COMPACTION_THRESHOLD}
      */
     public ReceiveBufferImpl(long bufferSize, int maxCombinedFrameSize, ConnectionMemoryBudget connectionMemoryBudget) {
+        if (maxCombinedFrameSize < 2 * COMPACTION_THRESHOLD) {
+            // Otherwise, two small adjacent frames could not always be combined, so many small adjacent frames could
+            // cause excessive memory overhead.
+            throw new IllegalArgumentException("maxCombinedFrameSize must be at least " + 2 * COMPACTION_THRESHOLD);
+        }
         this.maxCombinedFrameSize = maxCombinedFrameSize;
         this.connectionMemoryBudget = connectionMemoryBudget;
         this.maxMemoryUsage = MAX_MEMORY_FACTOR * bufferSize;
