@@ -534,11 +534,11 @@ public class ReceiveBufferImpl implements ReceiveBuffer {
                 }
             }
         }
-        StreamElement combinedWithAfter = combineWithNeighbours(combineWithBefore, frame);
+        StreamElement combined = combineWithNeighbours(combineWithBefore, frame);
         // In certain cases, the combined could exactly match an existing, so only count when really added.
-        if (outOfOrderFrames.add(combinedWithAfter)) {
+        if (outOfOrderFrames.add(combined)) {
             outOfOrderFrameCount++;
-            bufferedOutOfOrderData += combinedWithAfter.getLength();
+            bufferedOutOfOrderData += combined.getLength();
         }
     }
 
