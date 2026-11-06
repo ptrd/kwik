@@ -69,9 +69,11 @@ import static tech.kwik.core.QuicConstants.TransportErrorCode.INTERNAL_ERROR;
  *   frames are compacted into chunks when the overhead is high</li>
  *   <li>in-order frames of 1200 bytes (typical for full packets): about 1.1 times the buffer size</li>
  *   <li>out-of-order frames of 1200 bytes, with every other frame lost: about 0.5 times the buffer size</li>
- *   <li>out-of-order adjacent small frames (e.g. 1, 10 or 100 bytes, offsets starting at 1): about 1.5 times the
- *   buffer size, as adjacent small out-of-order frames are combined when the overhead is high; larger adjacent frames
- *   (see {@link #COMPACTION_THRESHOLD}) are not combined, as their overhead is at most 25% of the data they contain</li>
+ *   <li>out-of-order adjacent small frames (e.g. 1, 10 or 100 bytes, offsets starting at 1): about 1.75, 1.75 and 1.6
+ *   times the buffer size, as adjacent small out-of-order frames are combined when the overhead is high (into frames
+ *   of about {@link #COMPACTION_THRESHOLD} bytes, which still have an overhead of about 25%); larger adjacent frames
+ *   (e.g. 500 or 1200 bytes) are not combined, as their overhead is at most 25% of the data they contain: about 1.2
+ *   and 1.1 times the buffer size</li>
  *   <li>out-of-order frames of 95 or 100 bytes with 1 byte gaps: about 1.99 and 1.94 times the buffer size (just
  *   within the limit)</li>
  *   <li>out-of-order frames of 200 bytes with 200 byte gaps: about 0.75 times the buffer size</li>
