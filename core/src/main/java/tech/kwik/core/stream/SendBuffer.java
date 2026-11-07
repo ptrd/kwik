@@ -196,6 +196,7 @@ public class SendBuffer {
      * end of stream marker.
      */
     public void reopen() {
+        clear();
         appendLock.lock();
         try {
             closed = false;
