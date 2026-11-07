@@ -65,20 +65,23 @@ public class SendBuffer {
     }
 
     /**
-     * Writes data to the buffer. If the buffer is full, the method will block until there is enough space in the buffer.
+     * Writes data to the buffer. If there is not enough space in the buffer for all data, the method will block until
+     * there is. Data is either written completely or not at all.
      * This method makes defensive copies of the data.
-     * @param data
-     * @param off
-     * @param len
+     * @param data  the data to write
+     * @param offset  the offset in data of the first byte to write
+     * @param length  the number of bytes to write; must not exceed the maximum buffer size, as the write would block forever
      * @throws IOException when the buffer is closed, also when it is closed while waiting for buffer space
-     * @throws InterruptedException
+     * @throws InterruptedException when the writer is interrupted by {@link #interruptBlockedWriter()}, also when that
+     * happens before the write started, or when the writing thread is interrupted while waiting for buffer space
      */
-    public void write(byte[] data, int off, int len) throws IOException, InterruptedException {
+    public void write(byte[] data, int offset, int length) throws IOException, InterruptedException {
+        assert length <= maxBufferSize;
         // Data is added while holding the lock, so it can never end up after the end of stream marker (see close()).
         bufferLock.lock();
         try {
-            if (maxBufferSize - bufferedBytes.get() < len) {
-                waitForBufferSpace(len);
+            if (maxBufferSize - bufferedBytes.get() < length) {
+                waitForBufferSpace(length);
             }
             if (writerInterrupted) {
                 throw new InterruptedException();
@@ -86,8 +89,8 @@ public class SendBuffer {
             if (closed) {
                 throw new IOException("output stream already closed");
             }
-            sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
-            bufferedBytes.getAndAdd(len);
+            sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, offset, offset + length)));
+            bufferedBytes.getAndAdd(length);
         }
         finally {
             bufferLock.unlock();
