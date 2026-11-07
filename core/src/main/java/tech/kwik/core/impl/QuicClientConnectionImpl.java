@@ -74,6 +74,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -162,7 +163,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile String handshakeError;
     private volatile ClientHello originalClientHello;
     private final SecureRandom secureRandom;
-    private final Object migrationLock = new Object();
+    private final ReentrantLock migrationLock;
     private final Set<Long> pendingPathChallenges = ConcurrentHashMap.newKeySet();
     private volatile CountDownLatch pathValidated;
 
@@ -248,7 +249,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
+
         secureRandom = new SecureRandom();
+        migrationLock = new ReentrantLock();
     }
 
     @Override
@@ -884,7 +887,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     public boolean migrate(Duration timeout) throws SocketException {
-        synchronized (migrationLock) {
+        migrationLock.lock();
+        try {
             if (handshakeState != HandshakeState.Confirmed) {
                 log.warn("Cannot migrate: handshake is not (yet) confirmed");
                 return false;
@@ -924,6 +928,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             // detection find out right away, instead of after the (exponentially backed-off) probe timeout.
             ping();
             return true;
+        }
+        finally {
+            migrationLock.unlock();
         }
     }
 
