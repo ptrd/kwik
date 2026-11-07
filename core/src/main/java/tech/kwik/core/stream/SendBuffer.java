@@ -106,9 +106,6 @@ public class SendBuffer {
         blockingWriterThread = Thread.currentThread();
         try {
             while (maxBufferSize - bufferedBytes.get() < len && !closed && !writerInterrupted) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedException();
-                }
                 // Might throw InterruptedException, must be handled by caller
                 notFull.await();
             }
