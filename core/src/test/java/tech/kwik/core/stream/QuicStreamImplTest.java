@@ -71,6 +71,7 @@ class QuicStreamImplTest {
     private Logger logger;
     private Random randomGenerator = new Random();
     private Role role;
+    private int maxSendBufferSize = SendBuffer.DEFAULT_MAX_BUFFER_SIZE;
 
     //region setup
     @BeforeEach
@@ -753,7 +754,7 @@ class QuicStreamImplTest {
         AtomicReference<Exception> exception = new AtomicReference<>();
         Thread asyncWriter = new Thread(() -> {
             try {
-                outputStream.write(new byte[50 * 1024]);
+                outputStream.write(new byte[maxSendBufferSize]);
                 writeSucceeded.set(true);
             } catch (IOException e) {
                 exception.set(e);
@@ -770,7 +771,7 @@ class QuicStreamImplTest {
     void writingMoreThanSendBufferSizeShouldBlock() throws Exception {
         // Given
         OutputStream outputStream = quicStream.getOutputStream();
-        outputStream.write(new byte[50 * 1024]);
+        outputStream.write(new byte[maxSendBufferSize]);
 
         // When
         AtomicBoolean writeSucceeded = new AtomicBoolean(false);
@@ -1052,7 +1053,7 @@ class QuicStreamImplTest {
     @Test
     void whenResetBlockedWriteShouldThrowException() throws Exception {
         // Given
-        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
         new Thread(() -> {
@@ -1078,7 +1079,7 @@ class QuicStreamImplTest {
     @Test
     void whenResetRacesWithWriterAboutToBlockWriteShouldFail() throws Exception {
         // Given
-        quicStream.getOutputStream().write(new byte[SendBuffer.DEFAULT_MAX_BUFFER_SIZE]);
+        quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
         ReentrantLock bufferLock = getSendBufferLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
@@ -1482,7 +1483,7 @@ class QuicStreamImplTest {
     void writerDoesNotBlockWhenStreamAborted() throws Exception {
         // Given
         // Write as many bytes as the size of the send buffer, so a next write would block
-        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
 
         // When
         quicStream.abort();
@@ -1502,7 +1503,7 @@ class QuicStreamImplTest {
     void blockingWriterIsInterruptedWhenStreamAborted() throws Exception {
         // Given
         // Write as many bytes as the size of the send buffer, so a next write will block
-        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
 
         AtomicBoolean writerHasThrownIOException = new AtomicBoolean(false);
         AtomicBoolean writerHasBeenBlocked = new AtomicBoolean(false);
@@ -1545,7 +1546,7 @@ class QuicStreamImplTest {
     @Test
     void whenAbortRacesWithWriterAboutToBlockWriterShouldBeInterrupted() throws Exception {
         // Given
-        quicStream.getOutputStream().write(new byte[SendBuffer.DEFAULT_MAX_BUFFER_SIZE]);
+        quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
         ReentrantLock bufferLock = getSendBufferLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
