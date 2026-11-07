@@ -894,10 +894,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 return false;
             }
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
-            // "If this transport parameter is received, the client MUST NOT use a new local address when sending to the
-            //  address that the server used during the handshake."
-            TransportParameters peerParameters = peerTransportParams;
-            if (peerParameters != null && peerParameters.getDisableMigration()) {
+            // "An endpoint that receives this transport parameter MUST NOT use a new local address when sending to the
+            //  address that the peer used during the handshake."
+            if (peerTransportParams.getDisableMigration()) {
                 log.info("Cannot migrate: server has disabled active migration");
                 return false;
             }
