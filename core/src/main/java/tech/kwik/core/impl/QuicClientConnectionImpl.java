@@ -161,6 +161,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile Thread receiverThread;
     private volatile String handshakeError;
     private volatile ClientHello originalClientHello;
+    private final SecureRandom secureRandom;
     private final Object migrationLock = new Object();
     private final Set<Long> pendingPathChallenges = ConcurrentHashMap.newKeySet();
     private volatile CountDownLatch pathValidated;
@@ -247,6 +248,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
+        secureRandom = new SecureRandom();
     }
 
     @Override
@@ -960,7 +962,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     private void sendPathChallenge(InetSocketAddress localAddress) {
         byte[] challengeData = new byte[8];
-        new SecureRandom().nextBytes(challengeData);
+        secureRandom.nextBytes(challengeData);
         pendingPathChallenges.add(ByteBuffer.wrap(challengeData).getLong());
         PathChallengeFrame challenge = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
         getSender().sendAlternateAddress(challenge, localAddress, SendOptions.getDefault());
@@ -996,7 +998,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     public void sendPathChallenge(boolean useStandardPath, int paddingSize) {
         byte[] challengeData = new byte[8];
-        new SecureRandom().nextBytes(challengeData);
+        secureRandom.nextBytes(challengeData);
 
         QuicFrame pathChallengeFrame = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
         if (paddingSize > 0) {
