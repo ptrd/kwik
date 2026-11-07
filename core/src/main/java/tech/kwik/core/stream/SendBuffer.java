@@ -98,7 +98,7 @@ public class SendBuffer {
     }
 
     private void waitForBufferSpace(int len) throws InterruptedException {
-        // Thread safety: must be called with bufferLock held.
+        assert bufferLock.isHeldByCurrentThread();
         // The blocking writer must be registered before writerInterrupted is checked: interruptBlockedWriter sets the
         // flag before reading the blocking writer, so either this thread sees the flag, or it will be interrupted.
         blockingWriterThread = Thread.currentThread();
