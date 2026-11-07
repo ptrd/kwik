@@ -1080,7 +1080,7 @@ class QuicStreamImplTest {
     void whenResetRacesWithWriterAboutToBlockWriteShouldFail() throws Exception {
         // Given
         quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
-        ReentrantLock bufferLock = getSendBufferLock(quicStream);
+        ReentrantLock appendLock = getSendBufferAppendLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
         AtomicBoolean writeSucceeded = new AtomicBoolean(false);
@@ -1094,16 +1094,16 @@ class QuicStreamImplTest {
             }
         });
         // Holding the buffer lock lets the writer pass the stream state check, but not register itself as blocked writer.
-        bufferLock.lock();
+        appendLock.lock();
         try {
             writer.start();
-            waitUntilQueuedOnLock(writer, bufferLock);
+            waitUntilQueuedOnLock(writer, appendLock);
 
             // When
             quicStream.resetStream(9);
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
 
         // Then
@@ -1547,7 +1547,7 @@ class QuicStreamImplTest {
     void whenAbortRacesWithWriterAboutToBlockWriterShouldBeInterrupted() throws Exception {
         // Given
         quicStream.getOutputStream().write(new byte[maxSendBufferSize]);
-        ReentrantLock bufferLock = getSendBufferLock(quicStream);
+        ReentrantLock appendLock = getSendBufferAppendLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
         Thread writer = new Thread(() -> {
@@ -1559,16 +1559,16 @@ class QuicStreamImplTest {
             }
         });
         // Holding the buffer lock lets the writer pass the stream state check, but not register itself as blocked writer.
-        bufferLock.lock();
+        appendLock.lock();
         try {
             writer.start();
-            waitUntilQueuedOnLock(writer, bufferLock);
+            waitUntilQueuedOnLock(writer, appendLock);
 
             // When
             quicStream.abort();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
 
         // Then
@@ -1929,9 +1929,9 @@ class QuicStreamImplTest {
         }
     }
 
-    private ReentrantLock getSendBufferLock(QuicStreamImpl stream) throws NoSuchFieldException {
+    private ReentrantLock getSendBufferAppendLock(QuicStreamImpl stream) throws NoSuchFieldException {
         SendBuffer sendBuffer = (SendBuffer) new FieldReader(stream.getOutputStream(), "sendBuffer").read();
-        return (ReentrantLock) new FieldReader(sendBuffer, "bufferLock").read();
+        return (ReentrantLock) new FieldReader(sendBuffer, "appendLock").read();
     }
 
     private void waitUntilQueuedOnLock(Thread thread, ReentrantLock lock) throws InterruptedException {

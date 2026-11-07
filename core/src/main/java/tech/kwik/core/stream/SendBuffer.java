@@ -43,13 +43,15 @@ public class SendBuffer {
     private final ByteBuffer END_OF_STREAM_MARKER = ByteBuffer.allocate(0);
     private final int maxBufferSize;
     private final AtomicInteger bufferedBytes;
-    private final ReentrantLock bufferLock;
+    // Serializes appending to the send queue (data and end of stream marker) and guards the closed flag, so that no data
+    // is appended after the end of stream marker. Readers only take it to signal notFull.
+    private final ReentrantLock appendLock;
     private final Condition notFull;
     private volatile Thread blockingWriterThread;
     // Indicates the stream is reset or aborted, so a write that has not completed yet must fail.
     private volatile boolean writerInterrupted;
     // Indicates the end of stream marker has been added, so no more data can be added.
-    // Thread safety: guarded by bufferLock.
+    // Thread safety: guarded by appendLock.
     private boolean closed;
 
 
@@ -62,8 +64,8 @@ public class SendBuffer {
             maxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
         }
         bufferedBytes = new AtomicInteger();
-        bufferLock = new ReentrantLock();
-        notFull = bufferLock.newCondition();
+        appendLock = new ReentrantLock();
+        notFull = appendLock.newCondition();
     }
 
     /**
@@ -80,7 +82,7 @@ public class SendBuffer {
     public void write(byte[] data, int offset, int length) throws IOException, InterruptedException {
         assert length <= maxBufferSize;
         // Data is added while holding the lock, so it can never end up after the end of stream marker (see close()).
-        bufferLock.lock();
+        appendLock.lock();
         try {
             if (maxBufferSize - bufferedBytes.get() < length) {
                 waitForBufferSpace(length);
@@ -95,12 +97,12 @@ public class SendBuffer {
             bufferedBytes.getAndAdd(length);
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
     }
 
     private void waitForBufferSpace(int len) throws InterruptedException {
-        assert bufferLock.isHeldByCurrentThread();
+        assert appendLock.isHeldByCurrentThread();
         // The blocking writer must be registered before writerInterrupted is checked: interruptBlockedWriter sets the
         // flag before reading the blocking writer, so either this thread sees the flag, or it will be interrupted.
         blockingWriterThread = Thread.currentThread();
@@ -150,12 +152,12 @@ public class SendBuffer {
         }
 
         bufferedBytes.getAndAdd(-1 * nrOfBytes);
-        bufferLock.lock();
+        appendLock.lock();
         try {
             notFull.signal();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
         if (nrOfBytes < maxBytesToSend) {
             // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
@@ -178,14 +180,14 @@ public class SendBuffer {
      * space will fail.
      */
     public void close() {
-        bufferLock.lock();
+        appendLock.lock();
         try {
             closed = true;
             sendQueue.add(END_OF_STREAM_MARKER);
             notFull.signalAll();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
     }
 
@@ -194,24 +196,24 @@ public class SendBuffer {
      * end of stream marker.
      */
     public void reopen() {
-        bufferLock.lock();
+        appendLock.lock();
         try {
             closed = false;
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
     }
 
     public void clear() {
         sendQueue.clear();
         bufferedBytes.set(0);
-        bufferLock.lock();
+        appendLock.lock();
         try {
             notFull.signal();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
     }
 
