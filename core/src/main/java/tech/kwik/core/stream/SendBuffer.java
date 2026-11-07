@@ -36,14 +36,23 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class SendBuffer {
 
+    public static final int DEFAULT_MAX_BUFFER_SIZE = 50 * 1024;
+
     // Send queue contains stream bytes to send in order. The position of the first byte buffer in the queue determines the next byte(s) to send.
     private final Queue<ByteBuffer> sendQueue;
     private final ByteBuffer END_OF_STREAM_MARKER = ByteBuffer.allocate(0);
     private final int maxBufferSize;
     private final AtomicInteger bufferedBytes;
-    private final ReentrantLock bufferLock;
+    // Serializes appending to the send queue (data and end of stream marker) and guards the closed flag, so that no data
+    // is appended after the end of stream marker. Readers only take it to signal notFull.
+    private final ReentrantLock appendLock;
     private final Condition notFull;
     private volatile Thread blockingWriterThread;
+    // Indicates the stream is reset or aborted, so a write that has not completed yet must fail.
+    private volatile boolean writerInterrupted;
+    // Indicates the end of stream marker has been added, so no more data can be added.
+    // Thread safety: guarded by appendLock.
+    private boolean closed;
 
 
     public SendBuffer(Integer sendBufferSize) {
@@ -52,50 +61,65 @@ public class SendBuffer {
             maxBufferSize = sendBufferSize;
         }
         else {
-            maxBufferSize = 50 * 1024;
+            maxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
         }
         bufferedBytes = new AtomicInteger();
-        bufferLock = new ReentrantLock();
-        notFull = bufferLock.newCondition();
+        appendLock = new ReentrantLock();
+        notFull = appendLock.newCondition();
     }
 
     /**
-     * Writes data to the buffer. If the buffer is full, the method will block until there is enough space in the buffer.
+     * Writes data to the buffer. If there is not enough space in the buffer for all data, the method will block until
+     * there is. Data is either written completely or not at all.
      * This method makes defensive copies of the data.
-     * @param data
-     * @param off
-     * @param len
-     * @throws IOException
-     * @throws InterruptedException
+     * @param data  the data to write
+     * @param offset  the offset in data of the first byte to write
+     * @param length  the number of bytes to write; must not exceed the maximum buffer size, as the write would block forever
+     * @throws IOException when the buffer is closed, also when it is closed while waiting for buffer space
+     * @throws InterruptedException when the writer is interrupted by {@link #interruptBlockedWriter()}, also when that
+     * happens before the write started, or when the writing thread is interrupted while waiting for buffer space
      */
-    public void write(byte[] data, int off, int len) throws IOException, InterruptedException {
-        int availableBufferSpace = maxBufferSize - bufferedBytes.get();
-        if (len > availableBufferSpace) {
-            // Wait for enough buffer space to become available
-            bufferLock.lock();
-            blockingWriterThread = Thread.currentThread();
-            try {
-                while (maxBufferSize - bufferedBytes.get() < len) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedException();
-                    }
-                    // Might throw InterruptedException, must be handled by caller
-                    notFull.await();
-                }
-                if (Thread.currentThread().isInterrupted()) {
-                    // When an interrupt races with a signal, await() can return normally with the interrupt status set
-                    // (instead of throwing InterruptedException); the interrupted write must not complete.
-                    throw new InterruptedException();
-                }
+    public void write(byte[] data, int offset, int length) throws IOException, InterruptedException {
+        assert length <= maxBufferSize;
+        // Data is added while holding the lock, so it can never end up after the end of stream marker (see close()).
+        appendLock.lock();
+        try {
+            if (maxBufferSize - bufferedBytes.get() < length) {
+                waitForBufferSpace(length);
             }
-            finally {
-                blockingWriterThread = null;
-                bufferLock.unlock();
+            if (writerInterrupted) {
+                throw new InterruptedException();
+            }
+            if (closed) {
+                throw new IOException("output stream already closed");
+            }
+            sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, offset, offset + length)));
+            bufferedBytes.getAndAdd(length);
+        }
+        finally {
+            appendLock.unlock();
+        }
+    }
+
+    private void waitForBufferSpace(int len) throws InterruptedException {
+        assert appendLock.isHeldByCurrentThread();
+        // The blocking writer must be registered before writerInterrupted is checked: interruptBlockedWriter sets the
+        // flag before reading the blocking writer, so either this thread sees the flag, or it will be interrupted.
+        blockingWriterThread = Thread.currentThread();
+        try {
+            while (maxBufferSize - bufferedBytes.get() < len && !closed && !writerInterrupted) {
+                // Might throw InterruptedException, must be handled by caller
+                notFull.await();
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                // When an interrupt races with a signal, await() can return normally with the interrupt status set
+                // (instead of throwing InterruptedException); the interrupted write must not complete.
+                throw new InterruptedException();
             }
         }
-
-        sendQueue.add(ByteBuffer.wrap(Arrays.copyOfRange(data, off, off + len)));
-        bufferedBytes.getAndAdd(len);
+        finally {
+            blockingWriterThread = null;
+        }
     }
 
     public StreamFrame getStreamFrame(Version quicVersion, int streamId, long currentOffset, int maxBytesToSend) {
@@ -128,12 +152,12 @@ public class SendBuffer {
         }
 
         bufferedBytes.getAndAdd(-1 * nrOfBytes);
-        bufferLock.lock();
+        appendLock.lock();
         try {
             notFull.signal();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
         if (nrOfBytes < maxBytesToSend) {
             // This can happen when not enough data is buffer to fill a stream frame, or length field is 1 byte (instead of 2 that was counted for)
@@ -151,23 +175,54 @@ public class SendBuffer {
         return sendQueue.isEmpty();
     }
 
+    /**
+     * Adds the end of stream marker; after this, no more data can be written. A writer that is waiting for buffer
+     * space will fail.
+     */
     public void close() {
-        sendQueue.add(END_OF_STREAM_MARKER);
+        appendLock.lock();
+        try {
+            closed = true;
+            sendQueue.add(END_OF_STREAM_MARKER);
+            notFull.signalAll();
+        }
+        finally {
+            appendLock.unlock();
+        }
+    }
+
+    /**
+     * Makes a closed buffer accept data again; only to be used when the buffer is cleared, as that also removes the
+     * end of stream marker.
+     */
+    public void reopen() {
+        clear();
+        appendLock.lock();
+        try {
+            closed = false;
+        }
+        finally {
+            appendLock.unlock();
+        }
     }
 
     public void clear() {
         sendQueue.clear();
         bufferedBytes.set(0);
-        bufferLock.lock();
+        appendLock.lock();
         try {
             notFull.signal();
         }
         finally {
-            bufferLock.unlock();
+            appendLock.unlock();
         }
     }
 
+    /**
+     * Interrupts the writer that is waiting for buffer space and lets any write that has not completed yet fail.
+     */
     public void interruptBlockedWriter() {
+        writerInterrupted = true;
         Thread blocking = blockingWriterThread;
         if (blocking != null) {
             blocking.interrupt();

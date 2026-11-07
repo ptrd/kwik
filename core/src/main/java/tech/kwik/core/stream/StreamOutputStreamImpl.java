@@ -320,7 +320,7 @@ class StreamOutputStreamImpl extends StreamOutputStream implements FlowControlUp
 
     private void restart() {
         currentOffset = 0;
-        sendBuffer.clear();
+        sendBuffer.reopen();
         sendRequestsQueued.set(0);
     }
 
