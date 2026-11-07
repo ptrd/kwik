@@ -35,6 +35,7 @@ import tech.kwik.core.packet.PacketFilter;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.recovery.RecoveryManager;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.FlowControl;
 import tech.kwik.core.stream.StreamManager;
@@ -510,7 +511,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             // The response goes back over the path the challenge arrived on: the peer might be probing a new path
             // precisely because the current one stopped working, in which case a response on the current path
             // would never arrive.
-            getSender().sendAlternateAddress(response, alternatePath);
+            getSender().sendAlternateAddress(response, alternatePath, SendOptions.getDefault());
         }
         else {
             send(response, f -> {});

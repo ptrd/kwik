@@ -18,7 +18,9 @@
  */
 package tech.kwik.core.send;
 
+import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Result of a packet assembly operation: a list of QUIC packets to coalesce into one UDP datagram,
@@ -28,20 +30,27 @@ public class AssembledDatagram {
 
     private final List<SendItem> items;
     private final int minDatagramSize;
+    private final InetSocketAddress clientAddress;
+    private final SendOptions sendOptions;
 
-    public AssembledDatagram(SendItem item) {
-        this.items = List.of(item);
+    private AssembledDatagram() {
+        this.items = List.of();
         this.minDatagramSize = 0;
+        this.clientAddress = null;
+        this.sendOptions = SendOptions.getDefault();
     }
 
-    public AssembledDatagram(List<SendItem> items) {
-        this.items = items;
-        this.minDatagramSize = 0;
+    static AssembledDatagram empty() {
+        return new AssembledDatagram();
     }
 
-    public AssembledDatagram(List<SendItem> items, int minDatagramSize) {
+    public AssembledDatagram(List<SendItem> items, int minDatagramSize, SendOptions sendOptions) {
+        assert items != null && !items.isEmpty();
         this.items = items;
         this.minDatagramSize = minDatagramSize;
+        this.sendOptions = Objects.requireNonNull(sendOptions);
+        this.clientAddress = items.get(0).getClientAddress();
+        assert items.stream().allMatch(item -> item.getClientAddress().equals(clientAddress));
     }
 
     public List<SendItem> getItems() {
@@ -52,10 +61,21 @@ public class AssembledDatagram {
         return items.isEmpty();
     }
 
+    public InetSocketAddress getClientAddress() {
+        return clientAddress;
+    }
+
     /**
      * Returns the minimum UDP datagram size required, or 0 if no external padding is needed.
      */
     public int getMinDatagramSize() {
         return minDatagramSize;
+    }
+
+    /**
+     * Returns the (merged) send options of the packets in this datagram.
+     */
+    public SendOptions getSendOptions() {
+        return sendOptions;
     }
 }

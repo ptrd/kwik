@@ -28,17 +28,20 @@ public class FixedFrameSendRequest implements SendRequest {
     private final QuicFrame fixedFrame;
     private final Consumer<QuicFrame> lostCallback;
     private final InetSocketAddress alternateAddress;
+    private final SendOptions sendOptions;
 
     public FixedFrameSendRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback) {
         this.fixedFrame = fixedFrame;
         this.lostCallback = lostCallback;
         alternateAddress = null;
+        sendOptions = SendOptions.getDefault();
     }
 
-    public FixedFrameSendRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback, InetSocketAddress address) {
+    public FixedFrameSendRequest(QuicFrame fixedFrame, Consumer<QuicFrame> lostCallback, InetSocketAddress address, SendOptions sendOptions) {
         this.fixedFrame = fixedFrame;
         this.lostCallback = lostCallback;
         this.alternateAddress = address;
+        this.sendOptions = sendOptions;
     }
 
     public Class<QuicFrame> getFrameType() {
@@ -63,5 +66,10 @@ public class FixedFrameSendRequest implements SendRequest {
     @Override
     public InetSocketAddress getAlternateAddress() {
         return alternateAddress;
+    }
+
+    @Override
+    public SendOptions getSendOptions() {
+        return sendOptions;
     }
 }

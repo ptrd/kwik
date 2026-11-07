@@ -28,6 +28,7 @@ import tech.kwik.core.impl.VersionHolder;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.util.OneShotRateLimiter;
@@ -36,6 +37,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Map;
@@ -48,6 +50,12 @@ import java.util.concurrent.ScheduledExecutorService;
 public class PathValidator {
 
     private static final Random randomGenerator = new SecureRandom();
+    // Size of a datagram containing a path challenge that is expanded with padding.
+    static final int PADDED_PATH_CHALLENGE_DATAGRAM_SIZE = 1200;
+    // Upper bound for the size of a datagram containing a path challenge without padding: a short header packet with
+    // flags (1), max length destination connection id (20), max length packet number (4), path challenge frame (9)
+    // and AEAD tag (16).
+    static final int MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE = 1 + 20 + 4 + 9 + 16;
     private final VersionHolder version;
     private volatile InetSocketAddress currentAddress;
     private final SenderImpl sender;
@@ -55,7 +63,7 @@ public class PathValidator {
     private final Logger logger;
     private final ServerConnectionSocketManager socketManager;
     private final Clock clock;
-    private final Map<Long, PathValidation> pathValidationsByChallenge;
+    private final Map<Long, SentChallenge> pathValidationsByChallenge;
     private final Map<InetSocketAddress, PathValidation> pathValidationsByAddress;
     private final ScheduledExecutorService executor;
     private volatile long highestReceivedPacketNumber;
@@ -101,7 +109,13 @@ public class PathValidator {
                     migrateConnection(packetSourceAddress);
                 }
             }
-            else if (! pathValidationInProgress(packetSourceAddress)) {
+            else if (pathValidationInProgress(packetSourceAddress)) {
+                PathValidation validation = pathValidationsByAddress.get(packetSourceAddress);
+                if (validation != null) {
+                    validation.addBytesReceived(metaData.getDatagramSize());
+                }
+            }
+            else {
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
                 // "If the recipient has no unused connection IDs from the peer, it will not be able to send anything on
                 //  the new path until the peer provides one; ..."
@@ -117,7 +131,7 @@ public class PathValidator {
                     // https://www.rfc-editor.org/rfc/rfc9000.html#section-9
                     // "An endpoint MUST perform path validation (Section 8.2) if it detects any change to a peer's address, "
                     logger.info(String.format("Potential address migration? %s -> %s; starting path validation", currentAddress, packetSourceAddress));
-                    startValidation(packet, packetSourceAddress);
+                    startValidation(packet, metaData, packetSourceAddress);
                 }
             }
         }
@@ -130,8 +144,9 @@ public class PathValidator {
         return connectionIdProvider.unusedPeerConnectionIdAvailable();
     }
 
-    private void startValidation(QuicPacket packet, InetSocketAddress packetSourceAddress) {
+    private void startValidation(QuicPacket packet, PacketMetaData metaData, InetSocketAddress packetSourceAddress) {
         PathValidation validation = new PathValidation(packetSourceAddress, isProbingPacket(packet), clock.instant());
+        validation.addBytesReceived(metaData.getDatagramSize());
         pathValidationsByAddress.put(packetSourceAddress, validation);
 
         doValidation(validation);
@@ -145,19 +160,32 @@ public class PathValidator {
         //  than it would send an Initial packet. "
         int initialPto = 1000;
         int delay = initialPto * (int) (Math.pow(2, validation.getChallengeRepeatCount()));
+        long timeout = (long) (3 * initialPto * 1.05f);
 
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.4
         // "Endpoints SHOULD abandon path validation based on a timer."
-        if (clock.instant().isAfter(validation.startedAt().plusMillis((long) (3 * initialPto * 1.05f)))) {
+        if (clock.instant().isAfter(validation.startedAt().plusMillis(timeout))) {
             logger.info("Path validation failed for " + validation.getAddressToValidate() + " after " + validation.getChallengeRepeatCount() + " attempts and timeout of " + (3 * initialPto) + "ms");
             remove(validation);
         }
         else {
-            byte[] challenge = generateChallenge();
-            pathValidationsByChallenge.put(convertToLong(challenge), validation);
-            PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
-            sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate());
-            validation.incrementChallengeRepeatCount();
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
+            // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
+            //  maximum datagram size of 1200 bytes, unless the anti-amplification limit for the path does not permit
+            //  sending a datagram of this size."
+            // Padding must not consume all credit: enough must be left to send (unpadded) path challenges in the
+            // remaining attempts, in case this one gets lost.
+            long credit = validation.getAntiAmplificationCredit();
+            long reserved = (long) remainingAttempts(validation, delay, timeout) * MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE;
+            if (credit - PADDED_PATH_CHALLENGE_DATAGRAM_SIZE >= reserved) {
+                sendPathChallenge(validation, SendOptions.getDefault(), PADDED_PATH_CHALLENGE_DATAGRAM_SIZE, true);
+            }
+            else if (credit >= MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE) {
+                sendPathChallenge(validation, SendOptions.noPadding(), MAX_UNPADDED_PATH_CHALLENGE_DATAGRAM_SIZE, false);
+            }
+            else {
+                logger.info("Anti-amplification limit prevents sending path challenge to " + validation.getAddressToValidate());
+            }
 
             // And schedule the next check
             executor.schedule(() -> {
@@ -168,9 +196,33 @@ public class PathValidator {
         }
     }
 
+    /**
+     * Computes how many more path challenges will be sent (after the current one) before the validation times out,
+     * given the delay until the next attempt and the doubling of the delay with each attempt.
+     */
+    private int remainingAttempts(PathValidation validation, long delay, long timeout) {
+        long elapsed = Duration.between(validation.startedAt(), clock.instant()).toMillis();
+        int remaining = 0;
+        while (elapsed + delay <= timeout) {
+            remaining++;
+            elapsed += delay;
+            delay *= 2;
+        }
+        return remaining;
+    }
+
+    private void sendPathChallenge(PathValidation validation, SendOptions sendOptions, int datagramSize, boolean padded) {
+        byte[] challenge = generateChallenge();
+        pathValidationsByChallenge.put(convertToLong(challenge), new SentChallenge(validation, padded));
+        PathChallengeFrame pathChallengeFrame = new PathChallengeFrame(version.getVersion(), challenge);
+        sender.sendAlternateAddress(pathChallengeFrame, validation.getAddressToValidate(), sendOptions);
+        validation.addBytesSent(datagramSize);
+        validation.incrementChallengeRepeatCount();
+    }
+
     private void remove(PathValidation validation) {
         pathValidationsByAddress.remove(validation.getAddressToValidate());
-        pathValidationsByChallenge.values().removeIf(v -> v == validation);
+        pathValidationsByChallenge.values().removeIf(sent -> sent.validation == validation);
     }
 
     private void purgeOldValidations() {
@@ -237,10 +289,11 @@ public class PathValidator {
         //  which the PATH_CHALLENGE was sent."
         Long challenge = convertToLong(pathResponseFrame.getData());
         if (pathValidationsByChallenge.containsKey(challenge)) {
-            PathValidation pathValidation = pathValidationsByChallenge.remove(challenge);
-            pathValidation.setValidated();
+            SentChallenge sentChallenge = pathValidationsByChallenge.remove(challenge);
+            PathValidation pathValidation = sentChallenge.validation;
+            pathValidation.setValidated(sentChallenge.padded);
             InetSocketAddress validatedAddress = pathValidation.getAddressToValidate();
-            logger.info("Path validated: " + validatedAddress);
+            logger.info("Path validated: " + validatedAddress + (sentChallenge.padded? " (with full size packet)": " (with small packet)"));
             if (! pathValidation.isStartedByProbingPacket()) {
                 logger.info("Immediately migrating connection to validated address: " + validatedAddress);
                 migrateConnection(validatedAddress);
@@ -262,5 +315,21 @@ public class PathValidator {
     public boolean isValidated(InetSocketAddress newAddress) {
         PathValidation validation = pathValidationsByAddress.get(newAddress);
         return validation != null && validation.isValidated(clock.instant());
+    }
+
+    public boolean isValidatedWithFullSizePacket(InetSocketAddress address) {
+        PathValidation validation = pathValidationsByAddress.get(address);
+        return validation != null && validation.isValidated(clock.instant()) && validation.isValidatedWithFullSizePacket();
+    }
+
+    private static class SentChallenge {
+        final PathValidation validation;
+        // Whether the datagram containing the path challenge was expanded to 1200 bytes.
+        final boolean padded;
+
+        SentChallenge(PathValidation validation, boolean padded) {
+            this.validation = validation;
+            this.padded = padded;
+        }
     }
 }

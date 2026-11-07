@@ -47,6 +47,7 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
@@ -961,15 +962,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         byte[] challengeData = new byte[8];
         new SecureRandom().nextBytes(challengeData);
         pendingPathChallenges.add(ByteBuffer.wrap(challengeData).getLong());
-        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
-        // "An endpoint MUST expand datagrams that contain a PATH_CHALLENGE frame to at least the smallest allowed
-        //  maximum datagram size of 1200 bytes, unless the anti-amplification limit for the path does not permit
-        //  sending a datagram of this size."
-        // (a client is not subject to an anti-amplification limit)
-        int overhead = 1 + connectionIdManager.getCurrentPeerConnectionIdLength() + 4 + 16;   // header, cid, max packet number size, AEAD tag
         PathChallengeFrame challenge = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
-        int paddingSize = 1200 - overhead - challenge.getFrameLength();
-        getSender().sendAlternateAddress(new CompositeFrame(challenge, new Padding(paddingSize)), localAddress);
+        getSender().sendAlternateAddress(challenge, localAddress, SendOptions.getDefault());
     }
 
     @Override
@@ -1017,7 +1011,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.warn("Cannot send path challenge to alternate address, because it is not set");
                 return;
             }
-            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress());
+            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress(), SendOptions.getDefault());
         }
     }
 
