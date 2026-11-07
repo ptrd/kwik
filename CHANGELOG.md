@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## 0.12.2 (2026-11-07)
 
 - server: added `ServerConnector.Builder.withSupportedGroups` to restrict the TLS named groups accepted for key exchange,
   which makes it possible to enforce a post-quantum key exchange on the server side
@@ -11,6 +11,9 @@
   when a stream is reset or aborted
 - fix: lost connection flow-control credit (`MAX_DATA`) was not retransmitted
 - fix: receiving a final size lower than the offset of already received data now raises a transport error
+- fix: closing a stream while another thread was blocked writing to it could abort the connection or leave the stream
+  without end of stream; the blocked write now fails
+- fix: a write racing with a stream reset or abort could hang (abort) or complete (reset) instead of failing
 
 ## 0.12.1 (2026-10-18)
 
