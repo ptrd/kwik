@@ -36,6 +36,8 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class SendBuffer {
 
+    public static final int DEFAULT_MAX_BUFFER_SIZE = 50 * 1024;
+
     // Send queue contains stream bytes to send in order. The position of the first byte buffer in the queue determines the next byte(s) to send.
     private final Queue<ByteBuffer> sendQueue;
     private final ByteBuffer END_OF_STREAM_MARKER = ByteBuffer.allocate(0);
@@ -57,7 +59,7 @@ public class SendBuffer {
             maxBufferSize = sendBufferSize;
         }
         else {
-            maxBufferSize = 50 * 1024;
+            maxBufferSize = DEFAULT_MAX_BUFFER_SIZE;
         }
         bufferedBytes = new AtomicInteger();
         bufferLock = new ReentrantLock();

@@ -1078,7 +1078,7 @@ class QuicStreamImplTest {
     @Test
     void whenResetRacesWithWriterAboutToBlockWriteShouldFail() throws Exception {
         // Given
-        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        quicStream.getOutputStream().write(new byte[SendBuffer.DEFAULT_MAX_BUFFER_SIZE]);
         ReentrantLock bufferLock = getSendBufferLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
@@ -1545,7 +1545,7 @@ class QuicStreamImplTest {
     @Test
     void whenAbortRacesWithWriterAboutToBlockWriterShouldBeInterrupted() throws Exception {
         // Given
-        quicStream.getOutputStream().write(new byte[50 * 1024]);
+        quicStream.getOutputStream().write(new byte[SendBuffer.DEFAULT_MAX_BUFFER_SIZE]);
         ReentrantLock bufferLock = getSendBufferLock(quicStream);
 
         AtomicReference<Exception> thrownException = new AtomicReference<>();
@@ -1753,9 +1753,11 @@ class QuicStreamImplTest {
         // Given
         int sendBufferSize = 100;
         quicStream = new QuicStreamImpl(Version.getDefault(), 0, role, connection, streamManager,
-                new FlowControl(Role.Client, 9999, 9999, 9999, 9999), logger, sendBufferSize);
+                new FlowControl(Role.Client, 9999, 9999, 9999, 9999),
+                logger, sendBufferSize);
         Queue<Function<Integer, QuicFrame>> sendRequests = new ConcurrentLinkedQueue<>();
         doAnswer(invocation -> {
+            // This is what connection.send() does: it calls the frame supplier function to get a frame (from the buffer)
             sendRequests.add(invocation.getArgument(0));
             return null;
         }).when(connection).send(any(Function.class), anyInt(), any(EncryptionLevel.class), any(Consumer.class), anyBoolean());
@@ -1777,8 +1779,8 @@ class QuicStreamImplTest {
 
         // When
         outputStream.close();
-        // Sending empties the buffer, which wakes up the writer if it is still blocked.
         List<StreamFrame> framesSent = new ArrayList<>();
+        // Sending (executing the queued frame supplier functions) empties the buffer, which wakes up the writer if it is still blocked.
         framesSent.add((StreamFrame) sendRequests.poll().apply(1500));
         blockedWriter.join(1000);
         Function<Integer, QuicFrame> sendRequest;
