@@ -102,6 +102,19 @@ class SenderImplTest extends AbstractSenderTest {
     }
 
     @Test
+    void acknowledgementBeforeSocketSendReturnsDoesNotLeaveBytesInFlight() throws Exception {
+        var recovery = (tech.kwik.core.recovery.RecoveryManager) new FieldReader(sender, "recoveryManager").read();
+        ShortHeaderPacket packet = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
+        packet.setPacketNumber(0);
+        when(socketManager.send(any(ByteBuffer.class), any(InetSocketAddress.class))).thenAnswer(invocation -> {
+            recovery.received(new AckFrame(0), PnSpace.App, clock.instant().plusMillis(1));
+            return clock.instant();
+        });
+        sender.send(new AssembledDatagram(new SendItem(packet, clientAddress)));
+        assertThat(sender.getCongestionController().getBytesInFlight()).isZero();
+    }
+
+    @Test
     void senderStatisticsShouldWork() throws Exception {
         ShortHeaderPacket packet1 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[1100], false));
         ShortHeaderPacket packet2 = new ShortHeaderPacket(Version.getDefault(), new byte[4], new StreamFrame(0, new byte[11], false));
