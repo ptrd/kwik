@@ -100,6 +100,19 @@ public class QuicStreamImpl implements QuicStream {
     }
 
     @Override
+    public void enableReceiveWindowAutoTuning(long minimum, long maximum) {
+        if (maximum > streamManager.getMaxConnectionBufferSize()) {
+            throw new IllegalArgumentException("Receive window exceeds connection buffer size");
+        }
+        inputStream.enableReceiveWindowAutoTuning(minimum, maximum);
+    }
+
+    @Override
+    public long getReceiveWindowSize() {
+        return inputStream.getReceiveWindowSize();
+    }
+
+    @Override
     public OutputStream getOutputStream() {
         return outputStream;
     }

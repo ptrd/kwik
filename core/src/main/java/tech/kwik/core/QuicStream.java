@@ -31,6 +31,14 @@ import java.io.OutputStream;
  */
 public interface QuicStream {
 
+    default void enableReceiveWindowAutoTuning(long minimum, long maximum) {
+        throw new UnsupportedOperationException();
+    }
+
+    default long getReceiveWindowSize() {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Returns the input stream for reading data sent by the peer.
      *
