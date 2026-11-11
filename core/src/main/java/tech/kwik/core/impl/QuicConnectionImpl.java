@@ -994,7 +994,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return executor;
     }
 
-    private void schedule(Runnable command, int delay, TimeUnit unit) {
+    protected void schedule(Runnable command, int delay, TimeUnit unit) {
         try {
             scheduler.schedule(command, delay, unit);
         }

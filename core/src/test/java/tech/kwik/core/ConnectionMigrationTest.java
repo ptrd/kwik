@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import tech.kwik.core.impl.QuicClientConnectionImpl;
 import tech.kwik.core.log.Logger;
 import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.server.ApplicationProtocolConnection;
@@ -141,7 +142,10 @@ class ConnectionMigrationTest {
 
     private QuicClientConnection connect() throws Exception {
         InetSocketAddress relayAddress = relay.getAddress();
-        QuicClientConnection connection = QuicClientConnection.newBuilder()
+        // The test migrates again right after the previous migration, before the previous address (and its connection
+        // ID) is retired, so it needs more connection IDs than the default limit of 2 provides.
+        QuicClientConnection connection = QuicClientConnectionImpl.newExtendedBuilder()
+                .activeConnectionIdLimit(4)
                 .uri(URI.create("echo://" + relayAddress.getAddress().getHostAddress() + ":" + relayAddress.getPort()))
                 .applicationProtocol("echo")
                 .noServerCertificateCheck()

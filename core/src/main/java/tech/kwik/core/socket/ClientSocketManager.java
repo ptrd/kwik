@@ -29,9 +29,18 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Controls the socket used by the client to send and receive datagrams.
+ * Sockets are registered by local address, and a datagram is always sent from the socket of the address it was
+ * assembled for. A socket that is no longer the current or alternate one stays registered (so it can still send and
+ * receive) until it is explicitly removed with {@link #removeLocalAddress(InetSocketAddress)}. This way, a datagram
+ * assembled for an address just before that address is replaced can still be sent, without the need to make assembling
+ * and sending atomic with respect to changing addresses.
+ * Methods that change addresses must not be called concurrently with each other; they can be called concurrently with
+ * {@link #send(ByteBuffer, InetSocketAddress)}.
  */
 public class ClientSocketManager implements SocketManager {
 
@@ -39,8 +48,7 @@ public class ClientSocketManager implements SocketManager {
     private MultipleAddressReceiver receiver;
     private final DatagramSocketFactory socketFactory;
     private final Clock clock;
-    private volatile DatagramSocket socket;
-    private volatile DatagramSocket alternateSocket;
+    private final Map<InetSocketAddress, DatagramSocket> socketsByAddress;
     private volatile InetSocketAddress clientAddress;
     private volatile InetSocketAddress alternateClientAddress;
 
@@ -54,35 +62,38 @@ public class ClientSocketManager implements SocketManager {
         this.receiver = receiver;
         this.socketFactory = datagramSocketFactory != null? datagramSocketFactory: (address) -> new DatagramSocket();
         this.clock = clock;
-        this.socket = this.socketFactory.createSocket(serverAddress.getAddress());
-        clientAddress = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
-
-        receiver.addSocket(socket);
+        socketsByAddress = new ConcurrentHashMap<>();
+        clientAddress = register(socketFactory.createSocket(serverAddress.getAddress()));
     }
 
-    // Changing the sockets is synchronized on this instance, as is assembling and sending a datagram (see
-    // SenderImpl.sendIfAny), so a datagram is never assembled for one address and sent after it has been replaced.
+    /**
+     * Sends the datagram from the socket bound to the given (local) address. When that address is not registered
+     * (anymore), or its socket is closed while sending, the datagram is dropped: it is reported as sent, so loss
+     * detection will take care of retransmitting its contents.
+     */
     @Override
-    public synchronized Instant send(ByteBuffer data, InetSocketAddress address) throws IOException {
-        DatagramSocket sendSocket;
-        if (address.equals(clientAddress)) {
-            sendSocket = socket;
-        }
-        else if (address.equals(alternateClientAddress)) {
-            sendSocket = alternateSocket;
-        }
-        else {
-            throw new IllegalStateException("client address is not registered");
+    public Instant send(ByteBuffer data, InetSocketAddress address) throws IOException {
+        Instant timeSent = clock.instant();
+        DatagramSocket sendSocket = socketsByAddress.get(address);
+        if (sendSocket == null) {
+            return timeSent;
         }
         DatagramPacket datagram = new DatagramPacket(data.array(), data.limit(), serverAddress.getAddress(), serverAddress.getPort());
-        Instant timeSent = clock.instant();
-        sendSocket.send(datagram);
+        try {
+            sendSocket.send(datagram);
+        }
+        catch (SocketException socketException) {
+            if (!sendSocket.isClosed() || socketsByAddress.containsKey(address)) {
+                throw socketException;
+            }
+            // Socket was removed (and closed) while sending, so dropping the datagram is ok.
+        }
         return timeSent;
     }
 
     @Override
     public void close() {
-        socket.close();
+        socketsByAddress.values().forEach(DatagramSocket::close);
     }
 
     @Override
@@ -91,35 +102,33 @@ public class ClientSocketManager implements SocketManager {
     }
 
     public InetSocketAddress getLocalSocketAddress() {
-        return (InetSocketAddress) socket.getLocalSocketAddress();
+        return (InetSocketAddress) getSocket().getLocalSocketAddress();
     }
 
-    public synchronized InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
-        DatagramSocket oldSocket = socket;
-        if (port == null || alternateSocket == null || alternateSocket.getLocalPort() != port) {
-            DatagramSocket newSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
-            receiver.addSocket(newSocket);
-            clientAddress = new InetSocketAddress(newSocket.getInetAddress(), newSocket.getLocalPort());
-            socket = newSocket;
+    /**
+     * Makes the alternate address (when the given port matches it) or a new address the current one. The previous
+     * address stays registered until it is removed with {@link #removeLocalAddress(InetSocketAddress)}.
+     * @param port  the local port to use, or null for an ephemeral port
+     * @return  the new current address
+     */
+    public InetSocketAddress changeLocalAddress(Integer port) throws SocketException {
+        InetSocketAddress alternate = alternateClientAddress;
+        if (port == null || alternate == null || alternate.getPort() != port) {
+            clientAddress = register(socketFactory.createSocket(serverAddress.getAddress(), port));
         }
         else {
-            clientAddress = alternateClientAddress;
-            socket = alternateSocket;
-            alternateSocket = null;
+            clientAddress = alternate;
             alternateClientAddress = null;
         }
-        receiver.removeSocket(oldSocket);
         return clientAddress;
     }
 
     public DatagramSocket getSocket() {
-        return socket;
+        return socketsByAddress.get(clientAddress);
     }
 
-    public synchronized InetSocketAddress addLocalAddress(Integer port) throws SocketException {
-        alternateSocket = socketFactory.createSocket(serverAddress.getAddress(), port);
-        alternateClientAddress = new InetSocketAddress(alternateSocket.getInetAddress(), alternateSocket.getLocalPort());
-        receiver.addSocket(alternateSocket);
+    public InetSocketAddress addLocalAddress(Integer port) throws SocketException {
+        alternateClientAddress = register(socketFactory.createSocket(serverAddress.getAddress(), port));
         return alternateClientAddress;
     }
 
@@ -128,14 +137,26 @@ public class ClientSocketManager implements SocketManager {
     }
 
     /**
-     * Stops using the alternate address added with {@link #addLocalAddress(Integer)}, closing its socket.
+     * Stops using the given local address, closing its socket. The current address cannot be removed.
      */
-    public synchronized void removeAlternateAddress() {
-        DatagramSocket socketToRemove = alternateSocket;
-        if (socketToRemove != null) {
-            alternateSocket = null;
+    public void removeLocalAddress(InetSocketAddress address) {
+        if (address.equals(clientAddress)) {
+            throw new IllegalArgumentException("Cannot remove current address");
+        }
+        if (address.equals(alternateClientAddress)) {
             alternateClientAddress = null;
+        }
+        DatagramSocket socketToRemove = socketsByAddress.remove(address);
+        if (socketToRemove != null) {
             receiver.removeSocket(socketToRemove);
         }
+    }
+
+    private InetSocketAddress register(DatagramSocket socket) {
+        InetSocketAddress address = new InetSocketAddress(socket.getInetAddress(), socket.getLocalPort());
+        // Register before the address is published, so a datagram assembled for it can always be sent.
+        socketsByAddress.put(address, socket);
+        receiver.addSocket(socket);
+        return address;
     }
 }

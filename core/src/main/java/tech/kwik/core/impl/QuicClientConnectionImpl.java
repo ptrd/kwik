@@ -110,6 +110,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     // "The value of the active_connection_id_limit parameter MUST be at least 2."
     public static final int MIN_ACTIVE_CONNECTION_ID_LIMIT = 2;
     public static final int DEFAULT_ACTIVE_CONNECTION_ID_LIMIT = 2;
+    // Only needs to cover the time between the sender determining the address for a packet and sending it, which is
+    // normally way less than a millisecond; it is a lot larger to cover a sender thread that is not scheduled for a while.
+    private static final int RETIRE_LOCAL_ADDRESS_DELAY_IN_MILLIS = 100;
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "Values below 1200 are invalid."
     public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
@@ -880,9 +883,16 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void changeAddress(Integer localPort) throws SocketException {
-        int oldPort = socketManager.getLocalSocketAddress().getPort();
-        InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
-        log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
+        migrationLock.lock();
+        try {
+            InetSocketAddress oldAddress = socketManager.getClientAddress();
+            InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
+            socketManager.removeLocalAddress(oldAddress);
+            log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldAddress.getPort() + ")");
+        }
+        finally {
+            migrationLock.unlock();
+        }
     }
 
     @Override
@@ -911,9 +921,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             InetSocketAddress newAddress = socketManager.addLocalAddress(null);
             log.info("Validating path from local port " + newAddress.getPort() + " (currently using " + oldAddress.getPort() + ")");
             if (!validatePath(newAddress, timeout)) {
-                socketManager.removeAlternateAddress();
                 // The probes used a connection ID of their own, which must not be used on any other path.
-                connectionIdManager.addressNoLongerInUse(newAddress);
+                retireLocalAddressLater(newAddress);
                 log.info("Migration failed: path from local port " + newAddress.getPort() + " could not be validated within " + timeout.toMillis() + " ms");
                 return false;
             }
@@ -921,7 +930,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             socketManager.changeLocalAddress(newAddress.getPort());
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5
             // "An endpoint MUST NOT reuse a connection ID when sending from more than one local address, ..."
-            connectionIdManager.addressNoLongerInUse(oldAddress);
+            retireLocalAddressLater(oldAddress);
             log.info("Migrated connection from local port " + oldAddress.getPort() + " to " + newAddress.getPort());
             // Packets in flight on the old path are probably lost. An ack-eliciting packet on the new path makes loss
             // detection find out right away, instead of after the (exponentially backed-off) probe timeout.
@@ -931,6 +940,34 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         finally {
             migrationLock.unlock();
         }
+    }
+
+    /**
+     * Retires a local address that is not used anymore, together with its connection ID, after a short delay. The
+     * sender might have assembled a packet for the address just before it was replaced; the delay ensures such a
+     * packet can still be sent from that address with the connection ID of that address. Whether it arrives does not
+     * matter (the old path might or might not still work); what matters is that the address and connection ID are
+     * not mixed up, and that sending it does not fail.
+     */
+    private void retireLocalAddressLater(InetSocketAddress address) {
+        schedule(() -> {
+            migrationLock.lock();
+            try {
+                if (address.equals(socketManager.getClientAddress())) {
+                    // Has been made current again in the meantime (e.g. with changeAddress)
+                    return;
+                }
+                socketManager.removeLocalAddress(address);
+                if (connectionState == Status.Connected) {
+                    connectionIdManager.addressNoLongerInUse(address);
+                    // Not called in the context of processing received packets, so sender flush must be called explicitly.
+                    getSender().flush();
+                }
+            }
+            finally {
+                migrationLock.unlock();
+            }
+        }, RETIRE_LOCAL_ADDRESS_DELAY_IN_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -998,8 +1035,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void addLocalAddress(Integer localPort) throws SocketException {
-        InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
-        log.info("Added local address " + newAddress.getPort());
+        migrationLock.lock();
+        try {
+            InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
+            log.info("Added local address " + newAddress.getPort());
+        }
+        finally {
+            migrationLock.unlock();
+        }
     }
 
     public void sendPathChallenge(boolean useStandardPath, int paddingSize) {

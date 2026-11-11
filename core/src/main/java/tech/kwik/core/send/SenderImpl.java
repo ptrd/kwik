@@ -355,14 +355,9 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     void sendIfAny() throws IOException {
         AssembledDatagram assembled;
         do {
-            // Assembling and sending must be atomic with respect to a change of the (client) address, as the packets
-            // are assembled for a given address (e.g. contain the connection ID used on that path); the socket
-            // manager synchronizes such changes on itself.
-            synchronized (socketManager) {
-                assembled = assemblePacket();
-                if (!assembled.isEmpty()) {
-                    send(assembled);
-                }
+            assembled = assemblePacket();
+            if (!assembled.isEmpty()) {
+                send(assembled);
             }
         }
         while (!assembled.isEmpty());

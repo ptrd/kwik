@@ -30,9 +30,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -128,6 +132,136 @@ class ClientSocketManagerTest {
         // Then
         verify(newSocket).send(any());
         verify(initialSocket, never()).send(any());
+    }
+
+    // region address change
+    @Test
+    void previousAddressCanStillBeUsedAfterChangingLocalAddress() throws IOException {
+        // Given
+        DatagramSocket initialSocket = mockSocket(1000);
+        DatagramSocket newSocket = mockSocket(2000);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(initialSocket, newSocket));
+        InetSocketAddress initialAddress = socketMgr.getClientAddress();
+
+        // When
+        socketMgr.changeLocalAddress(null);
+        socketMgr.send(ByteBuffer.allocate(100), initialAddress);
+
+        // Then
+        verify(initialSocket).send(any());
+        verify(newSocket, never()).send(any());
+    }
+
+    @Test
+    void changingToAlternateAddressMakesItTheCurrentAddress() throws IOException {
+        // Given
+        DatagramSocket alternateSocket = mockSocket(2000);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(mockSocket(1000), alternateSocket));
+        InetSocketAddress alternateAddress = socketMgr.addLocalAddress(null);
+
+        // When
+        InetSocketAddress newAddress = socketMgr.changeLocalAddress(alternateAddress.getPort());
+
+        // Then
+        assertThat(newAddress).isEqualTo(alternateAddress);
+        assertThat(socketMgr.getClientAddress()).isEqualTo(alternateAddress);
+        assertThat(socketMgr.getAlternateClientAddress()).isNull();
+        assertThat(socketMgr.getSocket()).isSameAs(alternateSocket);
+    }
+
+    @Test
+    void removingAddressRemovesSocketFromReceiver() throws IOException {
+        // Given
+        DatagramSocket alternateSocket = mockSocket(2000);
+        MultipleAddressReceiver receiver = mock(MultipleAddressReceiver.class);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), receiver, socketFactory(mockSocket(1000), alternateSocket));
+        InetSocketAddress alternateAddress = socketMgr.addLocalAddress(null);
+
+        // When
+        socketMgr.removeLocalAddress(alternateAddress);
+
+        // Then
+        verify(receiver).removeSocket(alternateSocket);
+        assertThat(socketMgr.getAlternateClientAddress()).isNull();
+    }
+
+    @Test
+    void datagramForRemovedAddressIsDropped() throws IOException {
+        // Given
+        DatagramSocket initialSocket = mockSocket(1000);
+        DatagramSocket alternateSocket = mockSocket(2000);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(initialSocket, alternateSocket));
+        InetSocketAddress alternateAddress = socketMgr.addLocalAddress(null);
+        socketMgr.removeLocalAddress(alternateAddress);
+
+        // When
+        Instant timeSent = socketMgr.send(ByteBuffer.allocate(100), alternateAddress);
+
+        // Then
+        assertThat(timeSent).isNotNull();
+        verify(initialSocket, never()).send(any());
+        verify(alternateSocket, never()).send(any());
+    }
+
+    @Test
+    void datagramIsDroppedWhenSocketIsRemovedWhileSending() throws IOException {
+        // Given
+        DatagramSocket alternateSocket = mockSocket(2000);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(mockSocket(1000), alternateSocket));
+        InetSocketAddress alternateAddress = socketMgr.addLocalAddress(null);
+        doAnswer(invocation -> {
+            socketMgr.removeLocalAddress(alternateAddress);
+            when(alternateSocket.isClosed()).thenReturn(true);
+            throw new SocketException("Socket is closed");
+        }).when(alternateSocket).send(any());
+
+        // When
+        Instant timeSent = socketMgr.send(ByteBuffer.allocate(100), alternateAddress);
+
+        // Then
+        assertThat(timeSent).isNotNull();
+    }
+
+    @Test
+    void socketExceptionOnRegisteredSocketIsNotSuppressed() throws IOException {
+        // Given
+        DatagramSocket initialSocket = mockSocket(1000);
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(initialSocket, mockSocket(2000)));
+        doThrow(new SocketException("Network is unreachable")).when(initialSocket).send(any());
+
+        // When / Then
+        assertThatThrownBy(() -> socketMgr.send(ByteBuffer.allocate(100), socketMgr.getClientAddress()))
+                .isInstanceOf(SocketException.class);
+    }
+
+    @Test
+    void currentAddressCannotBeRemoved() throws IOException {
+        // Given
+        var socketMgr = new ClientSocketManager(new InetSocketAddress("example.com", 4433), mock(MultipleAddressReceiver.class), socketFactory(mockSocket(1000), mockSocket(2000)));
+
+        // When / Then
+        assertThatThrownBy(() -> socketMgr.removeLocalAddress(socketMgr.getClientAddress()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+    // endregion
+
+    private static DatagramSocket mockSocket(int localPort) {
+        DatagramSocket socket = mock(DatagramSocket.class);
+        when(socket.getLocalPort()).thenReturn(localPort);
+        return socket;
+    }
+
+    private static DatagramSocketFactory socketFactory(DatagramSocket initialSocket, DatagramSocket otherSocket) {
+        return new DatagramSocketFactory() {
+            @Override
+            public DatagramSocket createSocket(InetAddress destination) {
+                return initialSocket;
+            }
+            @Override
+            public DatagramSocket createSocket(InetAddress destination, Integer localPort) {
+                return otherSocket;
+            }
+        };
     }
 
     static class CustomSocketFactory implements DatagramSocketFactory {
