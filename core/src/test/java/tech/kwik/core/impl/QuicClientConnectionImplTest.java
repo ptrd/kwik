@@ -30,6 +30,7 @@ import tech.kwik.agent15.extension.KeyShareExtension;
 import tech.kwik.agent15.handshake.ClientHello;
 import tech.kwik.core.ConnectionConfig;
 import tech.kwik.core.ConnectionListener;
+import tech.kwik.core.ConnectionStalledEvent;
 import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.QuicClientConnection;
 import tech.kwik.core.QuicStream;
@@ -835,6 +836,25 @@ class QuicClientConnectionImplTest {
         assertThat(connectionTerminatedEvent.closeReason()).isEqualTo(ConnectionTerminatedEvent.CloseReason.StatelessReset);
         assertThat(connectionTerminatedEvent.closedByPeer()).isTrue();
         assertThat(connectionTerminatedEvent.hasApplicationError()).isFalse();
+    }
+    //endregion
+
+    //region stalled
+    @Test
+    void whenProbeTimeoutOccursConnectionListenerIsCalled() throws Exception {
+        // Given
+        ConnectionListener listener = mock(ConnectionListener.class);
+        connection.setConnectionListener(listener);
+
+        // When
+        connection.probeTimeoutOccurred(2, Duration.ofMillis(300));
+        testScheduledExecutor.check();
+
+        // Then
+        ArgumentCaptor<ConnectionStalledEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionStalledEvent.class);
+        verify(listener).stalled(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().probeTimeoutCount()).isEqualTo(2);
+        assertThat(eventCaptor.getValue().stalledDuration()).isEqualTo(Duration.ofMillis(300));
     }
     //endregion
 

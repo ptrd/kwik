@@ -19,6 +19,8 @@
 package tech.kwik.cli;
 
 import tech.kwik.agent15.util.ByteUtils;
+import tech.kwik.core.ConnectionListener;
+import tech.kwik.core.ConnectionStalledEvent;
 import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.cid.ConnectionIdStatus;
@@ -183,7 +185,17 @@ public class InteractiveShell {
         try {
             builder.connectTimeout(Duration.ofMillis(connectionTimeout));
             quicConnection = builder.build();
-            quicConnection.setConnectionListener(this::closed);
+            quicConnection.setConnectionListener(new ConnectionListener() {
+                @Override
+                public void stalled(ConnectionStalledEvent stalledEvent) {
+                    InteractiveShell.this.stalled(stalledEvent);
+                }
+
+                @Override
+                public void disconnected(ConnectionTerminatedEvent terminationEvent) {
+                    closed(terminationEvent);
+                }
+            });
             quicConnection.setPeerInitiatedStreamCallback(stream -> streams.put(stream.getStreamId(), stream));
 
             quicConnection.connect();
@@ -192,6 +204,11 @@ public class InteractiveShell {
         catch (IOException e) {
             System.out.println("\nError: " + e);
         }
+    }
+
+    private void stalled(ConnectionStalledEvent stalledEvent) {
+        System.out.println("Connection stalled: " + stalledEvent.probeTimeoutCount() + " probe timeout(s), no ack received for "
+                + stalledEvent.stalledDuration().toMillis() + " ms");
     }
 
     private void closed(ConnectionTerminatedEvent terminationEvent) {

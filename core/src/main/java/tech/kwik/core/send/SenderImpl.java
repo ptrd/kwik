@@ -141,7 +141,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         congestionController = new NewRenoCongestionController(log, this);
 
-        recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this, log);
+        recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this,
+                connection::probeTimeoutOccurred, log);
         connection.addHandshakeStateListener(recoveryManager);
         connection.addAckFrameReceivedListener(recoveryManager);
 

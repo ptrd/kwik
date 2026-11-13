@@ -848,6 +848,21 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    protected void emit(ConnectionStalledEvent connectionStalledEvent) {
+        if (connectionListener != null) {
+            callbackThread.submit(() -> connectionListener.stalled(connectionStalledEvent));
+        }
+    }
+
+    /**
+     * Called by the recovery manager (on the loss detection thread) each time a probe timeout occurs after the
+     * handshake is confirmed.
+     * @param probeTimeoutCount  number of consecutive probe timeouts, i.e. without receiving an acknowledgement in between
+     * @param stalledDuration  time elapsed since the connection stalled
+     */
+    public void probeTimeoutOccurred(int probeTimeoutCount, Duration stalledDuration) {
+    }
+
     protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {

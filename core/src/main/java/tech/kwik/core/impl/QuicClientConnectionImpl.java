@@ -476,6 +476,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void probeTimeoutOccurred(int probeTimeoutCount, Duration stalledDuration) {
+        emit(new ConnectionStalledEvent(this, probeTimeoutCount, stalledDuration));
+    }
+
+    @Override
     public void keepAlive(int seconds) {
         if (connectionState != Status.Connected) {
             throw new IllegalStateException("keep alive can only be set when connected");

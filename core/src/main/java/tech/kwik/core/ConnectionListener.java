@@ -19,12 +19,23 @@
 package tech.kwik.core;
 
 /**
- * Listener for connect and disconnect events.
- * Primary use case is to be notified when a connection is terminated and obtain the reason why, including the error code (if any).
+ * Listener for connection events like connect and disconnect events.
+ * Primary use case is to be notified when a connection is terminated and obtain the reason why, including the error
+ * code (if any).
  */
 public interface ConnectionListener {
 
     default void connected(ConnectionEstablishedEvent connectionEstablishedEvent) {};
+
+    /**
+     * Called (client connections only) each time a probe timeout occurs after the handshake is confirmed, which
+     * indicates the connection might be stalled. As the probe timeout is derived from the RTT, this is a
+     * path-independent indication that the network path currently used has stopped delivering packets: an application
+     * can use it to decide to migrate the connection (see {@link QuicClientConnection#migrate(java.time.Duration)}).
+     * Use the probe timeout count or stalled duration of the event to determine how severe the stall is.
+     * @param connectionStalledEvent
+     */
+    default void stalled(ConnectionStalledEvent connectionStalledEvent) {};
 
     void disconnected(ConnectionTerminatedEvent connectionTerminatedEvent);
 }

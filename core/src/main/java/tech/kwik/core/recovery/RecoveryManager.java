@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -111,10 +112,12 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     private final Logger log;
     private final ScheduledExecutorService scheduler;
     private final ProbeType probeType;
+    private final BiConsumer<Integer, Duration> probeTimeoutListener;
     private int receiverMaxAckDelay;
     private ScheduledFuture<?> lossDetectionFuture;  // Concurrency: guarded by scheduleLock
     private final Object scheduleLock = new Object();
     private volatile int ptoCount;
+    private Instant stallStart;  // Concurrency: only accessed by the loss detection thread
     private volatile Instant timerExpiration;
     private volatile HandshakeState handshakeState = HandshakeState.Initial;
     private volatile boolean hasBeenStopped = false;
@@ -124,6 +127,19 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
     }
 
     public RecoveryManager(Clock clock, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, Logger logger) {
+        this(clock, role, rttEstimater, congestionController, sender, (ptoCount, stalledDuration) -> {}, logger);
+    }
+
+    /**
+     * @param probeTimeoutListener  called (on the loss detection thread) each time a probe is sent after the handshake
+     *                              is confirmed, with the number of consecutive probe timeouts and the time elapsed
+     *                              since the last ack-eliciting packet before the first probe timeout was sent.
+     */
+    public RecoveryManager(Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, BiConsumer<Integer, Duration> probeTimeoutListener, Logger logger) {
+        this(Clock.systemUTC(), role, rttEstimater, congestionController, sender, probeTimeoutListener, logger);
+    }
+
+    public RecoveryManager(Clock clock, Role role, RttEstimator rttEstimater, CongestionController congestionController, Sender sender, BiConsumer<Integer, Duration> probeTimeoutListener, Logger logger) {
         this.clock = clock;
         this.role = role;
         this.rttEstimater = rttEstimater;
@@ -132,6 +148,7 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             lossDetectors[pnSpace.ordinal()] = new LossDetector(clock ,this, rttEstimater, congestionController, () -> sender.flush(), logger.getQLog());
         }
         this.sender = sender;
+        this.probeTimeoutListener = probeTimeoutListener;
         log = logger;
 
         scheduler = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("loss-detection"));
@@ -309,6 +326,11 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
             }
         }
 
+        if (ptoCount == 0 || stallStart == null) {
+            // First probe timeout of a series (the series ends when ptoCount is reset)
+            PnSpaceTime earliestLastAckElicitingSent = getEarliestLossTime(LossDetector::getLastAckElicitingSent);
+            stallStart = earliestLastAckElicitingSent != null? earliestLastAckElicitingSent.lossTime: clock.instant();
+        }
         ptoCount++;
         int nrOfProbes = ptoCount > 1 ? 2 : 1;
 
@@ -320,6 +342,9 @@ public class RecoveryManager implements FrameReceivedListener<AckFrame>, Handsha
                 return;
             }
             sendOneOrTwoAckElicitingPackets(ptoTimeAndSpace.pnSpace, nrOfProbes);
+            if (handshakeState == HandshakeState.Confirmed) {
+                probeTimeoutListener.accept(ptoCount, Duration.between(stallStart, clock.instant()));
+            }
         }
         else {
             // Must be the peer awaiting address validation or race condition
