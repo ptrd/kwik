@@ -19,6 +19,7 @@
 package tech.kwik.core.path;
 
 import tech.kwik.core.cid.ConnectionIdProvider;
+import tech.kwik.core.frame.ConnectionCloseFrame;
 import tech.kwik.core.frame.NewConnectionIdFrame;
 import tech.kwik.core.frame.Padding;
 import tech.kwik.core.frame.PathChallengeFrame;
@@ -42,6 +43,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 
@@ -102,6 +104,15 @@ public class PathValidator {
                 }
             }
             else if (! pathValidationInProgress(packetSourceAddress)) {
+                if (containsConnectionClose(packet)) {
+                    // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
+                    // "An endpoint that receives a CONNECTION_CLOSE frame MAY send a single packet containing a
+                    //  CONNECTION_CLOSE frame before entering the draining state, (...) An endpoint MUST NOT send further
+                    //  packets."
+                    logger.info(String.format("Address change %s -> %s in packet closing the connection; not starting path validation",
+                            currentAddress, packetSourceAddress));
+                    return;
+                }
                 // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.3
                 // "If the recipient has no unused connection IDs from the peer, it will not be able to send anything on
                 //  the new path until the peer provides one; ..."
@@ -160,12 +171,25 @@ public class PathValidator {
             validation.incrementChallengeRepeatCount();
 
             // And schedule the next check
-            executor.schedule(() -> {
-                if (validation.isInProgress()) {
-                    doValidation(validation);
-                }
-            }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            try {
+                executor.schedule(() -> {
+                    if (validation.isInProgress()) {
+                        doValidation(validation);
+                    }
+                }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            }
+            catch (RejectedExecutionException rejected) {
+                // Can happen when already stopped; don't bother
+            }
         }
+    }
+
+    /**
+     * Stops all path validations and shuts down the executor that schedules them; to be called when the connection
+     * is terminated.
+     */
+    public void stop() {
+        executor.shutdownNow();
     }
 
     private void remove(PathValidation validation) {
@@ -213,6 +237,10 @@ public class PathValidator {
     private Long convertToLong(byte[] challenge) {
         assert challenge.length == 8;
         return ByteBuffer.wrap(challenge).getLong();
+    }
+
+    private static boolean containsConnectionClose(QuicPacket packet) {
+        return packet.getFrames().stream().anyMatch(frame -> frame instanceof ConnectionCloseFrame);
     }
 
     static boolean isProbingPacket(QuicPacket packet) {

@@ -53,6 +53,7 @@ import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.path.PathValidator;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
@@ -74,6 +75,7 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -447,6 +449,32 @@ class ServerConnectionImplTest {
 
         // Then
         assertThat(closeCallbackIsCalled.get()).isTrue();
+    }
+
+    @Test
+    void whenServerConnectionIsTerminatedPathValidatorIsStopped() throws Exception {
+        // Given
+        String migrationProperty = "tech.kwik.server.connection-migration.enabled";
+        String previousValue = System.setProperty(migrationProperty, "true");
+        try {
+            connection = createServerConnection(createTlsServerEngine(), null);
+        }
+        finally {
+            if (previousValue == null) {
+                System.clearProperty(migrationProperty);
+            }
+            else {
+                System.setProperty(migrationProperty, previousValue);
+            }
+        }
+        PathValidator pathValidator = (PathValidator) new FieldReader(connection, "pathValidator").read();
+        ScheduledExecutorService pathValidatorExecutor = (ScheduledExecutorService) new FieldReader(pathValidator, "executor").read();
+
+        // When
+        connection.preTerminateHook();
+
+        // Then
+        assertThat(pathValidatorExecutor.isShutdown()).isTrue();
     }
     //endregion
 
