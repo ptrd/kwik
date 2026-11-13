@@ -499,21 +499,20 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     public void process(Padding paddingFrame, QuicPacket packet, PacketMetaData metaData) {
     }
 
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-path_challenge-frames
-    // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.17
+        // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
         PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
-        // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
-        // "Responses to path validation using PATH_RESPONSE frames are sent just once."
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.2
+        // "A PATH_RESPONSE frame MUST be sent on the network path where the PATH_CHALLENGE frame was received."
         InetSocketAddress alternatePath = getAlternatePath(metaData);
         if (alternatePath != null) {
-            // The response goes back over the path the challenge arrived on: the peer might be probing a new path
-            // precisely because the current one stopped working, in which case a response on the current path
-            // would never arrive.
             getSender().sendAlternateAddress(response, alternatePath, SendOptions.getDefault());
         }
         else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.3
+            // "Responses to path validation using PATH_RESPONSE frames are sent just once."
             send(response, f -> {});
         }
     }
@@ -521,12 +520,10 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     /**
      * Determines whether a packet was received over another network path than the one currently in use.
      * @param metaData  the meta data of the received packet
-     * @return  the address to pass to {@link tech.kwik.core.send.Sender#sendAlternateAddress(QuicFrame, InetSocketAddress)} to send over
-     * the path the packet was received on, or null if it was received over the current path
+     * @return          the alternate path (in client role: the local address, in server role: the remote address) the
+     *                  packet was received on, or null if it was received over the current path
      */
-    protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
-        return null;
-    }
+    abstract protected InetSocketAddress getAlternatePath(PacketMetaData metaData);
 
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {

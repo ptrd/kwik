@@ -1026,12 +1026,14 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
 
     @Override
     protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
-        InetSocketAddress localAddress = metaData.localAddress();
+        InetSocketAddress receivedOn = metaData.localAddress();
         InetSocketAddress alternateAddress = socketManager.getAlternateClientAddress();
-        if (localAddress != null && alternateAddress != null && localAddress.getPort() == alternateAddress.getPort()) {
+        if (receivedOn != null && alternateAddress != null && receivedOn.getPort() == alternateAddress.getPort()) {
             return alternateAddress;
         }
-        return null;
+        else {
+            return null;
+        }
     }
 
     public void addLocalAddress(Integer localPort) throws SocketException {
