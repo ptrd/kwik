@@ -29,13 +29,8 @@ public class SendStatistics {
     private final int smoothedRtt;
     private final int rttVar;
     private final int latestRtt;
-    private final int consecutivePtoCount;
 
     public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long dataBytesSent, long lostPackets, int smoothedRtt, int rttVar, int latestRtt) {
-        this(datagramsSent, packetsSent, bytesSent, dataBytesSent, lostPackets, smoothedRtt, rttVar, latestRtt, 0);
-    }
-
-    public SendStatistics(int datagramsSent, long packetsSent, long bytesSent, long dataBytesSent, long lostPackets, int smoothedRtt, int rttVar, int latestRtt, int consecutivePtoCount) {
         this.datagramsSent = datagramsSent;
         this.packetsSent = packetsSent;
         this.bytesSent = bytesSent;
@@ -44,7 +39,6 @@ public class SendStatistics {
         this.smoothedRtt = smoothedRtt;
         this.rttVar = rttVar;
         this.latestRtt = latestRtt;
-        this.consecutivePtoCount = consecutivePtoCount;
     }
 
     public int datagramsSent() {
@@ -77,9 +71,5 @@ public class SendStatistics {
 
     public int latestRtt() {
         return latestRtt;
-    }
-
-    public int consecutivePtoCount() {
-        return consecutivePtoCount;
     }
 }
