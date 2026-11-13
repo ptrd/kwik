@@ -597,10 +597,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     /**
-     * Trivial (do nothing) override to make method accessible in this package.
+     * Stops path validation (if enabled); the override also makes the method accessible in this package.
      */
     @Override
-    protected void preTerminateHook() {}
+    protected void preTerminateHook() {
+        if (pathValidator != null) {
+            pathValidator.stop();
+        }
+    }
 
     @Override
     protected void postTerminateHook() {

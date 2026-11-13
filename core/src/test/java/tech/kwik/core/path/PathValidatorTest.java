@@ -40,6 +40,9 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -535,6 +538,38 @@ class PathValidatorTest {
 
         // Then
         verify(socketManager, never()).changeClientAddress(any(InetSocketAddress.class));
+    }
+    //endregion
+
+    //region stop
+    @Test
+    void whenStoppedNoNewPathChallengesAreSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+        clearInvocations(sender);
+
+        // When
+        pathValidator.stop();
+        testClock.fastForward(1000);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+    }
+
+    @Test
+    void whenStoppedExecutorThreadTerminates() throws Exception {
+        // Given
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        PathValidator validator = new PathValidator(executor, VersionHolder.with(Version.getDefault()), defaultClientAddress,
+                sender, socketManager, testClock, connectionIdProvider, mock(Logger.class));
+        validator.checkSourceAddress(normalPacket(), metaDataFor(1200, new InetSocketAddress("localhost", 59643)));
+
+        // When
+        validator.stop();
+
+        // Then
+        assertThat(executor.awaitTermination(1, TimeUnit.SECONDS)).isTrue();
     }
     //endregion
 

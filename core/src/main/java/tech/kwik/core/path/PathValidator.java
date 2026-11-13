@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 
@@ -170,12 +171,25 @@ public class PathValidator {
             validation.incrementChallengeRepeatCount();
 
             // And schedule the next check
-            executor.schedule(() -> {
-                if (validation.isInProgress()) {
-                    doValidation(validation);
-                }
-            }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            try {
+                executor.schedule(() -> {
+                    if (validation.isInProgress()) {
+                        doValidation(validation);
+                    }
+                }, delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            }
+            catch (RejectedExecutionException rejected) {
+                // Can happen when already stopped; don't bother
+            }
         }
+    }
+
+    /**
+     * Stops all path validations and shuts down the executor that schedules them; to be called when the connection
+     * is terminated.
+     */
+    public void stop() {
+        executor.shutdownNow();
     }
 
     private void remove(PathValidation validation) {
