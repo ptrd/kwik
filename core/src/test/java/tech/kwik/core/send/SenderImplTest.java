@@ -30,6 +30,7 @@ import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
 import tech.kwik.core.frame.AckFrame;
 import tech.kwik.core.frame.CryptoFrame;
+import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PingFrame;
 import tech.kwik.core.frame.StreamFrame;
 import tech.kwik.core.impl.*;
@@ -224,6 +225,50 @@ class SenderImplTest extends AbstractSenderTest {
 
         // Then
         verify(socketManager).send(any(ByteBuffer.class), any(InetSocketAddress.class));
+    }
+
+    @Test
+    void pathChallengeForAlternateAddressIsSentToThatAddress() throws Exception {
+        // Given
+        sender.enableAllLevels();
+        InetSocketAddress alternateAddress = new InetSocketAddress(InetAddress.getLoopbackAddress(), 59643);
+        sender.sendAlternateAddress(new PathChallengeFrame(Version.getDefault(), new byte[8]), alternateAddress);
+
+        // When
+        sender.sendIfAny();
+
+        // Then
+        verify(socketManager).send(any(ByteBuffer.class), eq(alternateAddress));
+    }
+
+    @Test
+    void pathChallengeQueuedBeforeSenderIsStoppedIsNotSent() throws Exception {
+        // Given
+        sender.enableAllLevels();
+        InetSocketAddress alternateAddress = new InetSocketAddress(InetAddress.getLoopbackAddress(), 59643);
+        sender.sendAlternateAddress(new PathChallengeFrame(Version.getDefault(), new byte[8]), alternateAddress);
+
+        // When
+        sender.stop();
+        sender.sendIfAny();
+
+        // Then
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
+    }
+
+    @Test
+    void pathChallengeQueuedAfterSenderIsStoppedIsNotSent() throws Exception {
+        // Given
+        sender.enableAllLevels();
+        sender.stop();
+
+        // When
+        InetSocketAddress alternateAddress = new InetSocketAddress(InetAddress.getLoopbackAddress(), 59643);
+        sender.sendAlternateAddress(new PathChallengeFrame(Version.getDefault(), new byte[8]), alternateAddress);
+        sender.sendIfAny();
+
+        // Then
+        verify(socketManager, never()).send(any(ByteBuffer.class), any(InetSocketAddress.class));
     }
 
     @Test

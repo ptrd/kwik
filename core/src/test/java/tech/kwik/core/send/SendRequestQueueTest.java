@@ -223,4 +223,17 @@ class SendRequestQueueTest {
         assertThat(request1).isEmpty();
         assertThat(request2).isPresent();
     }
+
+    @Test
+    void whenQueueIsClearedAlternateAddressRequestsAreRemoved() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress());
+
+        // When
+        sendRequestQueue.clear();
+
+        // Then
+        assertThat(sendRequestQueue.hasAlternateAddressRequest()).isFalse();
+    }
 }

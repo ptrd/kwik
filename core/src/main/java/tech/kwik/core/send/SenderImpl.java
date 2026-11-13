@@ -197,6 +197,14 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame)) {
             throw new IllegalArgumentException("Only path challenge/response frames can be sent to an alternate address");
         }
+        if (stopped) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.1
+            // "In the closing state, an endpoint retains only enough information to generate a packet containing a
+            //  CONNECTION_CLOSE frame and to identify packets as belonging to the connection."
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.2
+            // "an endpoint in the draining state MUST NOT send any packets."
+            return;
+        }
         sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
         wakeUpSenderLoop();
     }

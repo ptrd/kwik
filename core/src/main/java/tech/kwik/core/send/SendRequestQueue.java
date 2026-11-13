@@ -219,6 +219,7 @@ public class SendRequestQueue {
         cleared = true;
         requestQueue.clear();
         probeQueue.clear();
+        altAddressRequestQueue.clear();
         if (dropAcks) {
             synchronized (ackLock) {
                 nextAckTime = null;

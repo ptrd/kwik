@@ -108,6 +108,18 @@ class PathValidatorTest {
     }
 
     @Test
+    void whenPacketWithDifferentClientAddressContainsConnectionCloseNoPathChallengeIsSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(44, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(connectionClosePacket(), packetMetaData);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+    }
+
+    @Test
     void whenPathValidationInProgressDoNotRespondToChangedClientAddressWithPathChallenge() {
         // Given
         PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
@@ -580,6 +592,12 @@ class PathValidatorTest {
 
     private QuicPacket normalPacket(long pn) {
         ShortHeaderPacket packet = new ShortHeaderPacket(pn, new byte[8], new StreamFrame(0, new byte[1130], false));
+        setSize(packet);
+        return packet;
+    }
+
+    private QuicPacket connectionClosePacket() {
+        ShortHeaderPacket packet = new ShortHeaderPacket(68, new byte[8], new ConnectionCloseFrame(Version.getDefault()));
         setSize(packet);
         return packet;
     }
