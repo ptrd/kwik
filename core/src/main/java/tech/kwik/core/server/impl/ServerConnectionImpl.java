@@ -607,19 +607,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
-        super.process(pathChallengeFrame, packet, metaData);
-    }
-
-    @Override
     protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
         InetSocketAddress source = metaData.sourceAddress();
-        // Only a path the validator knows about has a peer connection ID assigned; without one nothing can be sent.
-        if (connectionMigrationEnabled && source != null && !source.equals(socketManager.getClientAddress())
-                && pathValidator.isValidatedOrInProgress(source)) {
+        if (!source.equals(socketManager.getClientAddress())) {
             return source;
         }
-        return null;
+        else {
+            return null;
+        }
     }
 
     @Override

@@ -51,6 +51,13 @@ public interface ConnectionIdProvider {
     boolean unusedPeerConnectionIdAvailable();
 
     /**
+     * Returns true if a connection ID is available for the given address, false otherwise.
+     * @param address
+     * @return
+     */
+    boolean hasConnectionIdForAddress(InetSocketAddress address);
+
+    /**
      * Returns true if the peer uses zero-length connection IDs, false otherwise.
      * @return
      */

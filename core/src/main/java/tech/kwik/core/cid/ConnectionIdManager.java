@@ -340,6 +340,17 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     @Override
+    public boolean hasConnectionIdForAddress(InetSocketAddress address) {
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.hasConnectionIdFor(address);
+        }
+        else {
+            // Peer uses zero-length connection IDs, which can be used for any address.
+            return true;
+        }
+    }
+
+    @Override
     public boolean peerUsesZeroLengthConnectionId() {
         return peerCidRegistry == null;
     }

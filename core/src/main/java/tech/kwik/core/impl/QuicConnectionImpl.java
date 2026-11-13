@@ -508,8 +508,13 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         // "A PATH_RESPONSE frame MUST be sent on the network path where the PATH_CHALLENGE frame was received."
         InetSocketAddress alternatePath = getAlternatePath(metaData);
         if (alternatePath != null) {
-            getSender().sendAlternateAddress(response, alternatePath, SendOptions.getDefault());
-        }
+            if (getConnectionIdManager().hasConnectionIdForAddress(alternatePath)) {
+                getSender().sendAlternateAddress(response, alternatePath, SendOptions.getDefault());
+            }
+            else {
+                log.warn("Cannot respond to path challenge, because no connection ID for address " + alternatePath);
+            }
+         }
         else {
             // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.3
             // "Responses to path validation using PATH_RESPONSE frames are sent just once."
