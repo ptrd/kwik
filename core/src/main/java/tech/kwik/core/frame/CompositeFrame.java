@@ -41,6 +41,10 @@ public class CompositeFrame extends QuicFrame {
         throw new UnsupportedOperationException("CompositeFrame does not support accept method directly. Use individual frames instead.");
     }
 
+    public QuicFrame getFirstFrame() {
+        return frame1;
+    }
+
     @Override
     public int getFrameLength() {
         return frame1.getFrameLength() + frame2.getFrameLength();
