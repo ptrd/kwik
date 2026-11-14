@@ -1,5 +1,13 @@
 # Releases
 
+## 0.12.3 (2026-11-15)
+
+- added connection migration method to client: `QuicClientConnection.migrate(Duration)` moves the connection to a new  
+  local port after validating the new path; also there is now a `migrate` command in the CLI interactive shell
+- added `ConnectionListener.stalled()` callback, called for client connections when (on an already established connection)
+  a probe timeout occurs, so an application can decide to migrate
+- server: path challenge packets are padded to 1200 bytes when the anti-amplification limit allows it
+
 ## 0.12.2 (2026-11-07)
 
 - server: added `ServerConnector.Builder.withSupportedGroups` to restrict the TLS named groups accepted for key exchange,
