@@ -103,6 +103,7 @@ public class InteractiveShell {
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("udp_add", this::addUdpPort);
+        commands.put("migrate", this::migrate);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
         commands.put("pc", this::pathChallenge);
@@ -368,6 +369,36 @@ public class InteractiveShell {
     private void addUdpPort(String args) {
         try {
             quicConnection.addLocalAddress(toInt(args));
+        }
+        catch (SocketException e) {
+            error(e);
+        }
+    }
+
+    private void migrate(String arg) {
+        if (quicConnection == null) {
+            System.out.println("Error: not connected");
+            return;
+        }
+        int timeout = 1000;
+        if (!arg.isBlank()) {
+            try {
+                timeout = Integer.parseInt(arg);
+            }
+            catch (NumberFormatException notANumber) {
+                System.out.println("Usage: migrate [<path validation timeout in ms>]");
+                return;
+            }
+        }
+
+        try {
+            InetSocketAddress oldAddress = quicConnection.getLocalAddress();
+            if (quicConnection.migrate(Duration.ofMillis(timeout))) {
+                System.out.println("Migrated from local port " + oldAddress.getPort() + " to " + quicConnection.getLocalAddress().getPort());
+            }
+            else {
+                System.out.println("Migration failed (see log for reason)");
+            }
         }
         catch (SocketException e) {
             error(e);
