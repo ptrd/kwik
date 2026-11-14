@@ -27,6 +27,7 @@ import tech.kwik.core.common.PnSpace;
 import tech.kwik.core.crypto.Aead;
 import tech.kwik.core.crypto.ConnectionSecrets;
 import tech.kwik.core.crypto.MissingKeysException;
+import tech.kwik.core.frame.CompositeFrame;
 import tech.kwik.core.frame.PathChallengeFrame;
 import tech.kwik.core.frame.PathResponseFrame;
 import tech.kwik.core.frame.QuicFrame;
@@ -50,7 +51,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -141,7 +141,8 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
 
         congestionController = new NewRenoCongestionController(log, this);
 
-        recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this, log);
+        recoveryManager = new RecoveryManager(connection.getRole(), rttEstimater, congestionController, this,
+                connection::probeTimeoutOccurred, log);
         connection.addHandshakeStateListener(recoveryManager);
         connection.addAckFrameReceivedListener(recoveryManager);
 
@@ -193,11 +194,12 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     @Override
-    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address) {
-        if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame)) {
+    public void sendAlternateAddress(QuicFrame frame, InetSocketAddress address, SendOptions sendOptions) {
+        if (! (frame instanceof PathChallengeFrame || frame instanceof PathResponseFrame ||
+                frame instanceof CompositeFrame && ((CompositeFrame) frame).getFrames().anyMatch(f -> f instanceof PathChallengeFrame || f instanceof PathResponseFrame))) {
             throw new IllegalArgumentException("Only path challenge/response frames can be sent to an alternate address");
         }
-        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address);
+        sendRequestQueue[EncryptionLevel.App.ordinal()].addAlternateAddressRequest(frame, address, sendOptions);
         wakeUpSenderLoop();
     }
 
@@ -405,6 +407,17 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
     }
 
     void send(AssembledDatagram assembledDatagram) throws IOException {
+        ByteBuffer buffer = serializePackets(assembledDatagram);
+        if (buffer == null) {
+            return;
+        }
+
+        Instant timeSent = socketManager.send(buffer, assembledDatagram.getClientAddress());
+
+        registerSentPackets(assembledDatagram.getItems(), buffer.position(), timeSent);
+    }
+
+    private ByteBuffer serializePackets(AssembledDatagram assembledDatagram) {
         List<SendItem> itemsToSend = assembledDatagram.getItems();
         byte[] datagramData = new byte[maxPacketSize];
         ByteBuffer buffer = ByteBuffer.wrap(datagramData);
@@ -436,24 +449,26 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         }
         if (buffer.position() == 0) {
             // Nothing to send
-            return;
+            return null;
         }
         addExternalPadding(buffer, assembledDatagram.getMinDatagramSize());
 
         buffer.limit(buffer.position());
+        return buffer;
+    }
 
-        Instant timeSent = socketManager.send(buffer, itemsToSend.stream().findAny().get().getClientAddress());
+    private void registerSentPackets(List<SendItem> itemsSent, int totalSize, Instant timeSent) {
         datagramsSent++;
-        packetsSent += itemsToSend.size();
-        bytesSent += buffer.position();
+        packetsSent += itemsSent.size();
+        bytesSent += totalSize;
 
-        itemsToSend.stream()
+        itemsSent.stream()
                 .forEach(item -> {
                     recoveryManager.packetSent(item.getPacket(), timeSent, item.getPacketLostCallback());
                     idleTimer.packetSent(item.getPacket(), timeSent);
                 });
 
-        List<QuicPacket> packetsSent = itemsToSend.stream().map(item -> item.getPacket()).collect(Collectors.toList());
+        List<QuicPacket> packetsSent = itemsSent.stream().map(item -> item.getPacket()).collect(Collectors.toList());
         if (packetsSent.stream().anyMatch(p -> p.isAckEliciting())) {
             lastestAckElicitingTime = timeSent;
         }
@@ -487,7 +502,7 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
             }
             else {
                 log.warn("Cannot send; anti-amplification limit is reached");
-                return new AssembledDatagram(Collections.emptyList());
+                return AssembledDatagram.empty();
             }
         }
 
@@ -571,4 +586,3 @@ public class SenderImpl implements Sender, CongestionControlEventListener {
         recoveryManager.reset(pnSpace);
     }
 }
-

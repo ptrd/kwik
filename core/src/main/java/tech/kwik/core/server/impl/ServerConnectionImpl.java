@@ -380,7 +380,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         //  transport parameter specified in [QUIC-VN] to prevent version downgrade attacks."
         serverTransportParams.setVersionInformation(new TransportParameters.VersionInformation(quicVersion.getVersion(), List.of(Version.QUIC_version_1, Version.QUIC_version_2)));
         serverTransportParams.setActiveConnectionIdLimit(allowedClientConnectionIds);
-        serverTransportParams.setDisableMigration(true);
+        // As long as the (unfinished) connection migration feature is not enabled, the client must not try to migrate.
+        serverTransportParams.setDisableMigration(!connectionMigrationEnabled);
         serverTransportParams.setInitialSourceConnectionId(connectionIdManager.getInitialConnectionId());
         // https://www.rfc-editor.org/rfc/rfc9000.html#section-7.3
         // "When the handshake includes a Retry (Figure 8), the server sets original_destination_connection_id to S1,
@@ -571,8 +572,14 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     }
 
     @Override
-    public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
-        super.process(pathChallengeFrame, packet, metaData);
+    protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
+        InetSocketAddress source = metaData.sourceAddress();
+        if (!source.equals(socketManager.getClientAddress())) {
+            return source;
+        }
+        else {
+            return null;
+        }
     }
 
     @Override

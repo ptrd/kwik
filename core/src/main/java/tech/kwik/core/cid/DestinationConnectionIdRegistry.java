@@ -181,6 +181,16 @@ public class DestinationConnectionIdRegistry extends ConnectionIdRegistry {
         return cidInfo.getConnectionId();
     }
 
+    /**
+     * Returns whether a connection ID can be used for the given client address, i.e. whether a call to
+     * getConnectionId(InetSocketAddress) with the same address would succeed.
+     * @param clientAddress
+     * @return
+     */
+    public boolean hasConnectionIdFor(InetSocketAddress clientAddress) {
+        return cidByClientAddress.containsKey(clientAddress) || unusedConnectionIdAvailable();
+    }
+
     public ConnectionIdInfo retireClientAddress(InetSocketAddress clientAddress) {
         ConnectionIdInfo cidInfo = cidByClientAddress.remove(clientAddress);
         if (cidInfo != null) {

@@ -25,13 +25,23 @@ public class PacketMetaData {
 
     private final Instant timeReceived;
     private final InetSocketAddress sourceAddress;
+    private final InetSocketAddress localAddress;
     private final int datagramNumber;
     private final int datagramSize;
     private final boolean moreDataInDatagram;
 
     public PacketMetaData(Instant timeReceived, InetSocketAddress sourceAddress, int datagramNumber, int datagramSize) {
+        this(timeReceived, sourceAddress, null, datagramNumber, datagramSize);
+    }
+
+    /**
+     * @param localAddress  the local address (socket) the datagram was received on, or null when not relevant (e.g. when
+     *                      the endpoint only uses one socket)
+     */
+    public PacketMetaData(Instant timeReceived, InetSocketAddress sourceAddress, InetSocketAddress localAddress, int datagramNumber, int datagramSize) {
         this.timeReceived = timeReceived;
         this.sourceAddress = sourceAddress;
+        this.localAddress = localAddress;
         this.datagramNumber = datagramNumber;
         this.datagramSize = datagramSize;
         moreDataInDatagram = false;
@@ -40,6 +50,7 @@ public class PacketMetaData {
     public PacketMetaData(PacketMetaData original, boolean moreDataInDatagram) {
         this.timeReceived = original.timeReceived;
         this.sourceAddress = original.sourceAddress;
+        this.localAddress = original.localAddress;
         this.datagramNumber = original.datagramNumber;
         this.datagramSize = original.datagramSize;
         this.moreDataInDatagram = moreDataInDatagram;
@@ -55,6 +66,13 @@ public class PacketMetaData {
 
     public InetSocketAddress sourceAddress() {
         return sourceAddress;
+    }
+
+    /**
+     * @return  the local address (socket) the datagram was received on, or null if unknown
+     */
+    public InetSocketAddress localAddress() {
+        return localAddress;
     }
 
     public int getDatagramSize() {

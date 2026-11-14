@@ -40,8 +40,10 @@ import tech.kwik.core.test.FieldSetter;
 import tech.kwik.core.test.TestClock;
 import tech.kwik.core.test.TestScheduledExecutor;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -58,6 +60,7 @@ class RecoveryManagerTest extends RecoveryTests {
     private TestClock clock;
     private TestScheduledExecutor scheduler;
     private CongestionController congestionController;
+    private BiConsumer<Integer, Duration> probeTimeoutListener;
 
     //region setup
     @BeforeEach
@@ -73,7 +76,8 @@ class RecoveryManagerTest extends RecoveryTests {
         // logger.logRecovery(true);
         clock = new TestClock();
         congestionController = mock(CongestionController.class);
-        recoveryManager = new RecoveryManager(clock, Role.Client, rttEstimator, congestionController, probeSender, logger);
+        probeTimeoutListener = mock(BiConsumer.class);
+        recoveryManager = new RecoveryManager(clock, Role.Client, rttEstimator, congestionController, probeSender, probeTimeoutListener, logger);
         scheduler = new TestScheduledExecutor(clock);
         FieldSetter.setField(recoveryManager, recoveryManager.getClass().getDeclaredField("scheduler"), scheduler);
     }
@@ -260,6 +264,61 @@ class RecoveryManagerTest extends RecoveryTests {
 
         // Then even though all client packets are acked, it sends to a probe to prevent a deadlock when server cannot send due to the amplification limit
         verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+    }
+    //endregion
+
+    //region probe timeout listener
+    @Test
+    void whenProbeTimeoutOccursListenerIsCalledWithProbeTimeoutCountAndStalledDuration() {
+        // Given
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
+        ensureSendProbeCallsPacketSent(3, 4, 5);
+
+        // When a packet is sent but not acked
+        recoveryManager.packetSent(createPacket(2), clock.instant(), p -> {});
+
+        // Then
+        int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
+        clock.fastForward(firstProbeTimeout);
+        verify(probeTimeoutListener).accept(eq(1), argThat(duration -> duration.toMillis() == firstProbeTimeout));
+        clock.fastForward(firstProbeTimeout * 2);
+        verify(probeTimeoutListener).accept(eq(2), argThat(duration -> duration.toMillis() == firstProbeTimeout * 3));
+        verifyNoMoreInteractions(probeTimeoutListener);
+    }
+
+    @Test
+    void whenAckIsReceivedProbeTimeoutCountAndStalledDurationPassedToListenerAreReset() {
+        // Given
+        recoveryManager.handshakeStateChangedEvent(HandshakeState.Confirmed);
+        ensureSendProbeCallsPacketSent(3, 4, 5, 6);
+        recoveryManager.packetSent(createPacket(2), clock.instant(), p -> {});
+        int firstProbeTimeout = defaultRtt + 4 * defaultRttVar;
+        clock.fastForward(firstProbeTimeout);
+        clock.fastForward(firstProbeTimeout * 2);
+        verify(probeTimeoutListener).accept(eq(2), argThat(duration -> duration.toMillis() == firstProbeTimeout * 3));
+        clearInvocations(probeTimeoutListener);
+
+        // When
+        recoveryManager.onAckReceived(new AckFrame(3), PnSpace.App, clock.instant());
+
+        // Then (the last ack-eliciting packets, i.e. the probes, were sent at the time of the ack)
+        clock.fastForward(firstProbeTimeout);
+        verify(probeTimeoutListener).accept(eq(1), argThat(duration -> duration.toMillis() == firstProbeTimeout));
+        verifyNoMoreInteractions(probeTimeoutListener);
+    }
+
+    @Test
+    void probeTimeoutListenerIsNotCalledBeforeHandshakeIsConfirmed() {
+        // Given a client sends an initial packet that is not acknowledged
+        recoveryManager.packetSent(createCryptoPacket(0), clock.instant(), lostPacket -> {});
+
+        // When
+        int probeTimeout = defaultRtt + 4 * defaultRttVar;
+        clock.fastForward(probeTimeout);
+
+        // Then
+        verify(probeSender, times(1)).sendProbe(anyList(), any(EncryptionLevel.class));
+        verify(probeTimeoutListener, never()).accept(anyInt(), any(Duration.class));
     }
     //endregion
 

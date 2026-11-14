@@ -184,7 +184,7 @@ class SendRequestQueueTest {
     void whenAlternateAddressRequestIsFetchedThereIsNoSuchRequestAnymore() throws Exception {
         // Given
         SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress());
+        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress(), SendOptions.getDefault());
 
         // When
         sendRequestQueue.getAlternateAddressRequest(1000);
@@ -197,8 +197,8 @@ class SendRequestQueueTest {
     void whenAlternateAddressRequestsAreQueuedOrderShouldBeMaintained() throws Exception {
         // Given
         SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress());
-        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress());
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress(), SendOptions.getDefault());
+        sendRequestQueue.addAlternateAddressRequest(new PingFrame(), TestUtils.getArbitraryLocalAddress(), SendOptions.getDefault());
 
         // When
         Optional<SendRequest> request1 = sendRequestQueue.getAlternateAddressRequest(1140);
@@ -213,7 +213,7 @@ class SendRequestQueueTest {
     void whenAlternateAddressRequestIsRequestedItShouldRespectSizeLimit() throws Exception {
         // Given
         SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
-        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress());
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress(), SendOptions.getDefault());
 
         // When
         Optional<SendRequest> request1 = sendRequestQueue.getAlternateAddressRequest(8);
@@ -223,4 +223,18 @@ class SendRequestQueueTest {
         assertThat(request1).isEmpty();
         assertThat(request2).isPresent();
     }
+
+    @Test
+    void alternateAddressRequestShouldRetainSendOptions() throws Exception {
+        // Given
+        SendRequestQueue sendRequestQueue = new SendRequestQueue(null);
+        sendRequestQueue.addAlternateAddressRequest(new PathChallengeFrame(Version.getDefault(), new byte[8]), TestUtils.getArbitraryLocalAddress(), SendOptions.noPadding());
+
+        // When
+        Optional<SendRequest> request = sendRequestQueue.getAlternateAddressRequest(1140);
+
+        // Then
+        assertThat(request.get().getSendOptions().doNotPad()).isTrue();
+    }
+    //endregion
 }

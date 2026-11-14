@@ -93,11 +93,13 @@ public interface Sender {
 
     /**
      * Send one frame to (server role) or from (client role) an alternate client address.
-     * Gets priority over other queued reqeusts.
+     * Gets priority over other queued requests.
+     *
      * @param frame
      * @param clientAddress
+     * @param sendOptions
      */
-    void sendAlternateAddress(QuicFrame frame, InetSocketAddress clientAddress);
+    void sendAlternateAddress(QuicFrame frame, InetSocketAddress clientAddress, SendOptions sendOptions);
 
     /**
      * Set the initial token that should be used for all initial packets.

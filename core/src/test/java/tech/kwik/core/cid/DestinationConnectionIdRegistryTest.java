@@ -102,6 +102,31 @@ class DestinationConnectionIdRegistryTest {
     }
     //endregion
 
+    //region connection id for address
+    @Test
+    void registeredClientAddressShouldHaveConnectionId() {
+        assertThat(connectionIdRegistry.hasConnectionIdFor(clientAddress)).isTrue();
+    }
+
+    @Test
+    void newClientAddressShouldHaveConnectionIdWhenUnusedConnectionIdIsAvailable() {
+        InetSocketAddress otherAddress = new InetSocketAddress(clientAddress.getAddress(), 9999);
+        assertThat(connectionIdRegistry.hasConnectionIdFor(otherAddress)).isTrue();
+    }
+
+    @Test
+    void newClientAddressShouldNotHaveConnectionIdWhenConnectionIdsAreExhausted() {
+        // Given: both unused connection ids are consumed by other addresses
+        connectionIdRegistry.getConnectionId(new InetSocketAddress(clientAddress.getAddress(), 9998));
+        connectionIdRegistry.getConnectionId(new InetSocketAddress(clientAddress.getAddress(), 9999));
+
+        // Then
+        InetSocketAddress otherAddress = new InetSocketAddress(clientAddress.getAddress(), 9997);
+        assertThat(connectionIdRegistry.hasConnectionIdFor(otherAddress)).isFalse();
+        assertThat(connectionIdRegistry.hasConnectionIdFor(clientAddress)).isTrue();
+    }
+    //endregion
+
     //region stateless reset token
     @Test
     void matchInitialStatelessResetToken() {

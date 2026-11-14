@@ -737,7 +737,7 @@ class PacketAssemblerTest extends AbstractSenderTest {
         // Given
         InetSocketAddress alternateAddress = new InetSocketAddress("10.0.0.1", 4433);
         PathChallengeFrame pathChallenge = new PathChallengeFrame(Version.getDefault(), new byte[8]);
-        sendRequestQueue.addAlternateAddressRequest(pathChallenge, alternateAddress);
+        sendRequestQueue.addAlternateAddressRequest(pathChallenge, alternateAddress, SendOptions.getDefault());
 
         // When
         // Congestion window is exhausted (0 bytes remaining), but path validation is not congestion controlled,

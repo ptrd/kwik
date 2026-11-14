@@ -33,9 +33,12 @@ public class PathValidation implements Comparable<PathValidation> {
     private final boolean startedByProbingPacket;
     private final Instant startedAt;
     private Status status = Status.InProgress;
+    private boolean validatedWithFullSizePacket;
     private Instant addressLastUsed;
 
     private int challengeRepeatCount = 0;
+    private long bytesReceived;
+    private long bytesSent;
 
     public PathValidation(InetSocketAddress addressToValidate, boolean startedByProbingPacket, Instant start) {
         this.addressToValidate = addressToValidate;
@@ -52,6 +55,9 @@ public class PathValidation implements Comparable<PathValidation> {
         this.startedAt = validatedAt;
         this.startedByProbingPacket = false;
         this.status = Status.Validated;
+        // The handshake on this path has proven that it supports datagrams of 1200 bytes (client Initial packets
+        // must be expanded to at least 1200 bytes).
+        this.validatedWithFullSizePacket = true;
     }
 
     @Override
@@ -100,8 +106,37 @@ public class PathValidation implements Comparable<PathValidation> {
         this.addressLastUsed = addressLastUsed;
     }
 
-    public void setValidated() {
+    public void setValidated(boolean withFullSizePacket) {
         status = Status.Validated;
+        validatedWithFullSizePacket = withFullSizePacket;
+    }
+
+    /**
+     * Returns whether the path was validated with a path challenge that was sent in a datagram expanded to (at least)
+     * 1200 bytes, which implies the path supports the minimum QUIC datagram size (in the direction to the peer).
+     * https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
+     */
+    public boolean isValidatedWithFullSizePacket() {
+        return status == Status.Validated && validatedWithFullSizePacket;
+    }
+
+    public void addBytesReceived(int count) {
+        bytesReceived += count;
+    }
+
+    public void addBytesSent(int count) {
+        bytesSent += count;
+    }
+
+    /**
+     * Returns the number of bytes that can still be sent on the path to be validated without exceeding the
+     * anti-amplification limit.
+     * https://www.rfc-editor.org/rfc/rfc9000.html#section-8
+     * "an endpoint MUST limit the amount of data it sends to the unvalidated address to three times the amount of
+     *  data received from that address."
+     */
+    public long getAntiAmplificationCredit() {
+        return 3 * bytesReceived - bytesSent;
     }
 
     public Instant startedAt() {

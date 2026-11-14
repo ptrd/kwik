@@ -96,8 +96,8 @@ public class SendRequestQueue {
         probeQueue.addLast(frames);
     }
 
-    public void addAlternateAddressRequest(QuicFrame frame, InetSocketAddress address) {
-        altAddressRequestQueue.add(new FixedFrameSendRequest(frame, f -> {}, address));
+    public void addAlternateAddressRequest(QuicFrame frame, InetSocketAddress address, SendOptions sendOptions) {
+        altAddressRequestQueue.add(new FixedFrameSendRequest(frame, f -> {}, address, sendOptions));
     }
 
     public boolean hasProbe() {

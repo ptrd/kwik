@@ -19,6 +19,8 @@
 package tech.kwik.cli;
 
 import tech.kwik.agent15.util.ByteUtils;
+import tech.kwik.core.ConnectionListener;
+import tech.kwik.core.ConnectionStalledEvent;
 import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.cid.ConnectionIdStatus;
@@ -101,6 +103,7 @@ public class InteractiveShell {
         commands.put("cid_retire", this::retireConnectionId);
         commands.put("udp_rebind", this::changeUdpPort);
         commands.put("udp_add", this::addUdpPort);
+        commands.put("migrate", this::migrate);
         commands.put("update_keys", this::updateKeys);
         commands.put("statistics", this::printStatistics);
         commands.put("pc", this::pathChallenge);
@@ -183,7 +186,17 @@ public class InteractiveShell {
         try {
             builder.connectTimeout(Duration.ofMillis(connectionTimeout));
             quicConnection = builder.build();
-            quicConnection.setConnectionListener(this::closed);
+            quicConnection.setConnectionListener(new ConnectionListener() {
+                @Override
+                public void stalled(ConnectionStalledEvent stalledEvent) {
+                    InteractiveShell.this.stalled(stalledEvent);
+                }
+
+                @Override
+                public void disconnected(ConnectionTerminatedEvent terminationEvent) {
+                    closed(terminationEvent);
+                }
+            });
             quicConnection.setPeerInitiatedStreamCallback(stream -> streams.put(stream.getStreamId(), stream));
 
             quicConnection.connect();
@@ -192,6 +205,11 @@ public class InteractiveShell {
         catch (IOException e) {
             System.out.println("\nError: " + e);
         }
+    }
+
+    private void stalled(ConnectionStalledEvent stalledEvent) {
+        System.out.println("Connection stalled: " + stalledEvent.probeTimeoutCount() + " probe timeout(s), no ack received for "
+                + stalledEvent.stalledDuration().toMillis() + " ms");
     }
 
     private void closed(ConnectionTerminatedEvent terminationEvent) {
@@ -351,6 +369,36 @@ public class InteractiveShell {
     private void addUdpPort(String args) {
         try {
             quicConnection.addLocalAddress(toInt(args));
+        }
+        catch (SocketException e) {
+            error(e);
+        }
+    }
+
+    private void migrate(String arg) {
+        if (quicConnection == null) {
+            System.out.println("Error: not connected");
+            return;
+        }
+        int timeout = 1000;
+        if (!arg.isBlank()) {
+            try {
+                timeout = Integer.parseInt(arg);
+            }
+            catch (NumberFormatException notANumber) {
+                System.out.println("Usage: migrate [<path validation timeout in ms>]");
+                return;
+            }
+        }
+
+        try {
+            InetSocketAddress oldAddress = quicConnection.getLocalAddress();
+            if (quicConnection.migrate(Duration.ofMillis(timeout))) {
+                System.out.println("Migrated from local port " + oldAddress.getPort() + " to " + quicConnection.getLocalAddress().getPort());
+            }
+            else {
+                System.out.println("Migration failed (see log for reason)");
+            }
         }
         catch (SocketException e) {
             error(e);

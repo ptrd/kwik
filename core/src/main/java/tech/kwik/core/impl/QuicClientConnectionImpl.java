@@ -47,6 +47,7 @@ import tech.kwik.core.log.NullLogger;
 import tech.kwik.core.packet.*;
 import tech.kwik.core.receive.MultipleAddressReceiver;
 import tech.kwik.core.receive.RawPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ClientSocketManager;
 import tech.kwik.core.stream.EarlyDataStream;
@@ -70,8 +71,10 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -107,6 +110,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     // "The value of the active_connection_id_limit parameter MUST be at least 2."
     public static final int MIN_ACTIVE_CONNECTION_ID_LIMIT = 2;
     public static final int DEFAULT_ACTIVE_CONNECTION_ID_LIMIT = 2;
+    // Only needs to cover the time between the sender determining the address for a packet and sending it, which is
+    // normally way less than a millisecond; it is a lot larger to cover a sender thread that is not scheduled for a while.
+    private static final int RETIRE_LOCAL_ADDRESS_DELAY_IN_MILLIS = 100;
     // https://www.rfc-editor.org/rfc/rfc9000.html#name-transport-parameter-definit
     // "Values below 1200 are invalid."
     public static final int MIN_MAX_UDP_PAYLOAD_SIZE = 1200;
@@ -159,6 +165,10 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     private volatile Thread receiverThread;
     private volatile String handshakeError;
     private volatile ClientHello originalClientHello;
+    private final SecureRandom secureRandom;
+    private final ReentrantLock migrationLock;
+    private final Set<Long> pendingPathChallenges = ConcurrentHashMap.newKeySet();
+    private volatile CountDownLatch pathValidated;
 
 
     private QuicClientConnectionImpl(String host, int port, InetTools.IPversionOption ipVersionOption, String applicationProtocol, long connectTimeout,
@@ -242,6 +252,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.sentPacketInfo(cryptoStream.toStringSent());
             }
         }, this);
+
+        secureRandom = new SecureRandom();
+        migrationLock = new ReentrantLock();
     }
 
     @Override
@@ -463,6 +476,11 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     @Override
+    public void probeTimeoutOccurred(int probeTimeoutCount, Duration stalledDuration) {
+        emit(new ConnectionStalledEvent(this, probeTimeoutCount, stalledDuration));
+    }
+
+    @Override
     public void keepAlive(int seconds) {
         if (connectionState != Status.Connected) {
             throw new IllegalStateException("keep alive can only be set when connected");
@@ -510,7 +528,8 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                     log.raw("Start processing packet " + ++receivedPacketCounter + " (" + rawPacket.getLength() + " bytes)", rawPacket.getData(), 0, rawPacket.getLength());
                     log.debug("Processing delay for packet #" + receivedPacketCounter + ": " + processDelay.toMillis() + " ms");
 
-                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), rawPacket.getPeerAddress(), receivedPacketCounter, rawPacket.getData().limit());
+                    PacketMetaData metaData = new PacketMetaData(rawPacket.getTimeReceived(), rawPacket.getPeerAddress(),
+                            rawPacket.getLocalAddress(), receivedPacketCounter, rawPacket.getData().limit());
                     datagramProcessingChain.processDatagram(rawPacket.getData(), metaData);
 
                     sender.datagramProcessed(receiver.hasMore());
@@ -786,6 +805,9 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
             if (handshakeState.transitionAllowed(HandshakeState.Confirmed)) {
                 handshakeState = HandshakeState.Confirmed;
                 handshakeStateListeners.forEach(l -> l.handshakeStateChangedEvent(handshakeState));
+                // Provide the server with spare connection IDs, which it needs to respond on a new path when the
+                // client migrates (https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5).
+                connectionIdManager.handshakeFinished();
             } else {
                 log.debug("Handshake state cannot be set to Confirmed");
             }
@@ -866,19 +888,173 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
     }
 
     public void changeAddress(Integer localPort) throws SocketException {
-        int oldPort = socketManager.getLocalSocketAddress().getPort();
-        InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
-        log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldPort + ")");
+        migrationLock.lock();
+        try {
+            InetSocketAddress oldAddress = socketManager.getClientAddress();
+            InetSocketAddress newAddress = socketManager.changeLocalAddress(localPort);
+            socketManager.removeLocalAddress(oldAddress);
+            log.info("Changed local address to " + newAddress.getPort() + " (was: " + oldAddress.getPort() + ")");
+        }
+        finally {
+            migrationLock.unlock();
+        }
+    }
+
+    @Override
+    public boolean migrate(Duration timeout) throws SocketException {
+        migrationLock.lock();
+        try {
+            if (handshakeState != HandshakeState.Confirmed) {
+                log.warn("Cannot migrate: handshake is not (yet) confirmed");
+                return false;
+            }
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-18.2
+            // "An endpoint that receives this transport parameter MUST NOT use a new local address when sending to the
+            //  address that the peer used during the handshake."
+            if (peerTransportParams.getDisableMigration()) {
+                log.info("Cannot migrate: server has disabled active migration");
+                return false;
+            }
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5
+            // "An endpoint that exhausts available connection IDs cannot probe new paths or initiate migration, ..."
+            if (!connectionIdManager.peerUsesZeroLengthConnectionId() && !connectionIdManager.unusedPeerConnectionIdAvailable()) {
+                log.info("Cannot migrate: no unused peer connection ID available");
+                return false;
+            }
+
+            InetSocketAddress oldAddress = socketManager.getClientAddress();
+            InetSocketAddress newAddress = socketManager.addLocalAddress(null);
+            log.info("Validating path from local port " + newAddress.getPort() + " (currently using " + oldAddress.getPort() + ")");
+            if (!validatePath(newAddress, timeout)) {
+                // The probes used a connection ID of their own, which must not be used on any other path.
+                retireLocalAddressLater(newAddress);
+                log.info("Migration failed: path from local port " + newAddress.getPort() + " could not be validated within " + timeout.toMillis() + " ms");
+                return false;
+            }
+
+            socketManager.changeLocalAddress(newAddress.getPort());
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-9.5
+            // "An endpoint MUST NOT reuse a connection ID when sending from more than one local address, ..."
+            retireLocalAddressLater(oldAddress);
+            log.info("Migrated connection from local port " + oldAddress.getPort() + " to " + newAddress.getPort());
+            // Packets in flight on the old path are probably lost. An ack-eliciting packet on the new path makes loss
+            // detection find out right away, instead of after the (exponentially backed-off) probe timeout.
+            ping();
+            return true;
+        }
+        finally {
+            migrationLock.unlock();
+        }
+    }
+
+    /**
+     * Retires a local address that is not used anymore, together with its connection ID, after a short delay. The
+     * sender might have assembled a packet for the address just before it was replaced; the delay ensures such a
+     * packet can still be sent from that address with the connection ID of that address. Whether it arrives does not
+     * matter (the old path might or might not still work); what matters is that the address and connection ID are
+     * not mixed up, and that sending it does not fail.
+     */
+    private void retireLocalAddressLater(InetSocketAddress address) {
+        schedule(() -> {
+            migrationLock.lock();
+            try {
+                if (address.equals(socketManager.getClientAddress())) {
+                    // Has been made current again in the meantime (e.g. with changeAddress)
+                    return;
+                }
+                socketManager.removeLocalAddress(address);
+                if (connectionState == Status.Connected) {
+                    connectionIdManager.addressNoLongerInUse(address);
+                    // Not called in the context of processing received packets, so sender flush must be called explicitly.
+                    getSender().flush();
+                }
+            }
+            finally {
+                migrationLock.unlock();
+            }
+        }, RETIRE_LOCAL_ADDRESS_DELAY_IN_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Validates the path from the given local address to the server, repeating the challenge a few times within the
+     * given timeout.
+     * @return  true if the server responded to one of the challenges
+     */
+    private boolean validatePath(InetSocketAddress localAddress, Duration timeout) {
+        CountDownLatch validated = new CountDownLatch(1);
+        pathValidated = validated;
+        pendingPathChallenges.clear();
+        try {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.1
+            // "An endpoint SHOULD NOT probe a new path with packets containing a PATH_CHALLENGE frame more frequently
+            //  than it would send an Initial packet."
+            int attempts = 3;
+            long interval = Long.max(timeout.toMillis() / attempts, 1);
+            for (int i = 0; i < attempts; i++) {
+                sendPathChallenge(localAddress);
+                if (validated.await(interval, TimeUnit.MILLISECONDS)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        finally {
+            pathValidated = null;
+            pendingPathChallenges.clear();
+        }
+    }
+
+    private void sendPathChallenge(InetSocketAddress localAddress) {
+        byte[] challengeData = new byte[8];
+        secureRandom.nextBytes(challengeData);
+        pendingPathChallenges.add(ByteBuffer.wrap(challengeData).getLong());
+        PathChallengeFrame challenge = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
+        getSender().sendAlternateAddress(challenge, localAddress, SendOptions.getDefault());
+    }
+
+    @Override
+    public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.3
+        // "A PATH_RESPONSE frame received on any network path validates the path on which the PATH_CHALLENGE was sent."
+        CountDownLatch validated = pathValidated;
+        if (validated != null && pendingPathChallenges.remove(ByteBuffer.wrap(pathResponseFrame.getData()).getLong())) {
+            validated.countDown();
+        }
+        else {
+            log.info("Received unexpected path response: " + pathResponseFrame);
+        }
+    }
+
+    @Override
+    protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
+        InetSocketAddress receivedOn = metaData.localAddress();
+        InetSocketAddress alternateAddress = socketManager.getAlternateClientAddress();
+        if (receivedOn != null && alternateAddress != null && receivedOn.getPort() == alternateAddress.getPort()) {
+            return alternateAddress;
+        }
+        else {
+            return null;
+        }
     }
 
     public void addLocalAddress(Integer localPort) throws SocketException {
-        InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
-        log.info("Added local address " + newAddress.getPort());
+        migrationLock.lock();
+        try {
+            InetSocketAddress newAddress = socketManager.addLocalAddress(localPort);
+            log.info("Added local address " + newAddress.getPort());
+        }
+        finally {
+            migrationLock.unlock();
+        }
     }
 
     public void sendPathChallenge(boolean useStandardPath, int paddingSize) {
         byte[] challengeData = new byte[8];
-        new SecureRandom().nextBytes(challengeData);
+        secureRandom.nextBytes(challengeData);
 
         QuicFrame pathChallengeFrame = new PathChallengeFrame(quicVersion.getVersion(), challengeData);
         if (paddingSize > 0) {
@@ -893,7 +1069,7 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
                 log.warn("Cannot send path challenge to alternate address, because it is not set");
                 return;
             }
-            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress());
+            getSender().sendAlternateAddress(pathChallengeFrame, socketManager.getAlternateClientAddress(), SendOptions.getDefault());
         }
     }
 

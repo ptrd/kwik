@@ -35,6 +35,7 @@ import tech.kwik.core.packet.PacketFilter;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.recovery.RecoveryManager;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.stream.FlowControl;
 import tech.kwik.core.stream.StreamManager;
@@ -42,6 +43,7 @@ import tech.kwik.core.util.ProgressivelyIncreasingRateLimiter;
 import tech.kwik.core.util.RateLimiter;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -497,15 +499,36 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     public void process(Padding paddingFrame, QuicPacket packet, PacketMetaData metaData) {
     }
 
-    // https://www.rfc-editor.org/rfc/rfc9000.html#name-path_challenge-frames
-    // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
     @Override
     public void process(PathChallengeFrame pathChallengeFrame, QuicPacket packet, PacketMetaData metaData) {
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-19.17
+        // "The recipient of this frame MUST generate a PATH_RESPONSE frame (...) containing the same Data value."
         PathResponseFrame response = new PathResponseFrame(quicVersion.getVersion(), pathChallengeFrame.getData());
-        // https://www.rfc-editor.org/rfc/rfc9000.html#name-retransmission-of-informati
-        // "Responses to path validation using PATH_RESPONSE frames are sent just once."
-        send(response, f -> {});
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-8.2.2
+        // "A PATH_RESPONSE frame MUST be sent on the network path where the PATH_CHALLENGE frame was received."
+        InetSocketAddress alternatePath = getAlternatePath(metaData);
+        if (alternatePath != null) {
+            if (getConnectionIdManager().hasConnectionIdForAddress(alternatePath)) {
+                getSender().sendAlternateAddress(response, alternatePath, SendOptions.getDefault());
+            }
+            else {
+                log.warn("Cannot respond to path challenge, because no connection ID for address " + alternatePath);
+            }
+         }
+        else {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#section-13.3
+            // "Responses to path validation using PATH_RESPONSE frames are sent just once."
+            send(response, f -> {});
+        }
     }
+
+    /**
+     * Determines whether a packet was received over another network path than the one currently in use.
+     * @param metaData  the meta data of the received packet
+     * @return          the alternate path (in client role: the local address, in server role: the remote address) the
+     *                  packet was received on, or null if it was received over the current path
+     */
+    abstract protected InetSocketAddress getAlternatePath(PacketMetaData metaData);
 
     @Override
     public void process(PathResponseFrame pathResponseFrame, QuicPacket packet, PacketMetaData metaData) {
@@ -825,6 +848,21 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         }
     }
 
+    protected void emit(ConnectionStalledEvent connectionStalledEvent) {
+        if (connectionListener != null) {
+            callbackThread.submit(() -> connectionListener.stalled(connectionStalledEvent));
+        }
+    }
+
+    /**
+     * Called by the recovery manager (on the loss detection thread) each time a probe timeout occurs after the
+     * handshake is confirmed.
+     * @param probeTimeoutCount  number of consecutive probe timeouts, i.e. without receiving an acknowledgement in between
+     * @param stalledDuration  time elapsed since the connection stalled
+     */
+    public void probeTimeoutOccurred(int probeTimeoutCount, Duration stalledDuration) {
+    }
+
     protected String determineClosingErrorMessage(ConnectionCloseFrame closing) {
         if (closing.hasTransportError()) {
             if (closing.hasTlsError()) {
@@ -973,7 +1011,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return executor;
     }
 
-    private void schedule(Runnable command, int delay, TimeUnit unit) {
+    protected void schedule(Runnable command, int delay, TimeUnit unit) {
         try {
             scheduler.schedule(command, delay, unit);
         }

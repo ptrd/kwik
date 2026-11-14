@@ -860,6 +860,11 @@ class QuicConnectionImplTest {
         }
 
         @Override
+        protected InetSocketAddress getAlternatePath(PacketMetaData metaData) {
+            return null;
+        }
+
+        @Override
         protected SenderImpl getSender() {
             return sender;
         }

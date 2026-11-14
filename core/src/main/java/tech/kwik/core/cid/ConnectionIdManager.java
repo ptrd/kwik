@@ -146,7 +146,6 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     public void handshakeFinished() {
-        assert role == Server;
         // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
         // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
         // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
@@ -337,6 +336,17 @@ public class ConnectionIdManager implements ConnectionIdProvider {
         }
         else {
             return false;
+        }
+    }
+
+    @Override
+    public boolean hasConnectionIdForAddress(InetSocketAddress address) {
+        if (peerCidRegistry != null) {
+            return peerCidRegistry.hasConnectionIdFor(address);
+        }
+        else {
+            // Peer uses zero-length connection IDs, which can be used for any address.
+            return true;
         }
     }
 

@@ -31,6 +31,7 @@ import tech.kwik.core.log.Logger;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
 import tech.kwik.core.packet.ShortHeaderPacket;
+import tech.kwik.core.send.SendOptions;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.socket.ServerConnectionSocketManager;
 import tech.kwik.core.test.TestClock;
@@ -89,7 +90,7 @@ class PathValidatorTest {
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
     }
 
     @Test
@@ -104,7 +105,7 @@ class PathValidatorTest {
         // Then
         int antiAmplificationLimit = 3 * pingPacketSize;
         int maxPayloadSize = antiAmplificationLimit - (18 + 8);  // short packet overhead + dcid size
-        verify(sender).sendAlternateAddress(argThat(frame -> frame.getFrameLength() <= maxPayloadSize), any(InetSocketAddress.class));
+        verify(sender).sendAlternateAddress(argThat(frame -> frame.getFrameLength() <= maxPayloadSize), any(InetSocketAddress.class), any(SendOptions.class));
     }
 
     @Test
@@ -118,7 +119,104 @@ class PathValidatorTest {
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
-        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
+    }
+    //endregion
+
+    //region padding and anti-amplification limit
+    @Test
+    void whenEnoughDataIsReceivedOnNewPathPathChallengeIsPadded() {
+        // Given
+        // Credit 3 * 434 = 1302: padded challenge (1200) plus two unpadded retries (2 * 50)
+        PacketMetaData packetMetaData = metaDataFor(434, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+    }
+
+    @Test
+    void whenNotEnoughDataIsReceivedOnNewPathPathChallengeIsNotPadded() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(433, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenCreditIsJustEnoughForOnePaddedChallengeItIsNotPaddedToLeaveRoomForRetries() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(400, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenFirstPathChallengeIsPaddedRetriesCanStillBeSent() {
+        // Given
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(434, new InetSocketAddress("localhost", 59643)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(1000);
+        testClock.fastForward(2000);
+
+        // Then
+        verify(sender, times(2)).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+    }
+
+    @Test
+    void whenAntiAmplificationLimitDoesNotPermitEvenUnpaddedPathChallengeNothingIsSent() {
+        // Given
+        PacketMetaData packetMetaData = metaDataFor(16, new InetSocketAddress("localhost", 59643));
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
+
+        // Then
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
+    }
+
+    @Test
+    void dataReceivedOnNewPathDuringValidationIsTakenIntoAccountForPadding() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(200, newAddress));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
+        clearInvocations(sender);
+
+        // When
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(400, newAddress));
+        testClock.fastForward(1000);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+    }
+
+    @Test
+    void dataSentOnNewPathIsTakenIntoAccountForPadding() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(600, newAddress));  // credit 1800, padded challenge leaves 600
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(options -> !options.doNotPad()));
+        clearInvocations(sender);
+
+        // When
+        testClock.fastForward(1000);
+
+        // Then
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), argThat(SendOptions::doNotPad));
     }
     //endregion
 
@@ -133,7 +231,7 @@ class PathValidatorTest {
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
-        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
     }
 
     @Test
@@ -142,14 +240,14 @@ class PathValidatorTest {
         when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(false);
         PacketMetaData packetMetaData = metaDataFor(1200, new InetSocketAddress("localhost", 59643));
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
-        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
 
         // When
         when(connectionIdProvider.unusedPeerConnectionIdAvailable()).thenReturn(true);
         pathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
     }
 
     @Test
@@ -164,7 +262,7 @@ class PathValidatorTest {
         zeroLengthCidPathValidator.checkSourceAddress(normalPacket(), packetMetaData);
 
         // Then
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
     }
     //endregion
 
@@ -183,6 +281,60 @@ class PathValidatorTest {
 
         // Then
         assertThat(pathValidator.isValidated(newAddress)).isTrue();
+    }
+
+    @Test
+    void whenPathResponseMatchesPaddedPathChallengePathIsValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(1200, newAddress));
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isTrue();
+    }
+
+    @Test
+    void whenPathResponseMatchesUnpaddedPathChallengePathIsNotValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(200, newAddress));
+        PathChallengeFrame pathChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), pathChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isFalse();
+    }
+
+    @Test
+    void whenPathResponseMatchesUnpaddedRetryOfPaddedPathChallengePathIsNotValidatedWithFullSizePacket() {
+        // Given
+        InetSocketAddress newAddress = new InetSocketAddress("localhost", 59643);
+        pathValidator.checkSourceAddress(normalPacket(), metaDataFor(600, newAddress));  // first padded, retry not
+        clearInvocations(sender);
+        testClock.fastForward(1000);
+        PathChallengeFrame retryChallengeFrame = capturePathChallengeFrame();
+
+        // When
+        PathResponseFrame pathResponseFrame = new PathResponseFrame(Version.getDefault(), retryChallengeFrame.getData());
+        pathValidator.checkPathResponse(pathResponseFrame, metaDataFor(1200, newAddress));
+
+        // Then
+        assertThat(pathValidator.isValidated(newAddress)).isTrue();
+        assertThat(pathValidator.isValidatedWithFullSizePacket(newAddress)).isFalse();
+    }
+
+    @Test
+    void initialAddressIsConsideredValidatedWithFullSizePacket() {
+        assertThat(pathValidator.isValidatedWithFullSizePacket(defaultClientAddress)).isTrue();
     }
 
     @Test
@@ -246,7 +398,7 @@ class PathValidatorTest {
         testClock.fastForward(initalPto);
 
         // Then
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
     }
 
     @Test
@@ -258,16 +410,16 @@ class PathValidatorTest {
         int initalPto = 1000;
 
         testClock.fastForward(initalPto);
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
         clearInvocations(sender);
 
         // When
         testClock.fastForward(initalPto);
-        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
         testClock.fastForward(initalPto);
 
         // Then
-        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)));
+        verify(sender).sendAlternateAddress(any(PathChallengeFrame.class), argThat(address -> ! address.equals(defaultClientAddress)), any(SendOptions.class));
     }
 
     @Test
@@ -286,7 +438,7 @@ class PathValidatorTest {
         testClock.fastForward(100 * initalPto);
 
         // Then
-        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class));
+        verify(sender, never()).sendAlternateAddress(any(PathChallengeFrame.class), any(InetSocketAddress.class), any(SendOptions.class));
     }
     //endregion
 
@@ -568,7 +720,7 @@ class PathValidatorTest {
 
     private PathChallengeFrame capturePathChallengeFrame() {
         ArgumentCaptor<QuicFrame> captor = ArgumentCaptor.forClass(QuicFrame.class);
-        verify(sender).sendAlternateAddress(captor.capture(), any(InetSocketAddress.class));
+        verify(sender).sendAlternateAddress(captor.capture(), any(InetSocketAddress.class), any(SendOptions.class));
         clearInvocations(sender);
 
         return (PathChallengeFrame) captor.getValue();
