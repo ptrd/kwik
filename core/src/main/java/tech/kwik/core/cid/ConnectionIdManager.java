@@ -146,12 +146,14 @@ public class ConnectionIdManager implements ConnectionIdProvider {
     }
 
     public void handshakeFinished() {
-        // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
-        // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
-        // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
-        //  packet header (Section 17.2) during the handshake."
-        for (int i = 1; i < maxCids; i++) {
-            sendNewCid(0);
+        if (connectionIdLength > 0) {
+            // https://www.rfc-editor.org/rfc/rfc9000.html#name-issuing-connection-ids
+            // "An endpoint SHOULD ensure that its peer has a sufficient number of available and unused connection IDs."
+            // "The initial connection ID issued by an endpoint is sent in the Source Connection ID field of the long
+            //  packet header (Section 17.2) during the handshake."
+            for (int i = 1; i < maxCids; i++) {
+                sendNewCid(0);
+            }
         }
     }
 
@@ -261,6 +263,7 @@ public class ConnectionIdManager implements ConnectionIdProvider {
      * @return
      */
     private ConnectionIdInfo sendNewCid(int retirePriorTo) {
+        assert connectionIdLength > 0;
         ConnectionIdInfo cidInfo = cidRegistry.generateNew();
         connectionRegistry.registerAdditionalConnectionId(cidRegistry.getActive(), cidInfo.getConnectionId());
         sender.send(new NewConnectionIdFrame(quicVersion, cidInfo.getSequenceNumber(), retirePriorTo, cidInfo.getConnectionId()),

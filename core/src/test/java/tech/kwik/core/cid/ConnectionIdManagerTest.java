@@ -605,4 +605,18 @@ class ConnectionIdManagerTest {
         // Then
         verify(closeCallback).accept(argThat(errorCode -> errorCode == PROTOCOL_VIOLATION.value), anyString());
     }
+
+    @Test
+    void whenUsingZeroLengthCidClientShouldNotSendNewConnectionIdsWhenHandshakeIsConfirmed() {
+        // Given
+        ConnectionIdManager clientCidMgr = new ConnectionIdManager(0, 8, closeCallback, mock(Logger.class));
+        clientCidMgr.setSender(sender);
+        clientCidMgr.registerPeerCidLimit(4);
+
+        // When
+        clientCidMgr.handshakeFinished();
+
+        // Then
+        verify(sender, never()).send(argThat(f -> f instanceof NewConnectionIdFrame), any(), any(Consumer.class));
+    }
 }
