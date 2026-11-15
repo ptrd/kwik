@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export JAVA_OPTS=-ea
 shopt -s nullglob
 distro=(cli/build/distributions/kwik-cli-*.zip)
 if [ ${#distro[@]} -lt 1 ]; then
