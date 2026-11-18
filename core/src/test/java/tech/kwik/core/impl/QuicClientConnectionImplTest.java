@@ -24,18 +24,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import tech.kwik.agent15.TlsConstants;
+import tech.kwik.agent15.engine.ClientMessageSender;
 import tech.kwik.agent15.engine.DefaultHostnameVerifier;
 import tech.kwik.agent15.engine.HostnameVerifier;
 import tech.kwik.agent15.engine.TlsClientEngine;
+import tech.kwik.agent15.engine.impl.TlsClientEngineImpl;
 import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
 import tech.kwik.agent15.extension.KeyShareExtension;
 import tech.kwik.agent15.handshake.ClientHello;
-import tech.kwik.core.ConnectionConfig;
-import tech.kwik.core.ConnectionListener;
-import tech.kwik.core.ConnectionStalledEvent;
-import tech.kwik.core.ConnectionTerminatedEvent;
-import tech.kwik.core.QuicClientConnection;
-import tech.kwik.core.QuicStream;
+import tech.kwik.core.*;
 import tech.kwik.core.cc.FixedWindowCongestionController;
 import tech.kwik.core.cid.ConnectionIdInfo;
 import tech.kwik.core.cid.ConnectionIdManager;
@@ -240,6 +237,26 @@ class QuicClientConnectionImplTest {
 
         // Then
         verify(tlsClientEngine, never()).startHandshake();
+    }
+
+    @Test
+    void retryPacketReceivedWhileClientHelloIsBeingSentShouldResendClientHello() throws Exception {
+        // Given
+        originalDestinationConnectionId = new byte[] { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18 };
+        setFixedOriginalDestinationConnectionId(originalDestinationConnectionId);
+        RetryPacket retryPacket = createRetryPacket(originalDestinationConnectionId, "9442e0ac29f6d650adc5e4b4a3cd12cc");
+        // Flushing the client hello sends it to the server; simulate the receiver thread processing the server's
+        // Retry packet before the sending thread returns from the flush (only the first flush, the resend flushes too).
+        doAnswer(invocation -> connection.process(retryPacket, null)).doNothing().when(sender).flush();
+        Object tlsEngine = new FieldReader(connection, connection.getClass().getDeclaredField("tlsEngine")).read();
+        ClientMessageSender clientMessageSender = (ClientMessageSender) new FieldReader(tlsEngine, TlsClientEngineImpl.class.getDeclaredField("sender")).read();
+
+        // When
+        clientMessageSender.send(createClientHello());  // call sender.flush(), causes the retry packet to be processed
+
+        // Then
+        verify(sender).setInitialToken(argThat(token -> Arrays.equals(token, new byte[] { 0x01, 0x02, 0x03 })));
+        assertThat(connection.getCryptoStream(EncryptionLevel.Initial).toStringSent()).isEqualTo("CryptoStream[I|ClientHello,ClientHello]");
     }
 
     @Test

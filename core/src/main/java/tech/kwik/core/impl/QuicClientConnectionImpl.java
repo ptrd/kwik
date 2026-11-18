@@ -223,12 +223,12 @@ public class QuicClientConnectionImpl extends QuicConnectionImpl implements Quic
         tlsEngine = TlsClientEngineFactory.createClientEngine(new ClientMessageSender() {
             @Override
             public void send(ClientHello clientHello) {
+                originalClientHello = clientHello;
                 CryptoStream cryptoStream = getCryptoStream(Initial);
                 cryptoStream.write(clientHello, true);
                 connectionState = Status.Handshaking;
                 connectionSecrets.setClientRandom(clientHello.getClientRandom());
                 log.sentPacketInfo(cryptoStream.toStringSent());
-                originalClientHello = clientHello;
             }
 
             @Override
