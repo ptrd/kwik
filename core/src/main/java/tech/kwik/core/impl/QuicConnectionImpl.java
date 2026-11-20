@@ -735,7 +735,7 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
             // "However, prior to confirming the handshake, it is possible that more advanced packet protection keys are
             //  not available to the peer, so another CONNECTION_CLOSE frame MAY be sent in a packet that uses a lower
             //  packet protection level."
-            ConnectionCloseFrame closeFrame = new ConnectionCloseFrame(quicVersion.getVersion(), error, errorType == QUIC_LAYER_ERROR, errorReason);
+            ConnectionCloseFrame closeFrame = new ConnectionCloseFrame(quicVersion.getVersion(), error, errorType == QUIC_LAYER_ERROR);
             switch (currentEncryptionLevel) {
                 case Initial:
                     getSender().send(closeFrame, Initial);

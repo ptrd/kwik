@@ -53,7 +53,7 @@ class ConnectionCloseFrameTest {
     @Test
     void testGetFrameLength() {
         // Given
-        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 77, "seventyseven");
+        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 77);
 
         // When
         ByteBuffer buffer = ByteBuffer.allocate(100);
@@ -67,7 +67,7 @@ class ConnectionCloseFrameTest {
     @Test
     void testGetFrameLength1d() {
         // Given
-        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false, "http3 request cancelled");
+        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false);
 
         // When
         ByteBuffer buffer = ByteBuffer.allocate(100);
@@ -81,7 +81,7 @@ class ConnectionCloseFrameTest {
     @Test
     void deserializeFrameWithApplicationError() throws Exception {
         // Given
-        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false, "http3 request cancelled");
+        ConnectionCloseFrame connectionCloseFrame = new ConnectionCloseFrame(Version.getDefault(), 0x010c, false);
         ByteBuffer buffer = ByteBuffer.allocate(100);
         connectionCloseFrame.serialize(buffer);
         buffer.flip();

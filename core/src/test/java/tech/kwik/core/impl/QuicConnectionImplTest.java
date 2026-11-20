@@ -161,7 +161,7 @@ class QuicConnectionImplTest {
         // Given
 
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, "no error"), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0), App);
 
         // Then
         verify(connection.getStreamManager()).abortAll();
@@ -170,7 +170,7 @@ class QuicConnectionImplTest {
     @Test
     void whenReceivingCloseOneCloseIsSend() {
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0), App);
 
         // Then
         verify(sender, atLeast(1)).send(argThat(f -> f instanceof ConnectionCloseFrame), any(EncryptionLevel.class), any(Consumer.class));
@@ -180,7 +180,7 @@ class QuicConnectionImplTest {
     void whenReceivingCloseNormalPacketsAreNotProcessed() throws Exception {
         // Given
         PacketFilter packetProcessor = wrapWithClosingOrDrainingFilter(connection);
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0), App);
 
         // When
         ShortHeaderPacket packet = spy(new ShortHeaderPacket(Version.getDefault(), new byte[0], new CryptoFrame()));
@@ -209,7 +209,7 @@ class QuicConnectionImplTest {
     @Test
     void whenPeerClosingAfterThreePtoConnectionIsTerminated() throws Exception {
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0, null), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 0), App);
 
         // When
         testClock.fastForward(11 * onePto / 4);
@@ -383,7 +383,7 @@ class QuicConnectionImplTest {
         connection.setConnectionListener(closeCallback);
 
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.NO_ERROR.value, null), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.NO_ERROR.value), App);
         callbackExecutor.clockAdvanced();
 
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -402,7 +402,7 @@ class QuicConnectionImplTest {
         connection.setConnectionListener(closeCallback);
 
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.INTERNAL_ERROR.value, null), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), QuicConstants.TransportErrorCode.INTERNAL_ERROR.value), App);
         callbackExecutor.clockAdvanced();
 
         verify(closeCallback).disconnected(eventCaptor.capture());
@@ -422,7 +422,7 @@ class QuicConnectionImplTest {
         connection.setConnectionListener(closeCallback);
 
         // When
-        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 999, false, "application error"), App);
+        connection.handlePeerClosing(new ConnectionCloseFrame(Version.getDefault(), 999, false), App);
         callbackExecutor.clockAdvanced();
 
         // Then

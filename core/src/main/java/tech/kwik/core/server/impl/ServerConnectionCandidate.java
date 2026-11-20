@@ -317,7 +317,7 @@ public class ServerConnectionCandidate implements ServerConnectionProxy, Datagra
     }
 
     private void sendInvalidTokenError(InetSocketAddress clientAddress) {
-        ConnectionCloseFrame connectionClose = new ConnectionCloseFrame(quicVersion, INVALID_TOKEN.value, null);
+        ConnectionCloseFrame connectionClose = new ConnectionCloseFrame(quicVersion, INVALID_TOKEN.value);
         InitialPacket closePacket = new InitialPacket(quicVersion, dcid, scid, null, connectionClose);
         closePacket.setPacketNumber(0);
         ConnectionSecrets connectionSecrets = new ConnectionSecrets(new VersionHolder(quicVersion), Role.Server, null, new NullLogger());

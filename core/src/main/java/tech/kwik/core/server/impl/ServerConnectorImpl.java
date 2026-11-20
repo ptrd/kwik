@@ -390,7 +390,7 @@ public class ServerConnectorImpl implements ServerConnector {
 
     private void sendConnectionRefused(int rawVersion, byte[] dcid, byte[] scid, InetSocketAddress clientAddress) {
         Version version = Version.parse(rawVersion);
-        QuicFrame connectionClosed = new ConnectionCloseFrame(version, QuicConstants.TransportErrorCode.CONNECTION_REFUSED.value, "");
+        QuicFrame connectionClosed = new ConnectionCloseFrame(version, QuicConstants.TransportErrorCode.CONNECTION_REFUSED.value);
         InitialPacket connectionRefusedResponse = new InitialPacket(version, dcid, scid, null, connectionClosed);
         connectionRefusedResponse.setPacketNumber(0);
 

@@ -57,14 +57,19 @@ public class ConnectionCloseFrame extends QuicFrame {
         errorCode = 0x00;
     }
 
-    public ConnectionCloseFrame(Version quicVersion, long error, String reason) {
+    public ConnectionCloseFrame(Version quicVersion, long error) {
         frameType = 0x1c;
         errorCode = error;
         if (errorCode >= 0x0100 && errorCode < 0x0200) {
             tlsError = (int) (errorCode - 256);
         }
-        if (reason != null && !reason.isBlank()) {
-            reasonPhrase = reason.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public ConnectionCloseFrame(Version quicVersion, long error, boolean quicError) {
+        frameType = quicError? 0x1c: 0x1d;
+        errorCode = error;
+        if (errorCode >= 0x0100 && errorCode < 0x0200) {
+            tlsError = (int) (errorCode - 256);
         }
     }
 

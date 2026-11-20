@@ -107,7 +107,7 @@ class FramesCheckFilterTest {
     @Test
     void initialWithConnectionCloseWithType1dShouldBeDiscarded() throws TransportError {
         // Given
-        ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault(), 999, false, "app error");
+        ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault(), 999, false);
         InitialPacket initialPacket = initialPacketWith(ccFrame);
 
         // When
@@ -169,7 +169,7 @@ class FramesCheckFilterTest {
     @Test
     void handshakeWithConnectionCloseWithType1dShouldBeDiscarded() throws TransportError {
         // Given
-        ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault(), 999, false, "app error");
+        ConnectionCloseFrame ccFrame = new ConnectionCloseFrame(Version.getDefault(), 999, false);
         HandshakePacket handshakePacket = handshakePacketWith(ccFrame);
 
         // When
