@@ -205,6 +205,11 @@ public class KwikCli {
             CommandLineParser parser = new DefaultParser();
             cmd = parser.parse(cmdLineOptions, rawArgs);
 
+            if (cmd.hasOption("h")) {
+                usage();
+                System.exit(0);
+            }
+
             if (cmd.hasOption("v")) {
                 System.out.println("Kwik version: " + KwikVersion.getVersion());
                 System.exit(0);
