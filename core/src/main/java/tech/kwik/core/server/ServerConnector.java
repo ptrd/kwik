@@ -28,6 +28,7 @@ import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.security.KeyStore;
 import java.security.cert.CertificateException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 
@@ -108,6 +109,17 @@ public interface ServerConnector extends AutoCloseable {
          * @throws IllegalArgumentException  if the list is empty or contains duplicates
          */
         Builder withSupportedGroups(List<TlsConstants.NamedGroup> namedGroups);
+
+        /**
+         * Sets the maximum duration of the QUIC handshake. If the handshake of a connection is not completed within
+         * this time (measured from the moment the connection is created, i.e. when a valid ClientHello is received),
+         * the connection is dropped: it is closed without sending anything to the client and all its resources are
+         * released. If this method is not called, the default handshake timeout of 30 seconds is used.
+         * @param timeout  the maximum handshake duration, must be positive (and not null)
+         * @return  the builder
+         * @throws IllegalArgumentException  if the timeout is not positive
+         */
+        Builder withHandshakeTimeout(Duration timeout);
 
         Builder withLogger(Logger log);
 

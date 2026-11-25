@@ -29,12 +29,15 @@ import tech.kwik.core.server.impl.ApplicationProtocolRegistry;
 import tech.kwik.core.server.impl.ServerConnectionImpl;
 import tech.kwik.core.server.impl.ServerConnectionProxy;
 import tech.kwik.core.server.impl.ServerConnectionThread;
+import tech.kwik.core.server.impl.ServerConnectorImpl;
 import tech.kwik.core.util.Bytes;
 
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import static tech.kwik.core.server.Constants.MAXIMUM_CONNECTION_ID_LENGTH;
@@ -51,6 +54,7 @@ public class ServerConnectionFactory {
     private final ServerConnectionRegistry connectionRegistry;
     private final ServerConnectionConfig configuration;
     private final List<TlsConstants.NamedGroup> supportedGroups;
+    private final Duration handshakeTimeout;
 
     public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
                                    ServerConnectionConfig configuration, ApplicationProtocolRegistry applicationProtocolRegistry,
@@ -67,12 +71,25 @@ public class ServerConnectionFactory {
                                    ApplicationProtocolRegistry applicationProtocolRegistry,
                                    ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
     {
+        this(serverSocket, tlsServerEngineFactory, configuration, supportedGroups, ServerConnectorImpl.DEFAULT_HANDSHAKE_TIMEOUT, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
+    }
+
+    /**
+     * @param supportedGroups   the named groups accepted for key exchange; when empty, all available groups are accepted
+     * @param handshakeTimeout  maximum duration of the handshake, after which the connection is silently dropped
+     */
+    public ServerConnectionFactory(DatagramSocket serverSocket, TlsServerEngineFactory tlsServerEngineFactory,
+                                   ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups,
+                                   Duration handshakeTimeout, ApplicationProtocolRegistry applicationProtocolRegistry,
+                                   ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log)
+    {
         if (configuration.connectionIdLength() > MAXIMUM_CONNECTION_ID_LENGTH || configuration.connectionIdLength() < MINIMUM_CONNECTION_ID_LENGTH) {
             throw new IllegalArgumentException();
         }
         this.tlsServerEngineFactory = tlsServerEngineFactory;
         this.configuration = configuration;
         this.supportedGroups = supportedGroups;
+        this.handshakeTimeout = Objects.requireNonNull(handshakeTimeout);
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.connectionRegistry = connectionRegistry;
         this.closeCallback = closeCallback;
@@ -93,7 +110,7 @@ public class ServerConnectionFactory {
      */
     public ServerConnectionImpl createNewConnection(Version version, InetSocketAddress clientAddress, byte[] scid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream) {
         ServerConnectionImpl connection = new ServerConnectionImpl(version, serverSocket, clientAddress, scid, originalDcid, retryScid, cryptoStream,
-                tlsServerEngineFactory, configuration, supportedGroups, applicationProtocolRegistry, connectionRegistry, closeCallback, log);
+                tlsServerEngineFactory, configuration, supportedGroups, applicationProtocolRegistry, connectionRegistry, closeCallback, handshakeTimeout, log);
 
         log.info("Creating new connection with version " + version + " for odcid " + Bytes.bytesToHex(originalDcid)
                 + " with " + clientAddress.getAddress().getHostAddress() + ": " + Bytes.bytesToHex(connection.getInitialConnectionId()));

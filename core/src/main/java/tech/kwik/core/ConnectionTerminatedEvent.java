@@ -41,7 +41,8 @@ public class ConnectionTerminatedEvent {
         IdleTimeout,
         ImmediateClose,
         StatelessReset,
-        ConnectionLost   // not in the RFC, but used in the implementation to indicate that the connection was lost (probes were not answered)
+        ConnectionLost,   // not in the RFC, but used in the implementation to indicate that the connection was lost (probes were not answered)
+        HandshakeTimeout  // not in the RFC, used by the server to indicate that the handshake did not complete within the configured time
     }
 
     public ConnectionTerminatedEvent(QuicConnection connection, CloseReason closeReason, boolean closedByPeer, Long transportErrorCode, Long applicationErrorCode, String error) {

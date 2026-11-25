@@ -41,6 +41,7 @@ import tech.kwik.core.receive.RawPacket;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
 import tech.kwik.core.server.ServerConnectionFactory;
 import tech.kwik.core.server.ServerConnectionRegistry;
+import tech.kwik.core.server.ServerConnector;
 import tech.kwik.core.test.ByteUtils;
 import tech.kwik.core.test.FieldReader;
 import tech.kwik.core.test.FieldSetter;
@@ -60,6 +61,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static tech.kwik.core.server.impl.ServerConnectorImpl.isValidLongHeaderPacket;
@@ -381,6 +383,18 @@ class ServerConnectorImplTest {
 
         // Then
         verify(serverSocket, atLeastOnce()).close();
+    }
+    //endregion
+
+    //region handshake timeout
+    @Test
+    void handshakeTimeoutMustBePositive() {
+        assertThatThrownBy(() -> ServerConnector.builder().withHandshakeTimeout(Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ServerConnector.builder().withHandshakeTimeout(Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ServerConnector.builder().withHandshakeTimeout(null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
     //endregion
 

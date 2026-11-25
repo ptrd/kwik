@@ -32,6 +32,7 @@ import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
 import tech.kwik.agent15.extension.Extension;
 import tech.kwik.agent15.handshake.*;
 import tech.kwik.core.ConnectionEstablishedEvent;
+import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.QuicStream;
 import tech.kwik.core.ack.GlobalAckGenerator;
 import tech.kwik.core.cid.ConnectionIdManager;
@@ -62,10 +63,14 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -102,6 +107,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
     private int allowedClientConnectionIds = 3;
     private boolean applicationProtocolStarted;
     private final boolean connectionMigrationEnabled;
+    private final ScheduledFuture<?> handshakeTimeoutTask;
 
     /**
      * Creates a server connection implementation.
@@ -120,12 +126,15 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
      * @param applicationProtocolRegistry the registry for application protocols this server supports
      * @param connectionRegistry          the registry for server connections
      * @param closeCallback               callback for notifying interested parties this connection is closed
+     * @param handshakeTimeout            maximum duration of the handshake, after which the connection is silently
+     *                                    dropped
      * @param log                         logger
      */
     public ServerConnectionImpl(Version originalVersion, DatagramSocket serverSocket, InetSocketAddress initialClientAddress,
                                 byte[] peerCid, byte[] originalDcid, byte[] retryScid, CryptoStream cryptoStream, TlsServerEngineFactory tlsServerEngineFactory,
                                 ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups, ApplicationProtocolRegistry applicationProtocolRegistry,
-                                ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback, Logger log) {
+                                ServerConnectionRegistry connectionRegistry, Consumer<ServerConnectionImpl> closeCallback,
+                                Duration handshakeTimeout, Logger log) {
         super(originalVersion, Role.Server, null, configuration, Bytes.bytesToHex(originalDcid), new LogProxy(log, originalDcid));
         this.originalVersion = originalVersion;
         this.initialClientAddress = initialClientAddress;
@@ -135,6 +144,7 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         this.configuration = configuration;
         this.applicationProtocolRegistry = applicationProtocolRegistry;
         this.closeCallback = closeCallback;
+        Objects.requireNonNull(handshakeTimeout);
 
         tlsEngine = tlsServerEngineFactory.createServerEngine(new TlsMessageSender(), this);
         tlsEngine.setSupportedGroups(supportedGroups);
@@ -185,6 +195,8 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         pathValidator = connectionMigrationEnabled? new PathValidator(quicVersion, initialClientAddress, sender, socketManager, connectionIdManager, log): null;
 
         this.log.getQLog().emitConnectionCreatedEvent(Instant.now());
+
+        handshakeTimeoutTask = schedule(this::handshakeTimedOut, handshakeTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -283,8 +295,18 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         currentEncryptionLevel = EncryptionLevel.Handshake;
     }
 
+    private void handshakeTimedOut() {
+        log.warn("Handshake did not complete in time; dropping connection " + this);
+        silentlyCloseConnection(ConnectionTerminatedEvent.CloseReason.HandshakeTimeout);
+    }
+
     @Override
     public void handshakeFinished() {
+        if (!handshakeTimeoutTask.cancel(false)) {
+            // Cancel fails only when the timeout task is already running (or has run), i.e. the handshake has timed out
+            // and the connection is being (or has been) closed; it must not be established anymore.
+            return;
+        }
         currentEncryptionLevel = EncryptionLevel.App;
         connectionSecrets.computeApplicationSecrets(tlsEngine);
         sender.enableAppLevel();
@@ -603,11 +625,12 @@ public class ServerConnectionImpl extends QuicConnectionImpl implements ServerCo
         super.connectionError(cause);
     }
 
-    /**
-     * Trivial (do nothing) override to make method accessible in this package.
-     */
     @Override
-    protected void preTerminateHook() {}
+    protected void preTerminateHook() {
+        // When the connection terminates during the handshake, the handshake timer is not needed anymore; cancel it so
+        // the connection's scheduler can shut down immediately.
+        handshakeTimeoutTask.cancel(false);
+    }
 
     @Override
     protected void postTerminateHook() {

@@ -39,6 +39,8 @@ import tech.kwik.agent15.extension.ApplicationLayerProtocolNegotiationExtension;
 import tech.kwik.agent15.extension.Extension;
 import tech.kwik.agent15.extension.KeyShareExtension;
 import tech.kwik.agent15.handshake.ClientHello;
+import tech.kwik.core.ConnectionListener;
+import tech.kwik.core.ConnectionTerminatedEvent;
 import tech.kwik.core.QuicConnection;
 import tech.kwik.core.common.EncryptionLevel;
 import tech.kwik.core.crypto.ConnectionSecrets;
@@ -53,6 +55,7 @@ import tech.kwik.core.packet.HandshakePacket;
 import tech.kwik.core.packet.InitialPacket;
 import tech.kwik.core.packet.PacketMetaData;
 import tech.kwik.core.packet.QuicPacket;
+import tech.kwik.core.send.SendStatistics;
 import tech.kwik.core.send.SenderImpl;
 import tech.kwik.core.server.ApplicationProtocolConnection;
 import tech.kwik.core.server.ApplicationProtocolConnectionFactory;
@@ -71,9 +74,11 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -450,6 +455,86 @@ class ServerConnectionImplTest {
     }
     //endregion
 
+    //region handshake timeout
+    @Test
+    void whenHandshakeDoesNotCompleteInTimeConnectionShouldBeDroppedSilently() throws Exception {
+        // Given
+        AtomicBoolean closeCallbackIsCalled = new AtomicBoolean(false);
+
+        // When
+        connection = createServerConnection(Duration.ofMillis(200), cid -> closeCallbackIsCalled.set(true));
+        SenderImpl sender = (SenderImpl) new FieldReader(connection, connection.getClass().getDeclaredField("sender")).read();
+        when(sender.getStatistics()).thenReturn(mock(SendStatistics.class));
+        connection.process(createInitialClientPacket(createDefaultTransportParameters()), metaDataForNow());
+
+        // Then
+        verify(sender, timeout(2000)).stop();
+        ArgumentCaptor<Runnable> postShutdownAction = ArgumentCaptor.forClass(Runnable.class);
+        verify(sender, timeout(2000)).shutdown(postShutdownAction.capture());
+        postShutdownAction.getValue().run();  // Simulate sender thread executing post shutdown action
+        assertThat(connection.isClosed()).isTrue();
+        assertThat(closeCallbackIsCalled.get()).isTrue();
+        verify(sender, never()).send(any(ConnectionCloseFrame.class), any(EncryptionLevel.class));
+        verify(sender, never()).send(any(ConnectionCloseFrame.class), any(EncryptionLevel.class), any(Consumer.class));
+    }
+
+    @Test
+    void whenHandshakeTimesOutConnectionTerminatedEventShouldIndicateHandshakeTimeout() throws Exception {
+        // Given
+        List<ConnectionTerminatedEvent> events = new CopyOnWriteArrayList<>();
+
+        // When
+        connection = createServerConnection(Duration.ofMillis(200), cid -> {});
+        connection.setConnectionListener(new ConnectionListener() {
+            @Override
+            public void disconnected(ConnectionTerminatedEvent event) {
+                events.add(event);
+            }
+        });
+
+        // Then
+        Instant deadline = Instant.now().plusSeconds(2);
+        while (events.isEmpty() && Instant.now().isBefore(deadline)) {
+            Thread.sleep(10);
+        }
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).closeReason()).isEqualTo(ConnectionTerminatedEvent.CloseReason.HandshakeTimeout);
+        assertThat(events.get(0).closedByPeer()).isFalse();
+    }
+
+    @Test
+    void whenHandshakeCompletesInTimeConnectionShouldNotBeDropped() throws Exception {
+        // Given
+        connection = createServerConnection(Duration.ofMillis(200), cid -> {});
+        SenderImpl sender = (SenderImpl) new FieldReader(connection, connection.getClass().getDeclaredField("sender")).read();
+
+        // When
+        simulateHandshakeSuccesfullyFinished();
+        Thread.sleep(400);
+
+        // Then
+        FieldReader fieldReader = new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"));
+        assertThat(fieldReader.read()).isEqualTo(QuicConnectionImpl.Status.Connected);
+        verify(sender, never()).stop();
+    }
+
+    @Test
+    void whenHandshakeHasTimedOutHandshakeFinishedShouldNotEstablishConnection() throws Exception {
+        // Given
+        connection = createServerConnection(Duration.ofMillis(200), cid -> {});
+        SenderImpl sender = (SenderImpl) new FieldReader(connection, connection.getClass().getDeclaredField("sender")).read();
+        verify(sender, timeout(2000)).shutdown(any(Runnable.class));
+
+        // When
+        simulateHandshakeSuccesfullyFinished();
+
+        // Then
+        FieldReader fieldReader = new FieldReader(connection, QuicConnectionImpl.class.getDeclaredField("connectionState"));
+        assertThat(fieldReader.read()).isNotEqualTo(QuicConnectionImpl.Status.Connected);
+        verify(sender, never()).enableAppLevel();
+    }
+    //endregion
+
     //region anti amplification
     @Test
     void receivingInitialPacketShouldSetAntiAmplification() throws Exception {
@@ -666,6 +751,15 @@ class ServerConnectionImplTest {
     }
 
     private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] retryScid, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback, CryptoStream cryptoStream) throws Exception {
+        return createServerConnection(tlsServerEngineFactory, retryScid, clientCid, odcid, closeCallback, cryptoStream, ServerConnectorImpl.DEFAULT_HANDSHAKE_TIMEOUT);
+    }
+
+    private ServerConnectionImpl createServerConnection(Duration handshakeTimeout, Consumer<ServerConnectionImpl> closeCallback) throws Exception {
+        byte[] odcid = { 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08 };
+        return createServerConnection(createTlsServerEngine(), null, new byte[8], odcid, closeCallback, null, handshakeTimeout);
+    }
+
+    private ServerConnectionImpl createServerConnection(TlsServerEngineFactory tlsServerEngineFactory, byte[] retryScid, byte[] clientCid, byte[] odcid, Consumer<ServerConnectionImpl> closeCallback, CryptoStream cryptoStream, Duration handshakeTimeout) throws Exception {
         ApplicationProtocolRegistry applicationProtocolRegistry = new ApplicationProtocolRegistry();
         ApplicationProtocolConnectionFactory applicationProtocolConnectionFactory = mock(ApplicationProtocolConnectionFactory.class);
         when(applicationProtocolConnectionFactory.createConnection(anyString(), any(QuicConnection.class))).thenReturn(Mockito.mock(ApplicationProtocolConnection.class));
@@ -674,7 +768,7 @@ class ServerConnectionImplTest {
         ServerConnectionImpl connection = new ServerConnectionImpl(Version.getDefault(), mock(DatagramSocket.class),
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), 6000), clientCid, odcid, retryScid, cryptoStream,
                 tlsServerEngineFactory, getDefaultConfiguration(), List.of(),
-                applicationProtocolRegistry, Mockito.mock(ServerConnectionRegistry.class), closeCallback, mock(Logger.class));
+                applicationProtocolRegistry, Mockito.mock(ServerConnectionRegistry.class), closeCallback, handshakeTimeout, mock(Logger.class));
 
         SenderImpl sender = mock(SenderImpl.class);
         FieldSetter.setField(connection, connection.getClass().getDeclaredField("sender"), sender);

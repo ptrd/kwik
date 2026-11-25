@@ -624,16 +624,24 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
     }
 
     protected void silentlyCloseConnection(long idleTime) {
+        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
+        // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
+        //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
+        silentlyCloseConnection(idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout);
+    }
+
+    /**
+     * Closes the connection without sending anything to the peer and discards all connection state.
+     * @param closeReason  the reason reported in the connection terminated event
+     */
+    protected void silentlyCloseConnection(CloseReason closeReason) {
         if (connectionState.closingOrDraining()) {
             return;
         }
         connectionState = Status.Closing;
 
-        emit(new ConnectionTerminatedEvent(this, idleTimer.isTailLoss()? ConnectionLost: CloseReason.IdleTimeout, false));
+        emit(new ConnectionTerminatedEvent(this, closeReason, false));
 
-        // https://tools.ietf.org/html/draft-ietf-quic-transport-32#section-10.1
-        // "If a max_idle_timeout is specified by either peer (...), the connection is silently closed and its state is
-        //  discarded when it remains idle for longer than the minimum of both peers max_idle_timeout values."
         getStreamManager().abortAll();
         getSender().stop();
         log.getQLog().emitConnectionClosedEvent(Instant.now());
@@ -1011,12 +1019,17 @@ public abstract class QuicConnectionImpl implements QuicConnection, PacketProces
         return executor;
     }
 
-    protected void schedule(Runnable command, int delay, TimeUnit unit) {
+    /**
+     * Schedules the given command on the connection's scheduler.
+     * @return  the scheduled task, or null if the connection is already terminated
+     */
+    protected ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         try {
-            scheduler.schedule(command, delay, unit);
+            return scheduler.schedule(command, delay, unit);
         }
         catch (RejectedExecutionException rejected) {
             // Can happen when already terminated; don't bother
+            return null;
         }
     }
 

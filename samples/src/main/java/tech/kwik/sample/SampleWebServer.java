@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.security.KeyStore;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -138,6 +139,7 @@ public class SampleWebServer {
         ServerConnector.Builder builder = ServerConnector.builder()
                 .withPort(port)
                 .withSupportedVersions(supportedVersions)
+                .withHandshakeTimeout(Duration.ofSeconds(10))
                 .withConfiguration(serverConnectionConfig)
                 .withLogger(log);
 

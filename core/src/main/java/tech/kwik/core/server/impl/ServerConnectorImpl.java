@@ -58,13 +58,7 @@ import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.ServiceLoader;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
@@ -75,7 +69,8 @@ import static tech.kwik.core.common.EncryptionLevel.Initial;
  */
 public class ServerConnectorImpl implements ServerConnector {
 
-    public static int DEFAULT_CLOSE_TIMEOUT_IN_SECONDS = 30;
+    public static final int DEFAULT_CLOSE_TIMEOUT_IN_SECONDS = 30;
+    public static final Duration DEFAULT_HANDSHAKE_TIMEOUT = Duration.ofSeconds(30);
 
     private final Receiver receiver;
     private final Logger log;
@@ -126,14 +121,14 @@ public class ServerConnectorImpl implements ServerConnector {
     }
 
     private ServerConnectorImpl(DatagramSocket socket, InputStream certificateFile, InputStream certificateKeyFile, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, List.of(), log);
+        this(socket, new TlsServerEngineFactory(certificateFile, certificateKeyFile), supportedVersions, configuration, List.of(), DEFAULT_HANDSHAKE_TIMEOUT, log);
     }
 
     private ServerConnectorImpl(DatagramSocket socket, KeyStore keyStore, String alias, char[] keyPassword, String ecCurve, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, Logger log) throws Exception {
-        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, List.of(), log);
+        this(socket, new TlsServerEngineFactory(keyStore, alias, keyPassword, ecCurve), supportedVersions, configuration, List.of(), DEFAULT_HANDSHAKE_TIMEOUT, log);
     }
 
-    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups, Logger log) {
+    private ServerConnectorImpl(DatagramSocket socket, TlsServerEngineFactory tlsEngineFactory, List<QuicConnection.QuicVersion> supportedVersions, ServerConnectionConfig configuration, List<TlsConstants.NamedGroup> supportedGroups, Duration handshakeTimeout, Logger log) {
         this.serverSocket = socket;
         this.tlsEngineFactory = tlsEngineFactory;
         this.supportedVersions = supportedVersions;
@@ -145,7 +140,7 @@ public class ServerConnectorImpl implements ServerConnector {
         applicationProtocolRegistry = new ApplicationProtocolRegistry();
         connectionRegistry = new ServerConnectionRegistryImpl(log);
         serverConnectionFactory = new ServerConnectionFactory(serverSocket, tlsEngineFactory,
-                configuration, supportedGroups, applicationProtocolRegistry, connectionRegistry, this::closed, log);
+                configuration, supportedGroups, handshakeTimeout, applicationProtocolRegistry, connectionRegistry, this::closed, log);
 
         supportedVersionIds = supportedVersions.stream()
                 .map(Version::of)
@@ -528,6 +523,7 @@ public class ServerConnectorImpl implements ServerConnector {
         private char[] privateKeyPassword;
         private String ecCurve;
         private List<TlsConstants.NamedGroup> supportedGroups = List.of();
+        private Duration handshakeTimeout = DEFAULT_HANDSHAKE_TIMEOUT;
 
         @Override
         public ServerConnector.Builder withPort(int port) {
@@ -607,6 +603,15 @@ public class ServerConnectorImpl implements ServerConnector {
         }
 
         @Override
+        public ServerConnector.Builder withHandshakeTimeout(Duration timeout) {
+            if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+                throw new IllegalArgumentException("Handshake timeout must be positive");
+            }
+            this.handshakeTimeout = timeout;
+            return this;
+        }
+
+        @Override
         public ServerConnector.Builder withLogger(Logger log) {
             this.log = log;
             return this;
@@ -634,7 +639,7 @@ public class ServerConnectorImpl implements ServerConnector {
                 else {
                     tlsEngineFactory = new TlsServerEngineFactory(certificateFile, certificateKeyFile);
                 }
-                return new ServerConnectorImpl(socket, tlsEngineFactory, supportedVersions, configuration, supportedGroups, log);
+                return new ServerConnectorImpl(socket, tlsEngineFactory, supportedVersions, configuration, supportedGroups, handshakeTimeout, log);
             }
             catch (IOException e) {
                 // Impossible, exception is never thrown by TlsServerEngineFactory constructor.
