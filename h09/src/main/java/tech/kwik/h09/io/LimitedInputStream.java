@@ -40,7 +40,9 @@ public class LimitedInputStream extends FilterInputStream {
     public int read() throws IOException {
         if (bytesRead < limit) {
             int read = super.read();
-            bytesRead++;
+            if (read != -1) {
+                bytesRead++;
+            }
             return read;
         }
         else {
@@ -58,7 +60,9 @@ public class LimitedInputStream extends FilterInputStream {
     public int read(byte[] b, int off, int len) throws IOException {
         if (bytesRead < limit) {
             int read = super.read(b, off, (int) Long.min(limit - bytesRead, len));
-            bytesRead += read;
+            if (read != -1) {
+                bytesRead += read;
+            }
             return read;
         }
         else {

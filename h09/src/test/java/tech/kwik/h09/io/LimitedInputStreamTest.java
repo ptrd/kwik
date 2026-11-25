@@ -63,4 +63,18 @@ class LimitedInputStreamTest {
                 .isInstanceOf(LimitExceededException.class);
     }
     // endregion
+
+    // region end of stream
+    @Test
+    void readingSingleByteAtEndOfStreamShouldNotCountTowardsLimit() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[5]), 10);
+        input.read(new byte[5]);
+
+        // When / Then
+        for (int i = 0; i < 10; i++) {
+            assertThat(input.read()).isEqualTo(-1);
+        }
+    }
+    // endregion
 }
