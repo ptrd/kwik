@@ -408,6 +408,11 @@ public class CryptoStream {
             @Override
             public void received(CertificateRequestMessage certificateRequestMessage, ProtectionKeysType protectionKeysType) throws TlsProtocolException, IOException {
             }
+
+            @Override
+            public byte[] exportKeyingMaterial(String label, byte[] context, int length) {
+                throw new IllegalStateException("TLS handshake not complete");
+            }
         };
     }
 
