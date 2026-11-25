@@ -64,6 +64,21 @@ class LimitedInputStreamTest {
     }
     // endregion
 
+    // region zero length read
+    @Test
+    void zeroLengthReadShouldReturnZeroWhenLimitIsReached() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+        input.read(new byte[10]);
+
+        // When
+        int read = input.read(new byte[10], 0, 0);
+
+        // Then
+        assertThat(read).isEqualTo(0);
+    }
+    // endregion
+
     // region end of stream
     @Test
     void readingSingleByteAtEndOfStreamShouldNotCountTowardsLimit() throws Exception {

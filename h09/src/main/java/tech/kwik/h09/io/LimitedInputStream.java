@@ -58,6 +58,9 @@ public class LimitedInputStream extends FilterInputStream {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
+        if (len == 0) {
+            return 0;
+        }
         if (bytesRead < limit) {
             int read = super.read(b, off, (int) Long.min(limit - bytesRead, len));
             if (read != -1) {
