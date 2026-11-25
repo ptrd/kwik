@@ -21,6 +21,7 @@ package tech.kwik.h09.io;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,6 +62,65 @@ class LimitedInputStreamTest {
         // When / Then
         assertThatThrownBy(() -> input.read())
                 .isInstanceOf(LimitExceededException.class);
+    }
+    // endregion
+
+    // region skip
+    @Test
+    void skipShouldNotSkipBeyondLimit() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+
+        // When
+        long skipped = input.skip(50);
+
+        // Then
+        assertThat(skipped).isEqualTo(10);
+    }
+
+    @Test
+    void skipShouldCountTowardsLimit() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+        input.skip(10);
+
+        // When / Then
+        assertThatThrownBy(() -> input.read())
+                .isInstanceOf(LimitExceededException.class);
+    }
+
+    @Test
+    void skipShouldThrowWhenLimitIsReached() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+        input.read(new byte[10]);
+
+        // When / Then
+        assertThatThrownBy(() -> input.skip(1))
+                .isInstanceOf(LimitExceededException.class);
+    }
+    // endregion
+
+    // region mark and reset
+    @Test
+    void markShouldNotBeSupported() {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+
+        // Then
+        assertThat(input.markSupported()).isFalse();
+    }
+
+    @Test
+    void resetShouldNotAllowReadingSameBytesAgain() throws Exception {
+        // Given
+        InputStream input = new LimitedInputStream(new ByteArrayInputStream(new byte[100]), 10);
+        input.mark(100);
+        input.read(new byte[10]);
+
+        // When / Then
+        assertThatThrownBy(() -> input.reset())
+                .isInstanceOf(IOException.class);
     }
     // endregion
 

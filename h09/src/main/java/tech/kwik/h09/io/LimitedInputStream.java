@@ -72,4 +72,33 @@ public class LimitedInputStream extends FilterInputStream {
             throw new LimitExceededException(limit);
         }
     }
+
+    @Override
+    public long skip(long n) throws IOException {
+        if (n <= 0) {
+            return 0;
+        }
+        if (bytesRead < limit) {
+            long skipped = super.skip(Long.min(limit - bytesRead, n));
+            bytesRead += skipped;
+            return skipped;
+        }
+        else {
+            throw new LimitExceededException(limit);
+        }
+    }
+
+    @Override
+    public boolean markSupported() {
+        return false;
+    }
+
+    @Override
+    public void mark(int readlimit) {
+    }
+
+    @Override
+    public void reset() throws IOException {
+        throw new IOException("mark/reset not supported");
+    }
 }
